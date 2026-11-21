@@ -42,5 +42,7 @@
     <string name="title_four_finger_tap">Stuknięcie czterema palcami</string>
     <string name="summary_four_finger_tap">Co robi szybkie stuknięcie czterema palcami. „Klawiatura systemowa” to klawiatura Androida; „Klawiatura PC” ma klawisze F, Ctrl i Win; „Klawiatura i mysz” to panel z klawiszami i touchpadem.</string>
     <string name="title_multi_touch_finger_taps">Stuknięcia wieloma palcami w trybie Wielodotyk</string>
+    <string name="title_finger_tap_on_cancel">Stuknięcia anulowane przez system</string>
+    <string name="summary_finger_tap_on_cancel">Stuknięcia trzema i czterema palcami, które system anuluje, jak w niektórych telefonach Oppo i ColorOS, nadal wykonują swoją akcję, gdy palce dotknęły ekranu razem i były nieruchome; od Androida 13 liczą się tylko anulowania oznaczone przez system jako jego własne, a w Androidzie 12 i starszym każde anulowanie w tym oknie. Włącz tylko wtedy, gdy stuknięcia trzema lub czterema palcami nic nie robią, gdy palce są blisko siebie.</string>
     <string name="summary_multi_touch_finger_taps">W trybie „Wielodotyk” stuknięcia trzema i czterema palcami wykonują swoje akcje i nie trafiają już do komputera jako dotyk. Zostaw wyłączone, jeśli coś na komputerze używa tych stuknięć.</string>
 </resources>

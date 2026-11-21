@@ -42,5 +42,7 @@
     <string name="title_four_finger_tap">Appui à quatre doigts</string>
     <string name="summary_four_finger_tap">Ce que fait un appui rapide à quatre doigts. « Clavier système » est celui d’Android ; « Clavier PC » a les touches F, Ctrl et Win ; « Clavier et souris » est un panneau avec des touches et un pavé tactile.</string>
     <string name="title_multi_touch_finger_taps">Appuis à plusieurs doigts en Multitouch</string>
+    <string name="title_finger_tap_on_cancel">Appuis annulés par le système</string>
+    <string name="summary_finger_tap_on_cancel">Les appuis à trois et quatre doigts que le système annule, comme sur certains téléphones Oppo et ColorOS, lancent quand même leur action si les doigts se sont posés ensemble et sont restés immobiles ; sous Android 13 et plus récent, seules les annulations que le système marque comme siennes comptent, et sous Android 12 et plus ancien, toute annulation dans cet intervalle. Activez-le seulement si les appuis à trois ou quatre doigts ne font rien quand les doigts sont rapprochés.</string>
     <string name="summary_multi_touch_finger_taps">En mode « Multitouch », les appuis à trois et quatre doigts lancent leurs actions et n’atteignent plus le PC comme appuis tactiles. Laissez-le désactivé si quelque chose sur le PC utilise ces appuis.</string>
 </resources>

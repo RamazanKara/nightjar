@@ -286,7 +286,20 @@ final class GameTouchInput {
             fingerTap.move(event.getX(tracked), event.getY(tracked));
         }
         if (action == MotionEvent.ACTION_CANCEL) {
-            fingerTap.reset();
+            // Some devices (seen on ColorOS) cancel the touches ~40 ms after the third finger lands, even
+            // with their own three-finger gestures off, and then never deliver the lifts. A cancel that
+            // arrives inside the tap window, with the fingers still, is the tap itself. From Android 13 only
+            // a cancel the system flags as its own counts; older versions have no flag to check.
+            boolean systemCancel = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                    || (event.getFlags() & MotionEvent.FLAG_CANCELED) != 0;
+            if (game.prefConfig.fingerTapOnCancel && systemCancel) {
+                int fingers = fingerTap.finish(event.getEventTime(),
+                        FINGER_TAP_SLOP_DP * game.getResources().getDisplayMetrics().density);
+                if (fingers == 3) onFingerTap(game.prefConfig.threeFingerTap);
+                else if (fingers == 4) onFingerTap(game.prefConfig.fourFingerTap);
+            } else {
+                fingerTap.reset();
+            }
         } else {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     (event.getFlags() & MotionEvent.FLAG_CANCELED) != 0) {

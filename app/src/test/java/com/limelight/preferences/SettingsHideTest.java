@@ -243,6 +243,7 @@ public class SettingsHideTest {
             new Row(SettingRules.MOMENTUM_GLIDE, "input", true, NO_TOUCH_SCREEN, TOUCH_SCREEN, untouchable(set(SettingRules.MOMENTUM_GLIDE, "long"))),
             new Row("list_trackpad_area", "input", true, NO_TOUCH_SCREEN, TOUCH_SCREEN, untouchable(set("list_trackpad_area", "right"))),
             new Row("checkbox_multi_touch_finger_taps", "input", true, NO_TOUCH_SCREEN, TOUCH_SCREEN, untouchable(on("checkbox_multi_touch_finger_taps"))),
+            new Row("checkbox_finger_tap_on_cancel", "input", true, NO_TOUCH_SCREEN, TOUCH_SCREEN, untouchable(on("checkbox_finger_tap_on_cancel"))),
             new Row("seekbar_trackpad_sensitivity_x", "input", true, NOTHING, (e, d) -> d.touchpad = true, number("seekbar_trackpad_sensitivity_x", 150)),
             new Row("seekbar_trackpad_sensitivity_y", "input", true, NOTHING, (e, d) -> d.touchpad = true, number("seekbar_trackpad_sensitivity_y", 150)),
             new Row("checkbox_trackpad_swap_axis", "input", true, NOTHING, (e, d) -> d.touchpad = true, on("checkbox_trackpad_swap_axis")),
