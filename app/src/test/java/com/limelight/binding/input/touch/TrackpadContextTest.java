@@ -163,6 +163,55 @@ public class TrackpadContextTest {
         return total;
     }
 
+    /** Like scrollTotal, for a touchscreen (the MoveScale constructor), which scrolls per pixel. */
+    private static int touchscreenScrollTotal(int steps, int step, int speedPercent, float unitsPerMm) {
+        Recorder connection = new Recorder();
+        TrackpadContext.MoveScale unscaled = new TrackpadContext.MoveScale() {
+            @Override public float x() { return 1; }
+            @Override public float y() { return 1; }
+        };
+        TrackpadContext first = new TrackpadContext(connection, 0, false, 100, 100, unscaled);
+        TrackpadContext second = new TrackpadContext(connection, 1, false, 100, 100, unscaled);
+        first.setScrollSpeed(speedPercent);
+        second.setScrollSpeed(speedPercent);
+        first.setUnitsPerMm(unitsPerMm);
+        second.setUnitsPerMm(unitsPerMm);
+        first.setPointerCount(1);
+        first.touchDownEvent(500, 500, 1000, true);
+        first.setPointerCount(2);
+        second.setPointerCount(2);
+        second.touchDownEvent(600, 500, 1005, true);
+        int y = 500;
+        long time = 1005;
+        // The first long movement only starts the scroll.
+        y += 35;
+        time += 100;
+        first.touchMoveEvent(500, y, time);
+        second.touchMoveEvent(600, y, time);
+        connection.scrolls.clear();
+        for (int i = 0; i < steps; i++) {
+            y += step;
+            time += 100;
+            first.touchMoveEvent(500, y, time);
+            second.touchMoveEvent(600, y, time);
+        }
+        int total = 0;
+        for (short amount : connection.scrolls) {
+            total += amount;
+        }
+        return total;
+    }
+
+    @Test
+    public void touchscreenScrollsFiveUnitsPerPixelAtTheDefaultSpeed() {
+        // 6 steps of 20 px is 120 px; the normal trackpad mode sends 5 units per pixel at 50%.
+        int atDefault = touchscreenScrollTotal(6, 20, 50, 10f);
+        assertTrue("got " + atDefault, Math.abs(atDefault - 120 * 5) <= 6);
+        // Scroll speed doubles it, and the screen's density (units per millimetre) does not change it.
+        assertTrue(Math.abs(touchscreenScrollTotal(6, 20, 100, 10f) - 2 * 120 * 5) <= 6);
+        assertTrue(Math.abs(touchscreenScrollTotal(6, 20, 50, 30f) - atDefault) <= 6);
+    }
+
     /** Drags one finger 40 units right and returns what the host received, summed. */
     private static int[] drag(boolean swap, int sensitivityX, int sensitivityY, int speed) {
         Recorder connection = new Recorder();
