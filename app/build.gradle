@@ -75,7 +75,7 @@ android {
         minSdk 21
         targetSdk 36
 
-        versionName "6.2.0"
+        versionName "6.2.1-rc.52"
         versionCode = 404
 
         resValue "string", "app_name", brandName
