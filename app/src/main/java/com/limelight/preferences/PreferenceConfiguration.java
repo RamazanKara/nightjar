@@ -149,6 +149,7 @@ public class PreferenceConfiguration {
     private static final String THREE_FINGER_TAP_PREF_STRING = "list_three_finger_tap";
     private static final String FOUR_FINGER_TAP_PREF_STRING = "list_four_finger_tap";
     private static final String MULTI_TOUCH_FINGER_TAPS_PREF_STRING = "checkbox_multi_touch_finger_taps";
+    private static final String FINGER_TAP_ON_CANCEL_PREF_STRING = "checkbox_finger_tap_on_cancel";
     private static final String PC_KEYBOARD_LAYOUT_PREF_STRING = "list_pc_keyboard_layout";
     private static final String PC_KEYBOARD_SIZE_PREF_STRING = "seekbar_pc_keyboard_size";
     private static final String PC_KEYBOARD_OPACITY_PREF_STRING = "seekbar_pc_keyboard_opacity";
@@ -487,6 +488,8 @@ public class PreferenceConfiguration {
     public String fourFingerTap = FingerTapGesture.NONE;
     /** Three- and four-finger taps run their actions in Multi-touch too, instead of reaching the PC. */
     public boolean multiTouchFingerTaps;
+    // Run a three- or four-finger tap when the system cancels the touches inside the tap window.
+    public boolean fingerTapOnCancel;
     public MoonBridge.AudioConfiguration audioConfiguration;
     public int framePacing;
     public boolean absoluteMouseMode;
@@ -1841,6 +1844,7 @@ public class PreferenceConfiguration {
         config.fourFingerTap = prefs.getString(FOUR_FINGER_TAP_PREF_STRING,
                 FingerTapGesture.NONE);
         config.multiTouchFingerTaps = prefs.getBoolean(MULTI_TOUCH_FINGER_TAPS_PREF_STRING, false);
+        config.fingerTapOnCancel = prefs.getBoolean(FINGER_TAP_ON_CANCEL_PREF_STRING, false);
         config.pcKeyboardLayout = prefs.getString(PC_KEYBOARD_LAYOUT_PREF_STRING, "auto");
         config.pcKeyboardSize = Math.max(30, Math.min(70, prefs.getInt(PC_KEYBOARD_SIZE_PREF_STRING, 50)));
         config.pcKeyboardOpacity = Math.max(30, Math.min(100, prefs.getInt(PC_KEYBOARD_OPACITY_PREF_STRING, 90)));

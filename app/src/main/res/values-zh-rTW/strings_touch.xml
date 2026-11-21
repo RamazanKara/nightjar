@@ -42,5 +42,7 @@
     <string name="title_four_finger_tap">四指輕點</string>
     <string name="summary_four_finger_tap">四指快速輕觸時執行的動作。「系統鍵盤」是 Android 的鍵盤；「PC 鍵盤」有 F 鍵、Ctrl 和 Win；「鍵盤與滑鼠」是附有按鍵和觸控板的面板。</string>
     <string name="title_multi_touch_finger_taps">多點觸控中的多指輕觸</string>
+    <string name="title_finger_tap_on_cancel">系統取消的多指輕觸</string>
+    <string name="summary_finger_tap_on_cancel">系統取消的三指和四指輕觸，例如部分 Oppo 和 ColorOS 手機上的情況，如果手指是同時落下且保持不動的，仍會執行對應動作；Android 13 及以上只計入系統標記為自身取消的動作，Android 12 及以下則計入該時間範圍內的所有取消。僅當手指靠近時三指和四指輕觸沒有任何反應，才需要開啟。</string>
     <string name="summary_multi_touch_finger_taps">在「多點觸控」模式下，三指和四指輕觸會執行對應動作，不再作為觸控傳送到電腦。如果電腦上有程式會用到這些輕觸，請保持關閉。</string>
 </resources>

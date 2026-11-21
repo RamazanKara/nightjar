@@ -441,6 +441,7 @@ public class SettingsKeysTest {
         reads.put("list_three_finger_tap", new Read("keyboard", "middle_click", c -> c.threeFingerTap));
         reads.put("list_four_finger_tap", new Read("none", "desktop_controls", c -> c.fourFingerTap));
         reads.put("checkbox_multi_touch_finger_taps", new Read(false, true, c -> c.multiTouchFingerTaps));
+        reads.put("checkbox_finger_tap_on_cancel", new Read(false, true, c -> c.fingerTapOnCancel));
         reads.put("list_pc_keyboard_layout", new Read("auto", "de", c -> c.pcKeyboardLayout));
         reads.put("seekbar_pc_keyboard_size", new Read(50, 60, c -> c.pcKeyboardSize));
         reads.put("seekbar_pc_keyboard_opacity", new Read(90, 60, c -> c.pcKeyboardOpacity));

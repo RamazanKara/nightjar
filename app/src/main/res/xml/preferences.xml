@@ -519,6 +519,11 @@
             android:title="@string/title_multi_touch_finger_taps"
             android:dialogMessage="@string/summary_multi_touch_finger_taps"
             android:defaultValue="false" />
+        <com.limelight.preferences.MaterialSwitchPreference
+            android:key="checkbox_finger_tap_on_cancel"
+            android:title="@string/title_finger_tap_on_cancel"
+            android:dialogMessage="@string/summary_finger_tap_on_cancel"
+            android:defaultValue="false" />
         <com.limelight.preferences.SeekBarPreference
             android:key="seekbar_trackpad_sensitivity_x"
             android:title="@string/title_trackpad_sensitivity_x"

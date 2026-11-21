@@ -42,5 +42,7 @@
     <string name="title_four_finger_tap">Toque com quatro dedos</string>
     <string name="summary_four_finger_tap">O que um toque rápido com quatro dedos faz. Teclado do sistema é o do Android; Teclado de PC tem teclas F, Ctrl e Win; Teclado e mouse é um painel com teclas e um trackpad.</string>
     <string name="title_multi_touch_finger_taps">Toques com vários dedos no Multitoque</string>
+    <string name="title_finger_tap_on_cancel">Toques anulados pelo sistema</string>
+    <string name="summary_finger_tap_on_cancel">Toques com três e quatro dedos que o sistema cancela, como em alguns celulares Oppo e ColorOS, ainda executam a ação quando os dedos caíram juntos e ficaram parados; no Android 13 ou mais recente só contam os cancelamentos que o sistema marca como seus, e no Android 12 ou anterior, qualquer cancelamento nesse intervalo. Ative somente se toques com três ou quatro dedos não fizerem nada quando os dedos estão próximos.</string>
     <string name="summary_multi_touch_finger_taps">No modo Multitoque, toques com três e quatro dedos executam suas ações e não chegam mais ao PC como toques. Deixe desativado se algo no PC usa esses toques.</string>
 </resources>

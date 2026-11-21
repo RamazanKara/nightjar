@@ -450,6 +450,44 @@ public class GameTouchInputTest {
         assertEquals(java.util.Arrays.asList("down 2", "up 2"), connection.buttons);
     }
 
+    @Test
+    public void aCancelRunsTheFingerTapOnlyWhenTheSettingIsOn() {
+        for (boolean on : new boolean[] {false, true}) {
+            RecordingConnection connection = new RecordingConnection();
+            Game game = game(connection);
+            PreferenceConfiguration config = touchConfig(game, TouchMode.TRACKPAD);
+            config.threeFingerTap = "middle_click";
+            config.fingerTapOnCancel = on;
+            FrameLayout container = streamContainer(game, null);
+            ReflectionHelpers.callInstanceMethod(game.touchInput, "initializeTouchContexts");
+            beginTap(container, 3);
+            dispatchAt(container, MotionEvent.ACTION_CANCEL, 0, new int[] {0, 1, 2}, 1045,
+                    MotionEvent.FLAG_CANCELED, point(0), point(1), point(2));
+            Shadows.shadowOf(Looper.getMainLooper()).idleFor(200, TimeUnit.MILLISECONDS);
+            assertEquals(on ? java.util.Arrays.asList("down 2", "up 2") : java.util.Collections.emptyList(),
+                    connection.buttons);
+        }
+    }
+
+    @Test @Config(sdk = 34)
+    public void fromAndroid13OnlyAFlaggedCancelRunsTheFingerTap() {
+        for (int flags : new int[] {0, MotionEvent.FLAG_CANCELED}) {
+            RecordingConnection connection = new RecordingConnection();
+            Game game = game(connection);
+            PreferenceConfiguration config = touchConfig(game, TouchMode.TRACKPAD);
+            config.threeFingerTap = "middle_click";
+            config.fingerTapOnCancel = true;
+            FrameLayout container = streamContainer(game, null);
+            ReflectionHelpers.callInstanceMethod(game.touchInput, "initializeTouchContexts");
+            beginTap(container, 3);
+            dispatchAt(container, MotionEvent.ACTION_CANCEL, 0, new int[] {0, 1, 2}, 1045,
+                    flags, point(0), point(1), point(2));
+            Shadows.shadowOf(Looper.getMainLooper()).idleFor(200, TimeUnit.MILLISECONDS);
+            assertEquals(flags == 0 ? java.util.Collections.emptyList() : java.util.Arrays.asList("down 2", "up 2"),
+                    connection.buttons);
+        }
+    }
+
     @Test public void eitherGestureCanOpenTheDesktopPanelInEveryMouseTouchMode() {
         for (int mode : new int[] {TouchMode.TRACKPAD, TouchMode.DIRECT, TouchMode.LOCAL_CURSOR}) {
             for (int fingers : new int[] {3, 4}) {
