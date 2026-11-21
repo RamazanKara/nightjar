@@ -41,6 +41,8 @@ public class TrackpadContext implements TouchContext {
     private float scrollSpeed = 0.5f;
     // Input units per millimetre of finger travel, so scrolling feels the same on any touchpad or screen.
     private float unitsPerMm = 10f;
+    // A touchscreen scrolls per screen pixel rather than per millimetre; see TOUCHSCREEN_SCROLL_UNITS_PER_PIXEL.
+    private boolean scrollsPerPixel;
     private long lastMoveTime;
     private boolean isScrollTransitioning = false;
 
@@ -65,6 +67,10 @@ public class TrackpadContext implements TouchContext {
     // High-resolution scroll units (120 is one notch) per millimetre of finger travel at 100%;
     // the default setting is 50%.
     private static final double SCROLL_UNITS_PER_MM = 1.2;
+    // High-resolution scroll units per screen pixel at 100%. The normal trackpad mode sends 5 units per
+    // pixel at its default speed (RelativeTouchContext SCROLL_SPEED_FACTOR), so this is 5 at the default 50%.
+    // Per pixel rather than per millimetre, so the feel does not depend on the screen's density.
+    private static final double TOUCHSCREEN_SCROLL_UNITS_PER_PIXEL = 10.0;
     private static final double HORIZONTAL_SCROLL_RATIO = 2.0 / 3.0;
     private static final double ACCELERATION_THRESHOLD = 8.0;
     private static final double FLICK_FRICTION = 0.93;
@@ -110,6 +116,7 @@ public class TrackpadContext implements TouchContext {
                            MoveScale moveScale) {
         this(conn, actionIndex);
         this.moveScale = moveScale;
+        this.scrollsPerPixel = true;
         this.referenceWidth = absolute ? referenceWidth : 0;
         this.referenceHeight = absolute ? referenceHeight : 0;
     }
@@ -122,6 +129,9 @@ public class TrackpadContext implements TouchContext {
     }
 
     private double scrollGainY() {
+        if (scrollsPerPixel) {
+            return TOUCHSCREEN_SCROLL_UNITS_PER_PIXEL * scrollSpeed;
+        }
         return SCROLL_UNITS_PER_MM * scrollSpeed / unitsPerMm;
     }
 
