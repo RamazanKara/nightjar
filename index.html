@@ -7,11 +7,11 @@
   <meta name="theme-color" content="#f8f9fd" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#14161f" media="(prefers-color-scheme: dark)">
   <title>Your PC. In your hands. · Nightjar</title>
-  <meta name="description" content="Stream your PC to Android, Windows and Linux from any Moonlight-compatible host. Nightjar brings low latency, a clear picture and complete control to your screen.">
+  <meta name="description" content="Stream your PC to Android, Windows, Linux and macOS from any Moonlight-compatible host. Nightjar brings low latency, a clear picture and complete control to your screen.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Nightjar">
   <meta property="og:title" content="Your PC. In your hands. · Nightjar">
-  <meta property="og:description" content="Stream your PC to Android, Windows and Linux from any Moonlight-compatible host. Nightjar brings low latency, a clear picture and complete control to your screen.">
+  <meta property="og:description" content="Stream your PC to Android, Windows, Linux and macOS from any Moonlight-compatible host. Nightjar brings low latency, a clear picture and complete control to your screen.">
   <meta property="og:image" content="assets/og.png">
   <meta property="og:image:alt" content="Nightjar — Stream your PC to Android.">
   <meta property="og:image:width" content="1200">
@@ -44,10 +44,10 @@
     <section class="hero wrap">
       <div class="hero-copy">
         <h1>Your PC.<br><span>In your hands.</span></h1>
-        <p class="mission">Stream your PC to Android, Windows and Linux.</p>
-        <p class="hero-description">Your games, your desktop, your controls. Nightjar 4.0 connects to any Moonlight-compatible host and brings them all to your phone, handheld, TV or another PC.</p>
+        <p class="mission">Stream your PC to Android, Windows, Linux and macOS.</p>
+        <p class="hero-description">Your games, your desktop, your controls. Powered by a shared Rust streaming engine built for immediate response, steady frame pacing and sharp HDR across any Moonlight-compatible host.</p>
         <div class="actions"><a class="button" href="https://github.com/RamazanKara/nightjar/releases/latest"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Download Nightjar</a><a class="text-link" href="#setup">See the setup<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a></div>
-        <p class="fine-print">Android 5.0+ · Windows · Linux · Free and open source</p>
+        <p class="fine-print">Android 7.1+ · Windows · Linux &amp; Steam Deck · macOS · Free and open source</p>
       </div>
       <figure class="hero-media">
         <div class="orbit" aria-hidden="true"></div>
@@ -59,38 +59,40 @@
       <div class="wrap"><h2 class="small-heading" id="how-title">How it works</h2>
         <ol class="how-steps">
           <li><span class="step-index" aria-hidden="true">01</span><div><h3>Your PC renders.</h3><p>Your PC’s streaming host runs your games and apps.</p></div></li>
-          <li><span class="step-index" aria-hidden="true">02</span><div><h3>Nightjar streams.</h3><p>Video and audio travel to your Android device.</p></div></li>
+          <li><span class="step-index" aria-hidden="true">02</span><div><h3>Nightjar streams.</h3><p>Video and audio travel to your phone, TV or computer.</p></div></li>
           <li><span class="step-index" aria-hidden="true">03</span><div><h3>You take control.</h3><p>Your input goes straight back to your PC.</p></div></li>
         </ol>
       </div>
     </section>
     <section class="section wrap" id="features" aria-labelledby="features-title">
-      <div class="section-intro"><h2 id="features-title">Make every frame count.</h2><p>From your first input to the next frame. Built for a stream that feels immediate.</p></div>
+      <div class="section-intro"><h2 id="features-title">Built for latency and smoothness.</h2><p>From your first input to the next refresh. Engineered to stay responsive and tear-free on real screens and networks.</p></div>
       <div class="feature-grid">
-        <article class="feature"><span class="feature-number" aria-hidden="true">01</span><h3>About 7 ms to your screen</h3><p>On a Retroid Pocket 6, the median picture reached the screen 7 ms after the PC captured it (HEVC 1080p60, measured 2026-10-23).</p><p class="feature-detail">Rust streaming engine</p></article>
-        <article class="feature"><span class="feature-number" aria-hidden="true">02</span><h3>More detail. More colour.</h3><p>AV1, HEVC and H.264, with HDR10, HDR10+, HLG and Dolby Vision where your screen shows them, and full-colour 4:4:4 for sharp text.</p><p class="feature-detail">HDR10 · HDR10+ · HLG · Dolby Vision</p></article>
-        <article class="feature"><span class="feature-number" aria-hidden="true">03</span><h3>Motion in step with your game</h3><p>Variable refresh rate (VRR) pacing follows the game. Nightjar presents each frame as it arrives.</p><p class="feature-detail">VRR pacing</p></article>
-        <article class="feature"><span class="feature-number" aria-hidden="true">04</span><h3>Sharper on your screen</h3><p>Client-side upscaling with FSR and Snapdragon GSR brings your stream up to size, right on Android.</p><p class="feature-detail">FSR · Snapdragon GSR</p></article>
-        <article class="feature"><span class="feature-number" aria-hidden="true">05</span><h3>Share with your PC</h3><p>Clipboard sync, files, shared folders and USB devices such as a drawing tablet, with a Rubylight 3.0 PC that allows them.</p><p class="feature-detail">Clipboard · Files · USB</p></article>
-        <article class="feature"><span class="feature-number" aria-hidden="true">06</span><h3>Play together</h3><p>Join a free seat in your PC's split-screen co-op game, change bitrate and frame rate mid-stream, and talk over your microphone.</p><p class="feature-detail">Co-op · Microphone</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">01</span><h3>Shared Rust streaming engine</h3><p>One Rust core powers Android, Windows, Linux and macOS—with per-chip low-latency decoder tuning, decoder receive priority, non-blocking input hand-off and phase-lock timing.</p><p class="feature-detail">Low-latency core</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">02</span><h3>Real VRR, Fractional V-Sync &amp; Beam Racing</h3><p>On VRR and Android adaptive screens, frames present on the game’s own rhythm. Fixed high-refresh panels hold an even cadence, while wired desktop PyroWave draws rows before the frame finishes.</p><p class="feature-detail">Real VRR · Phase lock · Beam racing</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">03</span><h3>Frame Warp</h3><p>With a Rubylight PC, mouse and right-stick camera turns reflect on your very next display refresh while keeping the game’s HUD locked firmly in place.</p><p class="feature-detail">Instant camera response</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">04</span><h3>True HDR &amp; full-colour 4:4:4</h3><p>AV1, HEVC and H.264 hardware decoding plus GPU-accelerated PyroWave (including Apple Silicon macOS), with HDR10, HDR10+, HLG, Dolby Vision and sharp 4:4:4 colour for crisp text.</p><p class="feature-detail">HDR10+ · Dolby Vision · PyroWave 4:4:4</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">05</span><h3>Upscaling on every platform</h3><p>Sharp spatial scaling built right in: AMD FSR 1 and Snapdragon GSR on Android, Apple MetalFX on macOS and GPU video upscaling on Windows.</p><p class="feature-detail">FSR · Snapdragon GSR · MetalFX</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">06</span><h3>One console-grade library</h3><p>Every paired PC’s games on one Home with dynamic cover-lit colours, store shelves, sorting by play time or installed state, Auto UI scaling on desktop/TV and Wake-on-LAN.</p><p class="feature-detail">Home · Sort &amp; group · Auto scaling</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">07</span><h3>Tune &amp; share mid-stream</h3><p>Adjust bitrate, frame rate and Radeon/NVIDIA driver profiles from the stream menu, move live sessions with Continue here, run Dual screen and share clipboard, files and USB devices.</p><p class="feature-detail">Clipboard · Files · USB · Driver controls</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">08</span><h3>Play together, anywhere</h3><p>Join friends as a guest or take a split-screen co-op seat, stream away from home via Tailscale or direct P2P internet play without port forwarding, and roam across networks seamlessly.</p><p class="feature-detail">Guests · Co-op · Direct P2P · Roaming</p></article>
       </div>
       <div class="showcase">
-        <figure class="showcase-wide"><div class="frame"><img src="assets/shot-stream.webp" alt="A Nightjar stream on a phone held sideways: a space-flight game with the compact overlay showing 119.9 FPS, 8 ms RTT and 0.1% loss." width="1600" height="900" loading="lazy" decoding="async"></div><figcaption>See FPS, latency and frame loss in the compact overlay.</figcaption></figure>
+        <figure class="showcase-wide"><div class="frame"><img src="assets/shot-stream.webp" alt="A Nightjar stream on a phone held sideways: a space-flight game with the compact overlay showing FPS, round-trip time and packet loss." width="1600" height="900" loading="lazy" decoding="async"></div><figcaption>Live FPS, round-trip time, frame loss and stutter breakdown in the overlay.</figcaption></figure>
         <figure class="showcase-tall"><div class="phone"><img src="assets/shot-upscaling.webp" alt="The Nightjar Display &amp; image settings with the client-side upscaling choices: Off, Bilinear, FSR 1.0 and SGSR 1 (Snapdragon Game Super Resolution)." width="720" height="1600" loading="lazy" decoding="async"></div><figcaption>Choose FSR or Snapdragon GSR under Display &amp; image.</figcaption></figure>
       </div>
     </section>
     <section class="control-band" aria-labelledby="controls-title">
       <div class="control-layout wrap">
-        <figure class="control-media"><div class="phone"><img src="assets/shot-presets.webp" alt="Nightjar settings with the Native (recommended) preset selected next to Battery saver, above the Video, Display &amp; image, Controls, Audio, Streaming, App and Advanced sections." width="720" height="1600" loading="lazy" decoding="async"></div><figcaption>Presets for the way you play.</figcaption></figure>
+        <figure class="control-media"><div class="phone"><img src="assets/shot-presets.webp" alt="Nightjar settings with Recommended presets above the Video, Display &amp; image, Controls, Audio, Streaming, App and Advanced sections." width="720" height="1600" loading="lazy" decoding="async"></div><figcaption>Presets for the way you play.</figcaption></figure>
         <div class="control-copy"><h2 id="controls-title">Your play.<br>Your way.</h2><p class="section-description">Pick up your controller. Reach for the touchscreen. Or keep your mouse and keyboard.</p>
-          <div class="control-list"><article><h3>Controllers, including DualSense</h3><p>Connect USB and Bluetooth controllers. Remap buttons to fit the way you play.</p></article><article><h3>Touch, trackpad, mouse, keyboard</h3><p>Use direct touch, a natural trackpad or a cursor drawn on your phone. Build on-screen controls with sticks and triggers, in the Classic or Modern style.</p></article><article><h3>Performance, in plain sight</h3><p>See FPS, latency and frame loss in the performance overlay. Open diagnostics and choose when to share a report.</p></article><article><h3>Discover. Wake. Play.</h3><p>Local discovery finds your host. Wake-on-LAN brings your PC online for your next stream.</p></article></div>
+          <div class="control-list"><article><h3>Controllers, including DualSense</h3><p>Connect USB and Bluetooth controllers. Remap buttons to fit the way you play.</p></article><article><h3>Touch, trackpad, mouse, keyboard</h3><p>Use direct touch, a natural trackpad or a cursor drawn on your phone. Build on-screen controls with sticks and triggers, in the Classic or Modern style.</p></article><article><h3>Performance, in plain sight</h3><p>See FPS, latency stages and frame loss in the performance overlay. Open stream health diagnostics and share a redacted report anytime.</p></article><article><h3>Discover. Wake. Play.</h3><p>Local discovery finds your host. Wake-on-LAN brings your PC online for your next stream.</p></article></div>
         </div>
       </div>
     </section>
     <section class="section wrap" id="demo" aria-labelledby="demo-title">
       <div class="section-intro"><h2 id="demo-title">Your screen goes with you.</h2><p>Video and audio to you. Your controls back to your PC.</p></div>
       <figure class="demo">
-        <video controls preload="none" playsinline width="1920" height="1080" poster="assets/poster-16x9.webp" data-poster-portrait="assets/poster-9x16.webp" data-src-portrait="assets/trailer-9x16.mp4" aria-label="Nightjar trailer: Home on a TV with every PC's games and a game's page, a stream on a handheld with the performance overlay, the stream menu with Radeon settings, the PC keyboard and picture-in-picture, the feature list, our measurements, and the supported platforms and hosts">
+        <video controls preload="none" playsinline width="1920" height="1080" poster="assets/poster-16x9.webp" data-poster-portrait="assets/poster-9x16.webp" data-src-portrait="assets/trailer-9x16.mp4" aria-label="Nightjar trailer: Home on a TV with every PC's games and a game's page, a stream on a handheld with the performance overlay, the stream menu with Radeon settings, the PC keyboard, picture-in-picture, features, and supported platforms and hosts">
           <source src="assets/trailer-16x9.mp4" type="video/mp4">
           <a href="assets/trailer-16x9.mp4">Watch the trailer</a>
         </video>
@@ -118,8 +120,8 @@
   </main>
   <footer class="site-footer wrap">
     <div><a class="brand" href="index.html">NIGHTJAR</a><p>Your PC. Your stream.</p></div>
-    <nav aria-label="Footer navigation"><a href="docs.html">Documentation</a><a href="devices.html">Device results</a><a href="privacy.html">Privacy</a><a href="https://github.com/RamazanKara/nightjar">Source code</a></nav>
-    <p class="footer-note">For Android, Windows and Linux. Free and open source.</p>
+    <nav aria-label="Footer navigation"><a href="docs.html">Documentation</a><a href="devices.html">Device results</a><a href="privacy.html">Privacy</a><a href="https://github.com/RamazanKara/nightjar">Source code</a><a href="https://ramazankara.github.io/Rubylight/">Rubylight host</a></nav>
+    <p class="footer-note">For Android, Windows, Linux and macOS. Free and open source.</p>
   </footer>
 </body>
 </html>
