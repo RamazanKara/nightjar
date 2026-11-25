@@ -589,9 +589,9 @@ pub use controls::{
     VALUE_AFTER_KEY,
 };
 pub use fonts::{
-    apply, definitions, fallback_ahead, fonts_for, fonts_key, needs_fallback,
-    register_font_loader, regular, semibold, FontLoaderFn, FontValidateFn, Loading,
-    SystemFonts, LOADED, LOADING,
+    apply, definitions, fallback_ahead, fonts_for, fonts_for_scripts, fonts_key,
+    needs_fallback, register_font_loader, regular, scripts_for_text, semibold, FontLoaderFn,
+    FontValidateFn, Loading, ScriptSet, SystemFonts, LOADED, LOADING,
 };
 
 #[cfg(test)]

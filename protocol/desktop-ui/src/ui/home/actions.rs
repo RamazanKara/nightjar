@@ -1,6 +1,7 @@
 //! Home hero action controls, Continue playing panel, and first-pair setup card.
 
 use super::*;
+use crate::ui::pcs::{pc_action, PcAction};
 
 impl Launcher {
     /// The hero's chips, title and buttons.
@@ -62,50 +63,69 @@ impl Launcher {
         }
         hero_title(ui, left, title_y, right - left, &game.title);
 
-        let label = if state.resumes {
-            tr("Resume")
+        let away = host.reach == Reach::Offline || (host.reach == Reach::Online && !host.paired());
+        let could_play = state.could_play(host);
+        let (label, icon, enabled, working, away_action) = if away {
+            let action = pc_action(host);
+            let icon = match action {
+                PcAction::Pair => Icon::Lock,
+                other => other.icon().unwrap_or(Icon::Refresh),
+            };
+            (action.words(), icon, true, false, Some(action))
         } else {
-            tr("Play")
+            let label = if state.resumes { tr("Resume") } else { tr("Play") };
+            (
+                label,
+                Icon::Play,
+                could_play,
+                self.playing_soon(host.id, game.app_id),
+                None,
+            )
         };
         let play_rect =
             Rect::from_min_size(pos2(left, buttons_y), vec2(play_width(ui, label), BUTTON_H));
         // A game that can start takes the focus even while its app list is on the way, so the first
         // press is never spent on the star. A list that came without it is no way to start it.
-        let could_play = state.could_play(host);
         let play = play_button(
             ui,
             play_rect,
             Id::unique("hero-play"),
-            Icon::Play,
+            icon,
             label,
-            could_play,
-            self.playing_soon(host.id, game.app_id),
+            enabled,
+            working,
         );
-        let play_first = *first && could_play;
+        let play_first = *first && enabled;
         if play_first {
             *first = false;
         }
         self.focus_item(&play, "hero-play", play_first);
         if play.clicked() {
-            self.press_play(host, game, &state, commands);
+            if let Some(action) = away_action {
+                commands.push(action.command(host.id));
+            } else {
+                self.press_play(host, game, &state, commands);
+            }
         }
         let target = GameTarget::Library {
             app: game.app_id,
             favourite: false,
         };
-        let go = if state.resumes { en("Resume") } else { en("Play") };
-        if let Some(anchor) = menu_request_going(ui, &play, None, go) {
-            self.open_menu(
-                Dialog::GameMenu {
-                    host: host.id,
-                    game: target,
-                },
-                anchor,
-                "hero-play".into(),
-            );
+        if away_action.is_none() {
+            let go = if state.resumes { en("Resume") } else { en("Play") };
+            if let Some(anchor) = menu_request_going(ui, &play, None, go) {
+                self.open_menu(
+                    Dialog::GameMenu {
+                        host: host.id,
+                        game: target,
+                    },
+                    anchor,
+                    "hero-play".into(),
+                );
+            }
         }
         let mut next_x = play_rect.right() + 10.0;
-        if problem.is_some() {
+        if !away && problem.is_some() {
             let rect = Rect::from_min_size(
                 pos2(next_x, buttons_y),
                 vec2(capsule_width(ui, tr("Try again")), BUTTON_H),

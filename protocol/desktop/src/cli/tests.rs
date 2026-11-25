@@ -716,3 +716,20 @@ fn a_joined_game_goes_to_the_second_screen_by_its_id() {
         "what the PC reports wins"
     );
 }
+
+#[test]
+fn list_falls_back_through_candidate_host_addresses() {
+    let candidates = vec!["192.0.2.1".to_owned(), "198.51.100.2".to_owned()];
+    let mut tried = Vec::new();
+    let apps = list_apps_from_addresses(&candidates, "192.0.2.1", |addr| {
+        tried.push(addr.to_owned());
+        if addr == "192.0.2.1" {
+            Err(("timeout".into(), 1))
+        } else {
+            Ok(vec![app(1, "", "Desktop")])
+        }
+    })
+    .unwrap();
+    assert_eq!(tried, candidates);
+    assert_eq!(app_names(&apps), "Desktop\n");
+}

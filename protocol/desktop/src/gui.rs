@@ -2,6 +2,7 @@
 //! `SDL_RenderGeometryRaw` on the same renderer that shows the video, so the launcher, the
 //! stream and its overlay share one window and one swap chain.
 
+mod ime;
 mod stage;
 
 use std::collections::HashMap;
@@ -26,6 +27,8 @@ pub struct Gui {
     cursor: Option<egui::CursorIcon>,
     cursors: HashMap<i32, *mut SDL_Cursor>,
     focused: bool,
+    ime_composing: bool,
+    ime_area: Option<([i32; 4], i32)>,
     /// Screen readers, once attached to the window (a11y.rs).
     a11y: Option<crate::a11y::Accessibility>,
     /// Whether the coming passes are worth a screen reader's tree (see [`Self::set_readable`]).
@@ -276,6 +279,8 @@ impl Gui {
             cursor: None,
             cursors: HashMap::new(),
             focused: true,
+            ime_composing: false,
+            ime_area: None,
             a11y: None,
             readable: true,
             ran: Instant::now(),
@@ -493,10 +498,10 @@ impl Gui {
                         });
                     }
                 }
+                SDL_EVENT_TEXT_EDITING => ime::handle_text_editing(&mut self.ime_composing, &mut self.events, &event.edit),
                 SDL_EVENT_TEXT_INPUT => {
-                    let text = std::ffi::CStr::from_ptr(event.text.text).to_string_lossy().into_owned();
-                    if !text.chars().any(char::is_control) {
-                        self.events.push(Event::Text(text));
+                    if !ime::handle_text_input(&mut self.ime_composing, &mut self.events, &event.text) {
+                        return false;
                     }
                 }
                 SDL_EVENT_WINDOW_FOCUS_GAINED => {
@@ -509,6 +514,7 @@ impl Gui {
                     self.focused = false;
                     if let Some(a11y) = &mut self.a11y { a11y.focus(false); }
                     self.sync_modifiers(Modifiers::NONE);
+                    ime::clear_composition(&mut self.ime_composing, &mut self.events);
                     self.events.push(Event::WindowFocused(false));
                 }
                 SDL_EVENT_RENDER_TARGETS_RESET => {
@@ -595,18 +601,9 @@ impl Gui {
         if let (Some(a11y), Some(update)) = (&mut self.a11y, &output.accesskit_update) {
             a11y.update(window, update);
         }
-        let wants_text = output.ime.is_some();
         // SDL's own state, not a copy: a stream's text field starts and stops text input too.
         // SAFETY: a live window.
-        unsafe {
-            if wants_text != SDL_TextInputActive(window) {
-                if wants_text {
-                    SDL_StartTextInput(window);
-                } else {
-                    SDL_StopTextInput(window);
-                }
-            }
-        }
+        unsafe { ime::sync_platform_text_input(window, &mut self.ime_area, output.ime, self.ctx.zoom_factor()) };
         for command in &output.commands {
             if let egui::OutputCommand::CopyText(text) = command
                 && let Ok(text) = CString::new(text.as_str()) {

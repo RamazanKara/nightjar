@@ -514,3 +514,39 @@ fn gui_event_updates_egui_modifiers_and_clipboard_shortcuts() {
     assert!(gui.events.iter().any(|e| matches!(e, Event::ModifiersChanged(m) if *m == Modifiers::NONE)));
     assert_eq!(run(&mut gui), (false, false));
 }
+
+#[test]
+fn ime_preedit_and_commit_flow_through_gui_events() {
+    let scale = Scale { pixels_per_point: 1.0, density: 1.0, size: Vec2::new(400.0, 300.0) };
+    let mut gui = Gui::new();
+    let preedit = CString::new("nihao").unwrap();
+    // SAFETY: zeroed union populated with valid SDL_EVENT_TEXT_EDITING fields.
+    let mut edit: SDL_Event = unsafe { std::mem::zeroed() };
+    edit.r#type = SDL_EVENT_TEXT_EDITING.0;
+    edit.edit.text = preedit.as_ptr();
+    edit.edit.start = 0;
+    edit.edit.length = 2;
+    assert!(gui.handle(&edit, scale));
+    assert_eq!(
+        gui.events,
+        vec![Event::Ime(egui::ImeEvent::Preedit {
+            text: "nihao".into(),
+            active_range_chars: Some(0..2),
+        })]
+    );
+    gui.events.clear();
+
+    let committed = CString::new("你好").unwrap();
+    // SAFETY: zeroed union populated with valid SDL_EVENT_TEXT_INPUT fields.
+    let mut text_ev: SDL_Event = unsafe { std::mem::zeroed() };
+    text_ev.r#type = SDL_EVENT_TEXT_INPUT.0;
+    text_ev.text.text = committed.as_ptr();
+    assert!(gui.handle(&text_ev, scale));
+    assert_eq!(gui.events, vec![Event::Ime(egui::ImeEvent::Commit("你好".into()))]);
+    gui.events.clear();
+
+    let plain = CString::new("a").unwrap();
+    text_ev.text.text = plain.as_ptr();
+    assert!(gui.handle(&text_ev, scale));
+    assert_eq!(gui.events, vec![Event::Text("a".into())]);
+}

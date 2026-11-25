@@ -216,6 +216,8 @@ pub struct Launcher {
     pub power: Vec<crate::power_types::Offer>,
     /// The system's preferred languages, for the Language setting's default.
     pub system_languages: Vec<String>,
+    /// Non-Latin-1 scripts required by shown PC names and game titles, cached by host/library signature.
+    title_scripts: (u64, crate::theme::ScriptSet),
     /// The look and motion egui's style was last built for.
     look: Option<(crate::theme::Look, bool)>,
     /// Whether the system asks for light apps (`sdl::system_light`), for the System theme: the main
@@ -345,6 +347,7 @@ impl Launcher {
             identity_error: None,
             power: Vec::new(),
             system_languages: Vec::new(),
+            title_scripts: (0, crate::theme::ScriptSet::default()),
             look: None,
             system_light: false,
             screen_keyboard: false,
@@ -366,7 +369,7 @@ impl Launcher {
         if self.zoom_keys(&ctx) {
             commands.push(Command::SaveSettings);
         }
-        self.sync_look(&ctx);
+        self.sync_look(&ctx, view.hosts);
         #[cfg(any(test, feature = "demo-library"))]
         if let Some(menu) = self.demo_menu {
             self.demo_stream_menu(ui, menu);

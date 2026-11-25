@@ -282,3 +282,19 @@ fn pending_bitrate_slider_flushes_immediately_when_taken_on_menu_close() {
     assert!(take_pending_bitrate_slider(&ctx));
     assert!(!take_pending_bitrate_slider(&ctx), "taking settles it once");
 }
+
+#[test]
+fn unreadable_list_names_removed_pc_or_unready_key() {
+    use crate::hosts::Hosts;
+    use std::sync::Arc;
+    let hosts = Hosts::without_discovery(vec![nightjar_desktop_config::config::HostRecord::default()], Arc::new(|| {}));
+    let id = hosts.list[0].id;
+    assert_eq!(
+        launch::unreadable_list(&hosts, id),
+        crate::strings::tr("This device’s pairing key is not ready yet. Try again in a moment.")
+    );
+    assert_eq!(
+        launch::unreadable_list(&hosts, id + 99),
+        crate::strings::tr("This PC is no longer in your list.")
+    );
+}

@@ -615,3 +615,34 @@ fn covers_load_a_few_at_a_time_and_all_of_them() {
     });
     wait_for("a cover asked for later loads", &|| landed.load(Ordering::SeqCst) == asked + 1);
 }
+
+#[test]
+fn corrupt_cached_cover_is_removed_instead_of_staying_stuck() {
+    let ctx = egui::Context::default();
+    let (store, dir) = art_store("corrupt");
+    let (waker, woken) = telling_waker();
+    let mut record = paired_record("uid");
+    record.address = "127.0.0.1".into();
+    let mut hosts = Hosts::without_discovery(vec![record], waker);
+    hosts.set_identity(Arc::new(ClientIdentity::generate().expect("a key")));
+    hosts.list[0].apps = Apps::Loaded(vec![App {
+        name: "Game".into(),
+        id: 7,
+        hdr_supported: false,
+        uuid: String::new(),
+        host_index: None,
+        art_version: "v1".into(),
+        control: AppControl::None,
+        monitor_resume: false,
+    }]);
+    let id = hosts.list[0].id;
+    hosts.list[0].reach = Reach::Offline;
+    let file = cover_file(&store, 7, b"<html>not a cover png</html>");
+    assert!(file.exists());
+    hosts.request_art(id, 7, "v1", &store);
+    woken.recv_timeout(Duration::from_secs(10)).expect("cover job runs");
+    hosts.drain(&ctx);
+    assert!(!file.exists(), "corrupt non-placeholder cache must be removed");
+    end_pass(&ctx);
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -210,6 +210,53 @@ fn log_pyrowave_probe_error(ten_bit: bool, reason: &str) {
     }
 }
 
+/// Proleptic Gregorian civil date to days since 1970-01-01 (Howard Hinnant algorithm).
+// Windows and Unix (Linux and macOS) share this date helper via local_day().
+#[cfg_attr(not(any(windows, unix, test)), allow(dead_code))]
+pub(crate) fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
+    let y = year - i64::from(month <= 2);
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let m = i64::from(month);
+    let doy = (153 * (m + if m > 2 { -3 } else { 9 }) + 2) / 5 + i64::from(day) - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+/// Converts Unix UTC seconds to the local calendar day index since 1970-01-01.
+pub(crate) fn local_day(secs: u64) -> i64 {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::{FILETIME, SYSTEMTIME};
+        use windows::Win32::Storage::FileSystem::FileTimeToLocalFileTime;
+        use windows::Win32::System::Time::FileTimeToSystemTime;
+        let ticks = secs.saturating_mul(10_000_000).saturating_add(116_444_736_000_000_000);
+        let ft = FILETIME { dwLowDateTime: ticks as u32, dwHighDateTime: (ticks >> 32) as u32 };
+        let (mut local_ft, mut st) = (FILETIME::default(), SYSTEMTIME::default());
+        // SAFETY: valid pointers to local structs filled by Win32 time conversion.
+        if unsafe { FileTimeToLocalFileTime(&ft, &mut local_ft).is_ok() && FileTimeToSystemTime(&local_ft, &mut st).is_ok() } {
+            return days_from_civil(i64::from(st.wYear), u32::from(st.wMonth), u32::from(st.wDay));
+        }
+    }
+    // Unix (Linux and macOS): convert UTC seconds to local calendar day via `localtime_r`.
+    #[cfg(unix)]
+    {
+        if let Ok(t) = libc::time_t::try_from(secs) {
+            // SAFETY: zeroed `libc::tm` written by thread-safe POSIX `localtime_r`.
+            let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+            let out = unsafe { libc::localtime_r(&t, &mut tm) };
+            if !out.is_null() {
+                return days_from_civil(
+                    i64::from(tm.tm_year) + 1900,
+                    (tm.tm_mon + 1).max(1) as u32,
+                    tm.tm_mday.max(1) as u32,
+                );
+            }
+        }
+    }
+    (secs / 86_400) as i64
+}
+
 /// Registers crate-level callback hooks before SDL and the UI initialize.
 pub(crate) fn register_hooks() {
     font_loader::register();
@@ -254,6 +301,7 @@ pub(crate) fn register_hooks() {
                 String::new()
             }
         },
+        local_day,
     });
 }
 

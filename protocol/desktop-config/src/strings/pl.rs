@@ -1748,4 +1748,11 @@ sudo sysctl -w net.core.rmem_max={}", "Bufor odbioru: system przydzielił {0} Ki
     ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Nie udało się zapisać klucza parowania, dlatego komputery sparowane z tym urządzeniem trzeba będzie sparować ponownie po restarcie: {}"),
     ("Another copy", "Inna kopia"),
     ("On the new device, select this PC in Nightjar or Moonlight.", "Na nowym urządzeniu wybierz ten komputer w Nightjar lub Moonlight."),
+    ("This Mac only offers sleep from Nightjar.", "Ten Mac obsługuje z poziomu Nightjar wyłącznie tryb uśpienia."),
+    ("This paired PC does not support PyroWave pace calibration.", "Ten sparowany komputer nie obsługuje kalibracji rytmu PyroWave."),
+    ("Neither endpoint reports a link speed. No calibration was saved.", "Żaden z punktów końcowych nie zgłasza szybkości łącza. Nie zapisano kalibracji."),
+    ("The stream’s wire bitrate is too high for this link. Lower its bitrate before calibrating.", "Przepływność sieciowa strumienia jest zbyt wysoka dla tego łącza. Obniż ją przed kalibracją."),
+    ("Testing {} Mbps frame pace", "Testowanie rytmu klatek przy {} Mb/s"),
+    ("No usable pace was measured. The PC will keep its default.", "Nie udało się zmierzyć użytecznego rytmu. Komputer zachowa wartość domyślną."),
+    ("Could not start network test: {}", "Nie można uruchomić testu sieci: {}"),
 ];

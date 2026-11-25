@@ -1,7 +1,7 @@
 //! Pure controller source attribution and "Controllers is Off" notice helpers shared between
 //! launch planning and the media stream layer.
 
-use crate::config::{self, Overrides, Profile, Settings};
+use crate::config::{Overrides, Profile, Settings};
 use crate::strings::{tr, trf};
 
 /// The saved switches of "Controllers" (`nightjar_policy::controllers`).
@@ -106,6 +106,5 @@ impl ControllersOffNotice {
 /// made in `from` is Off.
 pub fn controllers_notice(settings: &Settings, from: &ControllersFrom, connected: usize) -> Option<String> {
     let choice = nightjar_policy::controllers::Controllers::from_saved(settings.controllers, settings.multi_controller);
-    let _ = config::default_bitrate_kbps;
     choice.leaves_connected_here(connected).then(|| from.off_notice()).flatten()
 }

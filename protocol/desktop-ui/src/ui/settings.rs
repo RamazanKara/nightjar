@@ -530,6 +530,7 @@ impl Launcher {
             held: false,
             defer_reset: false,
             reset_clicked: false,
+            custom_reset: None,
         };
         let screen = self.screen;
         // Variable refresh rate needs tearing on Windows: where the swap chain can't, the row is not

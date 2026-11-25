@@ -596,3 +596,19 @@ fn the_fonts_follow_the_language_once_per_change() {
     apply(&ctx);
     assert_eq!(ctx.data(|d| d.get_temp::<Lang>(fonts_key())), None);
 }
+
+#[test]
+fn title_script_detection_picks_matching_fallback_and_skips_ascii() {
+    assert_eq!(scripts_for_text("Cyberpunk 2077"), ScriptSet::default());
+    let mut mixed = scripts_for_text("デスクトップ");
+    mixed.merge(scripts_for_text("한국어 게임"));
+    assert_ne!(mixed.without_primary(Lang::En), ScriptSet::default());
+    // Japanese primary interface covers Kana and Hanzi already, leaving only Korean extra.
+    assert_ne!(mixed.without_primary(Lang::Ja), ScriptSet::default());
+    assert_eq!(
+        scripts_for_text("デスクトップ").without_primary(Lang::Ja),
+        ScriptSet::default()
+    );
+    assert_ne!(scripts_for_text("Кириллица").without_primary(Lang::En), ScriptSet::default());
+    assert_eq!(scripts_for_text("Кириллица").without_primary(Lang::Ru), ScriptSet::default());
+}

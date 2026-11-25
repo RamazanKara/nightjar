@@ -145,11 +145,31 @@ impl Launcher {
                     ui.label(RichText::new(tr("Enter the PIN and passphrase created on the PC.")).color(ON_SURFACE_VARIANT));
                     ui.add_space(space::S);
                     let edit = dialog_field(ui, egui::TextEdit::singleline(pin).hint_text(hint(tr("PIN"), regular(text::BODY))));
-                    if focus_first {
+                    let pass = dialog_field(ui, egui::TextEdit::singleline(passphrase).password(true).hint_text(hint(tr("Passphrase"), regular(text::BODY))));
+                    let pad_target_id = Id::unique("otp-pad-target");
+                    let mut target = ui.data(|d| d.get_temp::<u8>(pad_target_id)).unwrap_or(0);
+                    if edit.gained_focus() || edit.clicked() {
+                        target = 0;
+                    }
+                    if pass.gained_focus() || pass.clicked() {
+                        target = 1;
+                    }
+                    ui.data_mut(|d| d.insert_temp(pad_target_id, target));
+                    if keys_on_screen {
+                        ui.add_space(space::S);
+                        let first = if target == 0 {
+                            text_pad(ui, pin, Some(4))
+                        } else {
+                            text_pad(ui, passphrase, None)
+                        };
+                        if focus_first {
+                            first.request_focus();
+                            focused = true;
+                        }
+                    } else if focus_first {
                         edit.request_focus();
                         focused = true;
                     }
-                    dialog_field(ui, egui::TextEdit::singleline(passphrase).password(true).hint_text(hint(tr("Passphrase"), regular(text::BODY))));
                     if let Some(error) = error {
                         ui.label(RichText::new(error.as_str()).color(ERROR));
                     }

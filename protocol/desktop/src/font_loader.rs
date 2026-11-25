@@ -38,9 +38,31 @@ pub fn os_reduces_motion() -> bool {
     unsafe { objc2_app_kit::NSWorkspace::sharedWorkspace().accessibilityDisplayShouldReduceMotion() }
 }
 
+/// Whether `org.freedesktop.appearance` `reduced-motion` (`1` = reduce) asks to reduce motion.
+#[cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
+pub(crate) fn portal_reduces_motion(value: u32) -> bool {
+    value == 1
+}
+
 #[cfg(target_os = "linux")]
 pub fn os_reduces_motion() -> bool {
-    false
+    if std::env::var_os("GTK_ENABLE_ANIMATIONS").is_some_and(|v| v == "0") {
+        return true;
+    }
+    use std::time::Duration;
+    use zbus::blocking::{connection::Builder, Proxy};
+    use zbus::zvariant::OwnedValue;
+    let read = (|| -> zbus::Result<OwnedValue> {
+        let connection = Builder::session()?.method_timeout(Duration::from_millis(200)).build()?;
+        let portal = Proxy::new_owned(
+            connection,
+            "org.freedesktop.portal.Desktop",
+            "/org/freedesktop/portal/desktop",
+            "org.freedesktop.portal.Settings",
+        )?;
+        portal.call("ReadOne", &("org.freedesktop.appearance", "reduced-motion"))
+    })();
+    read.ok().and_then(|v| u32::try_from(v).ok()).is_some_and(portal_reduces_motion)
 }
 
 /// Validates a loaded font face with `skrifa` so egui never panics on WOFF2 or broken indices.
@@ -395,5 +417,12 @@ mod tests {
         fonts_for(&ctx, Lang::En);
         assert!(!LOADED.lock().unwrap().iter().any(|e| e.0 == Lang::Ja));
         assert!(!LOADING.lock().unwrap().contains(&Lang::Ja));
+    }
+
+    #[test]
+    fn linux_portal_reduced_motion_value_maps_one_only() {
+        assert!(!portal_reduces_motion(0));
+        assert!(portal_reduces_motion(1));
+        assert!(!portal_reduces_motion(2));
     }
 }

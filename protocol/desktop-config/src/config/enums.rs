@@ -470,7 +470,6 @@ impl OverlayCorner {
     }
 }
 
-/// How Home lays out its library rows (Android's `home_view_layout`).
 /// "When Nightjar opens": the setting behind `nightjar_policy::open_play::Opens`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -500,6 +499,7 @@ impl OpenOnStart {
     }
 }
 
+/// How Home lays out its library rows (Android's `home_view_layout`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HomeLayout {

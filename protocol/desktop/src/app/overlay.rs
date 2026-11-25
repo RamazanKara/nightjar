@@ -121,8 +121,6 @@ fn show_usb_section(ui: &mut egui::Ui, panel: &mut usb::Panel) {
     }
 }
 
-/// The overlay and toasts, drawn with egui over the picture.
-/// Returns whether the user's shortcuts changed (saved or deleted in the stream menu) and want writing.
 /// Whether a stream with `settings` goes on video planes, drawing straight to the display
 /// (`kms_scanout::planned`).
 #[cfg(target_os = "linux")]

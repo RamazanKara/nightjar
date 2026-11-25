@@ -484,3 +484,42 @@ fn a_problem_report_without_logs_is_its_header() {
     assert_eq!(text, "Nightjar 9.9.9");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn add_secrets_redacts_pinned_address_and_typed_endpoints() {
+    use crate::config::HostRecord;
+    use nightjar_policy::hosts::EndpointSlot;
+
+    let slot = |address: &str| Some(EndpointSlot { address: address.into(), ..EndpointSlot::default() });
+    let record = HostRecord {
+        name: "SecretTower".into(),
+        unique_id: "uid-redact-endpoints".into(),
+        address: "198.51.100.10".into(),
+        pinned_address: Some("198.51.100.11".into()),
+        local_endpoint: slot("198.51.100.12"),
+        manual_endpoint: slot("198.51.100.13"),
+        ipv6_endpoint: slot("[2001:db8::14]:47989"),
+        remote_endpoint: slot("203.0.113.15"),
+        pinned_endpoint: slot("203.0.113.16:48989"),
+        ..HostRecord::default()
+    };
+    add_secrets(&record);
+
+    let mut redactor = Redactor::default();
+    let mut out = Vec::new();
+    redactor.push(
+        b"pinned=198.51.100.11 local=198.51.100.12 manual=198.51.100.13 v6=[2001:db8::14]:47989 remote=203.0.113.15 pin_slot=203.0.113.16:48989\n",
+        &mut out,
+    );
+    let scrubbed = String::from_utf8(out).unwrap();
+    for secret in [
+        "198.51.100.11",
+        "198.51.100.12",
+        "198.51.100.13",
+        "[2001:db8::14]:47989",
+        "203.0.113.15",
+        "203.0.113.16:48989",
+    ] {
+        assert!(!scrubbed.contains(secret), "{secret} leaked in {scrubbed}");
+    }
+}

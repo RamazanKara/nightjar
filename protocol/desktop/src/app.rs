@@ -525,6 +525,15 @@ pub(crate) fn stream_sleep(duration: Duration, precise: bool, pad_wait: Option<D
 }
 
 impl App {
+    fn poll_launcher_event(&mut self, event: &SDL_Event) -> bool {
+        let controller_test =
+            self.launcher.screen == Screen::Controllers && self.launcher.controller_test;
+        let woke = launcher_event_wakes_frame(event, controller_test, self.stick_held);
+        self.latency_input(event);
+        self.handle_launcher_event(event);
+        woke
+    }
+
     /// Polls launcher events with adaptive joystick cadence instead of SDL's 1000 Hz wakeup.
     /// Loops internally across 16 ms joystick poll slices until either a waking event arrives or
     /// `timeout` elapses, avoiding redundant launcher redraws while a controller sits idle (#179).
@@ -542,15 +551,11 @@ impl App {
                 unsafe { SDL_UpdateJoysticks() };
                 self.pad_poll.polled(now);
             }
-            let controller_test =
-                self.launcher.screen == Screen::Controllers && self.launcher.controller_test;
             // SAFETY: event polling on the main thread.
             let mut event: SDL_Event = unsafe { std::mem::zeroed() };
             let mut woke = false;
             while unsafe { SDL_PollEvent(&mut event) } {
-                woke |= launcher_event_wakes_frame(&event, controller_test, self.stick_held);
-                self.latency_input(&event);
-                self.handle_launcher_event(&event);
+                woke |= self.poll_launcher_event(&event);
             }
             if woke || !self.running {
                 return;
@@ -570,17 +575,9 @@ impl App {
             let slice = launcher_wait_slice_ms(remaining, pad_wait).max(1);
             // SAFETY: event polling on the main thread.
             if unsafe { SDL_WaitEventTimeout(&mut event, slice) } {
-                let controller_test =
-                    self.launcher.screen == Screen::Controllers && self.launcher.controller_test;
-                woke |= launcher_event_wakes_frame(&event, controller_test, self.stick_held);
-                self.latency_input(&event);
-                self.handle_launcher_event(&event);
+                woke |= self.poll_launcher_event(&event);
                 while unsafe { SDL_PollEvent(&mut event) } {
-                    let controller_test =
-                        self.launcher.screen == Screen::Controllers && self.launcher.controller_test;
-                    woke |= launcher_event_wakes_frame(&event, controller_test, self.stick_held);
-                    self.latency_input(&event);
-                    self.handle_launcher_event(&event);
+                    woke |= self.poll_launcher_event(&event);
                 }
                 if woke || !self.running {
                     return;

@@ -1748,4 +1748,11 @@ sudo sysctl -w net.core.rmem_max={}", "Буфер приёма: система �
     ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Не удалось сохранить ключ сопряжения, поэтому ПК, сопряжённые с этим устройством, придётся сопрячь заново после перезапуска: {}"),
     ("Another copy", "Другая копия"),
     ("On the new device, select this PC in Nightjar or Moonlight.", "На новом устройстве выберите этот ПК в Nightjar или Moonlight."),
+    ("This Mac only offers sleep from Nightjar.", "Этот Mac поддерживает из Nightjar только режим сна."),
+    ("This paired PC does not support PyroWave pace calibration.", "Этот сопряжённый ПК не поддерживает калибровку темпа PyroWave."),
+    ("Neither endpoint reports a link speed. No calibration was saved.", "Ни одна из сторон не сообщает скорость канала. Калибровка не сохранена."),
+    ("The stream’s wire bitrate is too high for this link. Lower its bitrate before calibrating.", "Сетевой битрейт потока слишком высок для этого канала. Снизьте его перед калибровкой."),
+    ("Testing {} Mbps frame pace", "Проверка темпа кадров {} Мбит/с"),
+    ("No usable pace was measured. The PC will keep its default.", "Не удалось измерить пригодный темп. ПК сохранит значение по умолчанию."),
+    ("Could not start network test: {}", "Не удалось запустить проверку сети: {}"),
 ];

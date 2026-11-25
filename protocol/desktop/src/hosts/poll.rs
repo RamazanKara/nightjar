@@ -193,14 +193,17 @@ impl Hosts {
         }
         let sender = self.sender.clone();
         let waker = self.waker.clone();
-        let _ = std::thread::Builder::new()
+        if let Err(e) = std::thread::Builder::new()
             .name(name.into())
             .spawn(move || {
                 if let Some(event) = work() {
                     let _ = sender.send(event);
                     waker();
                 }
-            });
+            })
+        {
+            eprintln!("nightjar: cannot start {name} worker: {e}");
+        }
     }
 
     /// Runs `work` on PC `id`'s worker for `lane`, started on its first request: the lane's
@@ -502,7 +505,7 @@ pub(super) fn punches_now(away: bool, tunnel_up: impl FnOnce() -> bool) -> bool 
 }
 
 /// The addresses a poll tries in turn.
-pub(super) fn poll_addresses(record: &HostRecord) -> Vec<String> {
+pub(crate) fn poll_addresses(record: &HostRecord) -> Vec<String> {
     nightjar_core::hosts::poll::desktop_poll_addresses(
         &record.to_shared_fields(),
         internet_reply(record).as_ref(),

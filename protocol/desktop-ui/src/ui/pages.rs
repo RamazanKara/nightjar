@@ -235,7 +235,7 @@ impl Launcher {
         column(ui, SETTINGS_W, |ui| {
             section(ui, "PC");
             detail(ui, tr("Streaming app"), &software);
-            detail(ui, tr("Address"), &host.record.address);
+            detail(ui, tr("Address"), host.connect_address());
             if let Some(gpu) = host.info.as_ref().and_then(|info| info.gpu_type.as_deref()).filter(|gpu| !gpu.is_empty()) {
                 detail(ui, tr("GPU"), gpu);
             }
@@ -601,6 +601,10 @@ impl Launcher {
                         self.profiles.home_wifi.push(ssid.clone());
                     }
             });
+            if self.profiles.automatic && self.wants_text_pad() {
+                ui.add_space(space::S);
+                text_pad(ui, &mut self.home_wifi_name, Some(32));
+            }
             self.profiles.home_wifi.retain(|name| {
                 !ui.horizontal(|ui| { ui.label(name); text_button(ui, "Remove").clicked() }).inner
             });

@@ -217,15 +217,22 @@ pub(in crate::ui) fn setting_row(
     control: impl FnOnce(&mut Ui, &mut Settings) -> Response,
 ) -> Option<Response> {
     let (action, mut note, room) = (rows.action.take(), rows.note.take(), std::mem::take(&mut rows.room));
-    let (reason, held, defer_reset) = (rows.idle.take(), std::mem::take(&mut rows.held), std::mem::take(&mut rows.defer_reset));
+    let (reason, held, defer_reset, custom_reset) = (
+        rows.idle.take(),
+        std::mem::take(&mut rows.held),
+        std::mem::take(&mut rows.defer_reset),
+        rows.custom_reset.take(),
+    );
     // A row that does nothing now still shows while it holds another value than its default, or
     // the PC's, game's or profile's layer sets it, so the value can be seen and set back.
     // Worked out only for a row that does nothing now: it formats both values.
     let changed = reason.is_some()
         && (held
-            || keys.first().is_some_and(|key| {
-                value_text(key, settings, &rows.display, rows.style) != value_text(key, &rows.defaults, &rows.display, rows.style)
-            })
+            || custom_reset.is_some_and(|(_, differs)| differs)
+            || (custom_reset.is_none()
+                && keys.first().is_some_and(|key| {
+                    value_text(key, settings, &rows.display, rows.style) != value_text(key, &rows.defaults, &rows.display, rows.style)
+                }))
             || rows.layer.as_ref().is_some_and(|(_, overrides)| !keys.is_empty() && overrides.has(keys)));
     let id = keys.first().copied().or(action).unwrap_or_default();
     // A row whose own control had focus or was dragged when last drawn stays while that control still
@@ -293,8 +300,14 @@ pub(in crate::ui) fn setting_row(
             })
         }
         (None, Some(key)) => {
-            let default = value_text(key, &rows.defaults, &rows.display, rows.style);
-            let differs = !second && value_text(key, settings, &rows.display, rows.style) != default;
+            let (default, differs) = match custom_reset {
+                Some((default, differs)) => (tr(default).to_owned(), differs),
+                None => {
+                    let default = value_text(key, &rows.defaults, &rows.display, rows.style);
+                    let differs = !second && value_text(key, settings, &rows.display, rows.style) != default;
+                    (default, differs)
+                }
+            };
             let reset_w = ui.painter().layout_no_wrap(tr("Reset").to_owned(), semibold(text::LABEL), *ON_SURFACE).size().x + 24.0;
             let mut reset = false;
             let response = settings_row(ui, label, description, note, None, false, reset_w + room, |ui| {
@@ -346,16 +359,15 @@ pub(in crate::ui) fn setting_row(
     Some(response)
 }
 
-/// A row: its label on the left, the control with the value on the right. The hint shows under
-/// the label while the pointer is over the row or focus is in it: one line, cut, with the whole
-/// text as a tooltip, or wrapped whole (the row grows for it) for a row keys or a controller
-/// focused. A note shows
-/// always. A row a PC, game or profile sets has an amber bar at its left edge and, under its
-/// label, where its value comes from beside the layer's box. `reset_w` keeps room left of the
-/// control for a Reset, so the text never moves when it comes and goes.
 /// Where the settings page says whether keys or a controller are in the hand, for [`settings_row`].
 pub(super) const KEYS_IN_HAND: &str = "settings-keys-in-hand";
 
+/// A row: its label on the left, the control with the value on the right. The hint shows under
+/// the label while the pointer is over the row or focus is in it: one line, cut, with the whole
+/// text as a tooltip, or wrapped whole (the row grows for it) for a row keys or a controller
+/// focused. A note shows always. A row a PC, game or profile sets has an amber bar at its left
+/// edge and, under its label, where its value comes from beside the layer's box. `reset_w` keeps
+/// room left of the control for a Reset, so the text never moves when it comes and goes.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn settings_row(
     ui: &mut Ui,

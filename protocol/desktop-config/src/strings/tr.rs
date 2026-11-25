@@ -1748,4 +1748,11 @@ sudo sysctl -w net.core.rmem_max={}", "Alma arabelleği: sistem istenen {1} KiB'
     ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Eşleştirme anahtarı kaydedilemediğinden bu cihazla eşleştirilen bilgisayarların yeniden başlatma sonrası tekrar eşleştirilmesi gerekir: {}"),
     ("Another copy", "Başka bir kopya"),
     ("On the new device, select this PC in Nightjar or Moonlight.", "Yeni cihazda Nightjar veya Moonlight’ta bu bilgisayarı seçin."),
+    ("This Mac only offers sleep from Nightjar.", "Bu Mac, Nightjar üzerinden yalnızca uyku modunu destekler."),
+    ("This paired PC does not support PyroWave pace calibration.", "Bu eşleştirilmiş PC, PyroWave tempo kalibrasyonunu desteklemiyor."),
+    ("Neither endpoint reports a link speed. No calibration was saved.", "Her iki uç da bağlantı hızı bildirmiyor. Kalibrasyon kaydedilmedi."),
+    ("The stream’s wire bitrate is too high for this link. Lower its bitrate before calibrating.", "Akışın ağ bit hızı bu bağlantı için çok yüksek. Kalibrasyondan önce bit hızını düşürün."),
+    ("Testing {} Mbps frame pace", "{} Mbps kare temposu test ediliyor"),
+    ("No usable pace was measured. The PC will keep its default.", "Kullanılabilir bir tempo ölçülemedi. PC varsayılan değerini koruyacak."),
+    ("Could not start network test: {}", "Ağ testi başlatılamadı: {}"),
 ];

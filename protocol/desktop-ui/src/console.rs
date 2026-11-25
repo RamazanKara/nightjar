@@ -418,11 +418,15 @@ pub fn host_line(source: &Source<'_>) -> HostLine {
 }
 
 pub fn list_line(entry: &Entry, played: Option<u64>, now: u64) -> String {
+    list_line_with_day(entry, played, now, crate::platform_hooks::hooks().local_day)
+}
+
+pub(crate) fn list_line_with_day(entry: &Entry, played: Option<u64>, now: u64, local_day: fn(u64) -> i64) -> String {
     let when = played.map(|at| {
         if at == 0 {
             tr("Not played yet").to_owned()
         } else {
-            let days = now.saturating_sub(at) / 86_400;
+            let days = (local_day(now) - local_day(at)).max(0);
             match days {
                 0 => tr("Played today").to_owned(),
                 1 => tr("Played yesterday").to_owned(),

@@ -2,9 +2,6 @@
 
 use super::super::*;
 
-/// Input-only on a PC without its own mode: the smallest stream every host takes, as on Android.
-/// It leaves the PC's display mode and its speakers alone: no virtual display or VRR, and the
-/// PC keeps playing its sound.
 /// A session whose picture nobody sees (input only, microphone only): the plainest stream, and
 /// nothing that needs the GPU renderer (Linux would switch to it, or refuse with OpenGL set).
 pub(crate) fn input_only_settings(settings: &mut config::Settings) {
@@ -18,6 +15,9 @@ pub(crate) fn input_only_settings(settings: &mut config::Settings) {
     settings.fps = 60;
 }
 
+/// Input-only on a PC without its own mode: the smallest stream every host takes, as on Android.
+/// It leaves the PC's display mode and its speakers alone: no virtual display or VRR, and the
+/// PC keeps playing its sound.
 pub(crate) fn small_stream(settings: &mut config::Settings) {
     use nightjar_policy::launch::{SMALL_BITRATE_KBPS, SMALL_FPS, SMALL_HEIGHT, SMALL_WIDTH};
     (settings.width, settings.height, settings.fps, settings.bitrate_kbps) = (SMALL_WIDTH, SMALL_HEIGHT, SMALL_FPS, SMALL_BITRATE_KBPS);

@@ -5,8 +5,7 @@ use super::*;
 /// A game's menu: its title and what it offers, the action selecting it does first. None when the
 /// game is gone from the PC. A favourite whose PC's library is not known (away with nothing saved,
 /// not read yet, or the game gone) still has its menu, from the stored star: its card is on Home.
-pub(in crate::ui) fn game_menu(host: &Host, view: &View<'_>, game: GameTarget, favourites: &[crate::config::Favourite], hidden: &[crate::config::Favourite]) -> Option<(String, Vec<GameAction>)> {
-    let _ = view;
+pub(in crate::ui) fn game_menu(host: &Host, game: GameTarget, favourites: &[crate::config::Favourite], hidden: &[crate::config::Favourite]) -> Option<(String, Vec<GameAction>)> {
     match game {
         GameTarget::Library { app, favourite } => {
             let listed = host.library().and_then(|l| l.games.iter().find(|g| g.app_id == app));
@@ -401,8 +400,6 @@ pub fn popover(
     (outcome, focused)
 }
 
-/// What every menu stands on: a clear layer that takes the pointer and, by its anchor, the raised
-/// glass that holds `add`. Says whether a press outside closed it.
 /// Where a menu by its anchor may go: below the top bar, which it never covers. A sheet in the
 /// middle takes the whole window.
 fn menu_room(screen: Rect, anchor: Anchor) -> Rect {
@@ -410,6 +407,8 @@ fn menu_room(screen: Rect, anchor: Anchor) -> Rect {
     Rect::from_min_max(Pos2::new(screen.left(), screen.top() + clear), screen.max)
 }
 
+/// What every menu stands on: a clear layer that takes the pointer and, by its anchor, the raised
+/// glass that holds `add`. Says whether a press outside closed it.
 fn menu_shell(ctx: &egui::Context, name: &str, anchor: Anchor, add: impl FnOnce(&mut Ui, Id)) -> bool {
     let id = Id::unique(("menu", name));
     let screen = ctx.content_rect();

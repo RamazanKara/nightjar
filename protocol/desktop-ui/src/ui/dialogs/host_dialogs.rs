@@ -74,7 +74,7 @@ impl Launcher {
             }
             Dialog::GameMenu { host, game } => {
                 let (id, game) = (*host, *game);
-                match view.hosts.get(id).and_then(|host| game_menu(host, view, game, &self.favourites, &self.hidden_games).map(|menu| (host, menu))) {
+                match view.hosts.get(id).and_then(|host| game_menu(host, game, &self.favourites, &self.hidden_games).map(|menu| (host, menu))) {
                     Some((host, (title, mut actions))) => {
                         actions.extend(open_on_start_action(host, game, &self.favourites, self.open_game.as_ref()));
                         let rows: Vec<MenuRow> = actions
@@ -211,7 +211,14 @@ impl Launcher {
                             .margin(Margin::symmetric(12, 10)),
                     )
                     .labelled_by(title.id);
-                    if focus_first {
+                    if keys_on_screen {
+                        ui.add_space(space::S);
+                        let first = text_pad(ui, text, None);
+                        if focus_first {
+                            first.request_focus();
+                            focused = true;
+                        }
+                    } else if focus_first {
                         edit.request_focus();
                         focused = true;
                     }

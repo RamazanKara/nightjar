@@ -354,6 +354,12 @@ impl App {
             return;
         }
         let Some(host) = self.hosts.get(host_id) else {
+            self.start_failed(
+                (host_id, app_id, resume, kind),
+                None,
+                None,
+                tr("This PC is no longer in your list.").to_owned(),
+            );
             return;
         };
         // A microphone-only session names no app of the PC's list.
@@ -417,6 +423,12 @@ impl App {
         // The demo library has no identity: its launch goes as far as the checks.
         let identity = self.hosts.identity().cloned();
         if identity.is_none() && !cfg!(feature = "demo-library") {
+            self.start_failed(
+                (host_id, app_id, resume, kind),
+                Some(app.name.clone()),
+                None,
+                tr("This device’s pairing key is not ready yet. Try again in a moment.").to_owned(),
+            );
             return;
         }
         let Some(info) = self.hosts.get(host_id).and_then(|host| host.info.clone()) else {

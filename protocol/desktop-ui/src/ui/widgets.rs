@@ -378,9 +378,12 @@ pub(super) fn text_pad(ui: &mut Ui, text: &mut String, limit: Option<usize>) -> 
         }
         ui.horizontal(|ui| {
             ui.add_space(indent);
-            let space = pin_key(ui, None, tr("Space"), tr("Space"), Tone::Quiet, vec2(key.x * 6.0 + gap * 5.0, key.y));
+            let space = pin_key(ui, None, tr("Space"), tr("Space"), Tone::Quiet, vec2(key.x * 5.0 + gap * 4.0, key.y));
             if space.clicked() {
                 typed = Some(' ');
+            }
+            if pin_key(ui, None, "+", "+", Tone::Quiet, key).clicked() {
+                typed = Some('+');
             }
             let said = tr("Delete");
             if pin_key(ui, Some(Icon::Backspace), "", said, Tone::Quiet, vec2(key.x * 2.0 + gap, key.y)).on_hover_text(said).clicked() {

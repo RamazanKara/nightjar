@@ -53,10 +53,10 @@ pub enum Lang {
     ZhHant,
 }
 
-/// Each language: the system language code it answers to, its own name and its table.
 /// A language's entries: (English, its text).
 type Table = &'static [(&'static str, &'static str)];
 
+/// Each language: the system language code it answers to, its own name and its table.
 const LANGS: [(Lang, &str, &str, Table); 15] = [
     (Lang::En, "en", "English", &[]),
     (Lang::De, "de", "Deutsch", de::TABLE),

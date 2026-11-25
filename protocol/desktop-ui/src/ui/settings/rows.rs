@@ -2,7 +2,6 @@
 
 use super::*;
 
-/// A Wait through network dropouts choice in seconds; 0 is Off.
 /// "Frames waiting for the decoder"'s choices, as Android's `decode_queue_frames_values`.
 pub(in crate::ui) const DECODE_QUEUE_CHOICES: [u32; 4] = [3, 5, 8, 15];
 
@@ -347,9 +346,11 @@ pub(in crate::ui) struct Rows<'a> {
     pub(super) idle: Option<String>,
     pub(super) held: bool,
     /// When set for the next row, a click on Reset sets `reset_clicked` instead of resetting only
-    /// the row's own keys (used by Recommended's `simple_*` rows, which apply through `simple_apply`).
+    /// the row's own keys (used by Recommended's `simple_*` rows and individual stream buttons).
     pub(super) defer_reset: bool,
     pub(super) reset_clicked: bool,
+    /// Per-row default label and changed flag for rows that share one underlying map/setting key.
+    pub(super) custom_reset: Option<(&'static str, bool)>,
 }
 
 /// The fold row of the open section, drawn before its first folded row; its words come once the
@@ -420,6 +421,11 @@ impl Rows<'_> {
 
     pub(super) fn take_reset(&mut self) -> bool {
         std::mem::take(&mut self.reset_clicked)
+    }
+
+    /// Overrides the Reset button's default tooltip text and differs flag on the next row.
+    pub(super) fn custom_reset(&mut self, default: &'static str, differs: bool) {
+        self.custom_reset = Some((default, differs));
     }
 
     /// Room the next row's control takes beyond the usual column (a PC's list beside its button).

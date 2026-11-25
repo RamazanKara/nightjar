@@ -13,8 +13,19 @@ impl Http for Arc<Fixtures> {
     }
 }
 
+fn ok_bytes(body: &[u8]) -> Answer {
+    Answer { status: 200, retry_after: None, body: body.to_vec() }
+}
+
 fn ok(body: &str) -> Answer {
-    Answer { status: 200, retry_after: None, body: body.as_bytes().to_vec() }
+    ok_bytes(body.as_bytes())
+}
+
+fn tiny_png() -> Vec<u8> {
+    let image = image::RgbImage::from_pixel(2, 2, image::Rgb([10, 120, 220]));
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+    bytes.into_inner()
 }
 
 fn services(request: &Request) -> Answer {
@@ -22,7 +33,7 @@ fn services(request: &Request) -> Answer {
     match request.service {
         Service::SteamGridDb if what.contains("/games/steam/1145360") => ok(r#"{"success":true,"data":{"id":42}}"#),
         Service::SteamGridDb if what.contains("/grids/game/42") => ok(r#"{"success":true,"data":[{"score":1,"url":"https://cdn2.steamgriddb.com/grid/hades.png"}]}"#),
-        Service::Image if request.url == "https://cdn2.steamgriddb.com/grid/hades.png" => ok("PNG-BYTES"),
+        Service::Image if request.url == "https://cdn2.steamgriddb.com/grid/hades.png" => ok_bytes(&tiny_png()),
         Service::Twitch => ok(r#"{"access_token":"tok-1","expires_in":5000000}"#),
         Service::Igdb if what.contains("external_games") => ok(r#"[{"game":7,"external_game_source":1}]"#),
         Service::Igdb if what.contains("game_time_to_beats") => ok(r#"[{"game_id":7,"hastily":72000,"normally":86400,"completely":324000}]"#),
@@ -59,9 +70,10 @@ fn without_keys_nothing_is_asked_and_nothing_is_kept() {
 #[test]
 fn a_cover_and_facts_are_looked_up_once_and_then_read_from_disk() {
     let root = dir("cover");
+    let expected = tiny_png();
     let http = fixture(services);
     let info = GameInfo::new(&root, keys(), Box::new(http.clone()));
-    assert_eq!(info.cover(&HADES()).as_deref(), Some(&b"PNG-BYTES"[..]));
+    assert_eq!(info.cover(&HADES()).as_deref(), Some(expected.as_slice()));
     let record = info.kept("steam:1145360").unwrap();
     assert_eq!(record.facts.as_ref().unwrap().genres, ["Roguelike"]);
     let asked = http.asked.lock().unwrap().len();
@@ -70,7 +82,7 @@ fn a_cover_and_facts_are_looked_up_once_and_then_read_from_disk() {
     // A new run reads the record and the image from disk: no request at all.
     let again = fixture(|_| panic!("asked again"));
     let info = GameInfo::new(&root, keys(), Box::new(again.clone()));
-    assert_eq!(info.cover(&HADES()).as_deref(), Some(&b"PNG-BYTES"[..]));
+    assert_eq!(info.cover(&HADES()).as_deref(), Some(expected.as_slice()));
     assert_eq!(info.record(&HADES(), false).unwrap().facts.unwrap().normally, Some(86400));
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -118,4 +130,41 @@ fn a_hosts_game_names_its_steam_id_from_either_field() {
     assert_eq!(game_of("A", Some("steam:10"), None).steam, Some(10));
     assert_eq!(game_of("A", None, Some(("steam", "20"))).steam, Some(20));
     assert_eq!(game_of("A", Some("epic:x"), Some(("epic", "x"))).steam, None);
+}
+
+#[test]
+fn undecodable_or_truncated_images_are_not_cached_and_corrupt_cache_is_replaced() {
+    let root = dir("bad-img");
+    let url = "https://cdn2.steamgriddb.com/grid/test.png";
+    let bad = GameInfo::new(&root, keys(), Box::new(fixture(|_| ok("<html>not an image</html>"))));
+    assert_eq!(bad.image(url), None);
+    let img_path = root.join("game-info").join("img").join(cache::image_file(url));
+    assert!(!img_path.exists());
+
+    // Simulate a 24 MiB truncated body matching EXCHANGE_LIMIT.
+    let cut = vec![0u8; crate::update_net::EXCHANGE_LIMIT as usize];
+    let oversized = GameInfo::new(&root, keys(), Box::new(fixture(move |_| ok_bytes(&cut))));
+    assert_eq!(oversized.image(url), None);
+    assert!(!img_path.exists());
+
+    // Corrupt cached bytes on disk are deleted and re-fetched from HTTP.
+    std::fs::create_dir_all(img_path.parent().unwrap()).unwrap();
+    std::fs::write(&img_path, b"corrupt-cache").unwrap();
+    let expected = tiny_png();
+    let healed = GameInfo::new(&root, keys(), Box::new(fixture(|_| ok_bytes(&tiny_png()))));
+    assert_eq!(healed.image(url).as_deref(), Some(expected.as_slice()));
+    assert_eq!(std::fs::read(&img_path).unwrap(), expected);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// Unix (Linux and macOS): saved keys use mode 0o600 from initial file creation.
+#[cfg(unix)]
+#[test]
+fn saved_keys_start_with_user_only_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = dir("mode");
+    save_keys(&root, &keys()).unwrap();
+    let mode = std::fs::metadata(root.join(KEYS_FILE)).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
+    let _ = std::fs::remove_dir_all(&root);
 }

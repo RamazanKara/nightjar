@@ -1748,4 +1748,11 @@ sudo sysctl -w net.core.rmem_max={}", "接收缓冲区：系统只分配了所�
     ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "无法保存配对密钥，因此重启后需要重新配对已与此设备配对的电脑：{}"),
     ("Another copy", "另一份副本"),
     ("On the new device, select this PC in Nightjar or Moonlight.", "在新设备上，在 Nightjar 或 Moonlight 中选择这台电脑。"),
+    ("This Mac only offers sleep from Nightjar.", "此 Mac 仅支持从 Nightjar 触发睡眠。"),
+    ("This paired PC does not support PyroWave pace calibration.", "此已配对的电脑不支持 PyroWave 步频校准。"),
+    ("Neither endpoint reports a link speed. No calibration was saved.", "两端均未报告链路速率，未保存任何校准结果。"),
+    ("The stream’s wire bitrate is too high for this link. Lower its bitrate before calibrating.", "串流的链路码率高于当前网络承受上限。请先降低码率再进行校准。"),
+    ("Testing {} Mbps frame pace", "正在测试 {} Mbps 帧步频"),
+    ("No usable pace was measured. The PC will keep its default.", "未测得可用步频。电脑将保留默认设置。"),
+    ("Could not start network test: {}", "无法启动网络测试：{}"),
 ];

@@ -1748,4 +1748,11 @@ sudo sysctl -w net.core.rmem_max={}", "Búfer de recepción: el sistema concedi�
     ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "No se pudo guardar la clave de emparejamiento, por lo que los PC emparejados con este dispositivo deberán volver a emparejarse tras reiniciar: {}"),
     ("Another copy", "Otra copia"),
     ("On the new device, select this PC in Nightjar or Moonlight.", "En el nuevo dispositivo, selecciona este PC en Nightjar o Moonlight."),
+    ("This Mac only offers sleep from Nightjar.", "Este Mac solo admite el modo de reposo desde Nightjar."),
+    ("This paired PC does not support PyroWave pace calibration.", "Este PC emparejado no es compatible con la calibración de ritmo de PyroWave."),
+    ("Neither endpoint reports a link speed. No calibration was saved.", "Ninguno de los extremos informa de la velocidad de enlace. No se guardó ninguna calibración."),
+    ("The stream’s wire bitrate is too high for this link. Lower its bitrate before calibrating.", "La tasa de bits de red del stream es demasiado alta para este enlace. Reduce la tasa de bits antes de calibrar."),
+    ("Testing {} Mbps frame pace", "Probando ritmo de fotogramas de {} Mbps"),
+    ("No usable pace was measured. The PC will keep its default.", "No se midió ningún ritmo utilizable. El PC mantendrá su valor predeterminado."),
+    ("Could not start network test: {}", "No se pudo iniciar la prueba de red: {}"),
 ];

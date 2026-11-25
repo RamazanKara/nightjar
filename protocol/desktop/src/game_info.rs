@@ -69,11 +69,21 @@ pub fn save_keys(dir: &Path, keys: &Keys) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
     let text = serde_json::to_vec_pretty(keys).map_err(std::io::Error::other)?;
     let part = path.with_extension("json.part");
-    std::fs::write(&part, text)?;
+    let _ = std::fs::remove_file(&part);
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    // Unix (Linux and macOS): create the key file with 0o600 permissions before writing any secret.
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&part, std::fs::Permissions::from_mode(0o600));
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    {
+        use std::io::Write;
+        if let Err(e) = opts.open(&part).and_then(|mut file| file.write_all(&text)) {
+            let _ = std::fs::remove_file(&part);
+            return Err(e);
+        }
     }
     std::fs::rename(&part, &path)
 }
@@ -188,17 +198,26 @@ impl GameInfo {
     pub fn image(&self, url: &str) -> Option<Vec<u8>> {
         let path = self.dir.join("img").join(cache::image_file(url));
         if let Ok(bytes) = std::fs::read(&path) {
-            return Some(bytes);
+            if (bytes.len() as u64) < crate::update_net::EXCHANGE_LIMIT && image::load_from_memory(&bytes).is_ok() {
+                return Some(bytes);
+            }
+            let _ = std::fs::remove_file(&path);
         }
         let answer = self.http.send(&Request { service: Service::Image, method: "GET".into(), url: url.to_owned(), headers: Vec::new(), body: None });
         if answer.status != 200 || answer.body.is_empty() {
             eprintln!("nightjar: game info: an image did not load (HTTP {})", answer.status);
             return None;
         }
+        if (answer.body.len() as u64) >= crate::update_net::EXCHANGE_LIMIT || image::load_from_memory(&answer.body).is_err() {
+            eprintln!("nightjar: game info: an image could not be decoded");
+            return None;
+        }
         let _ = std::fs::create_dir_all(path.parent()?);
         let part = path.with_extension("part");
-        if std::fs::write(&part, &answer.body).is_ok() {
-            let _ = std::fs::rename(&part, &path);
+        if std::fs::write(&part, &answer.body).is_ok()
+            && std::fs::rename(&part, &path).is_err()
+        {
+            let _ = std::fs::remove_file(&part);
         }
         Some(answer.body)
     }

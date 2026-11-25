@@ -471,23 +471,35 @@ pub fn use_parent_console() {
         use windows::Win32::Storage::FileSystem::{
             CreateFileW, GetFileType, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TYPE_DISK, FILE_TYPE_PIPE, OPEN_EXISTING,
         };
-        use windows::Win32::System::Console::{AttachConsole, GetStdHandle, SetStdHandle, ATTACH_PARENT_PROCESS, STD_OUTPUT_HANDLE};
+        use windows::Win32::System::Console::{AttachConsole, GetStdHandle, SetStdHandle, ATTACH_PARENT_PROCESS, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
         // SAFETY: plain console and file calls on handles of this process; a failure leaves stdout
-        // as it was, and printing then shows nothing, as before.
+        // and stderr as they were, and printing then shows nothing, as before.
         unsafe {
-            if let Ok(handle) = GetStdHandle(STD_OUTPUT_HANDLE)
-                && !handle.is_invalid() && !handle.0.is_null() {
-                    let kind = GetFileType(handle);
-                    if kind == FILE_TYPE_DISK || kind == FILE_TYPE_PIPE {
-                        return;
-                    }
-                }
+            let is_redirected = |std_id| {
+                GetStdHandle(std_id).is_ok_and(|handle| {
+                    !handle.is_invalid()
+                        && !handle.0.is_null()
+                        && matches!(GetFileType(handle), FILE_TYPE_DISK | FILE_TYPE_PIPE)
+                })
+            };
+            let out_redirected = is_redirected(STD_OUTPUT_HANDLE);
+            let err_redirected = is_redirected(STD_ERROR_HANDLE);
+            if out_redirected && err_redirected {
+                return;
+            }
             // A console parent hands a window program its own console's handles, which are no use
             // to it until it attaches; then CONOUT$ is that console's screen.
-            if AttachConsole(ATTACH_PARENT_PROCESS).is_ok()
-                && let Ok(out) = CreateFileW(w!("CONOUT$"), (GENERIC_READ | GENERIC_WRITE).0, FILE_SHARE_READ | FILE_SHARE_WRITE, None, OPEN_EXISTING, FILE_FLAGS_AND_ATTRIBUTES(0), None) {
+            if AttachConsole(ATTACH_PARENT_PROCESS).is_ok() {
+                let conout = || {
+                    CreateFileW(w!("CONOUT$"), (GENERIC_READ | GENERIC_WRITE).0, FILE_SHARE_READ | FILE_SHARE_WRITE, None, OPEN_EXISTING, FILE_FLAGS_AND_ATTRIBUTES(0), None)
+                };
+                if !out_redirected && let Ok(out) = conout() {
                     let _ = SetStdHandle(STD_OUTPUT_HANDLE, out);
                 }
+                if !err_redirected && let Ok(err) = conout() {
+                    let _ = SetStdHandle(STD_ERROR_HANDLE, err);
+                }
+            }
         }
     }
 }
@@ -561,28 +573,44 @@ pub fn run_list(list: &List, store: &crate::config::Store) -> i32 {
     if list.verbose {
         let _ = out.write_all(b"Establishing connection to PC...\n");
     }
-    let client = match crate::hosts::client_for(&identity, record, &record.address) {
-        Ok(client) => client,
-        Err(why) => {
-            eprintln!("{why}");
-            return LIST_NO_PC;
+    let addresses = crate::hosts::poll_addresses(record);
+    let mut announced_loading = false;
+    match list_apps_from_addresses(&addresses, &record.address, |address| {
+        let client = crate::hosts::client_for(&identity, record, address).map_err(|why| (why, LIST_NO_PC))?;
+        if list.verbose && !announced_loading {
+            announced_loading = true;
+            let _ = out.write_all(b"Loading app list...\n");
         }
-    };
-    if list.verbose {
-        let _ = out.write_all(b"Loading app list...\n");
-    }
-    match client.app_list(&nightjar_core::http::HostCapabilities::UNKNOWN) {
+        client.app_list(&nightjar_core::http::HostCapabilities::UNKNOWN).map_err(|e| list_error(&e, &list.host))
+    }) {
         Ok(apps) => {
             let _ = out.write_all(app_names(&apps).as_bytes());
             let _ = out.flush();
             0
         }
-        Err(e) => {
-            let (why, code) = list_error(&e, &list.host);
+        Err((why, code)) => {
             eprintln!("{why}");
             code
         }
     }
+}
+
+fn list_apps_from_addresses(
+    addresses: &[String],
+    fallback: &str,
+    mut try_addr: impl FnMut(&str) -> Result<Vec<nightjar_core::http::App>, (String, i32)>,
+) -> Result<Vec<nightjar_core::http::App>, (String, i32)> {
+    if addresses.is_empty() {
+        return try_addr(fallback);
+    }
+    let mut last_err = None;
+    for address in addresses {
+        match try_addr(address) {
+            Ok(apps) => return Ok(apps),
+            Err(err) => last_err = Some(err),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| ("this PC has no address".to_owned(), LIST_NO_PC)))
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@ use super::*;
 impl Launcher {
     /// Brings egui's style, the zoom and the language in line with the settings. Cheap when
     /// nothing changed: the style is rebuilt only for a new palette or motion setting.
-    pub(super) fn sync_look(&mut self, ctx: &egui::Context) {
+    pub(super) fn sync_look(&mut self, ctx: &egui::Context, hosts: &Hosts) {
         let s = &self.settings;
         let still = match s.reduce_motion {
             ReduceMotion::Reduce => true,
@@ -30,7 +30,11 @@ impl Launcher {
         }
         let lang = crate::strings::resolve(s.language, &self.system_languages);
         crate::strings::set(lang);
-        crate::theme::fonts_for(ctx, lang);
+        let sig = hosts_script_sig(hosts);
+        if sig != self.title_scripts.0 || sig == 0 {
+            self.title_scripts = (sig, collect_title_scripts(hosts));
+        }
+        crate::theme::fonts_for_scripts(ctx, lang, self.title_scripts.1);
     }
 
     /// Ctrl+= and Ctrl+- step the zoom from Auto's current size, Ctrl+0 returns to Auto. Returns
@@ -456,7 +460,6 @@ impl Launcher {
         !matches!(self.screen, Screen::Home | Screen::Hosts | Screen::Settings | Screen::Help)
     }
 
-    /// The destinations the top bar offers now: Home waits for a library, unless it is shown.
     /// The top bar's destinations: all of them, always in the same places. Home stays without a
     /// library to show (it says what to do then), as Android's Start does.
     pub(super) fn offered_destinations(&self) -> Vec<Screen> {
@@ -560,4 +563,64 @@ pub(super) fn page_area(screen: Screen) -> Id {
         Screen::LatencyBenchmark => Id::unique("latency-benchmark"),
         Screen::Settings | Screen::HostSettings(_) | Screen::AppSettings(_) | Screen::ProfileSettings(_) => Id::unique("settings"),
     }
+}
+
+fn mix_u64(hash: &mut u64, value: u64) {
+    for byte in value.to_le_bytes() {
+        *hash ^= u64::from(byte);
+        *hash = hash.wrapping_mul(0x100000001b3);
+    }
+}
+
+fn mix_bytes(hash: &mut u64, bytes: &[u8]) {
+    for &byte in bytes {
+        *hash ^= u64::from(byte);
+        *hash = hash.wrapping_mul(0x100000001b3);
+    }
+}
+
+fn hosts_script_sig(hosts: &Hosts) -> u64 {
+    let mut hash = 0xcbf29ce484222325u64;
+    mix_u64(&mut hash, hosts.list.len() as u64);
+    for host in &hosts.list {
+        mix_u64(&mut hash, host.id);
+        mix_bytes(&mut hash, host.display_name().as_bytes());
+        match &host.apps {
+            Apps::Loaded(apps) => mix_u64(&mut hash, apps.len() as u64 + 1),
+            Apps::Failed(msg) => mix_bytes(&mut hash, msg.as_bytes()),
+            _ => mix_u64(&mut hash, 0),
+        }
+        if let Some(lib) = &host.native.library {
+            mix_bytes(&mut hash, lib.revision.as_bytes());
+            mix_u64(&mut hash, lib.games.len() as u64);
+        }
+        if let Some(lib) = &host.classic {
+            mix_bytes(&mut hash, lib.revision.as_bytes());
+            mix_u64(&mut hash, lib.games.len() as u64);
+        }
+    }
+    hash.max(1)
+}
+
+fn collect_title_scripts(hosts: &Hosts) -> crate::theme::ScriptSet {
+    let mut set = crate::theme::ScriptSet::default();
+    for host in &hosts.list {
+        set.merge(crate::theme::scripts_for_text(host.display_name()));
+        if let Apps::Loaded(apps) = &host.apps {
+            for app in apps {
+                set.merge(crate::theme::scripts_for_text(&app.name));
+            }
+        }
+        if let Some(lib) = &host.native.library {
+            for game in &lib.games {
+                set.merge(crate::theme::scripts_for_text(&game.title));
+            }
+        }
+        if let Some(lib) = &host.classic {
+            for game in &lib.games {
+                set.merge(crate::theme::scripts_for_text(&game.title));
+            }
+        }
+    }
+    set
 }

@@ -607,3 +607,27 @@ fn a_late_plain_answer_leaves_checking_to_the_pinned_check() {
     assert!(host.checking && host.polling, "the pinned check, not the plain answer, ends Checking…");
     assert!(!host.pinned_check, "the check was asked for once");
 }
+
+#[test]
+fn missing_identity_or_host_on_pair_or_invite_emits_error_and_wakes() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let wakes = Arc::new(AtomicUsize::new(0));
+    let w = wakes.clone();
+    let waker: Waker = Arc::new(move || {
+        w.fetch_add(1, Ordering::SeqCst);
+    });
+    let mut hosts = Hosts::without_discovery(Vec::new(), waker);
+    hosts.redeem_invite(invite_link("Den"));
+    assert!(matches!(
+        hosts.events.try_recv(),
+        Ok(Event::Invited { result: Err(_), id: None })
+    ));
+    assert_eq!(wakes.load(Ordering::SeqCst), 1);
+
+    hosts.pair(999, "1234".into(), None);
+    assert!(matches!(
+        hosts.events.try_recv(),
+        Ok(Event::Paired { id: 999, result: Err(_), .. })
+    ));
+    assert_eq!(wakes.load(Ordering::SeqCst), 2);
+}

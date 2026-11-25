@@ -38,7 +38,6 @@ impl Launcher {
     /// other PCs.
     pub(super) fn game_rows(
         &self,
-        view: &View<'_>,
         host: &Host,
         source: &Source<'_>,
         game: &rubylight_native_api::library::Game,
@@ -242,7 +241,6 @@ impl Launcher {
                 },
             });
         }
-        let _ = view;
         rows
     }
 

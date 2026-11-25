@@ -1748,4 +1748,11 @@ sudo sysctl -w net.core.rmem_max={}", "受信バッファー：システムは�
     ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "ペアリング鍵を保存できなかったため、このデバイスとペアリングされた PC は再起動後に再ペアリングが必要です: {}"),
     ("Another copy", "別のコピー"),
     ("On the new device, select this PC in Nightjar or Moonlight.", "新しいデバイスの Nightjar または Moonlight でこの PC を選択します。"),
+    ("This Mac only offers sleep from Nightjar.", "この Mac は Nightjar からのスリープのみに対応しています。"),
+    ("This paired PC does not support PyroWave pace calibration.", "このペアリング済み PC は PyroWave ペース調整に対応していません。"),
+    ("Neither endpoint reports a link speed. No calibration was saved.", "両端のいずれもリンク速度を報告していません。調整結果は保存されませんでした。"),
+    ("The stream’s wire bitrate is too high for this link. Lower its bitrate before calibrating.", "ストリームの回線ビットレートがこのリンクに対して高すぎます。調整前にビットレートを下げてください。"),
+    ("Testing {} Mbps frame pace", "{} Mbps のフレームペースをテスト中"),
+    ("No usable pace was measured. The PC will keep its default.", "使用可能なペースを測定できませんでした。PC は既定値のままにします。"),
+    ("Could not start network test: {}", "ネットワークテストを開始できませんでした: {}"),
 ];

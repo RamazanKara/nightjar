@@ -1748,4 +1748,11 @@ sudo sysctl -w net.core.rmem_max={}", "수신 버퍼: 시스템이 요청한 {1}
     ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "페어링 키를 저장할 수 없어 재시작 후 이 기기와 페어링된 PC를 다시 페어링해야 합니다: {}"),
     ("Another copy", "다른 사본"),
     ("On the new device, select this PC in Nightjar or Moonlight.", "새 기기의 Nightjar 또는 Moonlight에서 이 PC를 선택하세요."),
+    ("This Mac only offers sleep from Nightjar.", "이 Mac은 Nightjar에서 잠자기만 지원합니다."),
+    ("This paired PC does not support PyroWave pace calibration.", "이 페어링된 PC는 PyroWave 페이스 보정을 지원하지 않습니다."),
+    ("Neither endpoint reports a link speed. No calibration was saved.", "어느 쪽 끝단도 링크 속도를 보고하지 않았습니다. 보정이 저장되지 않았습니다."),
+    ("The stream’s wire bitrate is too high for this link. Lower its bitrate before calibrating.", "스트림의 전송 비트레이트가 이 링크에 비해 너무 높습니다. 보정하기 전에 비트레이트를 낮추세요."),
+    ("Testing {} Mbps frame pace", "{} Mbps 프레임 페이스 테스트 중"),
+    ("No usable pace was measured. The PC will keep its default.", "사용 가능한 페이스를 측정하지 못했습니다. PC가 기본값을 유지합니다."),
+    ("Could not start network test: {}", "네트워크 테스트를 시작할 수 없습니다: {}"),
 ];

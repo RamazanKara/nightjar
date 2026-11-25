@@ -1748,4 +1748,11 @@ sudo sysctl -w net.core.rmem_max={}", "Bộ đệm nhận: hệ thống chỉ c�
     ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Không thể lưu khóa ghép đôi, nên các PC đã ghép đôi với thiết bị này sẽ phải ghép đôi lại sau khi khởi động lại: {}"),
     ("Another copy", "Bản sao khác"),
     ("On the new device, select this PC in Nightjar or Moonlight.", "Trên thiết bị mới, chọn PC này trong Nightjar hoặc Moonlight."),
+    ("This Mac only offers sleep from Nightjar.", "Máy Mac này chỉ hỗ trợ chế độ ngủ từ Nightjar."),
+    ("This paired PC does not support PyroWave pace calibration.", "PC đã ghép đôi này không hỗ trợ hiệu chỉnh nhịp PyroWave."),
+    ("Neither endpoint reports a link speed. No calibration was saved.", "Cả hai đầu đều không báo tốc độ liên kết. Không lưu hiệu chỉnh nào."),
+    ("The stream’s wire bitrate is too high for this link. Lower its bitrate before calibrating.", "Tốc độ bit mạng của luồng quá cao đối với liên kết này. Hãy giảm tốc độ bit trước khi hiệu chỉnh."),
+    ("Testing {} Mbps frame pace", "Đang thử nhịp khung hình {} Mbps"),
+    ("No usable pace was measured. The PC will keep its default.", "Không đo được nhịp khả dụng nào. PC sẽ giữ giá trị mặc định."),
+    ("Could not start network test: {}", "Không thể bắt đầu kiểm tra mạng: {}"),
 ];

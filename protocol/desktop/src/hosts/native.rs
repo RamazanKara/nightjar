@@ -303,8 +303,7 @@ impl Hosts {
     }
 }
 
-/// The addresses a poll tries, in order: only the pinned one when the user pinned the PC
-/// ([`Hosts::pin_address`]), otherwise the last that answered, then the others it was known by.
+/// Recognized host-specific 410 messages for control actions that already completed.
 pub(super) fn completed_action(control: AppControl, error: &nightjar_core::http::Error) -> bool {
     let nightjar_core::http::Error::Status { code: 410, message } = error else { return false; };
     let message = message.trim().trim_end_matches('.');

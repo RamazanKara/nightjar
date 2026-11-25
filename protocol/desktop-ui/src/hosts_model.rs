@@ -28,7 +28,7 @@ pub use crate::hosts_types::Waker;
 /// screen are smaller.
 pub const COVER_POINTS: [f32; 2] = [420.0, 630.0];
 
-/// How often an action on the host repeats when asked.
+/// How long after a failed box-art load before asking the PC again.
 const ART_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Notes that the cover `texture` is on screen (or needed off it) in this frame, so it is not one

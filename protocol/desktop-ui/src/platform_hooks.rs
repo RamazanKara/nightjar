@@ -48,6 +48,7 @@ pub struct PlatformHooks {
     /// `(power_saving_name, high_performance_name)` on Windows multi-GPU systems.
     pub gpu_pair: fn() -> Option<(String, String)>,
     pub video_driver: fn() -> String,
+    pub local_day: fn(u64) -> i64,
 }
 
 impl Default for PlatformHooks {
@@ -62,6 +63,7 @@ impl Default for PlatformHooks {
             kms_active: || false,
             gpu_pair: || None,
             video_driver: String::new,
+            local_day: |secs| (secs / 86_400) as i64,
         }
     }
 }
@@ -90,6 +92,7 @@ pub fn hooks() -> &'static PlatformHooks {
         kms_active: || false,
         gpu_pair: || None,
         video_driver: String::new,
+        local_day: |secs| (secs / 86_400) as i64,
     };
     HOOKS.get().unwrap_or(&DEFAULT)
 }

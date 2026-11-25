@@ -69,7 +69,7 @@ pub struct Exchanged {
 }
 
 /// The most of a body [`Native::exchange`] reads: SteamGridDB's largest covers are a few MB.
-const EXCHANGE_LIMIT: u64 = 24 << 20;
+pub(crate) const EXCHANGE_LIMIT: u64 = 24 << 20;
 
 impl Native {
     /// One request with its own method, headers and body, read whole (up to 24 MB), for

@@ -1748,4 +1748,11 @@ sudo sysctl -w net.core.rmem_max={}", "Tampon de réception : le système a acco
     ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Impossible d’enregistrer la clé d’appairage : les PC appairés avec cet appareil devront être appairés à nouveau après un redémarrage : {}"),
     ("Another copy", "Autre copie"),
     ("On the new device, select this PC in Nightjar or Moonlight.", "Sur le nouvel appareil, sélectionnez ce PC dans Nightjar ou Moonlight."),
+    ("This Mac only offers sleep from Nightjar.", "Ce Mac ne propose que la mise en veille depuis Nightjar."),
+    ("This paired PC does not support PyroWave pace calibration.", "Ce PC appairé ne prend pas en charge l’étalonnage du rythme PyroWave."),
+    ("Neither endpoint reports a link speed. No calibration was saved.", "Aucune des deux extrémités n’indique une vitesse de liaison. Aucun étalonnage n’a été enregistré."),
+    ("The stream’s wire bitrate is too high for this link. Lower its bitrate before calibrating.", "Le débit réseau du flux est trop élevé pour cette liaison. Réduisez le débit avant l’étalonnage."),
+    ("Testing {} Mbps frame pace", "Test du rythme d’images à {} Mbit/s"),
+    ("No usable pace was measured. The PC will keep its default.", "Aucun rythme utilisable n’a été mesuré. Le PC conservera sa valeur par défaut."),
+    ("Could not start network test: {}", "Impossible de démarrer le test réseau : {}"),
 ];

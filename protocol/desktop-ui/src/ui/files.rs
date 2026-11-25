@@ -46,6 +46,17 @@ pub trait FileHost: Send + Sync + 'static {
 }
 
 
+enum UploadStat {
+    Ready { name: String, size: u64 },
+    NotFile,
+    Failed(String),
+}
+
+struct StatedUpload {
+    path: PathBuf,
+    kind: UploadStat,
+}
+
 /// What a worker or the file dialog reports to the page.
 enum Event {
     Access(Result<NativeCapabilities, Error>),
@@ -55,6 +66,7 @@ enum Event {
     Uploaded { id: u64, result: Result<Uploaded, FileError> },
     Downloaded { id: u64, result: Result<u64, FileError> },
     Chosen(Result<Vec<PathBuf>, String>),
+    Stated(Vec<StatedUpload>),
 }
 
 /// What the PC allows this device.
@@ -89,6 +101,7 @@ pub struct Page {
     /// Chosen files that were not queued, and dialogs that failed, in the words to show.
     pub notices: Vec<String>,
     choosing: bool,
+    stating: usize,
     sender: Sender<Event>,
     events: Receiver<Event>,
     waker: Waker,
@@ -119,6 +132,7 @@ impl Page {
             folder,
             notices: Vec::new(),
             choosing: false,
+            stating: 0,
             sender,
             events,
             waker,
@@ -142,7 +156,11 @@ impl Page {
 
     /// Whether something runs that the UI should animate.
     pub fn busy(&self) -> bool {
-        self.access == Access::Checking || self.listing.is_some() || self.choosing || self.transfers.is_active()
+        self.access == Access::Checking
+            || self.listing.is_some()
+            || self.choosing
+            || self.stating > 0
+            || self.transfers.is_active()
     }
 
     /// The page is drawn: the failed transfers it shows count as seen.
@@ -194,19 +212,37 @@ impl Page {
 
     /// Queues files of this device to send. One that is not a readable file says so instead.
     pub fn send(&mut self, paths: Vec<PathBuf>) {
-        for path in paths {
-            let shown = path.display().to_string();
-            match std::fs::metadata(&path) {
-                Ok(meta) if meta.is_file() => {
-                    let local = path.file_name().map_or_else(|| shown.clone(), |n| n.to_string_lossy().into_owned());
-                    let id = self.transfers.queue_upload(&local, meta.len());
-                    self.sources.insert(id, path);
+        if paths.is_empty() {
+            return;
+        }
+        let paths_err = paths.clone();
+        match self.spawn("files stat", move || {
+            let stated = paths
+                .into_iter()
+                .map(|path| {
+                    let kind = match std::fs::metadata(&path) {
+                        Ok(meta) if meta.is_file() => {
+                            let name = path
+                                .file_name()
+                                .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
+                            UploadStat::Ready { name, size: meta.len() }
+                        }
+                        Ok(_) => UploadStat::NotFile,
+                        Err(e) => UploadStat::Failed(e.to_string()),
+                    };
+                    StatedUpload { path, kind }
+                })
+                .collect();
+            Event::Stated(stated)
+        }) {
+            Ok(()) => self.stating += 1,
+            Err(e) => {
+                for path in paths_err {
+                    let shown = path.display().to_string();
+                    self.notices.push(trf("{} was not sent: {}", &[&shown, &e]));
                 }
-                Ok(_) => self.notices.push(trf("{} was not sent: it is not a file.", &[&shown])),
-                Err(e) => self.notices.push(trf("{} was not sent: {}", &[&shown, &e])),
             }
         }
-        self.pump();
     }
 
     /// Queues a download of the PC's `file` into the downloads folder.
@@ -358,6 +394,25 @@ impl Page {
                     Err(e) => self.notices.push(trf("The file dialog did not open: {}", &[&e])),
                 }
             }
+            Event::Stated(entries) => {
+                self.stating = self.stating.saturating_sub(1);
+                for entry in entries {
+                    let shown = entry.path.display().to_string();
+                    match entry.kind {
+                        UploadStat::Ready { name, size } => {
+                            let id = self.transfers.queue_upload(&name, size);
+                            self.sources.insert(id, entry.path);
+                        }
+                        UploadStat::NotFile => {
+                            self.notices.push(trf("{} was not sent: it is not a file.", &[&shown]));
+                        }
+                        UploadStat::Failed(e) => {
+                            self.notices.push(trf("{} was not sent: {}", &[&shown, &e]));
+                        }
+                    }
+                }
+                self.pump();
+            }
         }
     }
 }
@@ -382,7 +437,7 @@ impl Files {
     /// back to: a page left is forgotten once no transfer of it is queued or running and none
     /// failed that it has not shown.
     pub fn poll(&mut self, open: Option<u64>) {
-        if self.page.as_ref().is_some_and(|p| open != Some(p.host) && !p.transfers.is_active() && p.unseen_failures() == 0) {
+        if self.page.as_ref().is_some_and(|p| open != Some(p.host) && p.stating == 0 && !p.transfers.is_active() && p.unseen_failures() == 0) {
             self.page = None;
         }
         if let Some(page) = &mut self.page {

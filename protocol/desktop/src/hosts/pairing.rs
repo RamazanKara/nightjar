@@ -140,9 +140,24 @@ impl Hosts {
             _ => Vec::new(),
         };
         let Some(identity) = self.identity.clone() else {
+            let _ = self.sender.send(Event::Paired {
+                id,
+                request,
+                result: Err(tr(
+                    "This device’s pairing key is not ready yet. Try again in a moment.",
+                )
+                .to_owned()),
+            });
+            (self.waker)();
             return;
         };
         let Some(host) = self.get(id) else {
+            let _ = self.sender.send(Event::Paired {
+                id,
+                request,
+                result: Err(tr("This PC is no longer in your list.").to_owned()),
+            });
+            (self.waker)();
             return;
         };
         let mut record = host.connect_record();
@@ -155,6 +170,7 @@ impl Hosts {
                     request,
                     result: Err(e),
                 });
+                (self.waker)();
                 return;
             }
         };

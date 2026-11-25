@@ -368,9 +368,6 @@ impl Hosts {
         }
     }
 
-    /// Asks a paired Sunshine-family PC once whether it has Foundation Sunshine's bandwidth test,
-    /// so Test speed is offered only where it runs. A request that did not get through is asked
-    /// again after the next poll.
     /// Reads the PC's internet play reply while it is reached on its own network and offers
     /// it, at most every `INTERNET_READ_INTERVAL`: the device keeps it for when it is away.
     fn follow_internet_play(&mut self, id: u64) {

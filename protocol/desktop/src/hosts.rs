@@ -45,8 +45,9 @@ pub use covers::*;
 pub use host::{Host, NativeRead};
 pub use poll::Event;
 use poll::{away_address, internet_reply, public_ipv4};
+pub(crate) use poll::poll_addresses;
 #[cfg(test)]
-use poll::{poll_addresses, punches_now};
+use poll::punches_now;
 pub use native::*;
 pub use pairing::*;
 pub use power::*;
@@ -402,6 +403,7 @@ impl Hosts {
                 .to_owned()),
                 id: None,
             });
+            (self.waker)();
             return;
         };
         self.spawn("invite", move || {
@@ -519,9 +521,6 @@ impl Hosts {
         true
     }
 
-    /// Pins the PC to one of its known addresses (`Some`), which then is the only one polled and
-    /// streamed to, or brings back the automatic pick (`None`), as Moonlight V+ PC's
-    /// `pinAddress` and `resetToAutomaticAddress`. False for an unknown PC or address.
     /// Keeps the MACs the user added to wake the PC by. False for an unknown PC.
     pub fn set_own_wake_macs(&mut self, id: u64, macs: Vec<String>) -> bool {
         let Some(host) = self.get_mut(id) else {
@@ -531,6 +530,9 @@ impl Hosts {
         true
     }
 
+    /// Pins the PC to one of its known addresses (`Some`), which then is the only one polled and
+    /// streamed to, or brings back the automatic pick (`None`), as Moonlight V+ PC's
+    /// `pinAddress` and `resetToAutomaticAddress`. False for an unknown PC or address.
     pub fn pin_address(&mut self, id: u64, address: Option<&str>) -> bool {
         let Some(host) = self.get_mut(id) else {
             return false;
