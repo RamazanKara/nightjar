@@ -32,13 +32,10 @@ pub(super) fn rail_folded(section: &str) -> bool {
 /// Whether a Debug setting is not at its default: the section then shows without "Show debug
 /// settings", so a changed diagnostic is never out of sight.
 pub(super) fn debug_changed(s: &Settings) -> bool {
-    // The defaults' Debug values, serialized once: this runs every frame.
-    static DEFAULTS: std::sync::OnceLock<Option<serde_json::Value>> = std::sync::OnceLock::new();
-    let defaults = DEFAULTS.get_or_init(|| serde_json::to_value(Settings::default()).ok());
-    let now = serde_json::to_value(s).ok();
-    SECTION_KEYS[section_index(en("Debug"))].iter().flat_map(|keys| keys.iter()).any(|key| {
-        now.as_ref().and_then(|v| v.get(*key)) != defaults.as_ref().and_then(|v| v.get(*key))
-    })
+    // The defaults compared field-by-field once: this runs every frame.
+    static DEFAULTS: std::sync::OnceLock<Settings> = std::sync::OnceLock::new();
+    let defaults = DEFAULTS.get_or_init(Settings::default);
+    SECTION_KEYS[section_index(en("Debug"))].iter().flat_map(|keys| keys.iter()).any(|key| s.field_differs(defaults, key))
 }
 
 /// Whether the list of sections shows Debug: asked for with "Show debug settings", a Debug setting

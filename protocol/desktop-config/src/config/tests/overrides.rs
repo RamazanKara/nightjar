@@ -367,6 +367,57 @@ fn an_override_this_version_cannot_read_keeps_the_base_setting() {
 }
 
 #[test]
+fn overrides_capture_apply_and_diff_cover_every_serialized_setting_field() {
+    let base = Settings::default();
+    let base_json = serde_json::to_value(&base).unwrap();
+    let keys: Vec<&str> = base_json.as_object().unwrap().keys().map(String::as_str).collect();
+
+    let mut custom = Settings {
+        width: 2560,
+        height: 1440,
+        native_scale: 75,
+        fps: 120,
+        bitrate_kbps: 80_000,
+        hdr: true,
+        virtual_display_scale: 150,
+        virtual_display_dpi: 125,
+        usb_auto: vec!["1234:5678".into()],
+        rtx_hdr: Some(true),
+        setup_card_host: Some(42),
+        ..Default::default()
+    };
+    custom.packet_size = 1392; // `#[serde(skip)]` must not be touched by overrides.
+
+    let mut all = Overrides::default();
+    all.capture(&custom, &keys);
+    assert_eq!(all.keys().count(), keys.len());
+    let expected = Settings { packet_size: base.packet_size, ..custom.clone() };
+    assert_eq!(all.apply(&base), expected);
+
+    for key in &keys {
+        let mut single = Overrides::default();
+        single.capture(&custom, &[key]);
+        let round_tripped: serde_json::Value = serde_json::to_value(&base).unwrap();
+        let mut merged = round_tripped.as_object().unwrap().clone();
+        merged.insert((*key).to_owned(), serde_json::to_value(&custom).unwrap()[*key].clone());
+        let serde_applied: Settings = serde_json::from_value(serde_json::Value::Object(merged)).unwrap();
+        assert_eq!(single.apply(&base), serde_applied, "override parity mismatch for key {key}");
+        assert_eq!(custom.field_differs(&base, key), custom != Settings { ..base.clone() } && base_json[*key] != serde_json::to_value(&custom).unwrap()[*key], "differs parity for {key}");
+    }
+
+    // Special rules: pre-6.4.1 width/height resets inherited native_scale to 100, and custom deserializers apply.
+    let res_only = Overrides(serde_json::Map::from_iter([("width".to_owned(), serde_json::json!(1920))]));
+    assert_eq!(res_only.apply(&Settings { native_scale: 50, ..Default::default() }).native_scale, 100);
+    let clamped = Overrides(serde_json::Map::from_iter([
+        ("virtual_display_scale".to_owned(), serde_json::json!(999)),
+        ("virtual_display_dpi".to_owned(), serde_json::json!(999)),
+    ]));
+    let out = clamped.apply(&base);
+    assert_eq!(out.virtual_display_scale, *RENDER_SCALE.end());
+    assert_eq!(out.virtual_display_dpi, 0);
+}
+
+#[test]
 fn an_unreadable_file_keeps_its_bytes_and_refuses_a_save_over_it() {
     let dir = std::env::temp_dir().join(format!("nightjar-unreadable-file-{}", std::process::id()));
     std::fs::remove_dir_all(&dir).ok();

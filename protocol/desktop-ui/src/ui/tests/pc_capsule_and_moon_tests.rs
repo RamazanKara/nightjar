@@ -49,14 +49,14 @@ fn covers_arriving_move_nothing() {
     let loading = (place(&f), heading(&f));
     let texture = f.ctx.load_texture("art", egui::ColorImage::new([3, 4], vec![Color32::GRAY; 12]), egui::TextureOptions::LINEAR);
     let pc = &mut f.hosts.list[0];
-    for g in &mut pc.native.library.as_mut().expect("a library").games {
-        pc.art.insert(g.app_id as i32, Art::Ready(texture.clone()));
+    for g in &mut Arc::make_mut(pc.native.library.as_mut().expect("a library")).games {
+        Arc::make_mut(&mut pc.art).insert(g.app_id as i32, Art::Ready(texture.clone()));
     }
     f.settle();
     assert_eq!((place(&f), heading(&f)), loading, "art");
     let pc = &mut f.hosts.list[0];
-    for g in &mut pc.native.library.as_mut().expect("a library").games {
-        pc.art.insert(g.app_id as i32, Art::Missing);
+    for g in &mut Arc::make_mut(pc.native.library.as_mut().expect("a library")).games {
+        Arc::make_mut(&mut pc.art).insert(g.app_id as i32, Art::Missing);
     }
     f.settle();
     assert_eq!((place(&f), heading(&f)), loading, "tiles");
@@ -397,7 +397,7 @@ fn home_view_changes_layout_grouping_and_card_size_in_place() {
     };
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
     let (played, never) = (install(&f, "Steam 00"), install(&f, "Steam 01"));
-    f.hosts.list[0].native.last_played = std::collections::BTreeMap::from([(played, now), (never, 0)]);
+    f.hosts.list[0].native.last_played = Arc::new(std::collections::BTreeMap::from([(played, now), (never, 0)]));
     f.settle();
     assert!(shows(&f, "Steam · Played today") && shows(&f, "Steam · Not played yet"), "{:?}", f.drawn);
     // The title beside the cover (the last of the two the line draws), each line under the one before.
@@ -522,12 +522,12 @@ fn a_filter_chip_keeps_the_focus_when_the_installed_chip_comes_or_goes() {
     }
     assert!(focused(&f).contains_rect(chip(&f, "Epic Games")), "the Epic Games chip has focus");
     // Celeste gets installed: the Installed chip goes, the chips after it move left.
-    f.hosts.list[0].native.library.as_mut().unwrap().games[1].installed = Some(true);
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().unwrap()).games[1].installed = Some(true);
     f.settle();
     assert!(!f.placed.iter().any(|(t, r, _)| t == "Installed" && r.center().y < 200.0), "{:?}", f.drawn);
     assert!(focused(&f).contains_rect(chip(&f, "Epic Games")), "the focus stayed on Epic Games");
     // And it comes back.
-    f.hosts.list[0].native.library.as_mut().unwrap().games[1].installed = Some(false);
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().unwrap()).games[1].installed = Some(false);
     f.settle();
     assert!(focused(&f).contains_rect(chip(&f, "Epic Games")), "the focus stayed on Epic Games");
 }

@@ -269,12 +269,12 @@ impl Hosts {
         let Some(host) = self.get_mut(id) else { return };
         host.record.server_certificate = None;
         host.apps = Apps::NotLoaded;
-        host.art.clear();
-        host.ambient.clear();
-        host.ambient_glow.clear();
-        host.art_versions.clear();
-        host.art_sized.clear();
-        host.art_retry.clear();
+        Arc::make_mut(&mut host.art).clear();
+        Arc::make_mut(&mut host.ambient).clear();
+        Arc::make_mut(&mut host.ambient_glow).clear();
+        Arc::make_mut(&mut host.art_versions).clear();
+        Arc::make_mut(&mut host.art_sized).clear();
+        Arc::make_mut(&mut host.art_retry).clear();
         host.native = Native::default();
         host.set_classic_apps(None);
         host.native_epoch += 1;

@@ -106,12 +106,12 @@ impl Hosts {
             return;
         }
         info.set_keys(keys);
-        self.facts_asked.clear();
+        Arc::make_mut(&mut self.facts_asked).clear();
         if !info.keys().info() {
-            self.facts.clear();
+            Arc::make_mut(&mut self.facts).clear();
         }
         for host in &mut self.list {
-            host.art.retain(|_, art| !matches!(art, Art::Missing));
+            Arc::make_mut(&mut host.art).retain(|_, art| !matches!(art, Art::Missing));
         }
     }
 
@@ -129,8 +129,8 @@ impl Hosts {
         let Some(worker) = &self.facts_worker else { return };
         for game in games {
             let key = nightjar_policy::game_info::names::key(&game.name, game.steam);
-            if self.facts_asked.insert(key.clone()) && worker.send(game).is_err() {
-                self.facts_asked.remove(&key);
+            if Arc::make_mut(&mut self.facts_asked).insert(key.clone()) && worker.send(game).is_err() {
+                Arc::make_mut(&mut self.facts_asked).remove(&key);
                 return;
             }
         }
@@ -142,12 +142,12 @@ impl Hosts {
         let key = record.key;
         match record.facts.filter(|f| !f.is_empty()) {
             Some(facts) => {
-                self.facts.insert(key, facts);
+                Arc::make_mut(&mut self.facts).insert(key, facts);
             }
             None => {
-                self.facts.remove(&key);
+                Arc::make_mut(&mut self.facts).remove(&key);
                 if retry {
-                    self.facts_asked.remove(&key);
+                    Arc::make_mut(&mut self.facts_asked).remove(&key);
                 }
             }
         }

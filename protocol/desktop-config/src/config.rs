@@ -7,6 +7,7 @@ mod defaults_gen;
 mod enums;
 mod host;
 mod migrate;
+mod override_fields;
 mod profiles;
 mod store;
 
@@ -489,6 +490,10 @@ impl Settings {
         ]
         .into_iter()
         .find_map(|(on, why)| on.then_some(why))
+    }
+    /// Whether setting key `key` differs between `self` and `other`, without JSON serialization.
+    pub fn field_differs(&self, other: &Self, key: &str) -> bool {
+        override_fields::field_differs(self, other, key).unwrap_or(false)
     }
 }
 

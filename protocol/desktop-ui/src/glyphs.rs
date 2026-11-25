@@ -297,11 +297,19 @@ pub fn width(ui: &Ui, pieces: &[Piece]) -> f32 {
 
 /// Draws `pieces` left to right from `left`, centred on its height.
 pub fn paint(ui: &Ui, left: Pos2, pieces: &[Piece]) {
+    paint_measured(ui, left, pieces, pieces.iter().map(|p| measure(ui, p)));
+}
+
+fn paint_measured(
+    ui: &Ui,
+    left: Pos2,
+    pieces: &[Piece],
+    measured: impl IntoIterator<Item = (f32, Option<std::sync::Arc<egui::Galley>>)>,
+) {
     let painter = ui.painter();
     let mut x = left.x;
     let mid = left.y;
-    for piece in pieces {
-        let (w, g) = measure(ui, piece);
+    for (piece, (w, g)) in pieces.iter().zip(measured) {
         let rect = Rect::from_min_size(pos2(x, mid - HEIGHT / 2.0), vec2(w, HEIGHT));
         let centred = |g: &std::sync::Arc<egui::Galley>, at: Pos2| at - g.size() / 2.0;
         match piece {
@@ -348,8 +356,10 @@ pub fn paint(ui: &Ui, left: Pos2, pieces: &[Piece]) {
 
 /// Allocates room for `pieces` where the layout puts the next widget, and draws them there.
 pub fn show(ui: &mut Ui, pieces: &[Piece]) -> Rect {
-    let (rect, _) = ui.allocate_exact_size(vec2(width(ui, pieces), HEIGHT), egui::Sense::hover());
-    paint(ui, rect.left_center(), pieces);
+    let measured: Vec<_> = pieces.iter().map(|p| measure(ui, p)).collect();
+    let total_w = measured.iter().map(|(w, _)| *w).sum();
+    let (rect, _) = ui.allocate_exact_size(vec2(total_w, HEIGHT), egui::Sense::hover());
+    paint_measured(ui, rect.left_center(), pieces, measured);
     rect
 }
 

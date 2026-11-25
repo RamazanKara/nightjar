@@ -607,7 +607,7 @@ fn collect_title_scripts(hosts: &Hosts) -> crate::theme::ScriptSet {
     for host in &hosts.list {
         set.merge(crate::theme::scripts_for_text(host.display_name()));
         if let Apps::Loaded(apps) = &host.apps {
-            for app in apps {
+            for app in apps.iter() {
                 set.merge(crate::theme::scripts_for_text(&app.name));
             }
         }

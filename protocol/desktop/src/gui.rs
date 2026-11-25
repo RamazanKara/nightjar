@@ -672,14 +672,18 @@ impl Gui {
         self.window_state = state;
     }
 
+    fn paint_stored_overlay(&mut self, renderer: *mut SDL_Renderer, output: egui::FullOutput) {
+        let primitives = std::mem::take(&mut self.overlay.primitives);
+        self.paint_tessellated(renderer, output, &primitives);
+        self.overlay.primitives = primitives;
+    }
+
     /// Repaints the shapes the last overlay pass drew, without running egui. Only valid while
     /// [`Self::overlay_shown`] is the digest of the frame being drawn.
     pub fn overlay_repaint(&mut self, renderer: *mut SDL_Renderer) {
         self.on_screen = None;
         let output = egui::FullOutput { pixels_per_point: self.overlay.ppp, ..Default::default() };
-        let primitives = std::mem::take(&mut self.overlay.primitives);
-        self.paint_tessellated(renderer, output, &primitives);
-        self.overlay.primitives = primitives;
+        self.paint_stored_overlay(renderer, output);
     }
 
     /// Draws a stream overlay pass that ran egui for `digest`, and keeps its shapes for
@@ -688,8 +692,8 @@ impl Gui {
         self.on_screen = None;
         let ppp = output.pixels_per_point;
         let primitives = self.ctx.tessellate(std::mem::take(&mut output.shapes), ppp);
-        self.overlay = OverlayShown { digest: Some(digest), primitives: primitives.clone(), ppp };
-        self.paint_tessellated(renderer, output, &primitives);
+        self.overlay = OverlayShown { digest: Some(digest), primitives, ppp };
+        self.paint_stored_overlay(renderer, output);
     }
 
     pub fn paint_if_changed(&mut self, renderer: *mut SDL_Renderer, mut output: egui::FullOutput, must_draw: bool, clear: impl FnOnce()) -> bool {

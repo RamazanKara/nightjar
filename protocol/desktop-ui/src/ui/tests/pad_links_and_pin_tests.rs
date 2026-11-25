@@ -8,7 +8,7 @@ use super::*;
 fn a_pc_card_shows_the_running_or_last_games_cover() {
     let mut f = Frames::with(record("Den", true, true), Reach::Online, Some(answer(true, 0)), vec![nightjar_policy::http::App { name: "Racing Game".into(), ..game(7) }]);
     let texture = cover_texture(&f, "racing");
-    f.hosts.list[0].art.insert(7, Art::Ready(texture.clone()));
+    Arc::make_mut(&mut f.hosts.list[0].art).insert(7, Art::Ready(texture.clone()));
     let shows_cover = |f: &Frames| meshes_drawn(f).iter().any(|(m, _)| m.texture_id == texture.id());
     f.settle();
     assert!(!shows_cover(&f), "nothing played there yet");

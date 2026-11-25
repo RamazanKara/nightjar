@@ -243,7 +243,7 @@ fn the_go_hint_names_what_the_control_does() {
     f.settle();
     tab_until(&mut f, "Play", "Play");
     // A running game: Resume, and its Quit game by its name.
-    f.hosts.list[0].native.library.as_mut().unwrap().games[0].running = true;
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().unwrap()).games[0].running = true;
     f.settle();
     tab_until(&mut f, "Resume", "Resume");
     f.l.go(Screen::Home);
@@ -295,7 +295,7 @@ fn a_running_game_with_no_list_entry_offers_the_same_choices() {
 /// of the running session, whatever the state of the list, and the PC's read still matches it.
 #[test]
 fn resuming_a_running_game_with_no_list_entry_reaches_the_stream_start() {
-    let lists = [Apps::Loaded(vec![game(1)]), Apps::NotLoaded, Apps::Failed("no".into())];
+    let lists = [Apps::Loaded(Arc::new(vec![game(1)])), Apps::NotLoaded, Apps::Failed("no".into())];
     for list in lists {
         let mut f = Frames::with(record("Den", true, true), Reach::Online, Some(answer(true, 77)), vec![game(1)]);
         f.settle();
@@ -330,7 +330,7 @@ fn try_again_on_a_failed_list_does_not_say_no_apps() {
     f.settle();
     assert!(!shows(&f, "This PC lists no apps."), "{:?}", f.drawn);
     // The empty page's Refresh, answered empty, then read by something else.
-    f.hosts.list[0].apps = Apps::Loaded(Vec::new());
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(Vec::new()));
     f.l.refocus();
     f.settle();
     // The launcher reads it before the next frame, as main does with the command.
@@ -338,7 +338,7 @@ fn try_again_on_a_failed_list_does_not_say_no_apps() {
     f.hosts.list[0].apps = Apps::Loading;
     f.settle();
     assert!(shows(&f, "This PC lists no apps."), "held while it reads: {:?}", f.drawn);
-    f.hosts.list[0].apps = Apps::Loaded(Vec::new());
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(Vec::new()));
     f.settle();
     f.hosts.list[0].apps = Apps::Loading;
     f.settle();
@@ -377,7 +377,7 @@ fn homes_play_says_what_stops_it_and_recovers() {
     type Case = (fn() -> Apps, &'static str);
     let cases: [Case; 2] = [
         (|| Apps::Failed("The PC did not answer".into()), "The app list could not be loaded. The PC did not answer"),
-        (|| Apps::Loaded(vec![game(77)]), "The PC’s app list has no entry for this game."),
+        (|| Apps::Loaded(Arc::new(vec![game(77)])), "The PC’s app list has no entry for this game."),
     ];
     for (list, why) in cases {
         for screen in ["Home", "Game"] {
@@ -401,7 +401,7 @@ fn homes_play_says_what_stops_it_and_recovers() {
             f.hosts.list[0].apps = Apps::Loading;
             f.settle();
             assert!(!shows(&f, why) && !shows(&f, "Try again"), "{screen}: {:?}", f.drawn);
-            f.hosts.list[0].apps = Apps::Loaded(vec![entry.clone()]);
+            f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![entry.clone()]));
             f.settle();
             let play = at(&f, "Play").expect("Play");
             let commands = f.click_at(play.center(), egui::PointerButton::Primary);
@@ -516,7 +516,7 @@ fn a_list_has_a_round_refresh_in_its_head() {
     assert_eq!(library::head_refresh(&f.hosts.list[0], None), Some(true));
     assert_eq!(square(&f), Some(at), "it keeps the focus while it spins");
     assert!(!f.press(Key::Enter).iter().any(|c| matches!(c, Command::Refresh(_))), "one read at a time");
-    f.hosts.list[0].apps = Apps::Loaded(vec![game(7)]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![game(7)]));
     f.settle();
     assert_eq!(square(&f), Some(at));
     assert_eq!(library::head_refresh(&f.hosts.list[0], None), Some(false));
@@ -526,7 +526,7 @@ fn a_list_has_a_round_refresh_in_its_head() {
     let quit = f.placed.iter().find(|(t, ..)| t == "Quit game").map(|p| p.1).expect("Quit game");
     assert!(quit.right() < at.left(), "{quit:?} {at:?}");
     // No list, no second Refresh: the page's middle has it.
-    f.hosts.list[0].apps = Apps::Loaded(Vec::new());
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(Vec::new()));
     assert_eq!(library::head_refresh(&f.hosts.list[0], None), None);
     f.hosts.list[0].apps = Apps::Failed("no".into());
     assert_eq!(library::head_refresh(&f.hosts.list[0], None), None);
@@ -538,7 +538,7 @@ fn a_list_has_a_round_refresh_in_its_head() {
 #[test]
 fn a_waiting_play_holds_while_a_dialog_is_open() {
     let entry = nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) };
-    for (landing, launches) in [(Apps::Loaded(vec![entry]), true), (Apps::Failed("The PC did not answer".into()), false)] {
+    for (landing, launches) in [(Apps::Loaded(Arc::new(vec![entry])), true), (Apps::Failed("The PC did not answer".into()), false)] {
         let mut f = home_with_games(1);
         let pc = f.hosts.list[0].id;
         f.hosts.list[0].apps = Apps::Loading;

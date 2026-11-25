@@ -59,7 +59,7 @@ fn describe(exit: HostExit) -> &'static str {
 /// The page under its header (the caller's, with the game's line).
 pub fn show(ui: &mut egui::Ui, page: &mut Page, lines: &[(&'static str, String)], hints: Hints) -> Outcome {
     let ctx = ui.ctx().clone();
-    let state = page.state();
+    let state = page.state_shared();
     let mut outcome = Outcome::Stay;
     let working = matches!(state.exit, ExitState::Running(_));
     if matches!(state.exit, ExitState::Done(_)) {

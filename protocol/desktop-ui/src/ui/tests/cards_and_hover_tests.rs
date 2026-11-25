@@ -86,7 +86,7 @@ fn a_value_from_a_pc_or_profile_says_so_on_the_game_settings_and_page() {
     f.l.profiles.active = Some(travel);
     f.hosts.list[0].record.settings = Some(serde_json::from_str(r#"{"fps":120}"#).unwrap());
     f.hosts.list[0].info = Some(answer(true, 1000));
-    f.hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
     f.l.go(Screen::Game { host: pc, app: 1000 });
     f.settle();
     let line = f.drawn.iter().find(|t| t.contains("Travel")).unwrap_or_else(|| panic!("{:?}", f.drawn)).clone();
@@ -154,7 +154,7 @@ fn home_groups_by_installation_and_sorts_from_the_view_menu() {
     f.size = vec2(1280.0, 2400.0);
     f.l.settings.home_group = HomeGroup::Installation;
     // A play time from the PC: Sort by offers Play time only then.
-    f.hosts.list[0].native.playtime_minutes = [("install-0".to_owned(), 90)].into();
+    f.hosts.list[0].native.playtime_minutes = Arc::new([("install-0".to_owned(), 90)].into());
     f.settle();
     let shelf = |f: &Frames, name: &str| f.placed.iter().find(|(t, r, _)| t == name && r.center().y > 80.0).map(|p| p.1.top()).expect(name);
     assert!(shelf(&f, "Installed") < shelf(&f, "Not installed"), "{:?}", f.drawn);
@@ -255,7 +255,7 @@ fn hiding_a_favourite_focuses_the_next_game_not_its_own_library_card() {
 fn hiding_on_a_pcs_page_moves_the_focus_only_when_the_card_goes() {
     let mut f = home_with_games(3);
     let id = f.hosts.list[0].id;
-    f.hosts.list[0].apps = Apps::Loaded(vec![game(7), game(9)]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![game(7), game(9)]));
     f.l.go(Screen::Apps(id));
     for (shows_hidden, focus) in [(true, "app:7"), (false, "app:9")] {
         f.l.show_hidden_apps = shows_hidden;
@@ -275,7 +275,7 @@ fn hiding_on_a_pcs_page_moves_the_focus_only_when_the_card_goes() {
 #[test]
 fn a_running_hidden_game_stays_under_continue_playing_and_can_be_shown_again() {
     let mut f = home_with_stores(&[("Alpha", "steam", true), ("Beta", "steam", true)]);
-    f.hosts.list[0].native.library.as_mut().unwrap().games[0].running = true;
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().unwrap()).games[0].running = true;
     let id = f.hosts.list[0].id;
     let keys = {
         let sources: Vec<crate::console::Source> = f.hosts.list.iter().map(crate::console::Source::of).collect();
@@ -495,7 +495,7 @@ fn a_help_section_jump_lands_below_the_chrome() {
 fn home_at_rest_asks_for_no_more_frames() {
     let mut f = store_mix();
     for art in f.hosts.list[0].native.library.as_ref().expect("a library").games.iter().map(|g| g.app_id as i32).collect::<Vec<_>>() {
-        f.hosts.list[0].art.insert(art, Art::Missing);
+        Arc::make_mut(&mut f.hosts.list[0].art).insert(art, Art::Missing);
     }
     for _ in 0..12 {
         f.settle();
@@ -515,7 +515,7 @@ fn a_launcher_at_rest_paints_the_same_frame_whenever_it_wakes() {
     use crate::live_glass::{frame_differs, frame_print};
     let mut f = store_mix();
     for art in f.hosts.list[0].native.library.as_ref().expect("a library").games.iter().map(|g| g.app_id as i32).collect::<Vec<_>>() {
-        f.hosts.list[0].art.insert(art, Art::Missing);
+        Arc::make_mut(&mut f.hosts.list[0].art).insert(art, Art::Missing);
     }
     for _ in 0..12 {
         f.settle();
@@ -601,7 +601,7 @@ fn the_hero_is_the_running_game_then_the_last_played_then_the_first_installed() 
     f.l.recents.push(crate::config::Recent { host: "Desk".into(), install_id: "install-2".into(), app_id: 1002, title: "Gamma".into(), at: 1000 });
     f.settle();
     assert_eq!(hero(&f).as_deref(), Some("Gamma"), "the last played");
-    f.hosts.list[0].native.library.as_mut().expect("a library").games[0].running = true;
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().expect("a library")).games[0].running = true;
     f.settle();
     assert_eq!(hero(&f).as_deref(), Some("Alpha"), "what runs");
 }

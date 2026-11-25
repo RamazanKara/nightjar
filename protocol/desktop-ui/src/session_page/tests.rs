@@ -336,9 +336,9 @@ fn a_second_write_is_refused_while_one_is_in_flight() {
     until("the panel", || page.state().radeon.panel.is_some());
     let row = editable_row(&page, "chill.max_fps");
     // The state a first write leaves behind until the worker answers.
-    lock(&page.shared).radeon.pending = Some((5, "anti_lag.enabled".into()));
+    Arc::make_mut(&mut lock(&page.shared)).radeon.pending = Some((5, "anti_lag.enabled".into()));
     assert!(!page.write(&row, Value::Integer(110)));
-    lock(&page.shared).radeon.pending = None;
+    Arc::make_mut(&mut lock(&page.shared)).radeon.pending = None;
     assert!(page.write(&row, Value::Integer(110)));
 }
 
@@ -428,10 +428,10 @@ fn the_page_is_busy_until_an_exit_has_been_answered() {
     let page = open(fake, 1000, 1000);
     assert!(!page.busy());
     // The state an exit leaves behind until the host answers.
-    lock(&page.shared).exit = ExitState::Running(HostExit::End);
+    Arc::make_mut(&mut lock(&page.shared)).exit = ExitState::Running(HostExit::End);
     assert!(page.busy(), "closing the page now would hide the host's answer");
     assert!(!page.exit(HostExit::CloseGame), "a second exit is refused too");
-    lock(&page.shared).exit = ExitState::Failed(HostExit::End, Failure::of(&Error::NotFound("x".into()), None));
+    Arc::make_mut(&mut lock(&page.shared)).exit = ExitState::Failed(HostExit::End, Failure::of(&Error::NotFound("x".into()), None));
     assert!(!page.busy(), "a failed exit leaves the page free to close");
 }
 

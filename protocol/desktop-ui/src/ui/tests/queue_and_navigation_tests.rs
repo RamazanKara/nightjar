@@ -287,7 +287,7 @@ fn the_shoulders_step_through_the_destinations() {
         playtime_minutes: None,
         collections: Vec::new(),
     };
-    f.hosts.list[0].native.library = Some(Library { revision: "r1".into(), games: vec![game] });
+    f.hosts.list[0].native.library = Some(Arc::new(Library { revision: "r1".into(), games: vec![game] }));
     f.l.go(Screen::Home);
     f.settle();
     let step = |f: &mut Frames, forward: bool| {

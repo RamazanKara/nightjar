@@ -21,7 +21,7 @@ pub(super) fn home_with_games(count: u32) -> Frames {
         })
         .collect();
     let mut f = Frames::with(record("Desk", true, true), Reach::Online, Some(answer(true, 0)), Vec::new());
-    f.hosts.list[0].native.library = Some(Library { revision: "r1".into(), games });
+    f.hosts.list[0].native.library = Some(Arc::new(Library { revision: "r1".into(), games }));
     f.l.go(Screen::Home);
     f.settle();
     f
@@ -31,7 +31,7 @@ pub(super) fn home_with_games(count: u32) -> Frames {
 pub(super) fn game_page_with_profiles(names: &[&str]) -> Frames {
     let mut f = home_with_games(1);
     let pc = f.hosts.list[0].id;
-    f.hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
     f.l.profiles.entries = names.iter().zip(1u64..).map(|(name, id)| crate::config::Profile { id, name: (*name).into(), settings: Default::default() }).collect();
     f.l.go(Screen::Game { host: pc, app: 1000 });
     f.settle();
@@ -60,7 +60,7 @@ impl crate::neural_page::NeuralSource for FixedNeural {
 pub(super) fn game_page_with_neural(on: bool, state: rubylight_native_api::radeon::ControlState, reason: Option<&str>) -> Frames {
     let mut f = home_with_games(1);
     let pc = f.hosts.list[0].id;
-    f.hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
     f.hosts.list[0].info = Some(answer(true, 0));
     let info = f.hosts.list[0].info.as_mut().unwrap();
     let evidence = info.capabilities.evidence().unwrap().clone();
@@ -202,7 +202,7 @@ pub(super) fn three_pcs() -> (Frames, [u64; 3]) {
     for (host, reach) in hosts.list.iter_mut().zip([Reach::Online, Reach::Online, Reach::Offline]) {
         host.reach = reach;
     }
-    hosts.list[0].apps = Apps::Loaded(vec![game(1)]);
+    hosts.list[0].apps = Apps::Loaded(Arc::new(vec![game(1)]));
     let ids = [hosts.list[0].id, hosts.list[1].id, hosts.list[2].id];
     let mut f = Frames::over(ctx, l, hosts);
     f.l.go(Screen::Apps(ids[0]));
@@ -312,7 +312,7 @@ pub(super) fn home_with_stores(games: &[(&str, &str, bool)]) -> Frames {
         })
         .collect();
     let mut f = Frames::with(record("Desk", true, true), Reach::Online, Some(answer(true, 0)), Vec::new());
-    f.hosts.list[0].native.library = Some(Library { revision: "r1".into(), games });
+    f.hosts.list[0].native.library = Some(Arc::new(Library { revision: "r1".into(), games }));
     f.l.go(Screen::Home);
     f.settle();
     f
@@ -335,7 +335,7 @@ pub(super) fn store_mix() -> Frames {
 }
 
 pub(super) fn in_collections(f: &mut Frames, games: &[(&str, &[&str])]) {
-    f.hosts.list[0].native.collections = games.iter().map(|(id, names)| ((*id).to_owned(), names.iter().map(|n| (*n).to_owned()).collect())).collect();
+    f.hosts.list[0].native.collections = Arc::new(games.iter().map(|(id, names)| ((*id).to_owned(), names.iter().map(|n| (*n).to_owned()).collect())).collect());
     f.settle();
 }
 
@@ -582,7 +582,7 @@ pub(super) fn pcs_more(more: usize) -> Frames {
     for (host, reach) in hosts.list.iter_mut().zip([Reach::Online, Reach::Online, Reach::Offline, Reach::Online]) {
         host.reach = reach;
     }
-    hosts.list[0].apps = Apps::Loaded(vec![game(1)]);
+    hosts.list[0].apps = Apps::Loaded(Arc::new(vec![game(1)]));
     Frames::over(ctx, l, hosts)
 }
 

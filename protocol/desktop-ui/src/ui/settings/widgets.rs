@@ -15,8 +15,7 @@ impl Launcher {
         // stream menu): Clear all clears those too.
         let rows = SECTION_KEYS.iter().flat_map(|keys| keys.iter());
         let in_rows = rows.clone().filter(|keys| self.edit_overrides.has(keys)).count();
-        let values = serde_json::to_value(&self.edit_overrides).expect("overrides serialize");
-        let without_row = values.as_object().map_or(0, |values| values.keys().filter(|key| !rows.clone().any(|keys| keys.contains(&key.as_str()))).count());
+        let without_row = self.edit_overrides.keys().filter(|key| !rows.clone().any(|keys| keys.contains(key))).count();
         let set = in_rows + without_row;
         let count = match set {
             0 => tr("Nothing is set here yet.").to_owned(),
@@ -274,7 +273,8 @@ pub(in crate::ui) fn setting_row(
                     ui.set_width(CONTROL_W);
                     // Choosing another value ticks the box, opening a menu and leaving it changes
                     // nothing. Read before the control: a number field consumes the arrow keys that step it.
-                    let (before, chose) = (settings.clone(), chosen(ui));
+                    let chose = chosen(ui);
+                    let before = chose.then(|| settings.clone());
                     let value = control(ui, settings);
                     name_for_readers(ui, &value, label, description);
                     // The box on the row's last line, beside where its value comes from, however
@@ -283,13 +283,14 @@ pub(in crate::ui) fn setting_row(
                     if room > 0.0 && room.is_finite() {
                         ui.add_space(room);
                     }
-                    let mut ticked = own || (*settings != before && chose);
+                    let changed = before.as_ref().is_some_and(|before| *settings != *before);
+                    let mut ticked = own || changed;
                     let boxed = layer_box(ui, &mut ticked, box_label);
                     name_for_readers(ui, &boxed, box_label, label);
                     if boxed.changed() && !ticked {
                         overrides.clear(keys);
                         *settings = overrides.apply(inherited);
-                    } else if ticked && (boxed.changed() || *settings != before) {
+                    } else if ticked && (boxed.changed() || changed) {
                         // Only on a change: a row over several keys leaves a layer that holds some
                         // of them, as older versions saved it, as it is until a value is chosen.
                         // Ticking the box takes the whole row; a chosen value, the keys it sets.

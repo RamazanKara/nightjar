@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use nightjar_core::http::native_api::library::Library;
@@ -39,24 +40,24 @@ pub struct Host {
     pub reach: Reach,
     pub info: Option<ServerInfo>,
     pub apps: Apps,
-    pub art: HashMap<i32, Art>,
+    pub art: Arc<HashMap<i32, Art>>,
     /// Each cover's ambient, baked with it on the art thread: what the backdrop cross-fades to
     /// (`glass::CrossFade`) and baked glass samples. None while the cover loads, or without one.
-    pub ambient: HashMap<i32, egui::TextureHandle>,
+    pub ambient: Arc<HashMap<i32, egui::TextureHandle>>,
     /// What each cover glows with on its page, taken from its ambient.
-    pub ambient_glow: HashMap<i32, egui::Color32>,
+    pub ambient_glow: Arc<HashMap<i32, egui::Color32>>,
     /// The cover version each `art` entry was asked for (empty for classic box art).
-    pub(super) art_versions: HashMap<i32, String>,
+    pub(super) art_versions: Arc<HashMap<i32, String>>,
     /// The pixels per point each cover that was made smaller was sized for; a cover kept at its
     /// own size is not in it.
-    pub(super) art_sized: HashMap<i32, f32>,
+    pub(super) art_sized: Arc<HashMap<i32, f32>>,
     /// When each cover whose download failed may be asked for again; its `art` is `Missing` till then.
-    pub(super) art_retry: HashMap<i32, Instant>,
+    pub(super) art_retry: Arc<HashMap<i32, Instant>>,
     pub native: Native,
     /// The last app list of a PC without the native library, as saved for Home (live or from an
     /// earlier run), and the same as a library with the running app marked ([`Host::library`]).
-    pub classic_apps: Option<crate::config::ClassicApps>,
-    pub classic: Option<Library>,
+    pub classic_apps: Option<Arc<crate::config::ClassicApps>>,
+    pub classic: Option<Arc<Library>>,
     /// Bumped when the PC is unpaired, so a native read that started before is dropped.
     pub(super) native_epoch: u64,
     /// Counts native reads and actions, in the order they started or landed.
@@ -177,14 +178,14 @@ impl Host {
     /// The games Home shows for the PC: its native library, else its app list as a library
     /// ([`crate::console::classic_library`]).
     pub fn library(&self) -> Option<&Library> {
-        self.native.library.as_ref().or(self.classic.as_ref())
+        self.native.library.as_deref().or(self.classic.as_deref())
     }
 
     /// Takes in the PC's app list as Home keeps it: None drops it. True when it changed and is to
     /// be saved (or forgotten).
     pub(super) fn set_classic_apps(&mut self, apps: Option<crate::config::ClassicApps>) -> bool {
-        let changed = self.classic_apps != apps;
-        self.classic_apps = apps;
+        let changed = self.classic_apps.as_deref() != apps.as_ref();
+        self.classic_apps = apps.map(Arc::new);
         self.sync_classic();
         changed
     }
@@ -197,7 +198,7 @@ impl Host {
             .as_ref()
             .filter(|_| self.reach == Reach::Online)
             .map(|i| (i.current_game, i.current_game_uuid.as_deref()));
-        self.classic = self.classic_apps.as_ref().map(|apps| crate::console::classic_library(apps, running));
+        self.classic = self.classic_apps.as_deref().map(|apps| Arc::new(crate::console::classic_library(apps, running)));
     }
 
     pub fn session_reads(&self) -> crate::open_play::SessionReads {
@@ -230,23 +231,23 @@ impl Host {
     pub(crate) fn begin_art(&mut self, app: i32, version: &str) -> Option<String> {
         let known = self.art_versions.get(&app);
         if known.is_some_and(|known| replaces(known, version)) {
-            self.art.remove(&app);
-            self.ambient.remove(&app);
-            self.ambient_glow.remove(&app);
-            self.art_sized.remove(&app);
+            Arc::make_mut(&mut self.art).remove(&app);
+            Arc::make_mut(&mut self.ambient).remove(&app);
+            Arc::make_mut(&mut self.ambient_glow).remove(&app);
+            Arc::make_mut(&mut self.art_sized).remove(&app);
         }
         if self.has_art(app) {
             return None;
         }
-        self.art_retry.remove(&app);
+        Arc::make_mut(&mut self.art_retry).remove(&app);
         // Asked for without a version, a cover that was dropped (a new renderer, or for room)
         // loads as the one it was, from its file.
         let version = match known {
             Some(known) if version.is_empty() => known.clone(),
             _ => version.to_owned(),
         };
-        self.art.insert(app, Art::Loading);
-        self.art_versions.insert(app, version.clone());
+        Arc::make_mut(&mut self.art).insert(app, Art::Loading);
+        Arc::make_mut(&mut self.art_versions).insert(app, version.clone());
         Some(version)
     }
 
@@ -327,12 +328,12 @@ impl Host {
             reach: self.reach,
             info: self.info.clone(),
             apps: self.apps.clone(),
-            art: self.art.clone(),
-            ambient: self.ambient.clone(),
-            ambient_glow: self.ambient_glow.clone(),
-            art_versions: self.art_versions.clone(),
-            art_sized: self.art_sized.clone(),
-            art_retry: self.art_retry.clone(),
+            art: Arc::clone(&self.art),
+            ambient: Arc::clone(&self.ambient),
+            ambient_glow: Arc::clone(&self.ambient_glow),
+            art_versions: Arc::clone(&self.art_versions),
+            art_sized: Arc::clone(&self.art_sized),
+            art_retry: Arc::clone(&self.art_retry),
             native: self.native.clone(),
             classic_apps: self.classic_apps.clone(),
             classic: self.classic.clone(),

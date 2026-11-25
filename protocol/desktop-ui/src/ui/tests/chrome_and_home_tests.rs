@@ -22,9 +22,9 @@ fn a_games_page_on_an_asleep_or_unpaired_pc_offers_the_way_back() {
 #[test]
 fn a_game_the_pc_has_not_installed_cannot_be_played_from_its_page() {
     let mut f = home_with_games(2);
-    f.hosts.list[0].native.library.as_mut().expect("the library").games[0].installed = Some(false);
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().expect("the library")).games[0].installed = Some(false);
     // Game 01 runs: Play could not close it, so nothing says it would.
-    f.hosts.list[0].native.library.as_mut().unwrap().games[1].running = true;
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().unwrap()).games[1].running = true;
     // A second PC with the same game, not installed there either.
     let mut hosts = Hosts::without_discovery(vec![record("Desk", true, true), record("Den", true, false)], Arc::new(|| {}));
     for host in &mut hosts.list {
@@ -32,7 +32,7 @@ fn a_game_the_pc_has_not_installed_cannot_be_played_from_its_page() {
         host.native.library = f.hosts.list[0].native.library.clone();
     }
     hosts.list[0].info = f.hosts.list[0].info.clone();
-    hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
+    hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
     f.hosts = hosts;
     let pc = f.hosts.list[0].id;
     f.l.go(Screen::Game { host: pc, app: 1000 });
@@ -46,11 +46,11 @@ fn a_game_the_pc_has_not_installed_cannot_be_played_from_its_page() {
     let commands = f.click_at(play.center(), egui::PointerButton::Primary);
     assert!(!commands.iter().any(|c| matches!(c, Command::Launch { .. })), "Play is off");
     // Installed, the same page plays it.
-    f.hosts.list[0].native.library.as_mut().unwrap().games[0].installed = Some(true);
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().unwrap()).games[0].installed = Some(true);
     f.settle();
     assert!(!shows(&f, "Not installed on Desk"), "{:?}", f.drawn);
     assert!(shows(&f, closes), "{:?}", f.drawn);
-    f.hosts.list[0].native.library.as_mut().unwrap().games[1].running = false;
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().unwrap()).games[1].running = false;
     f.settle();
     let play = f.placed.iter().find(|(t, ..)| t == "Play").map(|p| p.1).expect("Play is shown");
     let commands = f.click_at(play.center(), egui::PointerButton::Primary);
@@ -62,13 +62,13 @@ fn a_games_page_names_its_store_when_the_pc_sends_only_the_key() {
     use rubylight_native_api::library::Store;
     let mut f = home_with_games(1);
     let store = |source: &str, name: &str| Some(Store { source: source.into(), id: "1".into(), name: name.into() });
-    f.hosts.list[0].native.library.as_mut().expect("the library").games[0].store = store("microsoft", "");
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().expect("the library")).games[0].store = store("microsoft", "");
     let pc = f.hosts.list[0].id;
     f.l.go(Screen::Game { host: pc, app: 1000 });
     f.settle();
     assert!(shows(&f, "Xbox"), "the key's known name: {:?}", f.drawn);
     // The PC's own name wins.
-    f.hosts.list[0].native.library.as_mut().unwrap().games[0].store = store("microsoft", "Microsoft Store");
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().unwrap()).games[0].store = store("microsoft", "Microsoft Store");
     f.settle();
     assert!(shows(&f, "Microsoft Store") && !shows(&f, "Xbox"), "{:?}", f.drawn);
 }
@@ -199,7 +199,7 @@ fn the_home_card_of_a_pc_to_pair_fits_its_state() {
         playtime_minutes: None,
         collections: Vec::new(),
     };
-    f.hosts.list[0].native.library = Some(Library { revision: "r1".into(), games: vec![game] });
+    f.hosts.list[0].native.library = Some(Arc::new(Library { revision: "r1".into(), games: vec![game] }));
     f.hosts.list[1].reach = Reach::Online;
     f.hosts.list[1].info = Some(answer(false, 0));
     f.l.go(Screen::Home);
@@ -385,7 +385,7 @@ fn the_quit_on_leave_switch_sends_the_choice() {
     let mut f = home_with_games(1);
     f.ctx.enable_accesskit();
     let pc = f.hosts.list[0].id;
-    f.hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
     f.l.go(Screen::Game { host: pc, app: 1000 });
     f.settle();
     let bounds = f.access.as_ref().expect("AccessKit is on").nodes.iter()

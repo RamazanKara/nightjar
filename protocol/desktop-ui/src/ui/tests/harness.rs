@@ -83,7 +83,7 @@ impl Frames {
         hosts.list[0].reach = reach;
         hosts.list[0].info = info;
         if !apps.is_empty() {
-            hosts.list[0].apps = Apps::Loaded(apps);
+            hosts.list[0].apps = Apps::Loaded(Arc::new(apps));
         }
         let mut frames = Self::over(ctx, l, hosts);
         frames.settle();

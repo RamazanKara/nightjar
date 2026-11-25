@@ -17,7 +17,7 @@ fn input_only_through_a_small_stream_needs_the_setting_and_leaves_a_running_game
     allowed.info.as_mut().unwrap().permission = None;
     assert_eq!(small_stream_offer(&allowed, &game(7), true, true), Some(None), "joins the running game");
     assert_eq!(small_stream_offer(&allowed, &App { control: AppControl::Resume, ..game(7) }, true, true), None, "only ordinary games");
-    allowed.apps = Apps::Loaded(vec![game(7), App { control: AppControl::Input, ..game(9) }]);
+    allowed.apps = Apps::Loaded(Arc::new(vec![game(7), App { control: AppControl::Input, ..game(9) }]));
     assert_eq!(small_stream_offer(&allowed, &game(7), true, true), None, "the host's own Input-only tile is used instead");
     let mut idle = by("paired");
     idle.info.as_mut().unwrap().permission = None;

@@ -2,6 +2,7 @@
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::mpsc::channel;
+use std::sync::Arc;
 use std::time::Instant;
 
 use nightjar_core::http::native_api::session::{ActionId, Session};
@@ -487,9 +488,9 @@ impl Hosts {
     /// old one and load again from the art cache as they are asked for ([`Self::request_art`]).
     pub fn renderer_changed(&mut self) {
         for host in &mut self.list {
-            host.art.retain(|_, art| !matches!(art, Art::Ready(_)));
-            host.ambient.clear();
-            host.art_sized.clear();
+            Arc::make_mut(&mut host.art).retain(|_, art| !matches!(art, Art::Ready(_)));
+            Arc::make_mut(&mut host.ambient).clear();
+            Arc::make_mut(&mut host.art_sized).clear();
         }
         self.art_used.clear();
     }

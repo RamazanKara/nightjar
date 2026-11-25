@@ -594,20 +594,20 @@ fn multiple_copies_on_same_or_other_pc_get_distinct_click_targets_and_labels() {
         host.reach = Reach::Online;
         host.info = f.hosts.list[0].info.clone();
     }
-    hosts.list[0].native.library = Some(Library {
+    hosts.list[0].native.library = Some(std::sync::Arc::new(Library {
         revision: "r1".into(),
         games: vec![
             lib_game(100, "Game A", ("steam", "Steam")),
             lib_game(101, "Game A (Epic)", ("epic", "Epic Games")),
         ],
-    });
-    hosts.list[1].native.library = Some(Library {
+    }));
+    hosts.list[1].native.library = Some(std::sync::Arc::new(Library {
         revision: "r2".into(),
         games: vec![
             lib_game(201, "Game A", ("steam", "Steam")),
             lib_game(202, "Game A (GOG)", ("gog", "GOG")),
         ],
-    });
+    }));
     f.hosts = hosts;
     let pc0 = f.hosts.list[0].id;
     let pc1 = f.hosts.list[1].id;

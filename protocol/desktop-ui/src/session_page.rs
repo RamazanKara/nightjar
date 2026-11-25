@@ -315,7 +315,7 @@ enum Request {
 
 /// The open page. Dropping it stops the worker.
 pub struct Page {
-    shared: Arc<Mutex<State>>,
+    shared: Arc<Mutex<Arc<State>>>,
     requests: Sender<Request>,
     /// The exit the user has been asked to confirm.
     pub confirming: Option<HostExit>,
@@ -333,7 +333,7 @@ impl Page {
         session_every: Duration,
         radeon_every: Duration,
     ) -> Page {
-        let shared = Arc::new(Mutex::new(State::new()));
+        let shared = Arc::new(Mutex::new(Arc::new(State::new())));
         let (requests, inbox) = channel();
         let worker = Worker { shared: shared.clone(), wake, gate: Gate::new(radeon_every, session_every) };
         let spawned = std::thread::Builder::new().name("session-page".into()).spawn(move || match make() {
@@ -347,25 +347,31 @@ impl Page {
             }),
         });
         if spawned.is_err() {
-            lock(&shared).setup_error = Some(tr("The page could not start its worker.").into());
+            Arc::make_mut(&mut lock(&shared)).setup_error = Some(tr("The page could not start its worker.").into());
         }
         Page { shared, requests, confirming: None }
     }
 
+    /// Cheap shared snapshot of the page state for UI drawing.
+    pub fn state_shared(&self) -> Arc<State> {
+        Arc::clone(&lock(&self.shared))
+    }
+
     pub fn state(&self) -> State {
-        lock(&self.shared).clone()
+        (*self.state_shared()).clone()
     }
 
     /// Asks for one Radeon change. Returns false (and sends nothing) when the panel does not
     /// allow it now: not writable, the row is not editable, or another write is in flight.
     pub fn write(&self, row: &Row, value: Value) -> bool {
-        let mut state = lock(&self.shared);
-        if !state.can_write(row) {
+        let mut guard = lock(&self.shared);
+        if !guard.can_write(row) {
             return false;
         }
+        let state = Arc::make_mut(&mut guard);
         state.radeon.pending = Some((row.gpu, row.id.clone()));
         state.radeon.write_failure = None;
-        drop(state);
+        drop(guard);
         self.requests.send(Request::Write { gpu: row.gpu, id: row.id.clone(), value }).is_ok()
     }
 
@@ -376,36 +382,36 @@ impl Page {
 
     /// Runs End session, Close game or Quit game. Returns false when one is already running.
     pub fn exit(&self, exit: HostExit) -> bool {
-        let mut state = lock(&self.shared);
-        if matches!(state.exit, ExitState::Running(_)) {
+        let mut guard = lock(&self.shared);
+        if matches!(guard.exit, ExitState::Running(_)) {
             return false;
         }
-        state.exit = ExitState::Running(exit);
-        drop(state);
+        Arc::make_mut(&mut guard).exit = ExitState::Running(exit);
+        drop(guard);
         if self.requests.send(Request::Exit(exit)).is_err() {
             // The worker is gone (it could not start): the exit fails with why, it never runs.
-            let mut state = lock(&self.shared);
-            let why = state.setup_error.clone().unwrap_or_else(|| tr("The page could not start its worker.").into());
-            state.exit = ExitState::Failed(exit, Failure::of(&Error::InvalidArgument(why), None));
+            let mut guard = lock(&self.shared);
+            let why = guard.setup_error.clone().unwrap_or_else(|| tr("The page could not start its worker.").into());
+            Arc::make_mut(&mut guard).exit = ExitState::Failed(exit, Failure::of(&Error::InvalidArgument(why), None));
             return false;
         }
         true
     }
 }
 
-fn lock(shared: &Mutex<State>) -> std::sync::MutexGuard<'_, State> {
+fn lock(shared: &Mutex<Arc<State>>) -> std::sync::MutexGuard<'_, Arc<State>> {
     shared.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 struct Worker {
-    shared: Arc<Mutex<State>>,
+    shared: Arc<Mutex<Arc<State>>>,
     wake: Waker,
     gate: Gate,
 }
 
 impl Worker {
     fn update(&self, change: impl FnOnce(&mut State)) {
-        change(&mut lock(&self.shared));
+        change(Arc::make_mut(&mut lock(&self.shared)));
         (self.wake)();
     }
 

@@ -505,7 +505,7 @@ pub(crate) fn page_scroll_from(ui: &mut Ui, id: impl std::hash::Hash + std::fmt:
             let placing = super::backdrop::placing(ui.ctx());
             let layer = ui.layer_id();
             let from = ui.ctx().graphics(|g| g.get(layer).map_or(0, |l| l.next_idx().0));
-            ui.scope_builder(egui::UiBuilder::new().max_rect(inside), |ui| {
+            let content = ui.scope_builder(egui::UiBuilder::new().max_rect(inside), |ui| {
                 ui.add_space(top);
                 add(ui);
                 ui.add_space(space::XXL);
@@ -513,16 +513,7 @@ pub(crate) fn page_scroll_from(ui: &mut Ui, id: impl std::hash::Hash + std::fmt:
             // What the page laid out, as it stands at its top, for the sky's moon to stand clear of;
             // what rises over its neighbours is painted later, after the page.
             if placing {
-                let down = Vec2::new(0.0, full.top() - page.top());
-                let soft = glass::soft_textures(ui.ctx());
-                let deferred = glass::deferred(ui.ctx());
-                let mut rects = ui.ctx().graphics(|g| {
-                    g.get(layer).map_or_else(Vec::new, |l| {
-                        super::backdrop::laid_out(&soft, l.all_entries().skip(from).map(|c| &c.shape), down, full)
-                    })
-                });
-                rects.extend(super::backdrop::laid_out(&soft, deferred.iter().flat_map(|(_, shapes)| shapes), down, full));
-                super::backdrop::hold_page(ui.ctx(), full, rects, down.y);
+                super::backdrop::hold_page_scroll(ui.ctx(), id, layer, from, full, page.top(), content.response.rect);
             }
         })
         .state

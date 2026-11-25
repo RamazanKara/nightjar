@@ -132,9 +132,9 @@ pub struct Hosts {
     /// demo, which stay offline.
     game_info: Option<crate::game_info::Shared>,
     /// The facts known for each game, by its lookup key ([`crate::game_info::entry_key`]).
-    facts: HashMap<String, nightjar_policy::game_info::cache::Facts>,
+    facts: Arc<HashMap<String, nightjar_policy::game_info::cache::Facts>>,
     /// The games whose facts were asked for since the keys last changed.
-    facts_asked: std::collections::HashSet<String>,
+    facts_asked: Arc<std::collections::HashSet<String>>,
     /// The worker that looks facts up, one game at a time.
     facts_worker: Option<Sender<nightjar_policy::game_info::job::Game>>,
     /// The worker that fetches SteamGridDB covers for the gaps the cover workers found, so a
@@ -276,8 +276,8 @@ impl Hosts {
             discovering: false,
             pc_workers: HashMap::new(),
             game_info: None,
-            facts: HashMap::new(),
-            facts_asked: std::collections::HashSet::new(),
+            facts: Arc::new(HashMap::new()),
+            facts_asked: Arc::new(std::collections::HashSet::new()),
             facts_worker: None,
             cover_worker: None,
             merged_into: HashMap::new(),
@@ -309,12 +309,12 @@ impl Hosts {
             reach: Reach::Unknown,
             info: None,
             apps: Apps::NotLoaded,
-            art: HashMap::new(),
-            ambient: HashMap::new(),
-            ambient_glow: HashMap::new(),
-            art_versions: HashMap::new(),
-            art_sized: HashMap::new(),
-            art_retry: HashMap::new(),
+            art: Arc::new(HashMap::new()),
+            ambient: Arc::new(HashMap::new()),
+            ambient_glow: Arc::new(HashMap::new()),
+            art_versions: Arc::new(HashMap::new()),
+            art_sized: Arc::new(HashMap::new()),
+            art_retry: Arc::new(HashMap::new()),
             native: Native::default(),
             classic_apps: None,
             classic: None,
@@ -626,8 +626,8 @@ impl Hosts {
         let mut out = nightjar_desktop_ui::hosts_model::Hosts::without_discovery(Vec::new(), self.waker.clone());
         out.discovering = self.discovering;
         out.has_identity = self.identity.is_some();
-        out.facts = self.facts.clone();
-        out.facts_asked = self.facts_asked.clone();
+        out.facts = Arc::clone(&self.facts);
+        out.facts_asked = Arc::clone(&self.facts_asked);
         out.set_facts_source(Some(Arc::new(HostFactsSource(self.facts_offered()))));
         out.list = self.list.iter().map(Host::ui_view).collect();
         out

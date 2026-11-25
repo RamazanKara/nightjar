@@ -164,9 +164,16 @@ fn covers_name_the_game_inside_without_art_and_under_art_always() {
     assert_eq!((count(&f, "Game 01"), count(&f, "Game 02")), (1, 1), "without art each title shows once: {:?}", f.drawn);
     let texture = f.ctx.load_texture("art", egui::ColorImage::new([3, 4], vec![Color32::GRAY; 12]), egui::TextureOptions::LINEAR);
     let pc = &mut f.hosts.list[0];
-    for g in &mut pc.native.library.as_mut().expect("a library").games {
-        g.artwork = rubylight_native_api::library::Artwork { cover: Some(format!("/cover/{}", g.app_id)), version: "1".into() };
-        pc.art.insert(g.app_id as i32, Art::Ready(texture.clone()));
+    let app_ids: Vec<i32> = Arc::make_mut(pc.native.library.as_mut().expect("a library"))
+        .games
+        .iter_mut()
+        .map(|g| {
+            g.artwork = rubylight_native_api::library::Artwork { cover: Some(format!("/cover/{}", g.app_id)), version: "1".into() };
+            g.app_id as i32
+        })
+        .collect();
+    for app_id in app_ids {
+        Arc::make_mut(&mut pc.art).insert(app_id, Art::Ready(texture.clone()));
     }
     f.settle();
     assert_eq!((count(&f, "Game 01"), count(&f, "Game 02")), (1, 1), "every cover is named under its art: {:?}", f.drawn);
@@ -194,9 +201,12 @@ fn cover_art_fills_its_box_cropped_never_squashed() {
     let mut f = home_with_games(1);
     let texture = f.ctx.load_texture("wide", egui::ColorImage::new([6, 4], vec![Color32::GRAY; 24]), egui::TextureOptions::LINEAR);
     let pc = &mut f.hosts.list[0];
-    let g = &mut pc.native.library.as_mut().expect("a library").games[0];
-    g.artwork = rubylight_native_api::library::Artwork { cover: Some("/cover/0".into()), version: "1".into() };
-    pc.art.insert(g.app_id as i32, Art::Ready(texture.clone()));
+    let app_id = {
+        let g = &mut Arc::make_mut(pc.native.library.as_mut().expect("a library")).games[0];
+        g.artwork = rubylight_native_api::library::Artwork { cover: Some("/cover/0".into()), version: "1".into() };
+        g.app_id as i32
+    };
+    Arc::make_mut(&mut pc.art).insert(app_id, Art::Ready(texture.clone()));
     f.settle();
     let primitives = f.ctx.tessellate(f.shapes.clone(), f.ctx.pixels_per_point());
     let us: Vec<f32> = primitives
@@ -307,8 +317,8 @@ fn the_game_page_says_its_state_in_a_chip_and_the_pc_on_its_own_line() {
     let mut f = home_with_games(2);
     let pc = f.hosts.list[0].id;
     f.hosts.list[0].info = Some(answer(true, 1000));
-    f.hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
-    f.hosts.list[0].native.library.as_mut().expect("the library").games[0].running = true;
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().expect("the library")).games[0].running = true;
     f.l.go(Screen::Game { host: pc, app: 1000 });
     f.settle();
     // The last of a text: the cover without art shows the title too, before the page does.
@@ -327,7 +337,7 @@ fn the_game_page_says_its_state_in_a_chip_and_the_pc_on_its_own_line() {
 fn a_games_page_is_one_play_beside_favourite_over_its_rows() {
     let mut f = home_with_games(2);
     let pc = f.hosts.list[0].id;
-    f.hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
     f.l.go(Screen::Game { host: pc, app: 1000 });
     f.settle();
     let at = |f: &Frames, text: &str| f.placed.iter().rfind(|(t, r, _)| t == text && r.top() > chrome::PAGE_TOP).map(|p| p.1).unwrap_or_else(|| panic!("{text} in {:?}", f.drawn));
@@ -349,7 +359,7 @@ fn a_games_page_is_one_play_beside_favourite_over_its_rows() {
     // Running, the hero's words change in place and Quit game joins them.
     f.settle();
     f.hosts.list[0].info = Some(answer(true, 1000));
-    f.hosts.list[0].native.library.as_mut().expect("the library").games[0].running = true;
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().expect("the library")).games[0].running = true;
     f.settle();
     let (resume, quit) = (at(&f, "Resume"), at(&f, "Quit game"));
     assert!((resume.center().y - quit.center().y).abs() < 2.0, "{resume:?} {quit:?}");
@@ -451,10 +461,10 @@ fn settings_over_the_newest_game_page_keeps_that_pages_neural_panel() {
     let mut f = game_page_with_neural(false, rubylight_native_api::radeon::ControlState::Configurable, None);
     let pc = f.hosts.list[0].id;
     let neural = f.l.neural.state_for(pc, 1000).and_then(|open| open.state.clone()).unwrap();
-    f.hosts.list[0].apps = Apps::Loaded(vec![
+    f.hosts.list[0].apps = Apps::Loaded(std::sync::Arc::new(vec![
         nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) },
         nightjar_policy::http::App { name: "Game 01".into(), uuid: "install-1".into(), ..game(1001) },
-    ]);
+    ]));
     f.l.open(Screen::AllGames);
     f.l.open(Screen::Game { host: pc, app: 1001 });
     f.l.neural.open(pc, 1001, "install-1".into(), std::sync::Arc::new(FixedNeural(std::sync::Mutex::new(neural))), std::sync::Arc::new(|| {}));
@@ -476,8 +486,8 @@ fn settings_over_the_newest_game_page_keeps_that_pages_neural_panel() {
 fn a_game_page_that_changes_size_paints_one_moon() {
     let mut f = home_with_games(1);
     let pc = f.hosts.list[0].id;
-    f.hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
-    f.hosts.list[0].art.insert(1000, Art::Missing);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
+    Arc::make_mut(&mut f.hosts.list[0].art).insert(1000, Art::Missing);
     f.l.go(Screen::Game { host: pc, app: 1000 });
     for _ in 0..6 {
         f.settle();
@@ -535,7 +545,7 @@ fn play_before_the_list_arrives_starts_when_it_lands() {
     f.hosts.list[0].apps = Apps::Loading;
     let commands = f.frame(Vec::new());
     assert!(!commands.iter().any(|c| matches!(c, Command::Launch { .. })), "still on its way");
-    f.hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
     let commands = f.frame(Vec::new());
     assert!(commands.iter().any(|c| matches!(c, Command::Launch { host, app: 1000, resume: false } if *host == pc)));
     assert!(!f.l.playing_soon(pc, 1000));
@@ -560,14 +570,14 @@ fn play_before_the_list_is_loud_when_it_cannot_start_and_ends_with_the_page() {
     let mut f = press(Apps::Failed("The PC did not answer".into()));
     f.settle();
     assert!(shows(&f, "The stream could not start") && shows(&f, "The app list could not be loaded. The PC did not answer"), "{:?}", f.drawn);
-    let mut f = press(Apps::Loaded(vec![game(77)]));
+    let mut f = press(Apps::Loaded(Arc::new(vec![game(77)])));
     f.settle();
     assert!(shows(&f, "The stream could not start") && shows(&f, "The PC’s app list has no entry for this game."), "{:?}", f.drawn);
     // Gone from the page, nothing starts behind the player's back.
     let mut f = press(Apps::Loading);
     f.l.go(Screen::Home);
     f.frame(Vec::new());
-    f.hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
     let commands = f.frame(Vec::new());
     assert!(!commands.iter().any(|c| matches!(c, Command::Launch { .. })));
 }

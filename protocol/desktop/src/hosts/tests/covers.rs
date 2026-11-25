@@ -121,7 +121,7 @@ fn the_ambient_lands_with_its_cover_and_goes_with_it() {
     let ctx = egui::Context::default();
     let mut hosts = Hosts::without_discovery(vec![paired_record("uid")], Arc::new(|| {}));
     let id = hosts.list[0].id;
-    hosts.list[0].art_versions.insert(7, "v1".into());
+    Arc::make_mut(&mut hosts.list[0].art_versions).insert(7, "v1".into());
     let art = |version: &str, color: Option<[u8; 3]>| {
         let (image, ambient, sized) = art_and_ambient(color.map(png), 1.0);
         Event::Art { id, app: 7, version: version.into(), image, ambient, sized }
@@ -143,7 +143,7 @@ fn the_ambient_lands_with_its_cover_and_goes_with_it() {
     assert!(hosts.list[0].ambient.contains_key(&7));
 
     // Loaded again (given up for room) and found gone.
-    hosts.list[0].art.insert(7, Art::Loading);
+    Arc::make_mut(&mut hosts.list[0].art).insert(7, Art::Loading);
     hosts.sender.send(art("v1", None)).expect("the channel");
     hosts.drain(&ctx);
     assert!(!hosts.list[0].ambient.contains_key(&7), "no cover any more, no ambient of it");
@@ -159,13 +159,13 @@ fn a_new_renderer_drops_the_covers_so_they_load_again() {
     let ctx = egui::Context::default();
     let mut hosts = Hosts::without_discovery(vec![paired_record("uid")], Arc::new(|| {}));
     let id = hosts.list[0].id;
-    hosts.list[0].art_versions.insert(7, "v1".into());
+    Arc::make_mut(&mut hosts.list[0].art_versions).insert(7, "v1".into());
     let (image, ambient, sized) = art_and_ambient(Some(png([20, 200, 20])), 1.0);
     hosts.sender.send(Event::Art { id, app: 7, version: "v1".into(), image, ambient, sized }).expect("the channel");
     hosts.drain(&ctx);
-    hosts.list[0].art.insert(8, Art::Missing);
-    hosts.list[0].art.insert(9, Art::Loading);
-    hosts.list[0].art.insert(10, Art::Dropped);
+    Arc::make_mut(&mut hosts.list[0].art).insert(8, Art::Missing);
+    Arc::make_mut(&mut hosts.list[0].art).insert(9, Art::Loading);
+    Arc::make_mut(&mut hosts.list[0].art).insert(10, Art::Dropped);
     hosts.renderer_changed();
     let pc = &hosts.list[0];
     assert!(!pc.art.contains_key(&7) && !pc.ambient.contains_key(&7), "asked for again, from the cache");
@@ -195,7 +195,7 @@ fn a_cover_whose_download_failed_is_asked_for_again_after_a_wait() {
     assert!(!pc.art_wanted(7, "v1"), "not asked for again at once");
     assert!(!pc.art_wanted(8, "v1"), "no cover is still no cover");
 
-    hosts.list[0].art_retry.insert(7, Instant::now() - Duration::from_millis(1));
+    Arc::make_mut(&mut hosts.list[0].art_retry).insert(7, Instant::now() - Duration::from_millis(1));
     assert!(hosts.list[0].art_wanted(7, "v1"), "the wait is over");
     assert!(hosts.list[0].art_wanted(7, ""), "and pages that ask without a version ask too");
     assert!(!hosts.list[0].art_wanted(8, "v1"));
@@ -216,7 +216,7 @@ fn covers_shown_in(name: &str, shown: &[&[i32]]) -> (Hosts, egui::Context, Store
     let mut hosts = Hosts::without_discovery(vec![paired_record("uid")], Arc::new(|| {}));
     let id = hosts.list[0].id;
     for app in 1..=4 {
-        hosts.list[0].art_versions.insert(app, "v1".into());
+        Arc::make_mut(&mut hosts.list[0].art_versions).insert(app, "v1".into());
         let (image, ambient, sized) = art_and_ambient(Some(png([20, 200, 20])), 1.0);
         hosts.sender.send(Event::Art { id, app, version: "v1".into(), image, ambient, sized }).expect("the channel");
     }
@@ -284,7 +284,7 @@ fn a_cover_on_screen_is_never_given_up() {
 fn a_cover_that_just_landed_is_not_the_first_to_go() {
     let (mut hosts, ctx, store, dir) = covers_shown_in("landed", &[&[1, 2, 3, 4], &[3, 4]]);
     let id = hosts.list[0].id;
-    hosts.list[0].art_versions.insert(5, "v1".into());
+    Arc::make_mut(&mut hosts.list[0].art_versions).insert(5, "v1".into());
     let (image, ambient, sized) = art_and_ambient(Some(png([20, 20, 200])), 1.0);
     hosts.sender.send(Event::Art { id, app: 5, version: "v1".into(), image, ambient, sized }).expect("the channel");
     hosts.drain(&ctx);
@@ -309,8 +309,8 @@ fn a_cover_given_up_comes_back_from_its_file_without_its_pc() {
     hosts.set_identity(Arc::new(ClientIdentity::generate().expect("a key")));
     let id = hosts.list[0].id;
     cover_file(&store, 7, &png_of([900, 1350], [20, 200, 20]));
-    hosts.list[0].art_versions.insert(7, "v1".into());
-    hosts.list[0].art.insert(7, Art::Dropped);
+    Arc::make_mut(&mut hosts.list[0].art_versions).insert(7, "v1".into());
+    Arc::make_mut(&mut hosts.list[0].art).insert(7, Art::Dropped);
     assert!(hosts.list[0].reach != Reach::Online, "away");
 
     hosts.request_art(id, 7, "", &store);
@@ -336,9 +336,9 @@ fn a_cover_given_up_whose_file_is_gone_waits_for_its_pc() {
     let mut hosts = Hosts::without_discovery(vec![paired_record("uid")], waker);
     hosts.set_identity(Arc::new(ClientIdentity::generate().expect("a key")));
     let id = hosts.list[0].id;
-    hosts.list[0].art_versions.insert(7, "v1".into());
-    hosts.list[0].art.insert(7, Art::Dropped);
-    hosts.list[0].ambient_glow.insert(7, egui::Color32::RED);
+    Arc::make_mut(&mut hosts.list[0].art_versions).insert(7, "v1".into());
+    Arc::make_mut(&mut hosts.list[0].art).insert(7, Art::Dropped);
+    Arc::make_mut(&mut hosts.list[0].ambient_glow).insert(7, egui::Color32::RED);
     hosts.request_art(id, 7, "", &store);
     woken.recv_timeout(Duration::from_secs(20)).expect("its file is looked for");
     hosts.drain(&ctx);
@@ -362,7 +362,7 @@ fn a_cover_made_smaller_is_loaded_sharper_when_the_window_shows_more_pixels() {
     let id = hosts.list[0].id;
     let bytes = png_of([900, 1350], [20, 200, 20]);
     let file = cover_file(&store, 7, &bytes);
-    hosts.list[0].art_versions.insert(7, "v1".into());
+    Arc::make_mut(&mut hosts.list[0].art_versions).insert(7, "v1".into());
     hosts.covers_shown(&ctx, &store);
     assert_eq!(hosts.art_scale, 1.0);
     let (image, ambient, sized) = art_and_ambient(Some(bytes), hosts.art_scale);
@@ -410,7 +410,7 @@ fn a_sharper_cover_lands_only_on_the_cover_it_was_read_for() {
     let ctx = egui::Context::default();
     let mut hosts = Hosts::without_discovery(vec![paired_record("uid")], Arc::new(|| {}));
     let id = hosts.list[0].id;
-    hosts.list[0].art_versions.insert(7, "v1".into());
+    Arc::make_mut(&mut hosts.list[0].art_versions).insert(7, "v1".into());
     let sharper = |version: &str| {
         let image = decode_image(&png_of([60, 80], [20, 20, 200])).expect("the cover");
         Event::ArtSharper { id, app: 7, version: version.into(), image, sized: None }
@@ -429,11 +429,11 @@ fn a_sharper_cover_lands_only_on_the_cover_it_was_read_for() {
     assert!(hosts.list[0].ambient.contains_key(&7), "the ambient is the cover's own and stays");
 
     // Given up for room in between, it is not brought back by a read that is late.
-    hosts.list[0].art.insert(7, Art::Dropped);
+    Arc::make_mut(&mut hosts.list[0].art).insert(7, Art::Dropped);
     hosts.sender.send(sharper("v1")).expect("the channel");
     hosts.drain(&ctx);
     assert!(hosts.list[0].art_dropped(7));
-    hosts.list[0].art.insert(7, Art::Missing);
+    Arc::make_mut(&mut hosts.list[0].art).insert(7, Art::Missing);
     hosts.sender.send(sharper("v1")).expect("the channel");
     hosts.drain(&ctx);
     assert!(matches!(hosts.list[0].art.get(&7), Some(Art::Missing)));
@@ -447,7 +447,7 @@ fn a_late_sharper_cover_for_an_older_scale_does_not_make_the_cover_blurrier() {
     let ctx = egui::Context::default();
     let mut hosts = Hosts::without_discovery(vec![paired_record("uid")], Arc::new(|| {}));
     let id = hosts.list[0].id;
-    hosts.list[0].art_versions.insert(7, "v1".into());
+    Arc::make_mut(&mut hosts.list[0].art_versions).insert(7, "v1".into());
     let sharper = |size: [u32; 2], sized: Option<f32>| {
         let image = decode_image(&png_of(size, [20, 20, 200])).expect("the cover");
         Event::ArtSharper { id, app: 7, version: "v1".into(), image, sized }
@@ -456,7 +456,7 @@ fn a_late_sharper_cover_for_an_older_scale_does_not_make_the_cover_blurrier() {
     hosts.sender.send(Event::Art { id, app: 7, version: "v1".into(), image, ambient, sized: Some(1.0) }).expect("the channel");
     hosts.drain(&ctx);
     // 125 % then 150 % asked for before either landed: the 150 % read is the one `art_sized` names.
-    hosts.list[0].art_sized.insert(7, 1.5);
+    Arc::make_mut(&mut hosts.list[0].art_sized).insert(7, 1.5);
     hosts.sender.send(sharper([90, 120], Some(1.5))).expect("the channel");
     hosts.sender.send(sharper([75, 100], Some(1.25))).expect("the channel");
     hosts.drain(&ctx);
@@ -484,7 +484,7 @@ fn a_cover_whose_file_is_gone_keeps_showing_when_the_window_shows_more_pixels() 
     let id = hosts.list[0].id;
     let bytes = png_of([900, 1350], [20, 200, 20]);
     let file = cover_file(&store, 7, &bytes);
-    hosts.list[0].art_versions.insert(7, "v1".into());
+    Arc::make_mut(&mut hosts.list[0].art_versions).insert(7, "v1".into());
     hosts.covers_shown(&ctx, &store);
     let (image, ambient, sized) = art_and_ambient(Some(bytes), hosts.art_scale);
     hosts.sender.send(Event::Art { id, app: 7, version: "v1".into(), image, ambient, sized }).expect("the channel");
@@ -513,7 +513,7 @@ fn a_cover_asked_for_without_a_version_keeps_the_known_one() {
     let pc = &mut hosts.list[0];
     assert!(pc.art_wanted(7, "") && pc.art_wanted(7, "v1"), "not asked for yet");
     assert_eq!(pc.begin_art(7, "v1").as_deref(), Some("v1"));
-    pc.ambient_glow.insert(7, egui::Color32::RED);
+    Arc::make_mut(&mut pc.ambient_glow).insert(7, egui::Color32::RED);
 
     assert!(!pc.art_wanted(7, "") && !pc.art_wanted(7, "v1"));
     assert_eq!(pc.begin_art(7, ""), None, "no version says nothing of the cover");
@@ -522,7 +522,7 @@ fn a_cover_asked_for_without_a_version_keeps_the_known_one() {
     assert!(matches!(pc.art.get(&7), Some(Art::Loading)) && pc.ambient_glow.contains_key(&7), "kept");
 
     // Dropped with its renderer, it loads as the cover it was: from the file of that version.
-    pc.art.remove(&7);
+    Arc::make_mut(&mut pc.art).remove(&7);
     assert!(pc.art_wanted(7, ""));
     assert_eq!(pc.begin_art(7, "").as_deref(), Some("v1"));
 
@@ -552,15 +552,15 @@ fn every_page_asks_for_a_cover_at_one_version() {
     let mut hosts = Hosts::without_discovery(vec![paired_record("uid")], Arc::new(|| {}));
     let pc = &mut hosts.list[0];
     assert_eq!(pc.cover_version(7), "", "nothing read yet");
-    pc.apps = Apps::Loaded(vec![app(7, "7"), app(8, "8"), app(9, "")]);
+    pc.apps = Apps::Loaded(Arc::new(vec![app(7, "7"), app(8, "8"), app(9, "")]));
     assert_eq!((pc.cover_version(7), pc.cover_version(8), pc.cover_version(9)), ("7", "8", ""));
     assert_eq!(pc.cover_version(10), "", "not an app of this PC");
 
     let mut library = library();
     let listed = library.games[0].app_id as i32;
     library.games[0].artwork.version = "a41c09e2".into();
-    pc.apps = Apps::Loaded(vec![app(listed, "7"), app(listed + 1000, "8")]);
-    pc.native.library = Some(library);
+    pc.apps = Apps::Loaded(Arc::new(vec![app(listed, "7"), app(listed + 1000, "8")]));
+    pc.native.library = Some(Arc::new(library));
     assert_eq!(pc.cover_version(listed), "a41c09e2", "the library's, whatever the app list says");
     assert_eq!(pc.cover_version(listed + 1000), "8", "the app list's for an app the library leaves out");
     pc.apps = Apps::Loading;
@@ -625,7 +625,7 @@ fn corrupt_cached_cover_is_removed_instead_of_staying_stuck() {
     record.address = "127.0.0.1".into();
     let mut hosts = Hosts::without_discovery(vec![record], waker);
     hosts.set_identity(Arc::new(ClientIdentity::generate().expect("a key")));
-    hosts.list[0].apps = Apps::Loaded(vec![App {
+    hosts.list[0].apps = Apps::Loaded(Arc::new(vec![App {
         name: "Game".into(),
         id: 7,
         hdr_supported: false,
@@ -634,7 +634,7 @@ fn corrupt_cached_cover_is_removed_instead_of_staying_stuck() {
         art_version: "v1".into(),
         control: AppControl::None,
         monitor_resume: false,
-    }]);
+    }]));
     let id = hosts.list[0].id;
     hosts.list[0].reach = Reach::Offline;
     let file = cover_file(&store, 7, b"<html>not a cover png</html>");

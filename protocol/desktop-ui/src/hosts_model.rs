@@ -56,7 +56,7 @@ pub enum Reach {
 pub enum Apps {
     NotLoaded,
     Loading,
-    Loaded(Vec<App>),
+    Loaded(Arc<Vec<App>>),
     Failed(String),
 }
 
@@ -112,13 +112,13 @@ pub enum UpdateStep {
 pub struct Native {
     /// Its features and this device's permissions; `Host::info` carries them merged in.
     pub capabilities: Option<NativeCapabilities>,
-    pub library: Option<Library>,
+    pub library: Option<Arc<Library>>,
     /// When the library's games were last played, by install id (`NativeLibrary::last_played`).
-    pub last_played: BTreeMap<String, u64>,
+    pub last_played: Arc<BTreeMap<String, u64>>,
     /// How long the library's games were played, by install id (`NativeLibrary::playtime_minutes`).
-    pub playtime_minutes: BTreeMap<String, u64>,
+    pub playtime_minutes: Arc<BTreeMap<String, u64>>,
     /// The collections the library's games are in, by install id (`NativeLibrary::collections`).
-    pub collections: BTreeMap<String, Vec<String>>,
+    pub collections: Arc<BTreeMap<String, Vec<String>>>,
     /// The library was read from the PC in this run (not loaded from disk).
     pub library_live: bool,
     pub session: Option<Session>,
@@ -167,15 +167,15 @@ pub struct Host {
     pub reach: Reach,
     pub info: Option<ServerInfo>,
     pub apps: Apps,
-    pub art: HashMap<i32, Art>,
-    pub ambient: HashMap<i32, egui::TextureHandle>,
-    pub ambient_glow: HashMap<i32, egui::Color32>,
-    pub art_versions: HashMap<i32, String>,
-    pub art_sized: HashMap<i32, f32>,
-    pub art_retry: HashMap<i32, Instant>,
+    pub art: Arc<HashMap<i32, Art>>,
+    pub ambient: Arc<HashMap<i32, egui::TextureHandle>>,
+    pub ambient_glow: Arc<HashMap<i32, egui::Color32>>,
+    pub art_versions: Arc<HashMap<i32, String>>,
+    pub art_sized: Arc<HashMap<i32, f32>>,
+    pub art_retry: Arc<HashMap<i32, Instant>>,
     pub native: Native,
-    pub classic_apps: Option<config::ClassicApps>,
-    pub classic: Option<Library>,
+    pub classic_apps: Option<Arc<config::ClassicApps>>,
+    pub classic: Option<Arc<Library>>,
     pub error: Option<String>,
     pub checking: bool,
     pub via_remote: Option<String>,
@@ -190,12 +190,12 @@ impl Host {
             reach: Reach::Unknown,
             info: None,
             apps: Apps::NotLoaded,
-            art: HashMap::new(),
-            ambient: HashMap::new(),
-            ambient_glow: HashMap::new(),
-            art_versions: HashMap::new(),
-            art_sized: HashMap::new(),
-            art_retry: HashMap::new(),
+            art: Arc::new(HashMap::new()),
+            ambient: Arc::new(HashMap::new()),
+            ambient_glow: Arc::new(HashMap::new()),
+            art_versions: Arc::new(HashMap::new()),
+            art_sized: Arc::new(HashMap::new()),
+            art_retry: Arc::new(HashMap::new()),
             native: Native::default(),
             classic_apps: None,
             classic: None,
@@ -245,21 +245,21 @@ impl Host {
     pub fn begin_art(&mut self, app: i32, version: &str) -> Option<String> {
         let known = self.art_versions.get(&app);
         if known.is_some_and(|known| !version.is_empty() && known != version) {
-            self.art.remove(&app);
-            self.ambient.remove(&app);
-            self.ambient_glow.remove(&app);
-            self.art_sized.remove(&app);
+            Arc::make_mut(&mut self.art).remove(&app);
+            Arc::make_mut(&mut self.ambient).remove(&app);
+            Arc::make_mut(&mut self.ambient_glow).remove(&app);
+            Arc::make_mut(&mut self.art_sized).remove(&app);
         }
         if self.has_art(app) {
             return None;
         }
-        self.art_retry.remove(&app);
+        Arc::make_mut(&mut self.art_retry).remove(&app);
         let version = match known {
             Some(known) if version.is_empty() => known.clone(),
             _ => version.to_owned(),
         };
-        self.art.insert(app, Art::Loading);
-        self.art_versions.insert(app, version.clone());
+        Arc::make_mut(&mut self.art).insert(app, Art::Loading);
+        Arc::make_mut(&mut self.art_versions).insert(app, version.clone());
         Some(version)
     }
 
@@ -280,13 +280,17 @@ impl Host {
             || (self.info.is_none() && self.native.library.is_some())
     }
 
-    pub fn library(&self) -> Option<&Library> {
+    pub fn library_arc(&self) -> Option<&Arc<Library>> {
         self.native.library.as_ref().or(self.classic.as_ref())
     }
 
+    pub fn library(&self) -> Option<&Library> {
+        self.library_arc().map(Arc::as_ref)
+    }
+
     pub fn set_classic_apps(&mut self, apps: Option<config::ClassicApps>) -> bool {
-        let changed = self.classic_apps != apps;
-        self.classic_apps = apps;
+        let changed = self.classic_apps.as_deref() != apps.as_ref();
+        self.classic_apps = apps.map(Arc::new);
         self.sync_classic();
         changed
     }
@@ -297,7 +301,7 @@ impl Host {
             .as_ref()
             .filter(|_| self.reach == Reach::Online)
             .map(|i| (i.current_game, i.current_game_uuid.as_deref()));
-        self.classic = self.classic_apps.as_ref().map(|apps| crate::console::classic_library(apps, running));
+        self.classic = self.classic_apps.as_deref().map(|apps| Arc::new(crate::console::classic_library(apps, running)));
     }
 
     pub fn cover_version(&self, app: i32) -> &str {
@@ -403,8 +407,8 @@ pub struct Hosts {
     pub discovering: bool,
     pub has_identity: bool,
     facts_source: Option<Arc<dyn FactsSource>>,
-    pub facts: HashMap<String, Facts>,
-    pub facts_asked: std::collections::HashSet<String>,
+    pub facts: Arc<HashMap<String, Facts>>,
+    pub facts_asked: Arc<std::collections::HashSet<String>>,
     _waker: Waker,
 }
 
@@ -420,8 +424,8 @@ impl Hosts {
             discovering: false,
             has_identity: false,
             facts_source: None,
-            facts: HashMap::new(),
-            facts_asked: std::collections::HashSet::new(),
+            facts: Arc::new(HashMap::new()),
+            facts_asked: Arc::new(std::collections::HashSet::new()),
             _waker: waker,
         }
     }
@@ -455,18 +459,23 @@ impl Hosts {
     }
 
     pub fn put_facts(&mut self, key: &str, facts: Facts) {
-        self.facts.insert(key.to_owned(), facts);
-        self.facts_asked.insert(key.to_owned());
+        Arc::make_mut(&mut self.facts).insert(key.to_owned(), facts);
+        Arc::make_mut(&mut self.facts_asked).insert(key.to_owned());
     }
 
     pub fn want_facts(&mut self, games: Vec<FactsGame>) {
+        if games.is_empty() {
+            return;
+        }
+        let facts_asked = Arc::make_mut(&mut self.facts_asked);
+        let facts = Arc::make_mut(&mut self.facts);
         for game in games {
             let key = names::key(&game.name, game.steam);
-            if !self.facts_asked.insert(key.clone()) {
+            if !facts_asked.insert(key.clone()) {
                 continue;
             }
             if let Some(cached) = self.facts_source.as_ref().and_then(|s| s.cached(&key)) {
-                self.facts.insert(key, cached);
+                facts.insert(key, cached);
             }
         }
     }

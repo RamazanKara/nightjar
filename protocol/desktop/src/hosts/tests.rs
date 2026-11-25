@@ -614,14 +614,14 @@ fn game_info_keys_removed_clears_cached_facts_and_retries_failed_entries() {
     }
 
     let mut hosts = Hosts::without_discovery(vec![], Arc::new(|| {}));
-    hosts.facts.insert(
+    Arc::make_mut(&mut hosts.facts).insert(
         "entry-1".into(),
         nightjar_policy::game_info::cache::Facts {
             genres: vec!["Action".into()],
             ..Default::default()
         },
     );
-    hosts.facts_asked.insert("entry-1".into());
+    Arc::make_mut(&mut hosts.facts_asked).insert("entry-1".into());
     hosts.sender.send(Event::GameInfo(Box::new(nightjar_policy::game_info::cache::Record {
         key: "entry-1".into(),
         info: nightjar_policy::game_info::cache::Outcome::Failed,
@@ -641,14 +641,14 @@ fn game_info_keys_removed_clears_cached_facts_and_retries_failed_entries() {
         keys,
         Box::new(NoopHttp),
     )));
-    hosts.facts.insert(
+    Arc::make_mut(&mut hosts.facts).insert(
         "entry-2".into(),
         nightjar_policy::game_info::cache::Facts {
             genres: vec!["RPG".into()],
             ..Default::default()
         },
     );
-    hosts.facts_asked.insert("entry-2".into());
+    Arc::make_mut(&mut hosts.facts_asked).insert("entry-2".into());
     hosts.set_game_info_keys(nightjar_policy::game_info::job::Keys::default());
     assert!(hosts.facts.is_empty());
     assert!(hosts.facts_asked.is_empty());

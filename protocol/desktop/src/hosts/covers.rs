@@ -155,14 +155,23 @@ impl Hosts {
         let scale = self.art_scale;
         let mut jobs = Vec::new();
         for host in &mut self.list {
-            for (&app, sized) in &mut host.art_sized {
-                if *sized >= scale || !matches!(host.art.get(&app), Some(Art::Ready(_))) {
-                    continue;
-                }
-                let Some(version) = host.art_versions.get(&app) else { continue };
+            let updates: Vec<_> = host
+                .art_sized
+                .iter()
+                .filter(|&(&app, &sized)| sized < scale && matches!(host.art.get(&app), Some(Art::Ready(_))))
+                .filter_map(|(&app, _)| {
+                    let version = host.art_versions.get(&app)?.clone();
+                    Some((app, version))
+                })
+                .collect();
+            if updates.is_empty() {
+                continue;
+            }
+            let art_sized = Arc::make_mut(&mut host.art_sized);
+            for (app, version) in updates {
                 // Taken as sized for the new scale from here, so it is asked for once.
-                *sized = scale;
-                jobs.push((host.id, app, version.clone(), store.art_path(&host.record.unique_id, app, version)));
+                art_sized.insert(app, scale);
+                jobs.push((host.id, app, version.clone(), store.art_path(&host.record.unique_id, app, &version)));
             }
         }
         for (id, app, version, cache) in jobs {
@@ -195,7 +204,7 @@ impl Hosts {
         let mut covers = Vec::new();
         let mut held = 0;
         for (at, host) in self.list.iter().enumerate() {
-            for (&app, art) in &host.art {
+            for (&app, art) in host.art.iter() {
                 if let Art::Ready(texture) = art {
                     held += texture.byte_size();
                     covers.push((self.art_used.get(&texture.id()).copied().unwrap_or(0), at, app, texture.id(), texture.byte_size()));
@@ -214,8 +223,8 @@ impl Hosts {
                 break;
             }
             let host = &mut self.list[at];
-            host.art.insert(app, Art::Dropped);
-            host.art_sized.remove(&app);
+            Arc::make_mut(&mut host.art).insert(app, Art::Dropped);
+            Arc::make_mut(&mut host.art_sized).remove(&app);
             self.art_used.remove(&texture);
             held -= bytes;
         }

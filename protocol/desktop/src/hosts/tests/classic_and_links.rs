@@ -80,7 +80,7 @@ fn a_classic_pcs_app_list_becomes_its_home_library_and_is_saved() {
 
     // A PC with the native library keeps no app list for Home, and one kept is forgotten.
     let mut hosts = Hosts::without_discovery(vec![paired_record("uid")], Arc::new(|| {}));
-    hosts.list[0].classic_apps = Some(crate::config::ClassicApps::of(&apps));
+    hosts.list[0].classic_apps = Some(Arc::new(crate::config::ClassicApps::of(&apps)));
     let id = hosts.list[0].id;
     info_lands(&mut hosts, id, native_info());
     send(&mut hosts, Event::Apps { id, result: Ok(apps) });

@@ -155,9 +155,21 @@ pub(super) fn ambient_for(view: &View<'_>, host: u64, app: u32, title: &str) -> 
     }
 }
 
+/// Maps `(host, app_id)` to the first matching entry index once per frame so panel/shelf lookups
+/// stay O(1) instead of scanning all library entries per item.
+fn index_entries_by_copy(entries: &[console::Entry]) -> std::collections::HashMap<(u64, u32), usize> {
+    let mut index = std::collections::HashMap::with_capacity(entries.len());
+    for (idx, entry) in entries.iter().enumerate() {
+        for copy in &entry.copies {
+            index.entry((copy.host, copy.app_id)).or_insert(idx);
+        }
+    }
+    index
+}
+
 /// When a recent game was last played, for its line: the store and the day if known.
 fn recent_line(
-    entries: &[console::Entry],
+    entry: Option<&console::Entry>,
     sources: &[Source<'_>],
     recents: &[crate::config::Recent],
     item: &console::Recently,
@@ -165,11 +177,6 @@ fn recent_line(
     if !item.online {
         return trf("{} is away", &[&item.host_name]);
     }
-    let entry = entries.iter().find(|e| {
-        e.copies
-            .iter()
-            .any(|c| c.host == item.host && c.app_id == item.app_id)
-    });
     let played = entry.and_then(|e| console::last_played(e, sources, recents));
     match entry.zip(played) {
         Some((entry, at)) => {
@@ -204,12 +211,9 @@ impl Launcher {
         let rows = console::home_rows(entries, group, console::Sort::shown(&self.settings, entries), played);
         let loading = library_loading(view);
         // The rest of the running games and recents: the panel first, a shelf for what it cannot hold.
-        let has_cover = |host: u64, app: u32| {
-            entries
-                .iter()
-                .find(|e| e.copies.iter().any(|c| c.host == host && c.app_id == app))
-                .is_some_and(|e| e.cover().is_some())
-        };
+        let entry_index = index_entries_by_copy(entries);
+        let entry_for = |host: u64, app: u32| entry_index.get(&(host, app)).map(|&idx| &entries[idx]);
+        let has_cover = |host: u64, app: u32| entry_for(host, app).is_some_and(|e| e.cover().is_some());
         let is_hero = |host: u64, app: u32| {
             hero.as_ref()
                 .is_some_and(|h| h.host == host && h.app == app)
@@ -231,9 +235,10 @@ impl Launcher {
             });
         }
         for item in recent.iter().filter(|r| !is_hero(r.host, r.app_id)) {
-            let line = recent_line(entries, sources, &self.recents, item);
+            let entry = entry_for(item.host, item.app_id);
+            let line = recent_line(entry, sources, &self.recents, item);
             let key = format!("recent:{}:{}", item.host, item.app_id);
-            let game = console::entry_key_of(entries, item.host, item.app_id).cloned();
+            let game = entry.map(|e| e.key.clone());
             lines.push(PanelLine {
                 key,
                 game,
@@ -241,7 +246,7 @@ impl Launcher {
                 app: item.app_id,
                 title: item.title.clone(),
                 line,
-                has_cover: has_cover(item.host, item.app_id),
+                has_cover: entry.is_some_and(|e| e.cover().is_some()),
             });
         }
         let spill = lines.split_off(lines.len().min(PANEL_LINES));
@@ -367,11 +372,28 @@ impl Launcher {
                         // The List layout: every game of the row as a line, under each other.
                         if this.settings.home_layout == HomeLayout::List {
                             let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-                            for entry in &row.games {
-                                let line = console::list_line(entry, console::last_played(entry, sources, &this.recents), now);
-                                this.library_line(ui, view, &row.key(), entry, &line, width.min(LIST_MAX_W), std::mem::take(&mut first), commands);
-                                ui.add_space(space::XS);
+                            let row_key = row.key();
+                            let want_first = std::mem::take(&mut first);
+                            let mut pinned = Vec::with_capacity(3);
+                            if want_first && this.focus_screen && this.restore_key.is_none() && !row.games.is_empty() {
+                                push_pinned_row(&mut pinned, Some(0));
                             }
+                            for wanted in [&this.restore_key, &this.focused_key].into_iter().flatten() {
+                                if let Some(rest) = wanted.strip_prefix(&row_key)
+                                    && let Some(game_key) = rest.strip_prefix(":game:")
+                                    && let Some(pos) = row.games.iter().position(|e| e.key == game_key)
+                                {
+                                    push_pinned_row(&mut pinned, Some(pos));
+                                }
+                            }
+                            ui.push_id(&row_key, |ui| {
+                                draw_culled_rows(ui, row.games.len(), LIST_ROW_H + space::XS, &pinned, |ui, idx| {
+                                    let entry = row.games[idx];
+                                    let line = console::list_line(entry, console::last_played(entry, sources, &this.recents), now);
+                                    this.library_line(ui, view, &row_key, entry, &line, width.min(LIST_MAX_W), want_first && idx == 0, commands);
+                                    ui.add_space(space::XS);
+                                });
+                            });
                             continue;
                         }
                         // The hero stands above its own shelf; the count and All still hold it.
@@ -394,22 +416,44 @@ impl Launcher {
                         let games = &games[..shown];
                         // At one column no cover fits beside the tile: the tile is the row.
                         let lines: Vec<&[&console::Entry]> = if games.is_empty() && more { vec![games] } else { games.chunks(columns).collect() };
-                        for line in lines {
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = POSTER_GAP;
-                                for entry in line {
-                                    this.library_cover(ui, view, Some(&row.key()), entry, cover_w, std::mem::take(&mut first), commands);
-                                }
-                                if more && line.len() < columns {
-                                    let tile = all_tile(ui, row.games.len(), &said, cover_w);
-                                    this.focus_item(&tile, &format!("all:{}", row.key()), std::mem::take(&mut first));
-                                    if tile.clicked() {
-                                        this.library_filter = row.filter.clone();
-                                        this.open(Screen::AllGames);
-                                    }
-                                }
-                            });
+                        let row_key = row.key();
+                        let want_first = std::mem::take(&mut first);
+                        let mut pinned = Vec::with_capacity(3);
+                        if want_first && this.focus_screen && this.restore_key.is_none() && !lines.is_empty() {
+                            push_pinned_row(&mut pinned, Some(0));
                         }
+                        for wanted in [&this.restore_key, &this.focused_key].into_iter().flatten() {
+                            if let Some(rest) = wanted.strip_prefix(&row_key)
+                                && let Some(game_key) = rest.strip_prefix(":game:")
+                                && let Some(pos) = games.iter().position(|e| e.key == game_key)
+                            {
+                                push_pinned_row(&mut pinned, Some(pos / columns));
+                            } else if wanted.strip_prefix("all:").is_some_and(|k| k == row_key)
+                                && more
+                                && !lines.is_empty()
+                            {
+                                push_pinned_row(&mut pinned, Some(lines.len() - 1));
+                            }
+                        }
+                        ui.push_id(&row_key, |ui| {
+                            draw_culled_rows(ui, lines.len(), cover_height(cover_w) + POSTER_CAPTION, &pinned, |ui, line_idx| {
+                                let line = lines[line_idx];
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = POSTER_GAP;
+                                    for (col_idx, entry) in line.iter().enumerate() {
+                                        this.library_cover(ui, view, Some(&row_key), entry, cover_w, want_first && line_idx == 0 && col_idx == 0, commands);
+                                    }
+                                    if more && line.len() < columns {
+                                        let tile = all_tile(ui, row.games.len(), &said, cover_w);
+                                        this.focus_item(&tile, &format!("all:{row_key}"), want_first && line_idx == 0 && line.is_empty());
+                                        if tile.clicked() {
+                                            this.library_filter = row.filter.clone();
+                                            this.open(Screen::AllGames);
+                                        }
+                                    }
+                                });
+                            });
+                        });
                     }
                     this.shelf_head(ui, tr("PCs"), None, &mut actions_shown);
                     ui.horizontal_wrapped(|ui| {

@@ -432,7 +432,8 @@ fn placeholder_title(ui: &Ui, out: &mut Vec<Shape>, rect: Rect, name: &str) {
 fn cover_slot(ui: &mut Ui, cover_id: Id, name: &str, art: Option<&Art>, badge: Badge, width: f32, captioned: bool) -> Response {
     let height = cover_height(width);
     let caption = if captioned { POSTER_CAPTION } else { 0.0 };
-    let (rect, response) = ui.allocate_exact_size(vec2(width, height + caption), Sense::click());
+    let (rect, _) = ui.allocate_exact_size(vec2(width, height + caption), Sense::hover());
+    let response = ui.interact(rect, ui.scope_id().with(("slot", cover_id)), Sense::click());
     let said = match badge {
         Badge::Running => trf("{}, running", &[&name]),
         Badge::NotInstalled => trf("{}, not installed", &[&name]),
@@ -543,7 +544,8 @@ pub(super) fn caption_offset(text_w: f32, room: f32, focused: bool, motion: bool
 /// them all.
 pub(super) fn all_tile(ui: &mut Ui, count: usize, said: &str, width: f32) -> Response {
     let height = cover_height(width);
-    let (rect, response) = ui.allocate_exact_size(vec2(width, height + POSTER_CAPTION), Sense::click());
+    let (rect, _) = ui.allocate_exact_size(vec2(width, height + POSTER_CAPTION), Sense::hover());
+    let response = ui.interact(rect, ui.scope_id().with("all-tile"), Sense::click());
     let label = trf("All {}", &[&count]);
     // "All 12" on the tile; a screen reader hears whose games: "All Steam games, 12".
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, said));
@@ -572,13 +574,76 @@ pub(super) fn all_tile(ui: &mut Ui, count: usize, said: &str, width: f32) -> Res
     response
 }
 
+/// A card's title and subtitle: centred in `rect`, or flush left under it.
+/// Draws only the rows whose vertical band intersects `ui.clip_rect()` (plus a one-row buffer and
+/// sorted `pinned` row indices such as row 0 or a focused/restored off-screen row), advancing the
+/// cursor accurately across skipped blocks so total height and scrollbar metrics never shift.
+pub(super) fn draw_culled_rows(
+    ui: &mut Ui,
+    total: usize,
+    row_h: f32,
+    pinned: &[usize],
+    mut draw: impl FnMut(&mut Ui, usize),
+) {
+    if total == 0 {
+        return;
+    }
+    let gap = ui.spacing().item_spacing.y;
+    let stride = (row_h + gap).max(1.0);
+    let top_y = ui.cursor().top();
+    let clip = ui.clip_rect().expand2(vec2(0.0, stride + LIFT));
+    let first_vis = (((clip.top() - top_y) / stride).floor().max(0.0) as usize).min(total);
+    let end_vis = (((clip.bottom() - top_y) / stride).ceil().max(0.0) as usize).min(total);
+
+    let skip_rows = |ui: &mut Ui, count: usize| {
+        if count > 0 {
+            let height = (count as f32 * stride - gap).max(0.0);
+            ui.allocate_space(vec2(1.0, height));
+        }
+    };
+
+    let mut cursor = 0usize;
+    for &p in pinned {
+        if p < first_vis && p >= cursor && p < total {
+            skip_rows(ui, p - cursor);
+            ui.push_id(p, |ui| draw(ui, p));
+            cursor = p + 1;
+        }
+    }
+    if first_vis > cursor {
+        skip_rows(ui, first_vis - cursor);
+        cursor = first_vis;
+    }
+    for row in cursor..end_vis {
+        ui.push_id(row, |ui| draw(ui, row));
+    }
+    cursor = end_vis;
+    for &p in pinned {
+        if p >= cursor && p < total {
+            skip_rows(ui, p - cursor);
+            ui.push_id(p, |ui| draw(ui, p));
+            cursor = p + 1;
+        }
+    }
+    skip_rows(ui, total.saturating_sub(cursor));
+}
+
+/// Inserts `row` into a tiny sorted pinned-row list without heap allocation.
+pub(super) fn push_pinned_row(pinned: &mut Vec<usize>, row: Option<usize>) {
+    let Some(row) = row else { return };
+    if let Err(pos) = pinned.binary_search(&row) {
+        pinned.insert(pos, row);
+    }
+}
+
 /// A line of Home's List layout.
 pub(super) const LIST_ROW_H: f32 = 88.0;
 
 /// A game as a line of Home's List layout: a small cover, the title, and under it `line` (its
 /// store and when it was last played).
 pub(super) fn list_row(ui: &mut Ui, cover_id: Id, name: &str, line: &str, art: Option<&Art>, badge: Badge, width: f32) -> Response {
-    let (rect, response) = ui.allocate_exact_size(vec2(width, LIST_ROW_H), Sense::click());
+    let (rect, _) = ui.allocate_exact_size(vec2(width, LIST_ROW_H), Sense::hover());
+    let response = ui.interact(rect, ui.scope_id().with(("list-slot", cover_id)), Sense::click());
     let said = match badge {
         Badge::Running => trf("{}, running", &[&name]),
         Badge::NotInstalled => trf("{}, not installed", &[&name]),
