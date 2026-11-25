@@ -322,4 +322,19 @@ public class GameRecoveryChromaTest {
             cleanupRecovery(game);
         }
     }
+
+    @Test
+    @Config(shadows = RecoveryBridge.class, instrumentedPackages = "com.limelight.nvstream.jni")
+    public void lateUsbServiceConnectedIsIgnoredAfterConnectionRelease() {
+        Game game = recoveryGame();
+        try {
+            game.usbDriverServiceBound = true;
+            game.streamConnection.releaseUsbDriverBinder();
+            assertTrue(game.usbDriverReleased);
+            // Passing null iBinder proves the guard returns early before casting to UsbDriverBinder.
+            game.usbDriverServiceConnection.onServiceConnected(null, null);
+        } finally {
+            cleanupRecovery(game);
+        }
+    }
 }

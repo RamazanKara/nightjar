@@ -232,7 +232,19 @@ final class MediaCodecOverlayReport {
 
     static String formatRendererException(MediaCodecDecoderRenderer renderer, Exception originalException, String delimiter) {
         String str;
-        if (renderer.numVpsIn == 0 && renderer.numSpsIn == 0 && renderer.numPpsIn == 0) {
+        if ((renderer.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_AV1) != 0) {
+            if (renderer.numFramesIn == 0) {
+                str = "PreIFrameError";
+            } else if (renderer.outputFormat == null) {
+                str = "PreOutputConfigError";
+            } else if (renderer.numFramesOut == 0) {
+                str = "PreOutputError";
+            } else if (renderer.numFramesOut <= renderer.refreshRate * 30) {
+                str = "EarlyOutputError";
+            } else {
+                str = "ErrorWhileStreaming";
+            }
+        } else if (renderer.numVpsIn == 0 && renderer.numSpsIn == 0 && renderer.numPpsIn == 0) {
             str = "PreSPSError";
         } else if (renderer.numSpsIn > 0 && renderer.numPpsIn == 0) {
             str = "PrePPSError";

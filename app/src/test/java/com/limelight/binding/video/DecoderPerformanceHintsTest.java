@@ -1,6 +1,8 @@
 package com.limelight.binding.video;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -12,6 +14,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /** What the decoder threads tell ADPF is work: CPU time, never the time they wait. */
+@RunWith(RobolectricTestRunner.class)
 public class DecoderPerformanceHintsTest {
     private static String renderer() throws Exception {
         return new String(Files.readAllBytes(
@@ -96,5 +99,50 @@ public class DecoderPerformanceHintsTest {
         assertTrue("the setting (off by default, SettingsKeysTest), which the property overrides",
                 source.contains("MediaCodecHelper.debugSwitch(DecoderPerformanceHints.SUBMIT_SWITCH, prefs.submitHint)"));
         assertEquals("submit_adpf", DecoderPerformanceHints.SUBMIT_SWITCH);
+    }
+
+    @Test
+    @org.robolectric.annotation.Config(sdk = 34, shadows = ThrowingHintSessionShadow.class)
+    public void adpfGuardsZeroFrameRateAndPowerHalRuntimeExceptions() throws Exception {
+        String hints = new String(Files.readAllBytes(
+                Paths.get("src/main/java/com/limelight/binding/video/DecoderPerformanceHints.java")), StandardCharsets.UTF_8);
+        assertTrue(hints.contains("enabled && frameRate > 0"));
+        assertTrue(hints.contains("if (frameRate > 0)"));
+
+        android.content.Context context = org.robolectric.RuntimeEnvironment.getApplication();
+        // Zero frame rate must not throw ArithmeticException in ctor.
+        DecoderPerformanceHints zeroFps = new DecoderPerformanceHints(context, true, 0);
+        assertFalse(zeroFps.isActive());
+        zeroFps.reportWorkDuration(1_000_000L, 0);
+        zeroFps.close();
+
+        // A throwing Power HAL session must not crash reportWorkDuration or close.
+        DecoderPerformanceHints throwingHints = new DecoderPerformanceHints(context, false, 60);
+        android.os.PerformanceHintManager.Session badSession =
+                org.robolectric.shadow.api.Shadow.newInstanceOf(android.os.PerformanceHintManager.Session.class);
+        org.robolectric.util.ReflectionHelpers.setField(throwingHints, "session", badSession);
+        org.robolectric.util.ReflectionHelpers.setField(throwingHints, "targetDurationNs", 16_666_666L);
+        throwingHints.reportWorkDuration(500_000L, 120);
+        throwingHints.reportWorkDuration(500_000L, 0);
+        throwingHints.close();
+        assertFalse(throwingHints.isActive());
+    }
+
+    @org.robolectric.annotation.Implements(android.os.PerformanceHintManager.Session.class)
+    public static class ThrowingHintSessionShadow {
+        @org.robolectric.annotation.Implementation
+        public void updateTargetWorkDuration(long targetDurationNanos) {
+            throw new IllegalStateException("HAL dead");
+        }
+
+        @org.robolectric.annotation.Implementation
+        public void reportActualWorkDuration(long actualDurationNanos) {
+            throw new IllegalStateException("HAL dead");
+        }
+
+        @org.robolectric.annotation.Implementation
+        public void close() {
+            throw new IllegalStateException("HAL dead");
+        }
     }
 }

@@ -276,7 +276,10 @@ final class NvConnectionPreflight {
             if (notices != null) {
                 applyNegotiationNotices(appContext, context, details, renderer, notices, packedHdrDrop);
             }
-        } catch (JSONException ignored) {}
+        } catch (JSONException e) {
+            LimeLog.severe("Malformed media negotiation reply: " + e.getMessage());
+            throw new IllegalStateException("Malformed media negotiation reply", e);
+        }
     }
 
     static boolean startApp(NvConnection conn, VideoDecoderRenderer renderer)
@@ -576,6 +579,7 @@ final class NvConnectionPreflight {
                                 context.negotiatedHdr, conn.packedHdrDropAtLaunch, videoDecoderRenderer.packedHdrDropReason());
                     }
                     conn.nativeConnected = true;
+        started = true;
                     if (context.jumboFallback) {
                         context.connListener.displayTransientMessage(appContext.getString(R.string.jumbo_frames_fallback));
                     }

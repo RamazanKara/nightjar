@@ -161,6 +161,14 @@ public class MicrophoneCapture {
         }
     }
 
+    private void awaitZeroReadBackoff(int backoffMs) throws InterruptedException {
+        synchronized (lock) {
+            if (running && !muted) {
+                lock.wait(backoffMs);
+            }
+        }
+    }
+
     private boolean shouldSend() {
         synchronized (lock) {
             return running && !muted;
@@ -315,15 +323,21 @@ public class MicrophoneCapture {
                     }
                     if (canceller != null) canceller.restart();
                 }
+                int zeroReadBackoffMs = 2;
                 int read = readFrame(record, frame);
                 if (read < 0) {
                     fail("read failed: " + read);
                     return null;
                 }
-                // A partial frame comes only from a stop or mute; drop it.
+                // A partial frame comes only from a stop or mute; drop it and back off if silent 0.
                 if (read < FRAME_SAMPLES || !shouldSend()) {
+                    if (read == 0) {
+                        awaitZeroReadBackoff(zeroReadBackoffMs);
+                        zeroReadBackoffMs = Math.min(10, zeroReadBackoffMs * 2 + 1);
+                    }
                     continue;
                 }
+                zeroReadBackoffMs = 2;
                 // Before the gain: the canceller models the echo the microphone itself picked up.
                 if (canceller != null && !canceller.process(frame, FRAME_SAMPLES)) {
                     fail("the echo canceller refused a frame");

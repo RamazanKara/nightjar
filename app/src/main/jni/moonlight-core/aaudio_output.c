@@ -86,6 +86,7 @@ typedef struct {
     aaudio_result_t (*AAudioStream_requestStart)(AAudioStream*);
     aaudio_result_t (*AAudioStream_requestStop)(AAudioStream*);
     aaudio_result_t (*AAudioStream_close)(AAudioStream*);
+    aaudio_result_t (*AAudioStream_waitForStateChange)(AAudioStream*, aaudio_stream_state_t, aaudio_stream_state_t*, int64_t);
     AudioQueue queue;
     atomic_bool stopped;
     uint32_t rate;
@@ -242,10 +243,22 @@ static void closeAudio(AudioOutput* output) {
     atomic_store(&output->stopped, true);
     if (output->stream) {
         output->AAudioStream_requestStop(output->stream);
+        if (output->AAudioStream_waitForStateChange) {
+            aaudio_stream_state_t state = output->AAudioStream_getState(output->stream);
+            if (state != AAUDIO_STREAM_STATE_STOPPED &&
+                    state != AAUDIO_STREAM_STATE_DISCONNECTED &&
+                    state != AAUDIO_STREAM_STATE_CLOSED) {
+                aaudio_stream_state_t next = state;
+                output->AAudioStream_waitForStateChange(output->stream, state, &next, 10000000LL);
+            }
+        }
         output->AAudioStream_close(output->stream);
+        struct timespec ts = { 0, 10000000L };
+        nanosleep(&ts, NULL);
     }
     free(output->queue.samples);
-    if (output->library) dlclose(output->library);
+    // Keep libaaudio.so loaded for the process lifetime so vendor audio/binder teardown
+    // threads never jump into an unmapped DSO.
     free(output);
 }
 
@@ -271,6 +284,7 @@ Java_com_limelight_binding_audio_AndroidAudioRenderer_nativeOpenAudio(JNIEnv* en
 #define AUDIO_LOAD(name) output->name = dlsym(output->library, #name); if (!output->name) goto failed;
     AUDIO_FUNCTIONS(AUDIO_LOAD)
 #undef AUDIO_LOAD
+    output->AAudioStream_waitForStateChange = dlsym(output->library, "AAudioStream_waitForStateChange");
     // API 32: without it AAudio cannot place surround channels, and AudioTrack plays the stream.
     void (*setChannelMask)(AAudioStreamBuilder*, int32_t) = dlsym(output->library, "AAudioStreamBuilder_setChannelMask");
     if (channels != 2 && (!setChannelMask || channelMask <= 0)) goto failed;

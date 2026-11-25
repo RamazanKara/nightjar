@@ -289,6 +289,7 @@ public class Game extends Activity implements SurfaceHolder.Callback, TextureVie
     WifiManager.WifiLock lowLatencyWifiLock;
 
     boolean usbDriverServiceBound;
+    boolean usbDriverReleased;
     UsbDriverService.UsbDriverBinder usbDriverBinder;
     ServiceConnection usbDriverServiceConnection = streamLoops.usbDriverServiceConnection();
     java.util.concurrent.ScheduledExecutorService nativeMenuThread;

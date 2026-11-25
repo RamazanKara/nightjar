@@ -268,19 +268,15 @@ public final class HostMenu {
         }
     }
 
-    /**
-     * Join co-op on a paired PC whose host listed {@code coop} the last time its native capabilities were read in this
-     * process (the computer manager reads them when a poll first finds the PC online). Hidden until then, and on every
-     * other host: whether this device may take a free slot is per session, so the co-op sheet says that.
-     */
-    static boolean offersCoop(ComputerDetails details, PcGridAdapter.RowState state) {
+    private static boolean hasKnownCapability(ComputerDetails details, PcGridAdapter.RowState state,
+                                              HostCapabilities.Feature feature) {
         boolean ready = state == PcGridAdapter.RowState.RUNNING || state == PcGridAdapter.RowState.READY;
         String known = ready ? KnownCapabilities.of(details.uuid) : null;
         if (known == null) {
             return false;
         }
         try {
-            return details.caps.withNativeCapabilities(known).has(HostCapabilities.Feature.COOP);
+            return details.caps.withNativeCapabilities(known).has(feature);
         } catch (JSONException e) {
             LimeLog.warning("Unreadable native capabilities of " + details.uuid + ": " + e.getMessage());
             return false;
@@ -288,21 +284,20 @@ public final class HostMenu {
     }
 
     /**
+     * Join co-op on a paired PC whose host listed {@code coop} the last time its native capabilities were read in this
+     * process (the computer manager reads them when a poll first finds the PC online). Hidden until then, and on every
+     * other host: whether this device may take a free slot is per session, so the co-op sheet says that.
+     */
+    static boolean offersCoop(ComputerDetails details, PcGridAdapter.RowState state) {
+        return hasKnownCapability(details, state, HostCapabilities.Feature.COOP);
+    }
+
+    /**
      * Microphone only on a paired PC whose host listed {@code session.mic_only} the last time its native capabilities
      * were read in this process, and lets this device start sessions. Hidden on every other host, stock ones too.
      */
     static boolean offersMicOnly(ComputerDetails details, PcGridAdapter.RowState state) {
-        boolean ready = state == PcGridAdapter.RowState.RUNNING || state == PcGridAdapter.RowState.READY;
-        String known = ready ? KnownCapabilities.of(details.uuid) : null;
-        if (known == null) {
-            return false;
-        }
-        try {
-            return details.caps.withNativeCapabilities(known).has(HostCapabilities.Feature.MIC_ONLY);
-        } catch (JSONException e) {
-            LimeLog.warning("Unreadable native capabilities of " + details.uuid + ": " + e.getMessage());
-            return false;
-        }
+        return hasKnownCapability(details, state, HostCapabilities.Feature.MIC_ONLY);
     }
 
     /**

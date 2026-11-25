@@ -747,18 +747,34 @@ public class ComputerManagerService extends Service {
             startFailedNoEndpoint = false;
             final long h = NightjarHostsJni.applistPollerStart(
                     hostManagerHandle, addr.address, addr.port, computer.httpsPort, cert);
+            if (h == 0) {
+                startFailedNoEndpoint = true;
+                return;
+            }
             pollerHandle = h;
             thread = new Thread(() -> {
-                while (isCurrentWorker()) {
-                    String rawXml = NightjarHostsJni.applistPollerNextUpdate(h);
-                    if (rawXml == null || !isCurrentWorker()) break;
-                    if (!saveAppList(rawXml)) break;
-                    ComputerDetails latest = binder.getComputer(computer.uuid);
-                    ComputerDetails delivered = latest != null ? latest : computer;
-                    delivered.rawAppList = rawXml;
-                    ComputerManagerListener currentListener = listener;
-                    if (currentListener != null && isCurrentWorker()) currentListener.notifyAppListUpdated(delivered, true);
-                    FrontendSync.appListChanged(ComputerManagerService.this, delivered);
+                try {
+                    while (isCurrentWorker()) {
+                        String rawXml = NightjarHostsJni.applistPollerNextUpdate(h);
+                        if (rawXml == null || !isCurrentWorker()) break;
+                        if (!saveAppList(rawXml)) break;
+                        ComputerDetails latest = binder.getComputer(computer.uuid);
+                        ComputerDetails delivered = latest != null ? latest : computer;
+                        delivered.rawAppList = rawXml;
+                        ComputerManagerListener currentListener = listener;
+                        if (currentListener != null && isCurrentWorker()) currentListener.notifyAppListUpdated(delivered, true);
+                        FrontendSync.appListChanged(ComputerManagerService.this, delivered);
+                    }
+                } finally {
+                    synchronized (ApplistPoller.this) {
+                        if (thread == Thread.currentThread()) {
+                            thread = null;
+                        }
+                        if (pollerHandle == h) {
+                            pollerHandle = 0;
+                            NightjarHostsJni.applistPollerStop(h);
+                        }
+                    }
                 }
             }, "App list polling thread for " + computer.name);
             thread.start();

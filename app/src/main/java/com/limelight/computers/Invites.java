@@ -110,6 +110,9 @@ public final class Invites {
             throw new InternetPlay.Unreachable(KNOWN_PC);
         }
         LimelightCryptoProvider crypto = PlatformBinding.getCryptoProvider(context);
+        if (crypto == null || crypto.getClientCertificate() == null || crypto.getClientPrivateKey() == null) {
+            throw new InternetPlay.Unreachable("Client identity certificate or private key is missing");
+        }
         // The engine refuses with its words when this device's "Play over the internet" is off.
         InternetPlay.setEnabled(PreferenceManager.getDefaultSharedPreferences(context)
                 .getBoolean(PreferenceConfiguration.INTERNET_PLAY_PREF_STRING, true));

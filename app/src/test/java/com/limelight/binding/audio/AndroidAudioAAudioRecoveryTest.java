@@ -225,4 +225,18 @@ public class AndroidAudioAAudioRecoveryTest {
         assertEquals("no fourth reopen within a second of each", AudioBufferPolicy.MAX_QUICK_REOPENS, renderer.reopens);
         assertEquals("AAudio disconnected 3 times right after reopening", renderer.fallbackReason);
     }
+
+    @Test public void stopAndCleanupAbortAudioTrackAndEncodedOutputBeforeWaitingForLock() {
+        ScriptedRenderer renderer = new ScriptedRenderer();
+        AudioTrackBackend backend = ReflectionHelpers.getField(renderer, "audioTrack");
+        AudioEncodedOutput encoded = ReflectionHelpers.getField(renderer, "encodedOutput");
+        android.media.AudioTrack track = AudioOutputSupport.createPcmTrack(
+                android.media.AudioFormat.CHANNEL_OUT_STEREO, 48000, 4096, true);
+        ReflectionHelpers.setField(backend, "track", track);
+        ReflectionHelpers.setField(encoded, "track", track);
+        renderer.stop();
+        renderer.cleanup();
+        assertNull(ReflectionHelpers.getField(backend, "track"));
+        assertNull(ReflectionHelpers.getField(encoded, "track"));
+    }
 }

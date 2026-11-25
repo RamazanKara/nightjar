@@ -180,15 +180,22 @@ public final class NeuralSheet {
         return !closed && asked == request && !activity.isFinishing() && !activity.isDestroyed();
     }
 
+    private boolean initialFocused;
+    private MaterialButton refreshButton;
+
     private void answered(int asked, NativeNeural state) {
         if (!speaks(asked)) return;
         shown = state;
         render(state);
         if (state.working()) {
-            scheduler.later(() -> {
-                if (speaks(asked)) load();
-            }, POLL_MS);
+            schedulePoll(asked);
         }
+    }
+
+    private void schedulePoll(int asked) {
+        scheduler.later(() -> {
+            if (speaks(asked)) load();
+        }, POLL_MS);
     }
 
     private void failed(int asked, NativeApiException error, boolean wrote) {
@@ -205,10 +212,15 @@ public final class NeuralSheet {
                 .setMessage(CoopSheet.problemMessage(activity, error))
                 .setPositiveButton(android.R.string.ok, null)
                 .create());
-        if (wrote) load();
+        if (wrote) {
+            load();
+        } else if (shown != null && shown.working()) {
+            schedulePoll(asked);
+        }
     }
 
     private void render(NativeNeural state) {
+        boolean keepRefreshFocus = initialFocused && refreshButton != null && refreshButton.hasFocus();
         sheet.clearActions();
         sheet.addNote(sheet.addGroup(), activity.getString(R.string.neural_about), false);
         NativeNeural.Switch fg = state.frameGeneration;
@@ -238,11 +250,18 @@ public final class NeuralSheet {
         if (job != null) {
             sheet.addNote(sheet.addGroup(), job, state.failed());
         }
-        sheet.addAction(R.drawable.ic_refresh, activity.getString(R.string.neural_refresh)).setOnClickListener(v -> {
+        refreshButton = sheet.addAction(R.drawable.ic_refresh, activity.getString(R.string.neural_refresh));
+        refreshButton.setOnClickListener(v -> {
+            initialFocused = false;
             page(activity.getString(R.string.neural_loading));
             load();
         });
-        sheet.focusFirstAction();
+        if (!initialFocused) {
+            initialFocused = true;
+            sheet.focusFirstAction();
+        } else if (keepRefreshFocus) {
+            refreshButton.requestFocus();
+        }
     }
 
     private void toggle(NativeNeural state) {

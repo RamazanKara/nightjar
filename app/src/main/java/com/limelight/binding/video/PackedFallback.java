@@ -48,12 +48,27 @@ public final class PackedFallback {
     /** The stage that failed when this device found, before the stream started, that it cannot show full chroma. */
     public static final String CHECK_STAGE = "full chroma check";
 
+    /** Outcome of a bounded fallback check. */
+    public enum Outcome {
+        PASS,
+        FAIL,
+        TIMEOUT
+    }
+
     /**
      * Runs {@code check} on a thread of its own and waits at most {@code timeoutMs} for it: a
      * decoder or GPU driver that never returns from the check must not hold the launch. No answer
      * in time counts as false, and the thread is left to end by itself.
      */
     public static boolean within(java.util.function.BooleanSupplier check, long timeoutMs, String what) {
+        return withinOutcome(check, timeoutMs, what) == Outcome.PASS;
+    }
+
+    public static Outcome withinOutcome(java.util.function.BooleanSupplier check, long timeoutMs, String what) {
+        if (timeoutMs <= 0) {
+            com.limelight.LimeLog.warning("Full chroma check gave no answer within " + timeoutMs + " ms: " + what);
+            return Outcome.TIMEOUT;
+        }
         final boolean[] result = new boolean[1];
         Thread worker = new Thread(() -> {
             boolean value = check.getAsBoolean();
@@ -67,14 +82,14 @@ public final class PackedFallback {
             worker.join(timeoutMs);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return false;
+            return Outcome.FAIL;
         }
         if (worker.isAlive()) {
             com.limelight.LimeLog.warning("Full chroma check gave no answer within " + timeoutMs + " ms: " + what);
-            return false;
+            return Outcome.TIMEOUT;
         }
         synchronized (result) {
-            return result[0];
+            return result[0] ? Outcome.PASS : Outcome.FAIL;
         }
     }
 

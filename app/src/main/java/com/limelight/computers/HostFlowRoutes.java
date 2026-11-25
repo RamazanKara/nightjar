@@ -329,7 +329,7 @@ final class HostFlowRoutes {
         }, text);
     }
 
-    static void showPairOneTimePinDialog(
+    static AlertDialog showPairOneTimePinDialog(
             Activity activity, ComputerDetails computer, BiConsumer<String, String> onSubmit) {
         View fields = activity.getLayoutInflater().inflate(R.layout.dialog_pair_otp, null);
         EditText pin = fields.findViewById(R.id.pair_pin);
@@ -361,9 +361,10 @@ final class HostFlowRoutes {
         dialog.setOnDismissListener(ignored -> { pin.getText().clear(); passphrase.getText().clear(); });
         dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         dialog.show();
+        return dialog;
     }
 
-    static void showRenameDialog(Activity activity, ComputerDetails computer, Consumer<String> onSave) {
+    static AlertDialog showRenameDialog(Activity activity, ComputerDetails computer, Consumer<String> onSave) {
         View fields = activity.getLayoutInflater().inflate(R.layout.dialog_rename_host, null);
         EditText name = fields.findViewById(R.id.rename_name);
         name.setFilters(new InputFilter[] {new InputFilter.LengthFilter(HostNames.MAX_LENGTH)});
@@ -385,9 +386,10 @@ final class HostFlowRoutes {
         dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                 | WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
         dialog.show();
+        return dialog;
     }
 
-    static void showChooseAddressDialog(
+    static AlertDialog showChooseAddressDialog(
             Activity activity, ComputerDetails computer, Consumer<ComputerDetails.AddressTuple> onSelect) {
         List<ComputerDetails.AddressTuple> known = computer.knownAddresses();
         if (computer.pinnedAddress != null && !known.contains(computer.pinnedAddress)) known.add(computer.pinnedAddress);
@@ -398,7 +400,7 @@ final class HostFlowRoutes {
             items[i + 1] = known.get(i).toString();
             if (known.get(i).equals(computer.pinnedAddress)) checked = i + 1;
         }
-        new NavigationDialogBuilder(activity)
+        return new NavigationDialogBuilder(activity)
                 .setTitle(R.string.host_menu_connection_address)
                 .setSingleChoiceItems(items, checked, (d, which) -> {
                     d.dismiss();

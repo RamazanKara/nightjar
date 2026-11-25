@@ -36,12 +36,21 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarConsoleJni_repoSe
     handle: jlong,
     entry_json: JString,
     starred: jboolean,
-) {
-    if let Some(entry) = REPOS.get(handle)
-        && let Some(fav) = jstr(&mut env, &entry_json).and_then(|s| serde_json::from_str::<Favourite>(&s).ok())
-    {
-        let _ = entry.repo.set_favourite_explicit(fav, starred != JNI_FALSE);
+) -> jboolean {
+    let Some(entry) = REPOS.get(handle) else {
+        return JNI_FALSE;
+    };
+    let Some(fav) =
+        jstr(&mut env, &entry_json).and_then(|s| serde_json::from_str::<Favourite>(&s).ok())
+    else {
+        crate::platform::error("repoSetFavourite: malformed favourite JSON");
+        return JNI_FALSE;
+    };
+    if let Err(e) = entry.repo.set_favourite_explicit(fav, starred != JNI_FALSE) {
+        crate::platform::error(&format!("repoSetFavourite failed: {e}"));
+        return JNI_FALSE;
     }
+    crate::policy::jbool(true)
 }
 
 #[unsafe(no_mangle)]
@@ -74,7 +83,10 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarConsoleJni_repoHi
     };
     let hid = jstr(&mut env, &host_id).unwrap_or_default();
     let ids = entry.repo.hidden_store().of_app_ids(&hid);
-    new_jstring(&env, &serde_json::to_string(&ids).unwrap_or_else(|_| "[]".into()))
+    new_jstring(
+        &env,
+        &serde_json::to_string(&ids).unwrap_or_else(|_| "[]".into()),
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -89,7 +101,10 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarConsoleJni_repoHi
     };
     let hid = jstr(&mut env, &host_id).unwrap_or_default();
     let ids = entry.repo.hidden_store().stable_ids(&hid);
-    new_jstring(&env, &serde_json::to_string(&ids).unwrap_or_else(|_| "{}".into()))
+    new_jstring(
+        &env,
+        &serde_json::to_string(&ids).unwrap_or_else(|_| "{}".into()),
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -101,16 +116,22 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarConsoleJni_repoHi
     app_id: jint,
     stable_id: JString,
     hidden: jboolean,
-) {
-    if let Some(entry) = REPOS.get(handle) {
-        let hid = jstr(&mut env, &host_id).unwrap_or_default();
-        let sid = jstr(&mut env, &stable_id).unwrap_or_default();
-        let app = u32::try_from(app_id).unwrap_or(0);
-        let _ = entry
-            .repo
-            .hidden_store()
-            .set_app(&hid, app, &sid, hidden != JNI_FALSE);
+) -> jboolean {
+    let Some(entry) = REPOS.get(handle) else {
+        return JNI_FALSE;
+    };
+    let hid = jstr(&mut env, &host_id).unwrap_or_default();
+    let sid = jstr(&mut env, &stable_id).unwrap_or_default();
+    let app = u32::try_from(app_id).unwrap_or(0);
+    if let Err(e) = entry
+        .repo
+        .hidden_store()
+        .set_app(&hid, app, &sid, hidden != JNI_FALSE)
+    {
+        crate::platform::error(&format!("repoHiddenSetApp failed: {e}"));
+        return JNI_FALSE;
     }
+    crate::policy::jbool(true)
 }
 
 #[unsafe(no_mangle)]
@@ -128,12 +149,17 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarConsoleJni_repoHi
     let games: BTreeMap<String, u32> = jstr(&mut env, &games_json)
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default();
-    let ids = entry
-        .repo
-        .hidden_store()
-        .following(&hid, &games)
-        .unwrap_or_default();
-    new_jstring(&env, &serde_json::to_string(&ids).unwrap_or_else(|_| "[]".into()))
+    let ids = match entry.repo.hidden_store().following(&hid, &games) {
+        Ok(ids) => ids,
+        Err(e) => {
+            crate::platform::error(&format!("repoHiddenFollowing failed: {e}"));
+            Default::default()
+        }
+    };
+    new_jstring(
+        &env,
+        &serde_json::to_string(&ids).unwrap_or_else(|_| "[]".into()),
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -155,12 +181,17 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarConsoleJni_repoHi
     let hidden: Vec<u32> = jstr(&mut env, &hidden_json)
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default();
-    let ids = entry
-        .repo
-        .hidden_store()
-        .changed(&hid, &shown, &hidden)
-        .unwrap_or_default();
-    new_jstring(&env, &serde_json::to_string(&ids).unwrap_or_else(|_| "[]".into()))
+    let ids = match entry.repo.hidden_store().changed(&hid, &shown, &hidden) {
+        Ok(ids) => ids,
+        Err(e) => {
+            crate::platform::error(&format!("repoHiddenChanged failed: {e}"));
+            Default::default()
+        }
+    };
+    new_jstring(
+        &env,
+        &serde_json::to_string(&ids).unwrap_or_else(|_| "[]".into()),
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -173,7 +204,10 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarConsoleJni_repoRe
         return new_jstring(&env, "[]");
     };
     let recents = entry.repo.recents_store().list_stored();
-    new_jstring(&env, &serde_json::to_string(&recents).unwrap_or_else(|_| "[]".into()))
+    new_jstring(
+        &env,
+        &serde_json::to_string(&recents).unwrap_or_else(|_| "[]".into()),
+    )
 }
 
 pub(super) fn find_cached_library_cover_json(

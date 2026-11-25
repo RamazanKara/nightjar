@@ -207,7 +207,8 @@ final class GameStreamLoops {
         return new ServiceConnection() {
             @Override
             public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
-                if (game.isFinishing() || game.isDestroyed() || game.connectionStopThread != null) {
+                if (!game.usbDriverServiceBound || game.usbDriverReleased ||
+                        game.isFinishing() || game.isDestroyed() || game.connectionStopThread != null) {
                     return;
                 }
                 UsbDriverService.UsbDriverBinder binder = (UsbDriverService.UsbDriverBinder) iBinder;
@@ -219,7 +220,11 @@ final class GameStreamLoops {
 
             @Override
             public void onServiceDisconnected(ComponentName componentName) {
-                game.usbDriverBinder = null;
+                if (game.usbDriverBinder != null) {
+                    game.usbDriverBinder.setListener(null);
+                    game.usbDriverBinder.setStateListener(null);
+                    game.usbDriverBinder = null;
+                }
             }
         };
     }

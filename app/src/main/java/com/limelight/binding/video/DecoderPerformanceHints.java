@@ -25,12 +25,16 @@ final class DecoderPerformanceHints implements AutoCloseable {
     private long submitThreadsRetryNs;
 
     DecoderPerformanceHints(Context context, boolean enabled, int frameRate) {
-        if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (enabled && frameRate > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             manager = context.getSystemService(PerformanceHintManager.class);
             if (manager != null) {
                 targetDurationNs = 1000000000L / frameRate;
                 ownThreadId = Process.myTid();
-                session = manager.createHintSession(new int[] { ownThreadId }, targetDurationNs);
+                try {
+                    session = manager.createHintSession(new int[] { ownThreadId }, targetDurationNs);
+                } catch (RuntimeException e) {
+                    LimeLog.warning("Performance hint session creation failed: " + e);
+                }
             }
         }
     }
@@ -84,7 +88,11 @@ final class DecoderPerformanceHints implements AutoCloseable {
             if (replacement == null) {
                 LimeLog.warning("Performance hint session could not add submit threads " + first + ", " + second);
             } else {
-                session.close();
+                try {
+                    session.close();
+                } catch (RuntimeException e) {
+                    LimeLog.warning("Performance hint session close failed: " + e);
+                }
                 session = replacement;
             }
         }
@@ -106,19 +114,29 @@ final class DecoderPerformanceHints implements AutoCloseable {
 
     void reportWorkDuration(long durationNs, int frameRate) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && session != null) {
-            long frameIntervalNs = 1000000000L / frameRate;
-            if (frameIntervalNs != targetDurationNs) {
-                session.updateTargetWorkDuration(frameIntervalNs);
-                targetDurationNs = frameIntervalNs;
+            try {
+                if (frameRate > 0) {
+                    long frameIntervalNs = 1000000000L / frameRate;
+                    if (frameIntervalNs != targetDurationNs) {
+                        session.updateTargetWorkDuration(frameIntervalNs);
+                        targetDurationNs = frameIntervalNs;
+                    }
+                }
+                session.reportActualWorkDuration(Math.max(1, durationNs));
+            } catch (RuntimeException e) {
+                LimeLog.warning("Performance hint work duration report failed: " + e);
             }
-            session.reportActualWorkDuration(Math.max(1, durationNs));
         }
     }
 
     @Override
     public void close() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && session != null) {
-            session.close();
+            try {
+                session.close();
+            } catch (RuntimeException e) {
+                LimeLog.warning("Performance hint session close failed: " + e);
+            }
             session = null;
         }
     }

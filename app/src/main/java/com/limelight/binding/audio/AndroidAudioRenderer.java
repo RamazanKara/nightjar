@@ -673,6 +673,8 @@ public class AndroidAudioRenderer implements AudioRenderer {
         // Before the monitor: a write stalled on a full output holds it for up to 100 ms.
         stopRequested = true;
         abortNativeAudio();
+        audioTrack.abortWrite();
+        encodedOutput.abortWrite();
         synchronized (this) {
             stopped = true;
             audioTrack.setAudioFxWanted(false);
@@ -683,6 +685,8 @@ public class AndroidAudioRenderer implements AudioRenderer {
     public void cleanup() {
         stopRequested = true;
         abortNativeAudio();
+        audioTrack.abortWrite();
+        encodedOutput.abortWrite();
         cleanupLocked();
     }
 

@@ -266,6 +266,7 @@ final class GameLifecycle {
         game.keyboardPanHandler.removeCallbacks(game.keyboardPan);
         if (game.legacyKeyboard != null) game.legacyKeyboard.stop();
 
+        game.streamConnection.releaseUsbDriverBinder();
         if (game.controllerHandler != null) {
             game.controllerHandler.destroy();
         }

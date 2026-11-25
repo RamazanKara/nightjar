@@ -45,13 +45,20 @@ final class PairingDialogs {
     private final Executor worker;
     private final Executor main;
     private final Runnable changed;
+    private final java.util.function.Consumer<AlertDialog> onShow;
 
     PairingDialogs(Activity activity, Errors errors, Executor worker, Executor main, Runnable changed) {
+        this(activity, errors, worker, main, changed, dialog -> {});
+    }
+
+    PairingDialogs(Activity activity, Errors errors, Executor worker, Executor main, Runnable changed,
+                   java.util.function.Consumer<AlertDialog> onShow) {
         this.activity = activity;
         this.errors = errors;
         this.worker = worker;
         this.main = main;
         this.changed = changed;
+        this.onShow = onShow;
     }
 
     private boolean gone() {
@@ -85,10 +92,11 @@ final class PairingDialogs {
         if (gone()) {
             return;
         }
-        new NavigationDialogBuilder(activity).setTitle(R.string.host_menu_pair_another)
+        AlertDialog dialog = new NavigationDialogBuilder(activity).setTitle(R.string.host_menu_pair_another)
                 .setMessage(activity.getString(R.string.pairing_none_waiting, host.displayName()))
                 .setPositiveButton(android.R.string.ok, null)
                 .show();
+        onShow.accept(dialog);
     }
 
     /** More than one device waits. The address stands beside the name, which is the device's to choose. */
@@ -102,10 +110,11 @@ final class PairingDialogs {
             rows[i] = activity.getString(R.string.pairing_request_row, waiting.get(i).shownName(), request.address,
                     waiting.get(i).host.displayName());
         }
-        new NavigationDialogBuilder(activity).setTitle(R.string.host_menu_pair_another)
-                .setItems(rows, (dialog, which) -> showPin(waiting.get(which), clients.of(waiting.get(which))))
+        AlertDialog dialog = new NavigationDialogBuilder(activity).setTitle(R.string.host_menu_pair_another)
+                .setItems(rows, (d, which) -> showPin(waiting.get(which), clients.of(waiting.get(which))))
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
+        onShow.accept(dialog);
     }
 
     private static final int PIN_WIDE_DP = 640;
@@ -175,6 +184,7 @@ final class PairingDialogs {
             pad.getChildAt(0).requestFocus();
         });
         dialog.show();
+        onShow.accept(dialog);
         // Beside the pad's width in landscape, the slots and who asks need their own, or the four slots stand as slits.
         if (activity.getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             android.content.res.Resources res = activity.getResources();

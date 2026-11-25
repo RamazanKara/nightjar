@@ -248,6 +248,47 @@ public class GpuDriverStoreTest {
         return files;
     }
 
+    @Test
+    @Config(sdk = 34)
+    public void nonCrashProcessKillClearsActiveFlagWithoutDisablingSelectedDriver() throws Exception {
+        GpuDriverStore.Driver driver = install(packageFiles());
+        GpuDriverStore.select(context, driver);
+        context.getSharedPreferences("gpu-drivers", Context.MODE_PRIVATE).edit()
+                .putString("active", driver.id)
+                .putBoolean("fallback", false)
+                .commit();
+
+        org.robolectric.shadows.ShadowActivityManager am = org.robolectric.Shadows.shadowOf(
+                context.getSystemService(android.app.ActivityManager.class));
+        am.addApplicationExitInfo(context.getPackageName(), 123,
+                android.app.ApplicationExitInfo.REASON_LOW_MEMORY, 0);
+
+        GpuDriverStore.Driver kept = GpuDriverStore.selected(context);
+        assertNotNull("LMK kill must keep custom driver selected", kept);
+        assertEquals(driver.id, kept.id);
+        assertFalse(GpuDriverStore.usedFallback(context));
+        assertEquals("", context.getSharedPreferences("gpu-drivers", Context.MODE_PRIVATE).getString("active", ""));
+    }
+
+    @Test
+    @Config(sdk = 34)
+    public void nativeCrashOnApi34TriggersFallbackAndDeselectsActiveDriver() throws Exception {
+        GpuDriverStore.Driver driver = install(packageFiles());
+        GpuDriverStore.select(context, driver);
+        context.getSharedPreferences("gpu-drivers", Context.MODE_PRIVATE).edit()
+                .putString("active", driver.id)
+                .putBoolean("fallback", false)
+                .commit();
+
+        org.robolectric.shadows.ShadowActivityManager am = org.robolectric.Shadows.shadowOf(
+                context.getSystemService(android.app.ActivityManager.class));
+        am.addApplicationExitInfo(context.getPackageName(), 124,
+                android.app.ApplicationExitInfo.REASON_CRASH_NATIVE, 11);
+
+        assertNull("Native crash must deselect active driver", GpuDriverStore.selected(context));
+        assertTrue(GpuDriverStore.usedFallback(context));
+    }
+
     private static byte[] elf() {
         byte[] bytes = new byte[64];
         bytes[0] = 0x7f;

@@ -119,4 +119,29 @@ public class MicrophoneCaptureTest {
         }
         assertTrue("the capture did not get there in time", condition.getAsBoolean());
     }
+
+    @Test
+    public void zeroReadBackoffWaitWakesImmediatelyWhenMutedOrStopped() throws Exception {
+        MicrophoneCapture capture = new MicrophoneCapture((pcm, samples) -> 0, false);
+        org.robolectric.util.ReflectionHelpers.setField(capture, "running", true);
+        Object lock = org.robolectric.util.ReflectionHelpers.getField(capture, "lock");
+
+        java.util.concurrent.CountDownLatch waited = new java.util.concurrent.CountDownLatch(1);
+        long startNs = System.nanoTime();
+        Thread sleeper = new Thread(() -> {
+            try {
+                org.robolectric.util.ReflectionHelpers.callInstanceMethod(capture, "awaitZeroReadBackoff",
+                        org.robolectric.util.ReflectionHelpers.ClassParameter.from(int.class, 2000));
+                waited.countDown();
+            } catch (Exception ignored) {
+            }
+        });
+        sleeper.start();
+        Thread.sleep(30);
+        capture.setMuted(true);
+        assertTrue("awaitZeroReadBackoff must wake immediately on mute/stop",
+                waited.await(1, java.util.concurrent.TimeUnit.SECONDS));
+        assertTrue((System.nanoTime() - startNs) < 1_000_000_000L);
+        assertNotNull(lock);
+    }
 }

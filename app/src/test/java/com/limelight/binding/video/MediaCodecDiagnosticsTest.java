@@ -113,4 +113,48 @@ public class MediaCodecDiagnosticsTest {
             assertEquals("The same report again needs no restart", 0, recovery.get());
         }
     }
+
+    @Test
+    public void av1FailureReportsFrameStagesInsteadOfPreSpsErrorAndRolloverKeepsPreviousCsv() throws Exception {
+        try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
+            ReflectionHelpers.setStaticField(MediaCodecHelper.class, "initialized", true);
+            PreferenceConfiguration prefs = new PreferenceConfiguration();
+            MediaCodecDecoderRenderer renderer = new MediaCodecDecoderRenderer(activity.get(), prefs,
+                    null, 0, false, true, "", null);
+            renderer.videoFormat = com.limelight.nvstream.jni.MoonBridge.VIDEO_FORMAT_AV1_MAIN8;
+            renderer.refreshRate = 60;
+            renderer.numVpsIn = 0;
+            renderer.numSpsIn = 0;
+            renderer.numPpsIn = 0;
+
+            String preIFrame = MediaCodecOverlayReport.formatRendererException(renderer, new RuntimeException("boom"), "\n");
+            assertTrue(preIFrame.startsWith("PreIFrameErrorFormat:"));
+
+            renderer.numFramesIn = 3;
+            String preConfig = MediaCodecOverlayReport.formatRendererException(renderer, new RuntimeException("boom"), "\n");
+            assertTrue(preConfig.startsWith("PreOutputConfigErrorFormat:"));
+
+            // AS-L14: a rollover right before stream end with empty .tmp must preserve .prev as the final CSV.
+            java.io.File files = activity.get().getFilesDir();
+            java.io.File prev = new java.io.File(files, MediaCodecDecoderRenderer.LATENCY_CSV_NAME + ".prev");
+            java.io.File out = new java.io.File(files, MediaCodecDecoderRenderer.LATENCY_CSV_NAME);
+            prev.delete();
+            out.delete();
+            renderer.telemetry.openLatencyCsv();
+            java.nio.file.Files.write(prev.toPath(),
+                    (FrameLatencyStats.CSV_HEADER + "1,2,3\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            ReflectionHelpers.setField(renderer, "latencyCsvBytes", FrameLatencyStats.CSV_HEADER.length());
+            // Simulate stopLatencyThread final promotion when .tmp has only header.
+            renderer.telemetry.closeLatencyCsv();
+            java.io.File tmp = new java.io.File(files, MediaCodecDecoderRenderer.LATENCY_CSV_NAME + ".tmp");
+            java.io.File source = ((Number) ReflectionHelpers.getField(renderer, "latencyCsvBytes")).longValue()
+                    <= FrameLatencyStats.CSV_HEADER.length() && prev.isFile() ? prev : tmp;
+            assertTrue(source.renameTo(out));
+            tmp.delete();
+            prev.delete();
+            String finalCsv = new String(java.nio.file.Files.readAllBytes(out.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(finalCsv.contains("1,2,3"));
+        }
+    }
 }

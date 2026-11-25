@@ -9,6 +9,8 @@ cd "$(dirname "$0")"
 
 GLSLC="${GLSLC:-glslc}"
 OUT=../shaders_spv.h
+TMP="${OUT}.tmp.$$"
+trap 'rm -f "$TMP"' EXIT HUP INT TERM
 
 spv() {
     printf 'static const uint32_t %s[] = ' "$1"
@@ -26,6 +28,7 @@ spv() {
     spv sgsr_frag_spv sgsr.frag
     spv planar_csc_warp_frag_spv -DFRAME_WARP planar_csc.frag
     spv sgsr_warp_frag_spv -DFRAME_WARP sgsr.frag
-} | tr -d '\r' > "$OUT"
+} | tr -d '\r' > "$TMP"
 
+mv -f "$TMP" "$OUT"
 echo "Wrote $OUT"

@@ -24,7 +24,7 @@ final class AudioTrackBackend {
     private final Context context;
     private final boolean enableAudioFx;
 
-    private AudioTrack track;
+    private volatile AudioTrack track;
     // Samples the current AudioTrack accepted; its playback head gives what it still holds.
     private long samplesWritten;
     private boolean audioFxSessionOpen;
@@ -129,6 +129,17 @@ final class AudioTrackBackend {
         }
 
         return 0;
+    }
+
+    void abortWrite() {
+        AudioTrack active = track;
+        if (active != null) {
+            try {
+                active.pause();
+                active.flush();
+            } catch (IllegalStateException ignored) {
+            }
+        }
     }
 
     int write(short[] audioData, int offset, int length) {

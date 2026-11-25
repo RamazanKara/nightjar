@@ -59,4 +59,14 @@ public class PackedFallbackTest {
         assertEquals(com.limelight.R.string.sharp_color_unavailable_pc, PackedFallback.refusedToast(null));
         assertEquals(com.limelight.R.string.sharp_color_unavailable_device, PackedFallback.refusedToast(PackedFallback.CHECK_STAGE));
     }
+
+    @Test
+    public void withinOutcomeDistinguishesTimeoutFromPassAndFailAndZeroBudgetSkipsWait() {
+        assertEquals(PackedFallback.Outcome.TIMEOUT,
+                PackedFallback.withinOutcome(() -> true, 0L, "zero budget"));
+        assertEquals(PackedFallback.Outcome.PASS,
+                PackedFallback.withinOutcome(() -> true, 500L, "fast pass"));
+        assertEquals(PackedFallback.Outcome.FAIL,
+                PackedFallback.withinOutcome(() -> false, 500L, "fast fail"));
+    }
 }

@@ -16,7 +16,7 @@ import com.limelight.utils.ProblemReport;
  */
 final class AudioEncodedOutput {
     private final AndroidAudioRenderer renderer;
-    private AudioTrack track;
+    private volatile AudioTrack track;
     private int codec, bufferBytes;
     // A passthrough output that cannot be rebuilt says so once per stream, not once a second.
     private boolean failureShown;
@@ -125,6 +125,17 @@ final class AudioEncodedOutput {
             nextWriteWarningAt = now + AudioTrackBackend.TRACK_RECREATE_INTERVAL_MS;
             LimeLog.warning("Passthrough AudioTrack write failed: " + written + " of " + length + " bytes; dropping the frame");
             report();
+        }
+    }
+
+    void abortWrite() {
+        AudioTrack active = track;
+        if (active != null) {
+            try {
+                active.pause();
+                active.flush();
+            } catch (IllegalStateException ignored) {
+            }
         }
     }
 

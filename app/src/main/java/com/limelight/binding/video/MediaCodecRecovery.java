@@ -340,9 +340,8 @@ final class MediaCodecRecovery {
                         r.restartReason = "CodecException";
                         LimeLog.info("Decoder flush promoted to restart for recoverable CodecException");
                         e.printStackTrace();
-                    } else if (r.codecRecoveryType.get() != MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_RESET &&
-                            r.codecRecoveryType.get() != MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_RESTART) {
-                        throw new IllegalStateException("Unexpected codec recovery type: " + r.codecRecoveryType.get());
+                    } else if (!checkExpectedRecoveryType(true)) {
+                        return false;
                     }
                 } else {
                     if (r.codecRecoveryType.compareAndSet(MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_NONE,
@@ -357,8 +356,8 @@ final class MediaCodecRecovery {
                             MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_RESET)) {
                         LimeLog.info("Decoder restart promoted to reset for non-recoverable CodecException");
                         e.printStackTrace();
-                    } else if (r.codecRecoveryType.get() != MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_RESET) {
-                        throw new IllegalStateException("Unexpected codec recovery type: " + r.codecRecoveryType.get());
+                    } else if (!checkExpectedRecoveryType(false)) {
+                        return false;
                     }
                 }
 
@@ -386,8 +385,8 @@ final class MediaCodecRecovery {
                         MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_RESET)) {
                     LimeLog.info("Decoder restart promoted to reset for IllegalStateException");
                     e.printStackTrace();
-                } else if (r.codecRecoveryType.get() != MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_RESET) {
-                    throw new IllegalStateException("Unexpected codec recovery type: " + r.codecRecoveryType.get());
+                } else if (!checkExpectedRecoveryType(false)) {
+                    return false;
                 }
 
                 r.recoveryAfterFailure = true;
@@ -426,6 +425,18 @@ final class MediaCodecRecovery {
 
         // Not transient
         return false;
+    }
+
+    private boolean checkExpectedRecoveryType(boolean allowRestart) {
+        int type = r.codecRecoveryType.get();
+        if (type == MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_RESET ||
+                (allowRestart && type == MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_RESTART)) {
+            return true;
+        }
+        if (r.stopping) {
+            return false;
+        }
+        throw new IllegalStateException("Unexpected codec recovery type: " + type);
     }
 
     // The first exception, until the decoder puts out a frame after it: then the stream recovered,
