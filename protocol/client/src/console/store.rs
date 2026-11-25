@@ -2,7 +2,7 @@
 //! recent launches (`console_recents.json`), favourites with damaged-file `.bak` preservation
 //! (`console_favourites.json`), and hidden apps (`hidden_apps.json`).
 
-use crate::hosts::io::{GuardedJsonFile, write_atomic};
+use crate::hosts::io::{dir_lock, file_lock, GuardedJsonFile, write_atomic};
 use nightjar_policy::console::{
     parse_favourites, set_hidden_strict, toggle_favourite, Favourite, Recent, ANDROID_RECENT_LIMIT,
 };
@@ -36,17 +36,15 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
 }
 
 fn console_file(base_dir: &Path, name: &str) -> GuardedJsonFile {
-    GuardedJsonFile::new(
-        base_dir.join("console").join(name),
-        Arc::new(Mutex::new(())),
-        false,
-    )
+    let path = base_dir.join("console").join(name);
+    let lock = file_lock(&path);
+    GuardedJsonFile::new(path, lock, false)
 }
 
 /// Per-host cached native library files (`<base>/console-library/<sanitized_uuid>.json`).
 pub struct LibraryCacheStore {
     dir: PathBuf,
-    lock: Mutex<()>,
+    lock: Arc<Mutex<()>>,
 }
 
 impl LibraryCacheStore {
@@ -56,10 +54,8 @@ impl LibraryCacheStore {
         } else {
             base_dir.join("console-library")
         };
-        Self {
-            dir,
-            lock: Mutex::new(()),
-        }
+        let lock = dir_lock(&dir);
+        Self { dir, lock }
     }
 
     pub fn dir(&self) -> &Path {

@@ -603,3 +603,27 @@ fn applist_poller_reports_updated_unchanged_failed_and_stops_promptly() {
     assert!(started.elapsed() < Duration::from_secs(1), "stop took {:?}", started.elapsed());
     let _ = srv.join();
 }
+
+#[test]
+fn store_ignores_empty_unique_id_and_cleans_stale_tmp_files() {
+    let dir = temp_dir("empty_id_and_stale_tmp");
+    let store = HostStore::open(&dir);
+    let mut empty = HostEntry::default();
+    empty.shared.name = "Alpha".into();
+    assert!(!store.upsert(empty.clone()).unwrap());
+    assert!(!store.replace_entry(empty).unwrap());
+    assert!(store.all().is_empty());
+
+    let stale = dir.join("hosts.json.99999.0.tmp");
+    std::fs::write(&stale, b"stale").unwrap();
+    let mut valid = HostEntry::default();
+    valid.shared.unique_id = "pc-alpha".into();
+    valid.shared.name = "Alpha".into();
+    valid.local_endpoint = EndpointSlot::new("10.0.0.1", 47989);
+    valid.sync_shared_from_slots();
+    // Fresh tmp (< STALE_TMP_AGE) stays untouched; an entry save only prunes aged tmps safely.
+    assert!(store.upsert(valid).unwrap());
+    assert_eq!(store.all().len(), 1);
+    assert!(stale.exists());
+    let _ = std::fs::remove_dir_all(dir);
+}

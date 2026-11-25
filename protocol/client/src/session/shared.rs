@@ -205,6 +205,61 @@ pub(super) struct Microphone {
     pub(super) packet: [u8; microphone::MAX_PACKET_BYTES],
 }
 
+/// Teardown trait shared by [`CleanupGuard`] across audio renderers and video decoders.
+pub(super) trait StopCleanup {
+    fn stop(&mut self);
+    fn cleanup(&mut self);
+}
+
+impl StopCleanup for Box<dyn AudioRenderer> {
+    fn stop(&mut self) {
+        AudioRenderer::stop(self.as_mut());
+    }
+    fn cleanup(&mut self) {
+        AudioRenderer::cleanup(self.as_mut());
+    }
+}
+
+impl StopCleanup for Box<dyn VideoDecoder> {
+    fn stop(&mut self) {
+        VideoDecoder::stop(self.as_mut());
+    }
+    fn cleanup(&mut self) {
+        VideoDecoder::cleanup(self.as_mut());
+    }
+}
+
+/// RAII guard ensuring an unstarted [`AudioRenderer`] or [`VideoDecoder`] runs `stop()` +
+/// `cleanup()` if thread setup fails before the worker thread takes ownership.
+pub(super) struct CleanupGuard<T: StopCleanup>(Option<T>);
+
+impl<T: StopCleanup> CleanupGuard<T> {
+    pub(super) fn new(inner: T) -> Self {
+        Self(Some(inner))
+    }
+
+    pub(super) const fn empty() -> Self {
+        Self(None)
+    }
+
+    pub(super) fn is_armed(&self) -> bool {
+        self.0.is_some()
+    }
+
+    pub(super) fn take(&mut self) -> Option<T> {
+        self.0.take()
+    }
+}
+
+impl<T: StopCleanup> Drop for CleanupGuard<T> {
+    fn drop(&mut self) {
+        if let Some(mut inner) = self.0.take() {
+            inner.stop();
+            inner.cleanup();
+        }
+    }
+}
+
 /// Everything a session owns; filled stage by stage so a failed start tears down exactly
 /// what it built.
 pub(super) struct Parts {
@@ -237,6 +292,36 @@ pub(super) struct Parts {
 }
 
 impl Parts {
+    pub(super) fn new(
+        listener: Arc<dyn Listener>,
+        network_priority: bool,
+        receive_decode_priority: bool,
+    ) -> Self {
+        Self {
+            shared: Arc::new(Shared::new(listener, network_priority, receive_decode_priority)),
+            remote: None,
+            local: None,
+            outcome: None,
+            audio_socket: None,
+            audio_pinger: None,
+            video_pinger: None,
+            video_shared: None,
+            video_receive_buffer: None,
+            audio_shared: Arc::new(audio::AudioShared::default()),
+            control: None,
+            control_thread: None,
+            video: None,
+            video_decoder: None,
+            audio: None,
+            audio_renderer: None,
+            microphone: Arc::new(Mutex::new(None)),
+            video_next_socket: Arc::default(),
+            audio_next_socket: Arc::default(),
+            roamer: None,
+            roam_poll: None,
+        }
+    }
+
     /// LiStopConnection's order: input, audio, video, control, then the audio socket. The
     /// route poll stops first, so no roam moves a stream that is stopping.
     pub(super) fn teardown(&mut self) {

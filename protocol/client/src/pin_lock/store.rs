@@ -1,6 +1,7 @@
 //! File-backed PIN lock persistence (`pin_lock.json`) with crash-safe try counting,
 //! atomic private writes, background file coalescing and one-time legacy prefs migration.
 
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
@@ -309,22 +310,26 @@ impl PinStore {
             Self::put_throttle(&mut memory.saved, counted);
             (counted, memory.saved.hash.clone().unwrap_or_default())
         };
-        self.write_now();
+        if self.write_now().is_err() {
+            return Ok(Outcome::Unavailable);
+        }
         if !verify(&hash, pin)? {
             return Ok(Outcome::Wrong {
                 locked_for_ms: throttle::remaining_ms(counted, self.clock.elapsed()),
             });
         }
         Self::put_throttle(&mut self.memory().saved, throttle::State::default());
-        self.write_now();
+        let _ = self.write_now();
         Ok(Outcome::Ok)
     }
 
-    fn write_now(&self) {
+    fn write_now(&self) -> io::Result<()> {
         let saved = self.memory().saved.clone();
         if let Err(e) = write_file(&self.path, &saved) {
             eprintln!("nightjar: saving the PIN lock failed: {e}");
+            return Err(e);
         }
+        Ok(())
     }
 
     pub fn set_active(&self, elapsed: i64, boot: i64) {

@@ -247,9 +247,19 @@ pub fn download_android_apk(
     cancel: Option<&TransferCancel>,
     on_progress: &mut dyn FnMut(u64, u64),
 ) -> Result<PathBuf, UpdateError> {
-    download_android_apk_with(net, download_host, release, root, dir, cancel, on_progress)
+    download_android_apk_with(
+        net,
+        download_host,
+        release,
+        root,
+        dir,
+        cancel,
+        true,
+        on_progress,
+    )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn download_android_apk_with(
     net: &dyn Transport,
     allow: fn(&Url) -> bool,
@@ -257,6 +267,7 @@ pub(crate) fn download_android_apk_with(
     root: bool,
     dir: &Path,
     cancel: Option<&TransferCancel>,
+    pin_urls: bool,
     on_progress: &mut dyn FnMut(u64, u64),
 ) -> Result<PathBuf, UpdateError> {
     let apk = release.apk_asset(root).ok_or(UpdateError::NoApk)?;
@@ -264,6 +275,11 @@ pub(crate) fn download_android_apk_with(
         return Err(UpdateError::Malformed("unsafe asset name".into()));
     }
     let sums = release.checksum_asset().ok_or(UpdateError::NoChecksums)?;
+    if pin_urls
+        && (!release.is_pinned_download_url(apk) || !release.is_pinned_download_url(sums))
+    {
+        return Err(UpdateError::Address("unexpected release asset address".into()));
+    }
     if !apk.url.to_ascii_lowercase().starts_with("https://")
         || !sums.url.to_ascii_lowercase().starts_with("https://")
     {

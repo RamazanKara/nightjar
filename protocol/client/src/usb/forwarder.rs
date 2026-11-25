@@ -1,7 +1,9 @@
 //! The control half: which devices the user attached, what the host made of each, and the
 //! tunnel thread that serves an attached one.
 
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
+use std::thread::ThreadId;
+use std::time::{Duration, Instant};
 
 use rubylight_protocol::usb::{UsbMessage, UsbReason, UsbState, TOKEN_BYTES};
 
@@ -83,12 +85,54 @@ type SendFn = dyn Fn(ClientMessage) -> Result<(), SendError> + Send + Sync;
 type OpenFn = dyn Fn(&[u8; TOKEN_BYTES]) -> Result<Arc<dyn Tunnel>, String> + Send + Sync;
 type ChangedFn = dyn Fn() + Send + Sync;
 
+const DETACH_WAIT_TIMEOUT: Duration = Duration::from_secs(2);
+
+struct ServedSignal {
+    state: Mutex<(bool, Option<ThreadId>)>,
+    cvar: Condvar,
+}
+
+impl ServedSignal {
+    fn new(thread_id: ThreadId) -> Self {
+        Self {
+            state: Mutex::new((false, Some(thread_id))),
+            cvar: Condvar::new(),
+        }
+    }
+
+    fn finish(&self) {
+        *self.state.lock().unwrap_or_else(PoisonError::into_inner) = (true, None);
+        self.cvar.notify_all();
+    }
+
+    fn wait(&self) {
+        let current = std::thread::current().id();
+        let mut guard = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+        if guard.1 == Some(current) {
+            return;
+        }
+        let deadline = Instant::now() + DETACH_WAIT_TIMEOUT;
+        while !guard.0 {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            let (next, _) = self
+                .cvar
+                .wait_timeout(guard, remaining)
+                .unwrap_or_else(PoisonError::into_inner);
+            guard = next;
+        }
+    }
+}
+
 struct Entry {
     attachment: Attachment,
     device: Arc<dyn UsbDevice>,
     tunnel: Option<Arc<dyn Tunnel>>,
     /// A tunnel thread serves the device, and closes it when it stops.
     serving: bool,
+    done: Option<Arc<ServedSignal>>,
 }
 
 #[derive(Default)]
@@ -103,6 +147,7 @@ struct Table {
 struct Cleanup {
     tunnel: Option<Arc<dyn Tunnel>>,
     device: Option<Arc<dyn UsbDevice>>,
+    wait_served: Option<Arc<ServedSignal>>,
 }
 
 impl Cleanup {
@@ -112,6 +157,9 @@ impl Cleanup {
         }
         if let Some(device) = self.device {
             device.close();
+        }
+        if let Some(done) = self.wait_served {
+            done.wait();
         }
     }
 }
@@ -140,6 +188,7 @@ impl Table {
             tunnel: entry.tunnel.take(),
             // A serving thread closes the device once its tunnel closes.
             device: (!entry.serving).then(|| entry.device.clone()),
+            wait_served: entry.done.take(),
         };
         let ended = self
             .entries
@@ -189,12 +238,14 @@ impl Inner {
             Ok(tunnel) => tunnel,
             Err(e) => return failed(self, format!("the USB tunnel did not open: {e}")),
         };
+        let served_signal = Arc::new(ServedSignal::new(std::thread::current().id()));
         let device = {
             let mut table = self.table();
             match table.active(request_id) {
                 Some(entry) => {
                     entry.tunnel = Some(tunnel.clone());
                     entry.serving = true;
+                    entry.done = Some(served_signal.clone());
                     entry.device.clone()
                 }
                 // Detached while it opened.
@@ -206,6 +257,7 @@ impl Inner {
         };
         // Closes the tunnel and the device when it returns.
         let served = serve(tunnel, device);
+        served_signal.finish();
         let cleanup = {
             let mut table = self.table();
             match served {
@@ -321,6 +373,7 @@ impl Forwarder {
                 device,
                 tunnel: None,
                 serving: false,
+                done: None,
             });
             (request_id, message)
         };

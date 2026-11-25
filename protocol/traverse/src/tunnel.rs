@@ -621,7 +621,9 @@ impl Tunnel {
                 }
             });
         if spawned.is_err() {
-            self.shared.inner.lock().unwrap().reliable.reset(stream);
+            let mut inner = self.shared.inner.lock().unwrap();
+            inner.connections.remove(&stream);
+            inner.reliable.reset(stream);
         }
     }
 }

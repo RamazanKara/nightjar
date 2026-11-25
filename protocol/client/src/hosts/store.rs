@@ -320,12 +320,14 @@ impl HostStore {
     /// when the entry is new or its persistent fields changed. Preserves Desktop-owned
     /// `SharedHostFields`, `pinned_endpoint`, `alias`, and `extra` when incoming leaves them empty.
     pub fn upsert(&self, entry: HostEntry) -> io::Result<bool> {
+        if entry.shared.unique_id.is_empty() {
+            return Ok(false);
+        }
         let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         let mut entries: Vec<HostEntry> = self.read_kept_unlocked(|_| {});
-        if !entry.shared.unique_id.is_empty()
-            && let Some(existing) = entries
-                .iter_mut()
-                .find(|e| e.shared.unique_id == entry.shared.unique_id)
+        if let Some(existing) = entries
+            .iter_mut()
+            .find(|e| e.shared.unique_id == entry.shared.unique_id)
         {
             let merged = merge_preserving_desktop(existing, entry);
             if *existing == merged {
@@ -345,12 +347,14 @@ impl HostStore {
     /// `shared.server_certificate`, and `shared.internet_play` while preserving unknown `extra`
     /// JSON keys from an existing entry.
     pub fn replace_entry(&self, mut entry: HostEntry) -> io::Result<bool> {
+        if entry.shared.unique_id.is_empty() {
+            return Ok(false);
+        }
         let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         let mut entries: Vec<HostEntry> = self.read_kept_unlocked(|_| {});
-        if !entry.shared.unique_id.is_empty()
-            && let Some(existing) = entries
-                .iter_mut()
-                .find(|e| e.shared.unique_id == entry.shared.unique_id)
+        if let Some(existing) = entries
+            .iter_mut()
+            .find(|e| e.shared.unique_id == entry.shared.unique_id)
         {
             for (key, value) in &existing.extra {
                 entry

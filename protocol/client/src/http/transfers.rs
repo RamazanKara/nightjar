@@ -128,11 +128,37 @@ fn rename_new(from: &Path, to: &Path) -> std::io::Result<()> {
     link_and_unlink(from, to)
 }
 
-/// A link fails on an existing target, so nothing is replaced.
+/// A link fails on an existing target, so nothing is replaced. Where the filesystem or sandbox
+/// forbids hard links, falls back to creating `to` exclusively if absent (or failing `AlreadyExists`).
 #[cfg(unix)]
 fn link_and_unlink(from: &Path, to: &Path) -> std::io::Result<()> {
-    std::fs::hard_link(from, to)?;
-    std::fs::remove_file(from)
+    match std::fs::hard_link(from, to) {
+        Ok(()) => std::fs::remove_file(from),
+        Err(e)
+            if matches!(
+                e.kind(),
+                std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::Unsupported
+            ) || matches!(
+                e.raw_os_error(),
+                Some(libc::EPERM | libc::EXDEV | libc::EOPNOTSUPP | libc::ENOSYS | libc::EINVAL)
+            ) =>
+        {
+            let mut created = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(to)?;
+            let mut src = std::fs::File::open(from)?;
+            if let Err(copy_err) = std::io::copy(&mut src, &mut created).and_then(|_| created.sync_all()) {
+                drop(created);
+                let _ = std::fs::remove_file(to);
+                return Err(copy_err);
+            }
+            drop(created);
+            let _ = std::fs::remove_file(from);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 impl HostClient {

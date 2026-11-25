@@ -95,6 +95,8 @@ struct DeviceState {
     keys: Keys,
     tag: [u8; 8],
     published: Option<(u64, Millis, Vec<SocketAddr>)>,
+    publish_retry_at: Option<Millis>,
+    publish_failures: u32,
     last_poll: Option<Millis>,
     /// A look for its record is under way.
     polling: bool,
@@ -232,6 +234,8 @@ impl HostService {
                         keys,
                         tag,
                         published: None,
+                        publish_retry_at: None,
+                        publish_failures: 0,
                         last_poll: None,
                         polling: false,
                         heard: None,

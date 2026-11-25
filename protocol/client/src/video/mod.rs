@@ -560,12 +560,12 @@ impl VideoReceiver {
         if datagram.len() < 12 + header {
             return;
         }
-        // Every datagram counts as arrived, also one the queue drops unopened below.
-        if let Some(tally) = self.feedback.as_mut() {
-            let id = rubylight_protocol::transport_feedback::packet_id(
-                datagram,
-                self.decryptor.is_some(),
-            );
+        // Unencrypted streams count every arrived datagram before queue filtering; encrypted
+        // streams must authenticate first so forged UDP datagrams cannot move the feedback base.
+        if self.decryptor.is_none()
+            && let Some(tally) = self.feedback.as_mut()
+        {
+            let id = rubylight_protocol::transport_feedback::packet_id(datagram, false);
             if let Some(report) = id.and_then(|id| tally.packet(id, now_us)) {
                 sink.signal(VideoSignal::TransportFeedback(report));
             }
@@ -586,7 +586,15 @@ impl VideoReceiver {
         let mut buf = self.pools.packet();
         let len = if let Some(decryptor) = &self.decryptor {
             match decryptor.open(datagram, &mut buf) {
-                Some(len) => len,
+                Some(len) => {
+                    if let Some(tally) = self.feedback.as_mut() {
+                        let id = rubylight_protocol::transport_feedback::packet_id(datagram, true);
+                        if let Some(report) = id.and_then(|id| tally.packet(id, now_us)) {
+                            sink.signal(VideoSignal::TransportFeedback(report));
+                        }
+                    }
+                    len
+                }
                 None => {
                     self.stats.decrypt_failures += 1;
                     self.pools.recycle_packet(buf);

@@ -4,6 +4,8 @@ use super::*;
 use crate::stun;
 
 const STUN_RETRY_MIN: Millis = 5_000;
+const PUBLISH_RETRY_MIN: Millis = 5_000;
+const PUBLISH_RETRY_MAX: Millis = 60_000;
 
 pub(super) fn stun_retry_delay(ok: bool, failures: u32) -> (Millis, u32) {
     if ok {
@@ -109,6 +111,8 @@ impl HostService {
         if changed {
             for state in self.shared.devices.lock().unwrap().iter_mut() {
                 state.published = None;
+                state.publish_retry_at = None;
+                state.publish_failures = 0;
             }
         }
         ok
@@ -142,6 +146,7 @@ impl HostService {
             .iter()
             .filter(|state| {
                 !public.is_empty()
+                    && state.publish_retry_at.is_none_or(|at| now >= at)
                     && match &state.published {
                         None => true,
                         Some((at_window, at, endpoints)) => {
@@ -235,10 +240,18 @@ impl HostService {
                     .node
                     .put(&record.item(&keys, window, crate::crypto::random()));
             let mut devices = self.shared.devices.lock().unwrap();
-            if let Some(state) = devices.iter_mut().find(|state| state.device.id == id)
-                && confirmed > 0
-            {
-                state.published = Some((window, now, public.clone()));
+            if let Some(state) = devices.iter_mut().find(|state| state.device.id == id) {
+                if confirmed > 0 {
+                    state.published = Some((window, now, public.clone()));
+                    state.publish_retry_at = None;
+                    state.publish_failures = 0;
+                } else {
+                    let delay = PUBLISH_RETRY_MIN
+                        .saturating_mul(1 << state.publish_failures.min(4))
+                        .min(PUBLISH_RETRY_MAX);
+                    state.publish_failures = state.publish_failures.saturating_add(1);
+                    state.publish_retry_at = Some(now + delay);
+                }
             }
             drop(devices);
             self.shared.status.lock().unwrap().dht_error = (confirmed == 0).then(|| {
@@ -290,7 +303,6 @@ impl HostService {
         if state.answered == Some(record.session) {
             return;
         }
-        state.answered = Some(record.session);
         let peer = Peer::of(state);
         drop(devices);
         // A punch may be starting this very path: one start per device session, so no two
@@ -300,7 +312,13 @@ impl HostService {
             return;
         }
         let candidates = punch::candidates(&record.endpoints, record.nat);
-        self.open(&peer, record.session, record.time, candidates);
+        let opened = self.open(&peer, record.session, record.time, candidates);
         self.shared.starting.lock().unwrap().remove(&claim);
+        if opened.is_some() || self.is_ended(peer.tag, record.session) {
+            let mut devices = self.shared.devices.lock().unwrap();
+            if let Some(state) = devices.iter_mut().find(|state| state.device.id == id) {
+                state.answered = Some(record.session);
+            }
+        }
     }
 }

@@ -90,7 +90,20 @@ pub(crate) fn pair(
             one_time_pin_auth(pin, &salt, passphrase)
         ));
     }
-    let (root, ok) = paired(&transport.pair_command(&query, passphrase.is_some())?)?;
+    let reply = match transport.pair_command(&query, passphrase.is_some()) {
+        Ok(reply) => reply,
+        Err(err) => {
+            let _ = transport.cancel_pairing();
+            return Err(err);
+        }
+    };
+    let (root, ok) = match paired(&reply) {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            let _ = transport.cancel_pairing();
+            return Err(err);
+        }
+    };
     if !ok {
         return Ok(PairResult::Failed(PairFailure::Declined(
             PairStep::ServerCertificate,

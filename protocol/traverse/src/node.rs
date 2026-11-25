@@ -342,13 +342,16 @@ impl Node {
     pub fn put(&self, item: &Item) -> usize {
         let (_, writable) = self.get(&item.key, &item.salt);
         let (sender, answers) = mpsc::channel::<DhtAnswer>();
+        let mut expected: std::collections::HashMap<Tid, SocketAddr> =
+            std::collections::HashMap::new();
         let mut registered = Vec::new();
         {
             let mut state = self.shared.state.lock().unwrap();
-            for _ in &writable {
+            for (address, _) in &writable {
                 let tid = state.next_tid.to_be_bytes();
                 state.next_tid = state.next_tid.wrapping_add(1);
                 state.dht.insert(tid, sender.clone());
+                expected.insert(tid, *address);
                 registered.push(tid);
             }
         }
@@ -359,7 +362,12 @@ impl Node {
         let mut confirmed = 0;
         while confirmed < registered.len() && Instant::now() < deadline {
             match answers.recv_timeout(Duration::from_millis(100)) {
-                Ok((_, _, Message::Reply { .. })) => confirmed += 1,
+                Ok((tid, from, Message::Reply { .. }))
+                    if expected.get(&tid) == Some(&from) =>
+                {
+                    expected.remove(&tid);
+                    confirmed += 1;
+                }
                 Ok(_) | Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
@@ -391,7 +399,22 @@ fn receive(shared: Arc<Shared>) {
         let (length, from) = match received {
             Ok(received) => received,
             // Timeouts, and on Windows the ICMP port-unreachable a punch can draw.
-            Err(_) => continue,
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::WouldBlock
+                        | io::ErrorKind::TimedOut
+                        | io::ErrorKind::Interrupted
+                        | io::ErrorKind::ConnectionReset
+                        | io::ErrorKind::ConnectionRefused
+                ) =>
+            {
+                continue;
+            }
+            Err(_) => {
+                thread::sleep(Duration::from_millis(50));
+                continue;
+            }
         };
         let datagram = &mut buffer[..length];
         if crate::wire::is_wire(datagram) {

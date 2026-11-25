@@ -39,6 +39,8 @@ fn a_device_that_is_not_trying_is_looked_for_less_often() {
         keys,
         device,
         published: None,
+        publish_retry_at: None,
+        publish_failures: 0,
         last_poll: None,
         polling: false,
         heard: None,

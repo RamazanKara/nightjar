@@ -353,6 +353,8 @@ fn failure(e: io::Error) -> Failure {
         io::ErrorKind::ConnectionReset | io::ErrorKind::ConnectionRefused => Failure::Retry,
         // WSA_IO_PENDING, which some Windows systems return instead of a timeout.
         _ if cfg!(windows) && e.raw_os_error() == Some(997) => Failure::Timeout,
+        // WSAENETRESET (10052): TTL expired / interface reset on a connected UDP socket.
+        _ if cfg!(windows) && e.raw_os_error() == Some(10052) => Failure::Retry,
         _ => Failure::Fatal(e),
     }
 }

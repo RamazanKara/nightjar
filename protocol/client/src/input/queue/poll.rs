@@ -42,6 +42,12 @@ impl InputQueue {
             if !force {
                 let entry = &self.entries[index];
                 if matches!(entry, Entry::Text(_)) && !contact_lost {
+                    if self
+                        .text_ready_at
+                        .is_some_and(|at| now > at + TEXT_SETTLE)
+                    {
+                        self.text_ready_at = None;
+                    }
                     let at = *self.text_ready_at.get_or_insert(now + TEXT_SETTLE);
                     if now < at {
                         wake = Some(wake.map_or(at, |w| w.min(at)));
@@ -96,6 +102,10 @@ impl InputQueue {
                         self.last_pen = Some(now);
                         self.emit(latest, contact_lost, out);
                         continue;
+                    }
+                    if let InputEvent::Keyboard { .. } = pending.event {
+                        // A key event means Windows needs `TEXT_SETTLE` before later text.
+                        self.text_ready_at = None;
                     }
                     self.emit(pending, contact_lost, out);
                 }
@@ -168,7 +178,9 @@ impl InputQueue {
                     );
                 }
                 Entry::Text(text) => {
-                    self.text_ready_at = None;
+                    // Keep the current settle window alive across bursts of text so consecutive
+                    // text commits flow immediately without re-waiting `TEXT_SETTLE` per commit.
+                    self.text_ready_at = Some(now);
                     if contact_lost {
                         // Text typed while the host is silent would arrive late.
                         self.note_held();

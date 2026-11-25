@@ -489,11 +489,9 @@ impl ControlClient {
     /// Runs roaming: the datagrams set aside, a network change or a host silence, the
     /// timers, and the datagrams to send. Returns the next timer.
     fn roam(&mut self, now: Instant) -> Option<Instant> {
+        self.install_next_socket();
         // With roaming off no socket moves, no roaming datagram is kept and none goes out.
         let roaming = self.roaming.as_mut()?;
-        if let Some(socket) = lock(&self.shared.next_socket).take() {
-            self.host.socket_mut().replace(socket);
-        }
         let inbox = std::mem::take(&mut self.host.socket_mut().roam_inbox);
         for datagram in inbox {
             // A dropped datagram is never answered; an attempt left without answers fails.

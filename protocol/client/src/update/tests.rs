@@ -482,6 +482,7 @@ fn download_android_apk_checks_sums_first_verifies_sha256_size_and_cancel() {
         false,
         &dir,
         None,
+        false,
         &mut |done, total| {
             if done > 0 && total == apk_bytes.len() as u64 {
                 saw_clone.store(true, Ordering::SeqCst);
@@ -505,6 +506,7 @@ fn download_android_apk_checks_sums_first_verifies_sha256_size_and_cancel() {
             true,
             &temp_dir("missing-sum"),
             None,
+            false,
             &mut |_, _| {}
         ),
         Err(UpdateError::ChecksumEntryMissing)
@@ -523,6 +525,7 @@ fn download_android_apk_checks_sums_first_verifies_sha256_size_and_cancel() {
             false,
             &tampered_dir,
             None,
+            false,
             &mut |_, _| {}
         ),
         Err(UpdateError::ChecksumMismatch)
@@ -542,6 +545,7 @@ fn download_android_apk_checks_sums_first_verifies_sha256_size_and_cancel() {
             false,
             &temp_dir("size"),
             None,
+            false,
             &mut |_, _| {}
         ),
         Err(UpdateError::SizeMismatch)
@@ -558,6 +562,7 @@ fn download_android_apk_checks_sums_first_verifies_sha256_size_and_cancel() {
             false,
             &temp_dir("zero-size"),
             None,
+            false,
             &mut |_, _| {}
         ),
         Err(UpdateError::SizeMismatch)
@@ -583,6 +588,7 @@ fn download_android_apk_checks_sums_first_verifies_sha256_size_and_cancel() {
         false,
         &slow_dir,
         Some(&cancel),
+        false,
         &mut |_, _| {},
     );
     assert_eq!(res, Err(UpdateError::Cancelled));
@@ -658,6 +664,7 @@ fn download_android_apk_rejects_unsafe_asset_name_before_network_or_cleanup() {
             false,
             &dir,
             None,
+            false,
             &mut |_, _| {},
         );
         assert!(
@@ -753,4 +760,20 @@ fn exchange_strips_auth_headers_on_cross_origin_redirect() {
     assert!(!second_req.contains("secret-key"), "Authorization leaked across origins: {second_req}");
     assert!(!second_req.contains("secret-client"), "Client-ID leaked across origins: {second_req}");
     assert!(second_req.contains("Accept: application/json\r\n"));
+}
+
+#[test]
+fn download_android_apk_rejects_unpinned_release_urls() {
+    struct Fail;
+    impl Transport for Fail {
+        fn get(&self, _: &Url, _: bool) -> Result<Response, String> {
+            Err("must reject unpinned URLs before network".into())
+        }
+    }
+    let rel_json = r#"{"tag_name":"v2.0.0","assets":[{"name":"nightjar-2.0.0.apk","size":10,"browser_download_url":"https://github.com/evil/nightjar/releases/download/v2.0.0/nightjar-2.0.0.apk"},{"name":"SHA256SUMS-2.0.0.txt","size":10,"browser_download_url":"https://github.com/RamazanKara/nightjar/releases/download/v2.0.0/SHA256SUMS-2.0.0.txt"}]}"#;
+    let rel = Release::parse(rel_json).unwrap();
+    let dir = temp_dir("unpinned");
+    let res = download_android_apk_with(&Fail, download_host, &rel, false, &dir, None, true, &mut |_, _| {});
+    assert!(matches!(res, Err(UpdateError::Address(_))), "{res:?}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

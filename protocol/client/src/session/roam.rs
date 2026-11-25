@@ -166,15 +166,16 @@ impl State {
     /// hints only while armed. After a move that left some sockets behind, any route moves.
     fn route_moves(&mut self, route: SocketAddr, platform_hints: bool, now: Instant) -> bool {
         if self.retry {
-            self.route = route;
             return true;
         }
         if same_address(route, self.route) {
             return false;
         }
-        self.route = route;
-        !stays_on(self.local, route)
-            && !self.held
+        if stays_on(self.local, route) {
+            self.route = route;
+            return false;
+        }
+        !self.held
             && !(platform_hints && !self.armed_until.is_some_and(|until| now < until))
     }
 }
@@ -293,7 +294,6 @@ impl Roamer {
         state.arm(Instant::now());
         match net::local_address_toward(self.remote) {
             Ok(route) => {
-                state.route = route;
                 if !stays_on(state.local, route) {
                     // A move that fails leaves the sockets where the route no longer goes.
                     return if self.roam(&mut state, route) {
@@ -302,6 +302,7 @@ impl Roamer {
                         NetworkChange::CannotContinue
                     };
                 }
+                state.route = route;
                 // The route toward the host still leaves where the sockets are: nothing
                 // moved, and a host that went silent starts its own attempt.
                 self.shared.log(&format!(
@@ -429,7 +430,7 @@ impl Roamer {
     ) -> Result<(), MoveError> {
         let warn = |m: &str| self.shared.warn(m);
         let control_socket = control
-            .then(|| self.control.bind_move(local.ip()))
+            .then(|| self.control.bind_move_addr(local))
             .transpose()?;
         let mut sockets = Vec::with_capacity(self.paths.len());
         for path in &self.paths {
@@ -463,6 +464,7 @@ impl Roamer {
         }
         drop(microphone);
         state.local = local;
+        state.route = local;
         match control_socket {
             // The media moved already: the control stream is the one left behind.
             Some(socket) => self

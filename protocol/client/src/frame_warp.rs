@@ -581,8 +581,8 @@ impl Predictor {
         self.shift(frame, now_us, true)
     }
 
-    /// The shift a picture would get now, for deciding whether to draw it again: not
-    /// counted, so the statistics show only what was drawn.
+    /// The shift a picture would get now, for deciding whether to draw it again: still advances
+    /// the fade weight to `now_us`, while excluded from the drawn statistics.
     pub fn peek(&mut self, frame: u32, now_us: u64) -> Warp {
         self.shift(frame, now_us, false)
     }

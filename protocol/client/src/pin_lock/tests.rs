@@ -693,3 +693,19 @@ fn failed_set_pin_and_hand_over_keep_prior_memory_and_lockout_intact() {
     drop(store);
     std::fs::remove_dir_all(dir).ok();
 }
+
+#[test]
+fn failed_throttle_write_returns_unavailable() {
+    let (store, _, dir) = store("throttle-write-fail");
+    store.set_pin_with(b"1234", 1_000).unwrap();
+    store.set_mode(Mode::App);
+    store.flush();
+
+    std::fs::remove_file(dir.join(FILE)).unwrap();
+    std::fs::create_dir(dir.join(FILE)).unwrap();
+    std::fs::write(dir.join(FILE).join("blocker"), b"x").unwrap();
+
+    assert_eq!(store.try_pin(b"0000"), Outcome::Unavailable);
+    drop(store);
+    std::fs::remove_dir_all(dir).ok();
+}

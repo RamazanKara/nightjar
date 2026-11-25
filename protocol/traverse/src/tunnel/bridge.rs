@@ -35,9 +35,16 @@ impl Tunnel {
             };
             self.flush();
             let tunnel = self.clone();
-            let _ = thread::Builder::new()
+            let spawned = thread::Builder::new()
                 .name("internet play connection".into())
                 .spawn(move || tunnel.bridge_connection(stream, tcp, writes, None));
+            if spawned.is_err() {
+                let mut inner = self.shared.inner.lock().unwrap();
+                inner.connections.remove(&stream);
+                inner.reliable.reset(stream);
+                drop(inner);
+                self.flush();
+            }
         }
     }
 
@@ -54,17 +61,29 @@ impl Tunnel {
         mark: Option<Arc<peers::Mark>>,
     ) {
         let _ = tcp.set_nodelay(true);
+        let _ = tcp.set_write_timeout(Some(Duration::from_secs(30)));
         if let Ok(reading) = tcp.try_clone() {
             let tunnel = self.clone();
             let held = mark.clone();
-            let _ = thread::Builder::new()
+            let spawned = thread::Builder::new()
                 .name("internet play read".into())
                 .spawn(move || {
                     tunnel.read_connection(stream, reading);
                     drop(held);
                 });
+            if spawned.is_err() {
+                let mut inner = self.shared.inner.lock().unwrap();
+                inner.connections.remove(&stream);
+                inner.reliable.reset(stream);
+                drop(inner);
+                self.flush();
+                return;
+            }
         } else {
-            self.shared.inner.lock().unwrap().reliable.reset(stream);
+            let mut inner = self.shared.inner.lock().unwrap();
+            inner.connections.remove(&stream);
+            inner.reliable.reset(stream);
+            drop(inner);
             self.flush();
             return;
         }

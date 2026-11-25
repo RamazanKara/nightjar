@@ -325,3 +325,48 @@ fn library_memo_invalidates_when_source_metadata_or_session_changes() {
     assert_eq!(memo.merges(), 5);
     assert!(merged_running.shown()[0].running());
 }
+
+#[test]
+fn zero_installed_chips_distinct_install_ids_and_newer_recents_follow_policy() {
+    let lib_uninstalled = Library {
+        revision: "r1".into(),
+        games: vec![game("id-old", 42, "Old", None, None, Some(false), false)],
+    };
+    let mut lp = BTreeMap::new();
+    lp.insert("id-old".into(), 100u64);
+    let mut s1 = source(1, "pc-1", "PC", true, &lib_uninstalled);
+    s1.last_played = Some(&lp);
+    let entries = merge_library(&[s1]);
+
+    // DA-L2: when nothing is installed, emit only NotInstalled (never Installed (0)).
+    let chips = library_filters(&entries);
+    assert!(chips.iter().all(|c| c.filter != LibraryFilter::Installed));
+    assert!(chips.iter().any(|c| c.filter == LibraryFilter::NotInstalled && c.count == 1));
+
+    // DA-L3: distinct non-empty install_ids must not match by app_id fallback.
+    let lib_both = Library {
+        revision: "r2".into(),
+        games: vec![game("id-new", 42, "New", None, None, Some(true), false)],
+    };
+    let s2 = source(1, "pc-1", "PC", true, &lib_both);
+    let starred = favourite_games(
+        &[s2],
+        &[Favourite {
+            host: "pc-1".into(),
+            install_id: "id-other".into(),
+            app_id: 42,
+            title: "Other".into(),
+        }],
+    );
+    assert!(starred.is_empty());
+
+    // DA-L4: last_played prefers newer local recent timestamp over stale store timestamp.
+    let recents = vec![Recent {
+        host: "pc-1".into(),
+        install_id: "id-old".into(),
+        app_id: 42,
+        title: "Old".into(),
+        at: 250,
+    }];
+    assert_eq!(last_played(&entries[0], &[s1], &recents), Some(250));
+}

@@ -711,6 +711,60 @@ fn bytes_held_past_recycling_are_never_reused() {
     assert!(reused || after.data().as_ptr() == address, "unheld storage comes back");
 }
 
+#[test]
+fn forged_encrypted_datagram_does_not_move_transport_feedback_base() {
+    use aes_gcm::aead::generic_array::GenericArray;
+    use aes_gcm::aead::{AeadInPlace, KeyInit};
+    use rubylight_protocol::transport_feedback::TransportFeedback;
+
+    let key = [7u8; 16];
+    let cipher = aes_gcm::Aes128Gcm::new(GenericArray::from_slice(&key));
+    let mut host = Host::new();
+    let mut cfg = config(0x1000);
+    cfg.encryption_key = Some(key);
+    let mut rx = VideoReceiver::new(cfg);
+    rx.enable_transport_feedback();
+    let mut events = Vec::new();
+    let payload = vec![0x5a; 2000];
+    let packets = host.frame(&payload, 2);
+    let mut seq = 0u64;
+    let encrypt = |mut pkt: Vec<u8>, n: u64, frame_num: u32| {
+        let mut iv = [0u8; 12];
+        iv[..8].copy_from_slice(&n.to_le_bytes());
+        let tag = cipher
+            .encrypt_in_place_detached(GenericArray::from_slice(&iv), &[], &mut pkt)
+            .unwrap();
+        let mut out = iv.to_vec();
+        out.extend_from_slice(&frame_num.to_le_bytes());
+        out.extend_from_slice(&tag);
+        out.extend_from_slice(&pkt);
+        out
+    };
+    for pkt in packets {
+        rx.receive(&encrypt(pkt, seq, 1), 1_000 + seq * 100, &mut events);
+        seq += 1;
+    }
+    // Forged datagram advertising a huge packet id (+20_000) and current frame fails GCM auth and is ignored by tally.
+    let mut forged = vec![0u8; 64];
+    forged[..2].copy_from_slice(&20_000u16.to_le_bytes());
+    forged[12..16].copy_from_slice(&2u32.to_le_bytes());
+    rx.receive(&forged, 2_000, &mut events);
+    for pkt in host.frame(&payload, 2) {
+        rx.receive(&encrypt(pkt, seq, 2), 61_000, &mut events);
+        seq += 1;
+    }
+    assert_eq!(rx.stats().decrypt_failures, 1);
+    let reports: Vec<&TransportFeedback> = events
+        .iter()
+        .filter_map(|e| match e {
+            VideoEvent::Signal(VideoSignal::TransportFeedback(r)) => Some(r),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].base, 0);
+}
+
 mod dolby_vision;
 pub(crate) mod early_chunks;
 mod multi_block;

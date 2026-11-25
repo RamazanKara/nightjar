@@ -176,19 +176,19 @@ pub fn library_filters(entries: &[Entry]) -> Vec<FilterChip> {
     }];
     let installed_count = entries.iter().filter(|e| e.installed()).count();
     let not_installed_count = entries.len() - installed_count;
-    if not_installed_count > 0 {
+    if installed_count > 0 && not_installed_count > 0 {
         chips.push(FilterChip {
             filter: LibraryFilter::Installed,
             store_name: None,
             count: installed_count,
         });
-        if installed_count > 0 {
-            chips.push(FilterChip {
-                filter: LibraryFilter::NotInstalled,
-                store_name: None,
-                count: not_installed_count,
-            });
-        }
+    }
+    if not_installed_count > 0 {
+        chips.push(FilterChip {
+            filter: LibraryFilter::NotInstalled,
+            store_name: None,
+            count: not_installed_count,
+        });
     }
 
     let mut stores: BTreeMap<String, (String, usize)> = BTreeMap::new();
