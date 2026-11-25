@@ -166,6 +166,7 @@ pub struct RefreshSlot {
     pub vsync_ns: i64,
     pub target_ns: i64,
     pub shared: bool,
+    pub hold_ns: i64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -186,6 +187,22 @@ impl RefreshSlots {
         self.interval_ns = 0;
     }
 
+    fn next_claimed_vsync(&self, vsync_ns: i64, iv: i64) -> i64 {
+        let (iv128, v128) = (i128::from(iv), i128::from(vsync_ns));
+        let off = i128::from(self.last_vsync_ns) + iv128 - v128 + iv128 / 2;
+        (v128 + off.div_euclid(iv128) * iv128).clamp(i128::from(i64::MIN), i128::from(i64::MAX))
+            as i64
+    }
+
+    pub fn earliest_claimed(&self, release: i64, vsync_ns: i64, iv: i64, lead: i64) -> bool {
+        if vsync_ns <= 0 || iv <= 0 || self.last_vsync_ns == 0 || iv != self.interval_ns {
+            return false;
+        }
+        let earliest = first_vsync_ns(release, vsync_ns, iv, lead);
+        let next = self.next_claimed_vsync(vsync_ns, iv);
+        next.saturating_sub(iv) >= earliest
+    }
+
     pub fn plan(&mut self, release: i64, vsync_ns: i64, iv: i64, lead: i64) -> RefreshSlot {
         if vsync_ns <= 0 || iv <= 0 {
             self.reset();
@@ -199,10 +216,7 @@ impl RefreshSlots {
         let (claimed, vsync) = if self.last_vsync_ns == 0 {
             (0_i64, earliest)
         } else {
-            let (iv128, v128) = (i128::from(iv), i128::from(vsync_ns));
-            let off = i128::from(self.last_vsync_ns) + iv128 - v128 + iv128 / 2;
-            let next = (v128 + off.div_euclid(iv128) * iv128)
-                .clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64;
+            let next = self.next_claimed_vsync(vsync_ns, iv);
             (next.saturating_sub(iv), earliest.max(next))
         };
         if self.last_vsync_ns != 0 && i128::from(vsync) - i128::from(earliest) >= 2 * i128::from(iv)
@@ -213,6 +227,7 @@ impl RefreshSlots {
                 vsync_ns: claimed,
                 target_ns: claimed - iv / 2,
                 shared: true,
+                hold_ns: claimed.saturating_sub(earliest).max(0),
             };
         }
         self.last_vsync_ns = vsync;
@@ -221,6 +236,7 @@ impl RefreshSlots {
             vsync_ns: vsync,
             target_ns: vsync - iv / 2,
             shared: false,
+            hold_ns: vsync.saturating_sub(earliest).max(0),
         }
     }
 
@@ -592,20 +608,40 @@ mod tests {
         assert!(!refresh_slots_applies(1_000_000_000 / 144, iv));
         assert!(adaptive_in_use(true, false, false) && !adaptive_in_use(true, false, true));
         let mut slots = RefreshSlots::new();
+        assert!(!slots.earliest_claimed(vsync + 1_000_000, vsync, iv, lead));
         let s1 = slots.plan(vsync + 1_000_000, vsync, iv, lead);
+        assert_eq!(s1.hold_ns, 0);
+        assert!(slots.earliest_claimed(vsync + 2_000_000, vsync, iv, lead));
+        assert!(!slots.earliest_claimed(vsync + iv + 1_000_000, vsync, iv, lead));
         let s2 = slots.plan(vsync + 2_000_000, vsync, iv, lead);
+        assert_eq!(s2.hold_ns, iv);
+        assert!(slots.earliest_claimed(vsync + 3_000_000, vsync, iv, lead));
+        assert!(slots.earliest_claimed(vsync + iv + 1_000_000, vsync, iv, lead));
+        assert!(!slots.earliest_claimed(vsync + 2 * iv + 1_000_000, vsync, iv, lead));
+        assert!(!slots.earliest_claimed(vsync + 3_000_000, vsync, 16_666_667, lead));
         let s3 = slots.plan(vsync + 3_000_000, vsync, iv, lead);
         assert_eq!(s1.vsync_ns, vsync + 2 * iv);
         assert_eq!(s2.vsync_ns, s1.vsync_ns + iv);
-        assert!(!s2.shared && s3.shared && s3.vsync_ns == s2.vsync_ns);
+        assert!(!s2.shared && s3.shared && s3.vsync_ns == s2.vsync_ns && s3.hold_ns == iv);
+        let invalid = slots.plan(vsync + 4_000_000, 0, iv, lead);
+        assert_eq!(invalid, RefreshSlot::default());
+        assert_eq!(invalid.hold_ns, 0);
+        assert!(!slots.earliest_claimed(vsync + 4_000_000, vsync, iv, lead));
+        assert!(!slots.earliest_claimed(vsync + 4_000_000, 0, iv, lead));
+        assert!(!slots.earliest_claimed(vsync + 4_000_000, vsync, 0, lead));
         slots.reset();
         assert!(slots.planned() == 2 && slots.shared() == 1);
         let mut drift = RefreshSlots::new();
         let jitter = [0_i64, 400_000, -350_000, 250_000, -400_000, 150_000];
         for f in 0..120_i64 {
             let live = vsync + f * (iv - 50_000) + jitter[(f as usize) % jitter.len()];
+            assert!(!drift.earliest_claimed(live + 1_000_000, live, iv, lead));
             let slot = drift.plan(live + 1_000_000, live, iv, lead);
-            assert!(!slot.shared && (slot.vsync_ns - live).rem_euclid(iv) == 0);
+            assert!(
+                !slot.shared && slot.hold_ns == 0 && (slot.vsync_ns - live).rem_euclid(iv) == 0
+            );
+            let shifted = live + 300_000;
+            assert!(drift.earliest_claimed(shifted + 1_500_000, shifted, iv, lead));
         }
     }
 

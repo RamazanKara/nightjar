@@ -60,7 +60,7 @@ public final class RedactedLog {
             "Display luminance", "Display modes changed", "Display refresh policy:", "Refresh drop recovery:", "Microphone", "PC stream profiles", "Present mode",
             "PyroWave", "Phase lock", "Low latency", "Automatic codec", "Streaming engine", "Device controls bitrate",
             "DualSense USB ", "USB controller announcement ", "Audio output:", "Audio track configuration:",
-            "Video receive buffer"};
+            "Video receive buffer", "Stream summary"};
 
     public RedactedLog() {
         this(null);

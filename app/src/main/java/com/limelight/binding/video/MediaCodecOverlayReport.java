@@ -10,6 +10,7 @@ import android.media.MediaFormat;
 import android.os.Build;
 import android.os.SystemClock;
 
+import com.limelight.LimeLog;
 import com.limelight.R;
 import com.limelight.nvstream.jni.MoonBridge;
 import com.limelight.nvstream.jni.StreamEngine;
@@ -44,7 +45,7 @@ final class MediaCodecOverlayReport {
         String vulkanLine = vulkan != null ? vulkan.getDiagnosticsText() : null;
         if (vulkanLine == null) vulkanLine = r.vulkanHelper.vulkanDiagnostics;
         r.vulkanHelper.vulkanDiagnostics = null;
-        RecentStreams.add(Instant.ofEpochMilli(startMs).truncatedTo(ChronoUnit.SECONDS) + " " +
+        String row = Instant.ofEpochMilli(startMs).truncatedTo(ChronoUnit.SECONDS) + " " +
                 (SystemClock.uptimeMillis() - r.streamStartUptimeMs) / 1000 + " s" +
                 " | " + (pyroWave ? "PyroWave" : r.activeDecoderName + " " + configuredMime(r)) +
                 " | " + r.initialWidth + "x" + r.initialHeight + " " + r.refreshRate + " fps" +
@@ -65,9 +66,27 @@ final class MediaCodecOverlayReport {
                 ", input buffer " + r.telemetry.inputBufferBytes + " B, " + r.telemetry.receiveBufferStats() +
                 " | output " + (output == null ? "none" : FullRangePolicy.outputDescription(output)) +
                 (vulkanLine != null ? " | " + vulkanLine : "") +
-                " | hottest " + thermalName(r.hottestThermalLevel) + ", thermal protection " + onOff(r.prefs.thermalProtection));
+                " | hottest " + thermalName(r.hottestThermalLevel) + ", thermal protection " + onOff(r.prefs.thermalProtection);
+        RecentStreams.add(row);
+        logStreamSummary(row);
         r.repairCounts = null;
         r.hottestThermalLevel = ThermalMonitor.NORMAL;
+    }
+
+    /** The report log keeps 300 characters a line: the row goes in lines of whole " | " parts. */
+    private static void logStreamSummary(String row) {
+        String[] parts = row.split(" \\| ");
+        StringBuilder line = new StringBuilder();
+        boolean continued = false;
+        for (int i = 0; i < parts.length; i++) {
+            if (line.length() > 0 && line.length() + 3 + parts[i].length() > 270) {
+                LimeLog.info("Stream summary: " + (continued ? "| " : "") + line + " |");
+                line.setLength(0);
+                continued = true;
+            }
+            line.append(line.length() > 0 ? " | " : "").append(parts[i]);
+        }
+        LimeLog.info("Stream summary: " + (continued ? "| " : "") + line);
     }
 
     private static String describePacing(MediaCodecDecoderRenderer r) {
@@ -112,6 +131,14 @@ final class MediaCodecOverlayReport {
 
     private static String onOff(boolean on) {
         return on ? "on" : "off";
+    }
+
+    static String formatPacingDropsLine(String drops, long sharedSlots) {
+        boolean hasDrops = drops != null && !drops.isEmpty() && !"none".equals(drops);
+        if (!hasDrops && sharedSlots <= 0) return null;
+        if (!hasDrops) return "Shared refresh slots: " + sharedSlots;
+        if (sharedSlots > 0) return "Discarded before display: " + drops + " | shared refresh " + sharedSlots;
+        return "Discarded before display: " + drops;
     }
 
     static void updatePerformanceOverlay(MediaCodecDecoderRenderer r) {
@@ -210,6 +237,9 @@ final class MediaCodecOverlayReport {
         if (hostFrameLine != null) decode.append('\n').append(hostFrameLine);
         String schedulerLine = r.hostFrameTimes && mediaCodec ? r.presentScheduler.overlayLine() : null;
         if (schedulerLine != null) decode.append('\n').append(schedulerLine);
+        String dropsLine = mediaCodec ?
+                formatPacingDropsLine(r.frameLatencyStats.describeDrops(0), r.refreshSlots.shared()) : null;
+        if (dropsLine != null) decode.append('\n').append(dropsLine);
         decode.append('\n').append(r.vulkanHelper.upscalingStats());
         decode.append('\n').append(t.thermalStats());
         decode.append('\n').append(t.latencyOverlay);

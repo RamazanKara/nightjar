@@ -34,12 +34,14 @@ public class RefreshSlotsTest {
         // make (the Retroid needs 11.33 ms of lead, so that is two refreshes on): releasing either
         // "now" would land it on that refresh, and the second would replace the first there.
         long first = plan(VSYNC + 1_000_000L);
+        assertEquals(0L, slot.holdNs);
         long second = plan(VSYNC + 3_000_000L);
         assertEquals(VSYNC + 2 * INTERVAL_120, first);
         assertEquals(first + INTERVAL_120, second);
         // The stamp is half a refresh before its refresh, so the compositor rounds to it.
         assertEquals(second - INTERVAL_120 / 2, slot.targetNs);
         assertFalse(slot.shared);
+        assertEquals(INTERVAL_120, slot.holdNs);
     }
 
     @Test public void anOutputPastTheLatchTakesTheNextRefreshItCanMake() {
@@ -68,14 +70,18 @@ public class RefreshSlotsTest {
         assertEquals(second, plan(VSYNC + 3_000_000L));
         assertTrue(slot.shared);
         assertEquals(second - INTERVAL_120 / 2, slot.targetNs);
+        assertEquals(INTERVAL_120, slot.holdNs);
         assertEquals(2, slots.planned());
         assertEquals(1, slots.shared());
         assertEquals(second, plan(VSYNC + 4_000_000L));
         assertTrue(slot.shared);
+        assertEquals(INTERVAL_120, slot.holdNs);
         assertEquals(2, slots.shared());
         // Once the panel has passed the claimed refreshes, the next output gets one of its own.
         assertEquals(VSYNC + 4 * INTERVAL_120, plan(VSYNC + 12_000_000L));
         assertFalse(slot.shared);
+        // Its earliest refresh is the one the burst already claimed, so it waits one more.
+        assertEquals(INTERVAL_120, slot.holdNs);
     }
 
     @Test public void aNewRefreshRateStartsANewGrid() {
@@ -134,14 +140,51 @@ public class RefreshSlotsTest {
     }
 
     @Test public void withoutAGridTheOutputIsReleasedNow() {
+        slot.holdNs = INTERVAL_120;
         slots.plan(VSYNC, 0, INTERVAL_120, DEADLINE_120, slot);
         assertEquals(0, slot.vsyncNs);
         assertEquals(0, slot.targetNs);
         assertFalse(slot.shared);
+        assertEquals(0L, slot.holdNs);
         slots.plan(VSYNC, VSYNC, 0, DEADLINE_120, slot);
         assertEquals(0, slot.vsyncNs);
+        assertEquals(0L, slot.holdNs);
         assertEquals(0, slots.planned());
         assertEquals(0, slots.shared());
+    }
+
+    @Test public void earliestClaimedTracksBurstClaimsAndLiveGridDrift() {
+        assertFalse(slots.earliestClaimed(VSYNC + 1_000_000L, VSYNC, INTERVAL_120, DEADLINE_120));
+        assertFalse(slots.earliestClaimed(VSYNC + 1_000_000L, 0, INTERVAL_120, DEADLINE_120));
+        assertFalse(slots.earliestClaimed(VSYNC + 1_000_000L, VSYNC, 0, DEADLINE_120));
+
+        plan(VSYNC + 1_000_000L);
+        assertEquals(0L, slot.holdNs);
+        assertTrue(slots.earliestClaimed(VSYNC + 2_000_000L, VSYNC, INTERVAL_120, DEADLINE_120));
+        assertFalse(slots.earliestClaimed(VSYNC + INTERVAL_120 + 1_000_000L, VSYNC, INTERVAL_120, DEADLINE_120));
+        assertFalse(slots.earliestClaimed(VSYNC + 2_000_000L, VSYNC, INTERVAL_60, DEADLINE_60));
+
+        plan(VSYNC + 2_000_000L);
+        assertEquals(INTERVAL_120, slot.holdNs);
+        assertTrue(slots.earliestClaimed(VSYNC + 3_000_000L, VSYNC, INTERVAL_120, DEADLINE_120));
+        assertTrue(slots.earliestClaimed(VSYNC + INTERVAL_120 + 1_000_000L, VSYNC, INTERVAL_120, DEADLINE_120));
+        assertFalse(slots.earliestClaimed(VSYNC + 2 * INTERVAL_120 + 1_000_000L, VSYNC, INTERVAL_120, DEADLINE_120));
+
+        slots.reset();
+        assertFalse(slots.earliestClaimed(VSYNC + 2_000_000L, VSYNC, INTERVAL_120, DEADLINE_120));
+
+        long actualPeriodNs = INTERVAL_120 - 50_000L;
+        long[] jitterNs = {0L, 400_000L, -350_000L, 250_000L, -400_000L, 150_000L};
+        for (int frame = 0; frame < 60; frame++) {
+            long liveVsyncNs = VSYNC + frame * actualPeriodNs + jitterNs[frame % jitterNs.length];
+            long releaseNs = liveVsyncNs + 1_000_000L;
+            assertFalse("steady frame " + frame, slots.earliestClaimed(releaseNs, liveVsyncNs, INTERVAL_120, DEADLINE_120));
+            slots.plan(releaseNs, liveVsyncNs, INTERVAL_120, DEADLINE_120, slot);
+            assertEquals(0L, slot.holdNs);
+            long shiftedVsyncNs = liveVsyncNs + 300_000L;
+            assertTrue("same-refresh burst frame " + frame,
+                    slots.earliestClaimed(shiftedVsyncNs + 1_500_000L, shiftedVsyncNs, INTERVAL_120, DEADLINE_120));
+        }
     }
 
     @Test public void panelClockDriftAndChoreographerJitterDoNotRatchetOffTheVsyncGrid() {

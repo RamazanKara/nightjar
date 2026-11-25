@@ -128,6 +128,10 @@ final class MediaCodecFramePresenter {
         if (drained >= FramePacingPolicy.MAX_OUTPUT_DRAIN) return false;
         int effectiveMode = r.hostFrameTimes ? PreferenceConfiguration.FRAME_PACING_MAX_SMOOTHNESS : r.prefs.framePacing;
         if (FramePacingPolicy.dropQueuedFrames(effectiveMode)) {
+            if (effectiveMode == PreferenceConfiguration.FRAME_PACING_BALANCED &&
+                    r.vsyncPacer.keepsBurstForRefreshSlot(System.nanoTime())) {
+                return false;
+            }
             catchUpReason = "catch_up";
             return true;
         }
@@ -214,21 +218,26 @@ final class MediaCodecFramePresenter {
             long releaseNs = System.nanoTime();
             boolean displayQueueDrop = displayQueueDropDue(releaseNs);
             long displayAtNs;
+            long handoffAtNs;
             if (r.prefs.framePacing == PreferenceConfiguration.FRAME_PACING_MAX_SMOOTHNESS ||
                     r.prefs.framePacing == PreferenceConfiguration.FRAME_PACING_CAP_FPS) {
                 displayAtNs = r.vsyncPacer.smoothDisplayNs(releaseNs);
+                handoffAtNs = displayAtNs;
             } else if (r.hostFrameTimes) {
                 displayAtNs = r.hostFrameClock.presentNs(lastPtsUs, releaseNs);
+                handoffAtNs = displayAtNs;
             } else if (r.prefs.framePacing == PreferenceConfiguration.FRAME_PACING_BALANCED) {
                 displayAtNs = displayQueueDrop ? 0 : r.vsyncPacer.planRefreshSlot(releaseNs);
+                handoffAtNs = displayQueueDrop ? 0 : r.vsyncPacer.refreshSlotHandoffNs(releaseNs, displayAtNs);
             } else {
                 displayAtNs = r.vsyncPacer.heldDisplayNs(releaseNs);
+                handoffAtNs = displayAtNs;
             }
             if (displayQueueDrop) {
                 dropForDisplayQueue(lastIndex, releaseNs);
                 shown = false;
             } else {
-                countRenderRelease(lastIndex, releaseNs, displayAtNs);
+                countRenderRelease(lastIndex, releaseNs, handoffAtNs);
                 releaseOutputFrame(lastIndex, displayAtNs);
             }
         }

@@ -270,6 +270,8 @@ public final class NightjarPolicyJni {
     public static native long refreshSlotsOp(int op, long handle, long a, long b);
     public static native boolean refreshSlotsPlan(long handle, long releaseNs, long vsyncNs, long intervalNs,
                                                   long leadNs, long[] out);
+    public static native boolean refreshSlotsEarliestClaimed(long handle, long releaseNs, long vsyncNs,
+                                                             long intervalNs, long leadNs);
 
     public static native int displayIntGate(int op, int a, int b, int c, int d, int e, int f, boolean flag, float hz);
     public static native boolean displayBoolGate(int op, int sdk, boolean a, boolean b, boolean c,
