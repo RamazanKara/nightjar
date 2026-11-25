@@ -75,20 +75,6 @@ impl VideoRendererDecision {
     }
 }
 
-/// Whether `decoder_name` is a MediaTek hardware decoder (`c2.mtk.*` or `omx.mtk.*`).
-pub fn is_mediatek_decoder(decoder_name: Option<&str>) -> bool {
-    let Some(name) = decoder_name else {
-        return false;
-    };
-    let lower = name.to_ascii_lowercase();
-    lower.starts_with("c2.mtk.") || lower.starts_with("omx.mtk.")
-}
-
-/// Whether a stream should start on Vulkan unasked for full-range SDR accuracy (`#153`).
-pub fn needs_vulkan_up_front(full_range: bool, hdr: bool, decoder_name: Option<&str>) -> bool {
-    full_range && !hdr && is_mediatek_decoder(decoder_name)
-}
-
 /// Human-readable range label used in [`output_fallback_reason`].
 pub fn range_name(color_range: ColorRange) -> String {
     match color_range {
@@ -108,7 +94,6 @@ pub fn output_fallback_reason(
     dolby_vision: bool,
     packed444: bool,
     pyro_wave: bool,
-    decoder_name: Option<&str>,
     output_color_range: ColorRange,
     has_color_aspects: bool,
 ) -> Option<String> {
@@ -116,26 +101,15 @@ pub fn output_fallback_reason(
         return None;
     }
     match output_color_range {
-        ColorRange::Full => {}
-        ColorRange::Absent => {
-            if has_color_aspects {
-                return Some(
-                    "omitted color range (defaults to limited) for a full-range SDR stream"
-                        .to_owned(),
-                );
-            }
-        }
-        other => {
-            return Some(format!(
-                "reported {} color range for a full-range SDR stream",
-                range_name(other)
-            ));
-        }
+        ColorRange::Full => None,
+        ColorRange::Absent => has_color_aspects.then(|| {
+            "omitted color range (defaults to limited) for a full-range SDR stream".to_owned()
+        }),
+        other => Some(format!(
+            "reported {} color range for a full-range SDR stream",
+            range_name(other)
+        )),
     }
-    if is_mediatek_decoder(decoder_name) {
-        return Some("uses MediaTek direct output for a full-range SDR stream".to_owned());
-    }
-    None
 }
 
 /// Whether the API level supports Vulkan (`sdk_int >= 29`).
@@ -155,12 +129,8 @@ pub const fn needs_vulkan_probe(
     sdk_int: i32,
     packed444: bool,
     frame_warp: bool,
-    full_range_needs_vulkan: bool,
 ) -> bool {
-    !pyro_wave
-        && !packed444
-        && sdk_int >= MIN_SDK
-        && (vulkan_preferred || frame_warp || full_range_needs_vulkan)
+    !pyro_wave && !packed444 && sdk_int >= MIN_SDK && (vulkan_preferred || frame_warp)
 }
 
 /// Unified renderer decision given an already-probed (when [`needs_vulkan_probe`] is true)
@@ -175,7 +145,6 @@ pub const fn choose_resolved(
     upscaling_on: bool,
     frame_warp: bool,
     hdr_or_ten_bit: bool,
-    full_range_needs_vulkan: bool,
 ) -> VideoRendererDecision {
     let without = if pyro_wave {
         Renderer::Direct
@@ -235,7 +204,7 @@ pub const fn choose_resolved(
         }
     };
 
-    let with_warp = if !frame_warp {
+    if !frame_warp {
         plain
     } else if pyro_wave {
         VideoRendererDecision {
@@ -273,25 +242,7 @@ pub const fn choose_resolved(
             frame_warp: true,
             frame_warp_reason: FrameWarpReason::None,
         }
-    };
-
-    if !full_range_needs_vulkan
-        || pyro_wave
-        || packed444
-        || matches!(with_warp.renderer, Renderer::Vulkan)
-    {
-        return with_warp;
     }
-    if !vulkan_preferred && !frame_warp && sdk_int >= MIN_SDK && vulkan_supported {
-        return VideoRendererDecision {
-            renderer: Renderer::Vulkan,
-            reason: RendererReason::None,
-            upscaling_overridden: upscaling_on,
-            frame_warp: with_warp.frame_warp,
-            frame_warp_reason: with_warp.frame_warp_reason,
-        };
-    }
-    with_warp
 }
 
 /// Unified renderer decision probing `vulkan_supported` lazily at most once.
@@ -305,20 +256,13 @@ pub fn choose(
     upscaling_on: bool,
     frame_warp: bool,
     hdr_or_ten_bit: bool,
-    full_range_needs_vulkan: bool,
 ) -> VideoRendererDecision {
-    let supported = if needs_vulkan_probe(
-        vulkan_preferred,
-        pyro_wave,
-        sdk_int,
-        packed444,
-        frame_warp,
-        full_range_needs_vulkan,
-    ) {
-        vulkan_supported()
-    } else {
-        false
-    };
+    let supported =
+        if needs_vulkan_probe(vulkan_preferred, pyro_wave, sdk_int, packed444, frame_warp) {
+            vulkan_supported()
+        } else {
+            false
+        };
     choose_resolved(
         vulkan_preferred,
         pyro_wave,
@@ -328,7 +272,6 @@ pub fn choose(
         upscaling_on,
         frame_warp,
         hdr_or_ten_bit,
-        full_range_needs_vulkan,
     )
 }
 
@@ -355,7 +298,6 @@ pub fn vulkan_presents(
         upscaling_on,
         frame_warp_asked(frame_warp_pref, frame_warp_listed),
         true,
-        false,
     );
     matches!(decision.renderer, Renderer::Vulkan)
 }

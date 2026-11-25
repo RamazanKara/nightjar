@@ -569,4 +569,6 @@
     <string name="home_setup_dismiss">Ignora</string>
     <string name="help_loading_error">Impossibile aprire la guida senza WebView o un browser.</string>
     <string name="summary_hdr_shield_firmware_update">Aggiorna il firmware del tuo NVIDIA SHIELD Android TV per abilitare l’HDR</string>
+    <string name="full_range_vulkan_switched">Il decoder ha ignorato la gamma completa. Passaggio a Vulkan per neri corretti.</string>
+    <string name="full_range_vulkan_unavailable">Gamma completa ignorata, niente Vulkan: neri errati. Disattiva «Gamma colori completa».</string>
 </resources>

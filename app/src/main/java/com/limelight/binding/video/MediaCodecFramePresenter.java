@@ -6,6 +6,7 @@ import android.os.Build;
 import android.os.SystemClock;
 
 import com.limelight.LimeLog;
+import com.limelight.R;
 import com.limelight.nvstream.jni.MoonBridge;
 import com.limelight.nvstream.jni.NightjarPolicyJni;
 import com.limelight.preferences.PreferenceConfiguration;
@@ -67,11 +68,12 @@ final class MediaCodecFramePresenter {
         boolean hdr = r.currentHdrMode != null ? r.currentHdrMode : r.codecSelector.assumesHdr();
         String reason = FullRangePolicy.outputFallbackReason(r.getPreferredColorRange() == MoonBridge.COLOR_RANGE_FULL,
                 hdr, r.dolbyVisionActive, r.packing != null, (r.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_PYROWAVE) != 0,
-                r.activeDecoderName, r.outputFormat);
+                r.outputFormat);
         if (reason == null) return;
         r.fullRangeFallbackAttempted = true;
         if (!FullRangePolicy.canUseVulkan(Build.VERSION.SDK_INT, VulkanRendererBridge::isSupported)) {
             LimeLog.warning("Decoder " + r.telemetry.decoderName() + " " + reason + "; Vulkan renderer is unavailable, keeping direct output");
+            r.vulkanHelper.notifyFullRange(R.string.full_range_vulkan_unavailable);
             return;
         }
         synchronized (r.codecRecoveryMonitor) {
@@ -79,6 +81,7 @@ final class MediaCodecFramePresenter {
             r.wantVulkan = r.rebuildForVulkan = true;
             r.codecRecoveryAttempts = 0;
             LimeLog.warning("Decoder " + r.telemetry.decoderName() + " " + reason + "; switching this stream to the Vulkan renderer");
+            r.vulkanHelper.notifyFullRange(R.string.full_range_vulkan_switched);
             r.session.requestRestart("full color range on Vulkan");
         }
     }

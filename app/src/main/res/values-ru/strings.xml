@@ -569,4 +569,6 @@
     <string name="home_setup_dismiss">Скрыть</string>
     <string name="help_loading_error">Невозможно открыть справку без WebView или браузера.</string>
     <string name="summary_hdr_shield_firmware_update">Обновите прошивку NVIDIA SHIELD Android TV, чтобы включить HDR</string>
+    <string name="full_range_vulkan_switched">Декодер отбросил полный диапазон. Включён Vulkan, чтобы чёрный был правильным.</string>
+    <string name="full_range_vulkan_unavailable">Полный диапазон отброшен, Vulkan нет: чёрный может быть неверным. Отключите этот диапазон.</string>
 </resources>

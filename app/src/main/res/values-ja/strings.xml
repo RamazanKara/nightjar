@@ -569,4 +569,6 @@
     <string name="home_setup_dismiss">閉じる</string>
     <string name="help_loading_error">WebView またはブラウザーがないためヘルプを開けません。</string>
     <string name="summary_hdr_shield_firmware_update">HDR を有効にするには NVIDIA SHIELD Android TV のファームウェアを更新してください</string>
+    <string name="full_range_vulkan_switched">デコーダーがフルレンジを適用しないため、黒レベルを保つようVulkanに切り替えました。</string>
+    <string name="full_range_vulkan_unavailable">フルレンジが適用されずVulkanも使えません。黒がおかしい場合は「フルレンジカラー」をオフに。</string>
 </resources>

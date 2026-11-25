@@ -569,4 +569,6 @@
     <string name="home_setup_dismiss">Odrzuć</string>
     <string name="help_loading_error">Nie można otworzyć pomocy bez komponentu WebView lub przeglądarki.</string>
     <string name="summary_hdr_shield_firmware_update">Zaktualizuj oprogramowanie układowe urządzenia NVIDIA SHIELD Android TV, aby włączyć HDR</string>
+    <string name="full_range_vulkan_switched">Dekoder pominął pełny zakres. Przełączono na Vulkan, aby czerń była prawidłowa.</string>
+    <string name="full_range_vulkan_unavailable">Pełny zakres pominięty, brak Vulkan: czerń może być błędna. Wyłącz „Pełny zakres kolorów”.</string>
 </resources>

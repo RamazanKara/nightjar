@@ -569,4 +569,6 @@
     <string name="home_setup_dismiss">Ausblenden</string>
     <string name="help_loading_error">Hilfe kann ohne WebView oder einen Browser nicht geöffnet werden.</string>
     <string name="summary_hdr_shield_firmware_update">Aktualisiere die Firmware deines NVIDIA SHIELD Android TV, um HDR zu aktivieren</string>
+    <string name="full_range_vulkan_switched">Decoder verwirft den vollen Farbbereich. Auf Vulkan gewechselt, damit Schwarz stimmt.</string>
+    <string name="full_range_vulkan_unavailable">Voller Farbbereich verworfen, kein Vulkan: Schwarz evtl. falsch. Option ausschalten.</string>
 </resources>

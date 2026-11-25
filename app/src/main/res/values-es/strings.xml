@@ -569,4 +569,6 @@
     <string name="home_setup_dismiss">Descartar</string>
     <string name="help_loading_error">No se puede abrir la ayuda sin WebView ni un navegador.</string>
     <string name="summary_hdr_shield_firmware_update">Actualiza el firmware de tu NVIDIA SHIELD Android TV para activar HDR</string>
+    <string name="full_range_vulkan_switched">El decodificador descartó el rango completo. Cambiado a Vulkan para corregir los negros.</string>
+    <string name="full_range_vulkan_unavailable">Rango completo descartado y sin Vulkan: negros erróneos. Desactiva «Rango de color completo».</string>
 </resources>

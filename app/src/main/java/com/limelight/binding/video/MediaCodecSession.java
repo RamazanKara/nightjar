@@ -152,6 +152,10 @@ final class MediaCodecSession {
                     r.vulkanHelper.notifyVulkanUnused(r.context.getString(R.string.vulkan_reason_start) +
                             (detail == null || detail.isEmpty() ? "" : " (" + detail + ")"));
                 }
+                // The stream was switched for full color range: it stays on direct output after all.
+                if (r.fullRangeFallbackAttempted) {
+                    r.vulkanHelper.notifyFullRange(R.string.full_range_vulkan_unavailable);
+                }
             }
         }
         Surface surface = r.vulkanRenderer != null ? r.vulkanRenderer.getDecoderSurface() :

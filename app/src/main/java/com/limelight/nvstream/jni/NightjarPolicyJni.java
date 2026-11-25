@@ -373,20 +373,17 @@ public final class NightjarPolicyJni {
     public static final int TEXT_OP_NAME = 2;
     public static final int TEXT_OP_CODEC_NAMES = 3;
 
-    public static native boolean fullRangeIsMediaTekDecoder(String decoderName);
-    public static native boolean fullRangeNeedsVulkanUpFront(boolean fullRange, boolean hdr, String decoderName);
     public static native String fullRangeOutputFallbackReason(
             boolean fullRange, boolean hdr, boolean dolbyVision, boolean packed444, boolean pyroWave,
-            String decoderName, int colorRangeCode, int rawColorRange, boolean hasColorAspects);
+            int colorRangeCode, int rawColorRange, boolean hasColorAspects);
     public static native boolean fullRangeCanUseVulkanSdk(int sdkInt);
 
     public static native boolean videoRendererNeedsVulkanProbe(
             boolean vulkanPreferred, boolean pyroWave, int sdkInt, boolean packed444,
-            boolean frameWarp, boolean fullRangeNeedsVulkan);
+            boolean frameWarp);
     public static native int videoRendererChoose(
             boolean vulkanPreferred, boolean pyroWave, int sdkInt, boolean vulkanSupported,
-            boolean packed444, boolean upscalingOn, boolean frameWarp, boolean hdrOrTenBit,
-            boolean fullRangeNeedsVulkan);
+            boolean packed444, boolean upscalingOn, boolean frameWarp, boolean hdrOrTenBit);
     public static native boolean videoRendererFrameWarpAsked(boolean frameWarp, boolean frameWarpListed);
 
     public static native int sdr10Refusal(

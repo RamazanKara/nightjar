@@ -614,4 +614,6 @@
     <string name="home_setup_title">Set up for this device and %1$s</string>
     <string name="home_setup_codec_auto">codec chosen when the stream starts</string>
     <string name="home_setup_dismiss">Dismiss</string>
+    <string name="full_range_vulkan_switched">The decoder dropped full color range. Switched to Vulkan to keep black levels right.</string>
+    <string name="full_range_vulkan_unavailable">Decoder dropped full color range, no Vulkan: blacks may be off. Turn off Full color range.</string>
 </resources>

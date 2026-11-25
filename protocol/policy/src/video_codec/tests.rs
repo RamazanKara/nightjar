@@ -5,211 +5,57 @@ use rubylight_protocol::hdr::{DV_81, DV_101, HLG, PQ};
 
 use super::renderer::{
     ColorRange, FrameWarpReason, MIN_SDK, Renderer, RendererReason, can_use_vulkan, choose,
-    frame_warp_asked, is_mediatek_decoder, needs_vulkan_probe, needs_vulkan_up_front,
-    output_fallback_reason, range_name, vulkan_presents,
+    frame_warp_asked, needs_vulkan_probe, output_fallback_reason, range_name, vulkan_presents,
 };
 use super::*;
 
 #[test]
-fn mediatek_decoder_detection_is_case_insensitive() {
-    assert!(is_mediatek_decoder(Some("c2.mtk.hevc.decoder.lowlatency")));
-    assert!(is_mediatek_decoder(Some("C2.MTK.AVC.DECODER")));
-    assert!(is_mediatek_decoder(Some("omx.mtk.video.decoder.hevc")));
-    assert!(!is_mediatek_decoder(Some("c2.dolby.decoder.hevc")));
-    assert!(!is_mediatek_decoder(Some("c2.qti.hevc.decoder")));
-    assert!(!is_mediatek_decoder(None));
+fn full_range_alone_stays_direct_without_a_vulkan_probe() {
+    // Vulkan off, full-range SDR: no decoder name enters the choice, so a MediaTek one stays direct.
+    let choice = choose(
+        false,
+        false,
+        34,
+        || panic!("must not probe when Vulkan is off"),
+        false,
+        false,
+        false,
+        false,
+    );
+    assert_eq!(choice.renderer, Renderer::Direct);
+    assert_eq!(choice.reason, RendererReason::None);
 }
 
 #[test]
-fn mediatek_full_range_sdr_needs_vulkan_up_front_while_default_and_hdr_do_not() {
-    assert!(needs_vulkan_up_front(
-        true,
-        false,
-        Some("c2.mtk.hevc.decoder.lowlatency")
-    ));
-    assert!(needs_vulkan_up_front(
-        true,
-        false,
-        Some("C2.MTK.AVC.DECODER")
-    ));
-    assert!(needs_vulkan_up_front(
-        true,
-        false,
-        Some("omx.mtk.video.decoder.hevc")
-    ));
-    assert!(!needs_vulkan_up_front(
-        false,
-        false,
-        Some("c2.mtk.hevc.decoder.lowlatency")
-    ));
-    assert!(!needs_vulkan_up_front(
-        true,
-        true,
-        Some("c2.mtk.hevc.decoder.lowlatency")
-    ));
-    assert!(!needs_vulkan_up_front(
-        true,
-        false,
-        Some("c2.dolby.decoder.hevc")
-    ));
-    for name in [
-        Some("c2.qti.hevc.decoder"),
-        Some("c2.exynos.hevc.decoder"),
-        Some("c2.amlogic.hevc.decoder"),
-        Some("c2.google.hevc.decoder"),
-        None,
+fn output_fallback_detects_only_a_dropped_full_range() {
+    let reason =
+        |range, aspects| output_fallback_reason(true, false, false, false, false, range, aspects);
+    // Full range off, HDR, Dolby Vision, packed 4:4:4 and PyroWave stay on their own paths.
+    for [full, hdr, dolby, packed, pyro] in [
+        [false, false, false, false, false],
+        [true, true, false, false, false],
+        [true, false, true, false, false],
+        [true, false, false, true, false],
+        [true, false, false, false, true],
     ] {
-        assert!(!needs_vulkan_up_front(true, false, name));
+        assert_eq!(
+            output_fallback_reason(full, hdr, dolby, packed, pyro, ColorRange::Limited, true),
+            None
+        );
     }
-}
+    // A decoder reporting full range, or no colour keys at all, gives nothing to object to.
+    assert_eq!(reason(ColorRange::Full, true), None);
+    assert_eq!(reason(ColorRange::Absent, false), None);
 
-#[test]
-fn output_fallback_detects_limited_or_unspecified_range_and_mediatek_sdr() {
-    assert_eq!(
-        output_fallback_reason(
-            false,
-            false,
-            false,
-            false,
-            false,
-            Some("c2.qti.hevc.decoder"),
-            ColorRange::Limited,
-            true
-        ),
-        None
-    );
-    assert_eq!(
-        output_fallback_reason(
-            true,
-            true,
-            false,
-            false,
-            false,
-            Some("c2.mtk.hevc.decoder.lowlatency"),
-            ColorRange::Limited,
-            true
-        ),
-        None
-    );
-    assert_eq!(
-        output_fallback_reason(
-            true,
-            false,
-            true,
-            false,
-            false,
-            Some("c2.dolby.decoder.hevc"),
-            ColorRange::Limited,
-            true
-        ),
-        None
-    );
-    assert_eq!(
-        output_fallback_reason(
-            true,
-            false,
-            false,
-            true,
-            false,
-            Some("c2.mtk.hevc.decoder.lowlatency"),
-            ColorRange::Limited,
-            true
-        ),
-        None
-    );
-    assert_eq!(
-        output_fallback_reason(
-            true,
-            false,
-            false,
-            false,
-            true,
-            Some("c2.mtk.hevc.decoder.lowlatency"),
-            ColorRange::Limited,
-            true
-        ),
-        None
-    );
-    assert_eq!(
-        output_fallback_reason(
-            true,
-            false,
-            false,
-            false,
-            false,
-            Some("c2.qti.hevc.decoder"),
-            ColorRange::Full,
-            true
-        ),
-        None
-    );
-    assert_eq!(
-        output_fallback_reason(
-            true,
-            false,
-            false,
-            false,
-            false,
-            Some("c2.qti.hevc.decoder"),
-            ColorRange::Absent,
-            false
-        ),
-        None
-    );
-
-    let limited = output_fallback_reason(
-        true,
-        false,
-        false,
-        false,
-        false,
-        Some("c2.qti.hevc.decoder"),
-        ColorRange::Limited,
-        true,
-    )
-    .expect("limited range triggers fallback");
+    let limited = reason(ColorRange::Limited, true).expect("limited range triggers fallback");
     assert!(limited.contains("limited (2)"));
-
-    let unknown = output_fallback_reason(
-        true,
-        false,
-        false,
-        false,
-        false,
-        Some("c2.qti.hevc.decoder"),
-        ColorRange::Unknown(9),
-        true,
-    )
-    .expect("unknown range triggers fallback");
+    let unknown = reason(ColorRange::Unknown(9), true).expect("unknown range triggers fallback");
     assert!(unknown.contains("unknown (9)"));
+    let omitted = reason(ColorRange::Absent, true)
+        .expect("omitted range with color aspects triggers fallback");
+    assert!(omitted.contains("omitted"));
     assert_eq!(range_name(ColorRange::Absent), "unspecified");
     assert_eq!(range_name(ColorRange::Full), "full (1)");
-
-    let omitted = output_fallback_reason(
-        true,
-        false,
-        false,
-        false,
-        false,
-        Some("c2.exynos.hevc.decoder"),
-        ColorRange::Absent,
-        true,
-    )
-    .expect("omitted range with color aspects triggers fallback");
-    assert!(omitted.contains("omitted"));
-
-    let mtk = output_fallback_reason(
-        true,
-        false,
-        false,
-        false,
-        false,
-        Some("c2.mtk.hevc.decoder.lowlatency"),
-        ColorRange::Full,
-        true,
-    )
-    .expect("MediaTek SDR triggers even with full range");
-    assert!(mtk.contains("MediaTek"));
 }
 
 #[test]
@@ -242,7 +88,6 @@ fn video_renderer_choice_lazy_probe_and_all_cases() {
         false,
         false,
         false,
-        false,
     );
     assert!(!probed);
     assert_eq!(off.renderer, Renderer::Direct);
@@ -264,40 +109,33 @@ fn video_renderer_choice_lazy_probe_and_all_cases() {
             false,
             false,
             false,
-            false,
         );
         assert!(!called);
     }
 
-    // Frame Warp + full range matrix checks
-    let fw_unasked = choose(false, false, 29, || true, false, false, true, false, false);
+    // Frame Warp matrix checks
+    let fw_unasked = choose(false, false, 29, || true, false, false, true, false);
     assert_eq!(fw_unasked.renderer, Renderer::Vulkan);
     assert!(fw_unasked.frame_warp);
     assert_eq!(fw_unasked.reason, RendererReason::None);
     assert!(!fw_unasked.upscaling_overridden);
 
-    let fw_hdr_gles = choose(false, false, 34, || false, false, false, true, true, false);
+    let fw_hdr_gles = choose(false, false, 34, || false, false, false, true, true);
     assert_eq!(fw_hdr_gles.renderer, Renderer::Direct);
     assert!(!fw_hdr_gles.frame_warp);
     assert_eq!(fw_hdr_gles.frame_warp_reason, FrameWarpReason::Hdr);
 
-    let fw_packed = choose(true, false, 34, || true, true, false, true, false, false);
+    let fw_packed = choose(true, false, 34, || true, true, false, true, false);
     assert_eq!(fw_packed.renderer, Renderer::Gles);
     assert_eq!(fw_packed.reason, RendererReason::Packed444);
     assert!(!fw_packed.frame_warp);
     assert_eq!(fw_packed.frame_warp_reason, FrameWarpReason::FullChroma);
 
-    let fw_pyro = choose(true, true, 34, || true, false, true, true, true, false);
+    let fw_pyro = choose(true, true, 34, || true, false, true, true, true);
     assert_eq!(fw_pyro.renderer, Renderer::Direct);
     assert_eq!(fw_pyro.reason, RendererReason::PyroWave);
     assert!(fw_pyro.frame_warp);
     assert!(!fw_pyro.upscaling_overridden);
-
-    // Full range unasked Vulkan + probe at most once
-    let fr = choose(false, false, 34, || true, false, true, false, false, true);
-    assert_eq!(fr.renderer, Renderer::Vulkan);
-    assert_eq!(fr.reason, RendererReason::None);
-    assert!(fr.upscaling_overridden);
 
     let mut probes = 0;
     let pref_unsupported = choose(
@@ -312,14 +150,13 @@ fn video_renderer_choice_lazy_probe_and_all_cases() {
         false,
         false,
         false,
-        true,
     );
     assert_eq!(probes, 1);
     assert_eq!(pref_unsupported.renderer, Renderer::Direct);
     assert_eq!(pref_unsupported.reason, RendererReason::Unsupported);
 
-    assert!(needs_vulkan_probe(false, false, 29, false, false, true));
-    assert!(!needs_vulkan_probe(false, false, 28, false, false, true));
+    assert!(needs_vulkan_probe(false, false, 29, false, true));
+    assert!(!needs_vulkan_probe(false, false, 28, false, true));
     assert!(frame_warp_asked(true, true));
     assert!(!frame_warp_asked(true, false));
     assert!(vulkan_presents(false, 34, || true, false, true, true));

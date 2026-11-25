@@ -16,10 +16,7 @@ import java.util.function.BooleanSupplier;
  * one: PyroWave's own renderer, which draws it as it is; else Vulkan where it runs, asked for or
  * not, or the GLES presenter without upscaling. Only SDR reaches the GLES path, and packed full
  * chroma has its own; then the stream draws without it and {@link FrameWarpReason} says why.
- * Full-range SDR on a decoder whose direct surface path mishandles full range ({@link FullRangePolicy})
- * likewise chooses Vulkan unasked where it runs, without changing PyroWave, packed 4:4:4 or the
- * default limited-range path. Without Frame Warp or that full-range condition the choice is the
- * same as it always was.
+ * Without Frame Warp the choice is the same as it always was.
  */
 public final class VideoRendererChoice {
     public enum Renderer {
@@ -69,7 +66,7 @@ public final class VideoRendererChoice {
     public static VideoRendererChoice choose(boolean vulkanPreferred, boolean pyroWave, int sdkInt,
                                              BooleanSupplier vulkanSupported, boolean packed444,
                                              UpscalingPolicy.Mode upscaling) {
-        return choose(vulkanPreferred, pyroWave, sdkInt, vulkanSupported, packed444, upscaling, false, false, false);
+        return choose(vulkanPreferred, pyroWave, sdkInt, vulkanSupported, packed444, upscaling, false, false);
     }
 
     /**
@@ -82,27 +79,13 @@ public final class VideoRendererChoice {
                                              BooleanSupplier vulkanSupported, boolean packed444,
                                              UpscalingPolicy.Mode upscaling, boolean frameWarp,
                                              boolean hdrOrTenBit) {
-        return choose(vulkanPreferred, pyroWave, sdkInt, vulkanSupported, packed444, upscaling,
-                frameWarp, hdrOrTenBit, false);
-    }
-
-    /**
-     * As {@link #choose(boolean, boolean, int, BooleanSupplier, boolean, UpscalingPolicy.Mode, boolean, boolean)},
-     * also choosing Vulkan unasked when {@code fullRangeNeedsVulkan} is true ({@link FullRangePolicy}).
-     * Never overrides PyroWave or packed 4:4:4; when Vulkan is unavailable and was not asked for,
-     * {@link #reason} stays {@link Reason#NONE}.
-     */
-    public static VideoRendererChoice choose(boolean vulkanPreferred, boolean pyroWave, int sdkInt,
-                                             BooleanSupplier vulkanSupported, boolean packed444,
-                                             UpscalingPolicy.Mode upscaling, boolean frameWarp,
-                                             boolean hdrOrTenBit, boolean fullRangeNeedsVulkan) {
         boolean upscale = upscaling != UpscalingPolicy.Mode.OFF;
         boolean supported = NightjarPolicyJni.videoRendererNeedsVulkanProbe(
-                vulkanPreferred, pyroWave, sdkInt, packed444, frameWarp, fullRangeNeedsVulkan)
+                vulkanPreferred, pyroWave, sdkInt, packed444, frameWarp)
                 && vulkanSupported.getAsBoolean();
         int packed = NightjarPolicyJni.videoRendererChoose(
                 vulkanPreferred, pyroWave, sdkInt, supported, packed444, upscale, frameWarp,
-                hdrOrTenBit, fullRangeNeedsVulkan);
+                hdrOrTenBit);
         return new VideoRendererChoice(
                 Renderer.values()[packed & 0x3],
                 Reason.values()[(packed >>> 2) & 0x7],

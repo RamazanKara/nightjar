@@ -569,4 +569,6 @@
     <string name="home_setup_dismiss">Ignorer</string>
     <string name="help_loading_error">Impossible d’ouvrir l’aide sans WebView ni navigateur.</string>
     <string name="summary_hdr_shield_firmware_update">Mettez à jour le micrologiciel de votre NVIDIA SHIELD Android TV pour activer le HDR</string>
+    <string name="full_range_vulkan_switched">Le décodeur a ignoré la plage complète. Passage à Vulkan pour des noirs corrects.</string>
+    <string name="full_range_vulkan_unavailable">Plage complète ignorée, pas de Vulkan : noirs faussés. Désactivez la plage complète.</string>
 </resources>

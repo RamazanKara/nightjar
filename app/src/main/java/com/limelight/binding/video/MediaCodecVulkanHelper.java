@@ -200,14 +200,9 @@ final class MediaCodecVulkanHelper {
             warpOffered = MoonBridge.isFrameWarpStream();
         }
         boolean pyroWave = (r.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_PYROWAVE) != 0;
-        boolean hdr = r.currentHdrMode != null ? r.currentHdrMode : r.codecSelector.assumesHdr();
-        android.media.MediaCodecInfo streamDecoder = pyroWave ? null : r.decoderFor(r.videoFormat);
-        boolean fullRangeVulkan = FullRangePolicy.needsVulkanUpFront(
-                r.getPreferredColorRange() == MoonBridge.COLOR_RANGE_FULL, hdr,
-                streamDecoder == null ? null : streamDecoder.getName());
         VideoRendererChoice choice = VideoRendererChoice.choose(r.prefs.vulkanRender, pyroWave, Build.VERSION.SDK_INT,
                 VulkanRendererBridge::isSupported, r.packing != null, r.prefs.upscalingMode, warpOffered,
-                Boolean.TRUE.equals(r.currentHdrMode) || (r.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_10BIT) != 0, fullRangeVulkan);
+                Boolean.TRUE.equals(r.currentHdrMode) || (r.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_10BIT) != 0);
         if (choice.frameWarpReason == VideoRendererChoice.FrameWarpReason.HDR) {
             declineFrameWarp(R.string.frame_warp_reason_hdr);
         } else if (choice.frameWarpReason == VideoRendererChoice.FrameWarpReason.FULL_CHROMA) {
@@ -216,10 +211,6 @@ final class MediaCodecVulkanHelper {
         if (choice.renderer == VideoRendererChoice.Renderer.VULKAN) {
             r.wantVulkan = true;
             frameWarp = choice.frameWarp;
-            if (fullRangeVulkan && !r.prefs.vulkanRender && !choice.frameWarp) {
-                LimeLog.info("Decoder " + streamDecoder.getName() +
-                        " with full color range: using the Vulkan renderer for SDR output");
-            }
             r.upscalingPolicy.fail(UpscalingPolicy.Reason.DISABLED);
             if (choice.upscalingOverridden) {
                 notifyVulkan(r.context.getString(R.string.vulkan_overrides_upscaling));
@@ -299,6 +290,18 @@ final class MediaCodecVulkanHelper {
         LimeLog.warning(message);
         if (vulkanNoticeShown) return;
         vulkanNoticeShown = true;
+        showNotice(message);
+    }
+
+    // What became of a stream whose decoder dropped full color range (nightjar#153). An earlier
+    // Vulkan notice does not hold it back: that one said nothing about the black levels.
+    void notifyFullRange(int message) {
+        String text = r.context.getString(message);
+        LimeLog.warning(text);
+        showNotice(text);
+    }
+
+    private void showNotice(String message) {
         r.activity.runOnUiThread(() -> {
             if (!r.stopping) Toast.makeText(r.context, message, Toast.LENGTH_LONG).show();
         });
@@ -308,9 +311,7 @@ final class MediaCodecVulkanHelper {
         LimeLog.warning("Frame Warp: " + message);
         if (frameWarpNoticeShown) return;
         frameWarpNoticeShown = true;
-        r.activity.runOnUiThread(() -> {
-            if (!r.stopping) Toast.makeText(r.context, message, Toast.LENGTH_LONG).show();
-        });
+        showNotice(message);
     }
 
     /** The stream offers Frame Warp but this renderer cannot draw it: the host stops its work, and the user is told. */

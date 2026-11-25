@@ -12,13 +12,12 @@ import java.util.function.BooleanSupplier;
  * unit tested.
  *
  * <p>The host encodes full-range YUV (0..255 / 0..1023) and signals {@code video_full_range_flag=1}
- * whenever Full color range is enabled. On direct SurfaceView output, however, black levels still
- * crush or wash out if (1) the hardware decoder ignores {@link MediaFormat#KEY_COLOR_RANGE} and
- * reports limited or unspecified range in its output format (causing Codec2 to stamp a limited-range
- * dataspace onto the surface), or (2) a MediaTek display pipeline ({@code c2.mtk.*} /
- * {@code omx.mtk.*}) mishandles full-range direct YUV/P010 layers on SDR streams even when the
- * codec decodes full-range samples. Presenting those SDR streams through {@link VulkanRendererBridge}
- * applies {@code VK_SAMPLER_YCBCR_RANGE_ITU_FULL} explicitly and outputs an RGB swapchain.
+ * whenever Full color range is enabled. A hardware decoder that ignores
+ * {@link MediaFormat#KEY_COLOR_RANGE} and reports limited or unspecified range in its output format
+ * has Codec2 stamp a limited-range dataspace onto the surface, which crushes or washes out blacks on
+ * direct output. Only then does an SDR stream switch to {@link VulkanRendererBridge}, which applies
+ * {@code VK_SAMPLER_YCBCR_RANGE_ITU_FULL} explicitly, and the user is told. The decoder's vendor
+ * alone never picks the renderer.
  *
  * <p>With Full color range off (the default), nothing here runs and no Vulkan probe is made. HDR,
  * Dolby Vision, PyroWave and packed 4:4:4 keep their own color paths untouched.
@@ -26,45 +25,31 @@ import java.util.function.BooleanSupplier;
 public final class FullRangePolicy {
     private FullRangePolicy() {}
 
-    /** Whether {@code decoderName} is a MediaTek hardware decoder ({@code c2.mtk.*} or {@code omx.mtk.*}). */
-    public static boolean isMediaTekDecoder(String decoderName) {
-        return NightjarPolicyJni.fullRangeIsMediaTekDecoder(decoderName);
-    }
-
-    /**
-     * Whether a stream should start on the Vulkan renderer unasked for full-range SDR accuracy:
-     * only when Full color range is enabled, the stream is SDR (8-bit or 10-bit), and the selected
-     * decoder is MediaTek's, whose direct YUV/P010 SurfaceView path mishandles full-range SDR.
-     */
-    public static boolean needsVulkanUpFront(boolean fullRange, boolean hdr, String decoderName) {
-        return NightjarPolicyJni.fullRangeNeedsVulkanUpFront(fullRange, hdr, decoderName);
-    }
-
     /**
      * Whether an SDR stream running without the Vulkan renderer must switch to Vulkan based on the
      * decoder's reported {@link MediaFormat}, returning a short reason for the log or {@code null}
      * when the current path should be kept.
      */
     public static String outputFallbackReason(boolean fullRange, boolean hdr, boolean dolbyVision,
-                                              boolean packed444, boolean pyroWave, String decoderName,
+                                              boolean packed444, boolean pyroWave,
                                               MediaFormat outputFormat) {
         Integer range = outputFormat != null && outputFormat.containsKey(MediaFormat.KEY_COLOR_RANGE) ?
                 outputFormat.getInteger(MediaFormat.KEY_COLOR_RANGE) : null;
         boolean hasColorAspects = outputFormat != null &&
                 (outputFormat.containsKey(MediaFormat.KEY_COLOR_STANDARD) ||
                         outputFormat.containsKey(MediaFormat.KEY_COLOR_TRANSFER));
-        return outputFallbackReason(fullRange, hdr, dolbyVision, packed444, pyroWave, decoderName,
-                range, hasColorAspects);
+        return outputFallbackReason(fullRange, hdr, dolbyVision, packed444, pyroWave, range,
+                hasColorAspects);
     }
 
     /**
-     * Pure form of {@link #outputFallbackReason(boolean, boolean, boolean, boolean, boolean, String, MediaFormat)}.
+     * Pure form of {@link #outputFallbackReason(boolean, boolean, boolean, boolean, boolean, MediaFormat)}.
      *
      * @param outputColorRange {@link MediaFormat#KEY_COLOR_RANGE} from the output format, or null when absent
      * @param hasColorAspects  whether the output format reported {@code color-standard} or {@code color-transfer}
      */
     public static String outputFallbackReason(boolean fullRange, boolean hdr, boolean dolbyVision,
-                                              boolean packed444, boolean pyroWave, String decoderName,
+                                              boolean packed444, boolean pyroWave,
                                               Integer outputColorRange, boolean hasColorAspects) {
         int rangeCode = outputColorRange == null ? NightjarPolicyJni.COLOR_RANGE_ABSENT :
                 outputColorRange == MediaFormat.COLOR_RANGE_FULL ? NightjarPolicyJni.COLOR_RANGE_FULL :
@@ -72,7 +57,7 @@ public final class FullRangePolicy {
                                 NightjarPolicyJni.COLOR_RANGE_UNKNOWN;
         int rawRange = outputColorRange == null ? 0 : outputColorRange;
         return NightjarPolicyJni.fullRangeOutputFallbackReason(fullRange, hdr, dolbyVision, packed444,
-                pyroWave, decoderName, rangeCode, rawRange, hasColorAspects);
+                pyroWave, rangeCode, rawRange, hasColorAspects);
     }
 
     /** Whether the Vulkan renderer can take over on this API level and GPU; probes lazily. */

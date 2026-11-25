@@ -35,54 +35,25 @@ fn opt_bytes(env: &JNIEnv, arr: &JByteArray) -> Option<Vec<u8>> {
 // --- FullRangePolicy (#153) & VideoRendererChoice ---
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_fullRangeIsMediaTekDecoder(
-    mut env: JNIEnv,
-    _: JClass,
-    decoder_name: JString,
-) -> jboolean {
-    let name = string(&mut env, &decoder_name);
-    jbool(renderer::is_mediatek_decoder(name.as_deref()))
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_fullRangeNeedsVulkanUpFront(
-    mut env: JNIEnv,
-    _: JClass,
-    full_range: jboolean,
-    hdr: jboolean,
-    decoder_name: JString,
-) -> jboolean {
-    let name = string(&mut env, &decoder_name);
-    jbool(renderer::needs_vulkan_up_front(
-        full_range != JNI_FALSE,
-        hdr != JNI_FALSE,
-        name.as_deref(),
-    ))
-}
-
-#[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
 pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_fullRangeOutputFallbackReason(
-    mut env: JNIEnv,
+    env: JNIEnv,
     _: JClass,
     full_range: jboolean,
     hdr: jboolean,
     dolby_vision: jboolean,
     packed444: jboolean,
     pyro_wave: jboolean,
-    decoder_name: JString,
     color_range_code: jint,
     raw_color_range: jint,
     has_color_aspects: jboolean,
 ) -> jstring {
-    let name = string(&mut env, &decoder_name);
     let reason = renderer::output_fallback_reason(
         full_range != JNI_FALSE,
         hdr != JNI_FALSE,
         dolby_vision != JNI_FALSE,
         packed444 != JNI_FALSE,
         pyro_wave != JNI_FALSE,
-        name.as_deref(),
         ColorRange::from_jni(color_range_code, raw_color_range),
         has_color_aspects != JNI_FALSE,
     );
@@ -107,7 +78,6 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_videoRe
     sdk_int: jint,
     packed444: jboolean,
     frame_warp: jboolean,
-    full_range_needs_vulkan: jboolean,
 ) -> jboolean {
     jbool(renderer::needs_vulkan_probe(
         vulkan_preferred != JNI_FALSE,
@@ -115,7 +85,6 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_videoRe
         sdk_int,
         packed444 != JNI_FALSE,
         frame_warp != JNI_FALSE,
-        full_range_needs_vulkan != JNI_FALSE,
     ))
 }
 
@@ -132,7 +101,6 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_videoRe
     upscaling_on: jboolean,
     frame_warp: jboolean,
     hdr_or_ten_bit: jboolean,
-    full_range_needs_vulkan: jboolean,
 ) -> jint {
     renderer::choose_resolved(
         vulkan_preferred != JNI_FALSE,
@@ -143,7 +111,6 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_videoRe
         upscaling_on != JNI_FALSE,
         frame_warp != JNI_FALSE,
         hdr_or_ten_bit != JNI_FALSE,
-        full_range_needs_vulkan != JNI_FALSE,
     )
     .pack()
 }

@@ -5,9 +5,12 @@ import android.app.Application;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
+import android.os.Looper;
+import android.view.Surface;
 
 import com.limelight.LimeLog;
 import com.limelight.PcViewLifecycleTest;
+import com.limelight.R;
 import com.limelight.nvstream.jni.MoonBridge;
 import com.limelight.preferences.PreferenceConfiguration;
 
@@ -22,6 +25,7 @@ import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 import org.robolectric.shadows.MediaCodecInfoBuilder;
 import org.robolectric.shadows.ShadowMediaCodec;
+import org.robolectric.shadows.ShadowToast;
 import org.robolectric.util.ReflectionHelpers;
 import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
@@ -32,6 +36,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.*;
+import static org.robolectric.Shadows.shadowOf;
 
 /** Full-range SDR colour policy and its wiring into MediaCodecDecoderRenderer (issue #153). */
 @RunWith(RobolectricTestRunner.class)
@@ -49,12 +54,28 @@ public class FullRangePolicyTest {
             probes++;
             return supported;
         }
+
+        // The renderer never starts here.
+        @Implementation public static VulkanRendererBridge create(Surface output, int streamWidth, int streamHeight,
+                int streamFps, int framePacing, int jitterBuffer, int ditherMode, int colorspace, boolean fullRange,
+                boolean tenBit, boolean hlg, float displayRefreshHz, String codec, String decoderName,
+                String traceDirectory, boolean frontBuffer, long frameWarpApi) {
+            return null;
+        }
+
+        @Implementation public static String getLastError() {
+            return "";
+        }
     }
 
     @Implements(MediaCodec.class)
     public static class FakeCodec extends ShadowMediaCodec {
         static final List<String> calls = new ArrayList<>();
         static MediaFormat output;
+
+        @Implementation public String getName() {
+            return "c2.qti.hevc.decoder";
+        }
 
         @Implementation public MediaFormat getOutputFormat() {
             return output;
@@ -83,61 +104,37 @@ public class FullRangePolicyTest {
     }
 
     @Test
-    public void mediaTekFullRangeSdrNeedsVulkanUpFrontWhileDefaultAndHdrDoNot() {
-        assertTrue(FullRangePolicy.needsVulkanUpFront(true, false, "c2.mtk.hevc.decoder.lowlatency"));
-        assertTrue(FullRangePolicy.needsVulkanUpFront(true, false, "C2.MTK.AVC.DECODER"));
-        assertTrue(FullRangePolicy.needsVulkanUpFront(true, false, "omx.mtk.video.decoder.hevc"));
-        // Default limited range: untouched.
-        assertFalse(FullRangePolicy.needsVulkanUpFront(false, false, "c2.mtk.hevc.decoder.lowlatency"));
-        // HDR and Dolby Vision stay on their own paths.
-        assertFalse(FullRangePolicy.needsVulkanUpFront(true, true, "c2.mtk.hevc.decoder.lowlatency"));
-        assertFalse(FullRangePolicy.needsVulkanUpFront(true, false, "c2.dolby.decoder.hevc"));
-        // Other vendors stay on direct output unless their output format disagrees.
-        for (String name : new String[] {"c2.qti.hevc.decoder", "c2.exynos.hevc.decoder",
-                "c2.amlogic.hevc.decoder", "c2.google.hevc.decoder", null}) {
-            assertFalse(String.valueOf(name), FullRangePolicy.needsVulkanUpFront(true, false, name));
-        }
-    }
-
-    @Test
-    public void outputFallbackDetectsLimitedOrUnspecifiedRangeAndMediaTekSdr() {
+    public void outputFallbackDetectsOnlyADroppedFullRange() {
         // Full range off: never triggers.
         assertNull(FullRangePolicy.outputFallbackReason(false, false, false, false, false,
-                "c2.qti.hevc.decoder", MediaFormat.COLOR_RANGE_LIMITED, true));
+                MediaFormat.COLOR_RANGE_LIMITED, true));
         // HDR, Dolby Vision, packed 4:4:4 and PyroWave stay on their own paths.
         assertNull(FullRangePolicy.outputFallbackReason(true, true, false, false, false,
-                "c2.mtk.hevc.decoder.lowlatency", MediaFormat.COLOR_RANGE_LIMITED, true));
+                MediaFormat.COLOR_RANGE_LIMITED, true));
         assertNull(FullRangePolicy.outputFallbackReason(true, false, true, false, false,
-                "c2.dolby.decoder.hevc", MediaFormat.COLOR_RANGE_LIMITED, true));
+                MediaFormat.COLOR_RANGE_LIMITED, true));
         assertNull(FullRangePolicy.outputFallbackReason(true, false, false, true, false,
-                "c2.mtk.hevc.decoder.lowlatency", MediaFormat.COLOR_RANGE_LIMITED, true));
+                MediaFormat.COLOR_RANGE_LIMITED, true));
         assertNull(FullRangePolicy.outputFallbackReason(true, false, false, false, true,
-                "c2.mtk.hevc.decoder.lowlatency", MediaFormat.COLOR_RANGE_LIMITED, true));
+                MediaFormat.COLOR_RANGE_LIMITED, true));
 
-        // Non-MediaTek decoder honoring full range: stays direct.
+        // A decoder honoring full range, or reporting no colour keys at all, stays direct.
         assertNull(FullRangePolicy.outputFallbackReason(true, false, false, false, false,
-                "c2.qti.hevc.decoder", MediaFormat.COLOR_RANGE_FULL, true));
-        // Non-MediaTek decoder with no colour keys at all: gives nothing to object to.
+                MediaFormat.COLOR_RANGE_FULL, true));
         assertNull(FullRangePolicy.outputFallbackReason(true, false, false, false, false,
-                "c2.qti.hevc.decoder", null, false));
+                (Integer) null, false));
 
-        // Any decoder reporting limited range for full-range SDR triggers fallback.
+        // Limited range for full-range SDR triggers the fallback.
         String limited = FullRangePolicy.outputFallbackReason(true, false, false, false, false,
-                "c2.qti.hevc.decoder", MediaFormat.COLOR_RANGE_LIMITED, true);
+                MediaFormat.COLOR_RANGE_LIMITED, true);
         assertNotNull(limited);
         assertTrue(limited, limited.contains("limited"));
 
-        // Any decoder reporting standard/transfer while omitting range (defaults to limited in Codec2) triggers fallback.
+        // So does standard/transfer with the range omitted (Codec2 then takes limited).
         String omitted = FullRangePolicy.outputFallbackReason(true, false, false, false, false,
-                "c2.exynos.hevc.decoder", null, true);
+                (Integer) null, true);
         assertNotNull(omitted);
         assertTrue(omitted, omitted.contains("omitted"));
-
-        // MediaTek SDR triggers even if the decoder echoed COLOR_RANGE_FULL (e.g. after an HDR -> SDR switch).
-        String mtk = FullRangePolicy.outputFallbackReason(true, false, false, false, false,
-                "c2.mtk.hevc.decoder.lowlatency", MediaFormat.COLOR_RANGE_FULL, true);
-        assertNotNull(mtk);
-        assertTrue(mtk, mtk.contains("MediaTek"));
     }
 
     @Test
@@ -188,46 +185,45 @@ public class FullRangePolicyTest {
     }
 
     @Test
-    public void setupUpscalingPicksVulkanForMediaTekFullRangeTenBitAndEightBitSdr() {
+    public void mediaTekFullRangeSdrStartsDirectWithVulkanOffAndNeverProbes() {
         try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
-            // Lenovo TB375FC scenario: HEVC 10-bit SDR + full range ON + c2.mtk.hevc.decoder.lowlatency
-            MediaCodecDecoderRenderer sdr10 = buildRenderer(activity.get(), true, true,
-                    MoonBridge.VIDEO_FORMAT_H265_MAIN10, "c2.mtk.hevc.decoder.lowlatency");
-            ReflectionHelpers.callInstanceMethod(sdr10, "setupUpscaling");
-            assertEquals(true, ReflectionHelpers.getField(sdr10, "wantVulkan"));
-
-            // 8-bit HEVC SDR + full range ON + c2.mtk
-            MediaCodecDecoderRenderer sdr8 = buildRenderer(activity.get(), true, false,
-                    MoonBridge.VIDEO_FORMAT_H265, "c2.mtk.hevc.decoder.lowlatency");
-            ReflectionHelpers.callInstanceMethod(sdr8, "setupUpscaling");
-            assertEquals(true, ReflectionHelpers.getField(sdr8, "wantVulkan"));
-
-            // Default (full range OFF): stays direct, never probes Vulkan.
-            FakeVulkanBridge.probes = 0;
-            MediaCodecDecoderRenderer limited = buildRenderer(activity.get(), false, true,
-                    MoonBridge.VIDEO_FORMAT_H265_MAIN10, "c2.mtk.hevc.decoder.lowlatency");
-            ReflectionHelpers.callInstanceMethod(limited, "setupUpscaling");
-            assertEquals(false, ReflectionHelpers.getField(limited, "wantVulkan"));
-            assertEquals(0, FakeVulkanBridge.probes);
-
-            // HDR stream (10-bit without sdr10 -> assumesHdr): stays direct so HDR / Dolby Vision stays intact.
-            MediaCodecDecoderRenderer hdr = buildRenderer(activity.get(), true, false,
-                    MoonBridge.VIDEO_FORMAT_H265_MAIN10, "c2.mtk.hevc.decoder.lowlatency");
-            ReflectionHelpers.callInstanceMethod(hdr, "setupUpscaling");
-            assertEquals(false, ReflectionHelpers.getField(hdr, "wantVulkan"));
-            assertEquals(0, FakeVulkanBridge.probes);
-
-            // Non-MediaTek decoder starts direct and never probes Vulkan up front.
-            MediaCodecDecoderRenderer qti = buildRenderer(activity.get(), true, true,
-                    MoonBridge.VIDEO_FORMAT_H265_MAIN10, "c2.qti.hevc.decoder");
-            ReflectionHelpers.callInstanceMethod(qti, "setupUpscaling");
-            assertEquals(false, ReflectionHelpers.getField(qti, "wantVulkan"));
+            for (boolean sdr10 : new boolean[] {true, false}) {
+                MediaCodecDecoderRenderer renderer = buildRenderer(activity.get(), true, sdr10,
+                        sdr10 ? MoonBridge.VIDEO_FORMAT_H265_MAIN10 : MoonBridge.VIDEO_FORMAT_H265,
+                        "c2.mtk.hevc.decoder.lowlatency");
+                ReflectionHelpers.callInstanceMethod(renderer, "setupUpscaling");
+                assertEquals(false, ReflectionHelpers.getField(renderer, "wantVulkan"));
+            }
             assertEquals(0, FakeVulkanBridge.probes);
         }
     }
 
     @Test
-    public void outputFormatWithLimitedOrOmittedRangeSwitchesNonMediaTekStreamToVulkanOnce() throws IOException {
+    public void mediaTekDecoderReportingFullRangeStaysDirectWithoutANotice() throws IOException {
+        try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
+            MediaCodecDecoderRenderer renderer = buildRenderer(activity.get(), true, true,
+                    MoonBridge.VIDEO_FORMAT_H265_MAIN10, "c2.mtk.hevc.decoder.lowlatency");
+            MediaCodec codec = MediaCodec.createDecoderByType("video/avc");
+            try {
+                ReflectionHelpers.setField(renderer, "videoDecoder", codec);
+                MediaFormat full = MediaFormat.createVideoFormat("video/raw", 2944, 1840);
+                full.setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709);
+                full.setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO);
+                full.setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_FULL);
+                FakeCodec.output = full;
+                ReflectionHelpers.callInstanceMethod(renderer, "onOutputFormatChanged");
+                assertEquals(false, ReflectionHelpers.getField(renderer, "wantVulkan"));
+                assertEquals(false, ReflectionHelpers.getField(renderer, "fullRangeFallbackAttempted"));
+                assertEquals(0, FakeVulkanBridge.probes);
+                assertNull(ShadowToast.getLatestToast());
+            } finally {
+                codec.release();
+            }
+        }
+    }
+
+    @Test
+    public void outputFormatWithLimitedOrOmittedRangeSwitchesStreamToVulkanOnce() throws IOException {
         try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
             MediaCodecDecoderRenderer renderer = buildRenderer(activity.get(), true, true,
                     MoonBridge.VIDEO_FORMAT_H265_MAIN10, "c2.qti.hevc.decoder");
@@ -248,6 +244,9 @@ public class FullRangePolicyTest {
                 assertEquals(true, ReflectionHelpers.getField(renderer, "wantVulkan"));
                 assertEquals(true, ReflectionHelpers.getField(renderer, "rebuildForVulkan"));
                 assertEquals(true, ReflectionHelpers.getField(renderer, "fullRangeFallbackAttempted"));
+                shadowOf(Looper.getMainLooper()).idle();
+                assertEquals(activity.get().getString(R.string.full_range_vulkan_switched),
+                        ShadowToast.getTextOfLatestToast());
 
                 // Running a second time (e.g., if Vulkan later declined) never loops.
                 recovery.set(ReflectionHelpers.getStaticField(MediaCodecDecoderRenderer.class, "CR_RECOVERY_TYPE_NONE"));
@@ -300,6 +299,9 @@ public class FullRangePolicyTest {
                 assertEquals(true, ReflectionHelpers.getField(noVk, "fullRangeFallbackAttempted"));
                 assertEquals(0, ((AtomicInteger) ReflectionHelpers.getField(noVk, "codecRecoveryType")).get());
                 assertTrue(LimeLog.getRedactedLog().contains("Vulkan renderer is unavailable"));
+                shadowOf(Looper.getMainLooper()).idle();
+                assertEquals(activity.get().getString(R.string.full_range_vulkan_unavailable),
+                        ShadowToast.getTextOfLatestToast());
             } finally {
                 codec2.release();
             }
@@ -329,7 +331,7 @@ public class FullRangePolicyTest {
         try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
             // Starts as HDR (10-bit without sdr10 -> assumesHdr() is true).
             MediaCodecDecoderRenderer renderer = buildRenderer(activity.get(), true, false,
-                    MoonBridge.VIDEO_FORMAT_H265_MAIN10, "c2.mtk.hevc.decoder.lowlatency");
+                    MoonBridge.VIDEO_FORMAT_H265_MAIN10, "c2.qti.hevc.decoder");
             MediaCodec codec = MediaCodec.createDecoderByType("video/avc");
             try {
                 ReflectionHelpers.setField(renderer, "videoDecoder", codec);
@@ -348,11 +350,37 @@ public class FullRangePolicyTest {
                 ReflectionHelpers.setField(renderer, "currentHdrMode", Boolean.FALSE);
                 fmt.setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709);
                 fmt.setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO);
-                fmt.setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_FULL);
+                fmt.setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED);
                 ReflectionHelpers.callInstanceMethod(renderer, "onOutputFormatChanged");
                 assertEquals(true, ReflectionHelpers.getField(renderer, "fullRangeFallbackAttempted"));
                 assertEquals(true, ReflectionHelpers.getField(renderer, "wantVulkan"));
                 assertEquals(true, ReflectionHelpers.getField(renderer, "rebuildForVulkan"));
+            } finally {
+                codec.release();
+            }
+        }
+    }
+
+    @Test
+    public void vulkanFailingToStartAfterTheSwitchSaysTheStreamStaysDirect() throws IOException {
+        try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
+            MediaCodecDecoderRenderer renderer = buildRenderer(activity.get(), true, false,
+                    MoonBridge.VIDEO_FORMAT_H265, "c2.qti.hevc.decoder");
+            ReflectionHelpers.setField(renderer, "outputDisplay",
+                    activity.get().getWindowManager().getDefaultDisplay());
+            MediaCodec codec = MediaCodec.createDecoderByType("video/avc");
+            try {
+                ReflectionHelpers.setField(renderer, "videoDecoder", codec);
+                ReflectionHelpers.setField(renderer, "wantVulkan", true);
+                ReflectionHelpers.setField(renderer, "fullRangeFallbackAttempted", true);
+                Object session = ReflectionHelpers.getField(renderer, "session");
+                ReflectionHelpers.callInstanceMethod(session, "configureAndStartDecoder",
+                        ClassParameter.from(MediaFormat.class,
+                                MediaFormat.createVideoFormat("video/hevc", 1920, 1080)));
+                assertEquals(false, ReflectionHelpers.getField(renderer, "wantVulkan"));
+                shadowOf(Looper.getMainLooper()).idle();
+                assertEquals(activity.get().getString(R.string.full_range_vulkan_unavailable),
+                        ShadowToast.getTextOfLatestToast());
             } finally {
                 codec.release();
             }
