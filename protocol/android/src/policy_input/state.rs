@@ -464,7 +464,9 @@ struct MouseTickFloatPlan {
 
 impl MouseTickFloatPlan {
     fn flags(self) -> i32 {
-        i32::from(self.has_move1) | (i32::from(self.has_move2) << 1) | (i32::from(self.has_scroll) << 2)
+        i32::from(self.has_move1)
+            | (i32::from(self.has_move2) << 1)
+            | (i32::from(self.has_scroll) << 2)
     }
 }
 
@@ -511,7 +513,11 @@ fn mouse_tick_step_float(
         if mag < 1.0 {
             return (false, 0.0, 0.0);
         }
-        (true, (f64::from(vy) * 0.2) as f32, (f64::from(vx) * 0.2) as f32)
+        (
+            true,
+            (f64::from(vy) * 0.2) as f32,
+            (f64::from(vx) * 0.2) as f32,
+        )
     };
 
     match scroll_stick {

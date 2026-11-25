@@ -161,7 +161,7 @@ public class MicrophoneCapture {
         }
     }
 
-    private void awaitZeroReadBackoff(int backoffMs) throws InterruptedException {
+    void awaitZeroReadBackoff(int backoffMs) throws InterruptedException {
         synchronized (lock) {
             if (running && !muted) {
                 lock.wait(backoffMs);
@@ -307,6 +307,7 @@ public class MicrophoneCapture {
                 }
             }
 
+            int zeroReadBackoffMs = 2;
             while (awaitUnmuted(record)) {
                 if (routeChanged) {
                     routeChanged = false;
@@ -323,7 +324,6 @@ public class MicrophoneCapture {
                     }
                     if (canceller != null) canceller.restart();
                 }
-                int zeroReadBackoffMs = 2;
                 int read = readFrame(record, frame);
                 if (read < 0) {
                     fail("read failed: " + read);
@@ -334,6 +334,8 @@ public class MicrophoneCapture {
                     if (read == 0) {
                         awaitZeroReadBackoff(zeroReadBackoffMs);
                         zeroReadBackoffMs = Math.min(10, zeroReadBackoffMs * 2 + 1);
+                    } else {
+                        zeroReadBackoffMs = 2;
                     }
                     continue;
                 }
