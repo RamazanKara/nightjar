@@ -3,20 +3,27 @@
 use super::*;
 
 #[test]
-fn windows_only_uses_scrgb_swapchain_for_hdr_and_10bit_sdr() {
+fn windows_only_uses_scrgb_swapchain_for_hdr_10bit_sdr_and_ai_on_hdr_display() {
     let default = config::Settings::default();
-    assert!(!windows_needs_linear(&default), "default SDR stream uses 8-bit BGRA swapchain");
-    // PyroWave, 4:4:4, packed 4:4:4 and upscaling in 8-bit SDR stay on 8-bit BGRA.
+    // PyroWave, 4:4:4, packed 4:4:4 and shader upscaling in 8-bit SDR stay on 8-bit BGRA.
     let sdr_shaders = config::Settings {
         codec: config::CodecPreference::PyroWave,
         prefer_yuv444: true,
         experimental_packed_444: true,
-        upscaling: config::Upscaling::Fsr1,
         ..default.clone()
     };
-    assert!(!windows_needs_linear(&sdr_shaders));
-    assert!(windows_needs_linear(&config::Settings { hdr: true, ..default.clone() }));
-    assert!(windows_needs_linear(&config::Settings { sdr_10bit: true, ..default }));
+    let ai = config::Settings { upscaling: config::Upscaling::Ai, ..default.clone() };
+    for display_hdr in [false, true] {
+        assert!(!windows_needs_linear(&default, display_hdr), "default SDR stream uses 8-bit BGRA swapchain");
+        for upscaling in [config::Upscaling::Bilinear, config::Upscaling::Fsr1, config::Upscaling::Sgsr1] {
+            assert!(!windows_needs_linear(&config::Settings { upscaling, ..sdr_shaders.clone() }, display_hdr));
+        }
+        assert!(windows_needs_linear(&config::Settings { hdr: true, ..default.clone() }, display_hdr));
+        assert!(windows_needs_linear(&config::Settings { sdr_10bit: true, ..default.clone() }, display_hdr));
+    }
+    // RTX Video HDR needs the linear swapchain, only where the display shows HDR.
+    assert!(windows_needs_linear(&ai, true));
+    assert!(!windows_needs_linear(&ai, false));
 }
 
 #[test]

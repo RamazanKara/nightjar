@@ -8,6 +8,15 @@ pub fn hdr_available(renderer: *mut SDL_Renderer) -> bool {
     enabled && swapchain_takes_hdr(renderer)
 }
 
+/// Whether the window's display has HDR on: SDL's display property, read without a renderer.
+pub fn window_display_hdr(window: *mut SDL_Window) -> bool {
+    // SAFETY: a live window and its display; SDL's video is initialized on this thread.
+    unsafe {
+        let display = SDL_GetDisplayForWindow(window);
+        SDL_GetBooleanProperty(SDL_GetDisplayProperties(display), SDL_PROP_DISPLAY_HDR_ENABLED_BOOLEAN, false)
+    }
+}
+
 /// What a GPU renderer's swapchain answer depends on, read with cheap property queries: the device,
 /// the window's display and its HDR, the window's HDR request and its size in pixels. A change of
 /// any of them can change the answer, so the cache keeps an answer only for the state it was asked in.

@@ -1,17 +1,20 @@
 //! Windows D3D11 swapchain switching: keeps SDR streams on an 8-bit sRGB (`BGRA8`) swapchain
 //! and switches to 16-bit floating-point scRGB (`SDL_COLORSPACE_SRGB_LINEAR`) only for HDR or
-//! 10-bit SDR streams.
+//! 10-bit SDR streams, and for AI enhancement on a display in HDR.
 
 #[cfg(any(windows, test))]
 use super::*;
 
 /// Whether a Windows D3D11 stream needs a 16-bit floating-point scRGB swapchain
-/// (`SDL_COLORSPACE_SRGB_LINEAR`) rather than an 8-bit sRGB (`BGRA8`) swapchain: only HDR and
-/// 10-bit SDR streams need more than 8 bits per channel. Plain 8-bit SDR, upscaling, 4:4:4 and
-/// PyroWave SDR all render directly on the lightweight 8-bit swapchain.
+/// (`SDL_COLORSPACE_SRGB_LINEAR`) rather than an 8-bit sRGB (`BGRA8`) swapchain. HDR and 10-bit
+/// SDR streams do, and AI enhancement when the window's display is in HDR (`display_hdr`): RTX
+/// Video HDR turns 8-bit SDR into HDR, and SDL reports HDR output only for this swapchain. Plain
+/// 8-bit SDR, shader upscaling, 4:4:4 and PyroWave SDR render on the lightweight 8-bit swapchain.
 #[cfg(any(windows, test))]
-pub(crate) fn windows_needs_linear(settings: &config::Settings) -> bool {
-    settings.hdr || settings.sdr_10bit
+pub(crate) fn windows_needs_linear(settings: &config::Settings, display_hdr: bool) -> bool {
+    settings.hdr
+        || settings.sdr_10bit
+        || (settings.upscaling == config::Upscaling::Ai && display_hdr)
 }
 
 #[cfg(windows)]
@@ -30,7 +33,7 @@ impl App {
         {
             return;
         }
-        let linear = windows_needs_linear(settings);
+        let linear = windows_needs_linear(settings, sdl::window_display_hdr(self.window));
         if sdl::renderer_linear(self.renderer) == linear {
             return;
         }
@@ -102,7 +105,7 @@ impl App {
         eprintln!(
             "nightjar: renderer switched to {} swapchain for stream",
             if sdl::renderer_linear(made) {
-                "scRGB (HDR/10-bit)"
+                "scRGB (HDR/10-bit/AI HDR)"
             } else {
                 "sRGB (8-bit)"
             }
