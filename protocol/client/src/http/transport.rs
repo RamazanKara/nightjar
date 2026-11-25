@@ -341,8 +341,8 @@ pub(crate) fn probe_stream(
                         return Err(Error::Malformed("connection closed before the HTTP body ended".into()));
                     }
                     let take = left.min(reader.buffer.len());
-                    let chunk: Vec<u8> = reader.buffer.drain(..take).collect();
-                    on_chunk(&chunk)?;
+                    on_chunk(&reader.buffer[..take])?;
+                    reader.buffer.drain(..take);
                     total += take;
                     left -= take;
                 }
@@ -355,8 +355,8 @@ pub(crate) fn probe_stream(
                     return Err(Error::Malformed("connection closed before the HTTP body ended".into()));
                 }
                 let take = (len - total).min(reader.buffer.len());
-                let chunk: Vec<u8> = reader.buffer.drain(..take).collect();
-                on_chunk(&chunk)?;
+                on_chunk(&reader.buffer[..take])?;
+                reader.buffer.drain(..take);
                 total += take;
             }
         } else {

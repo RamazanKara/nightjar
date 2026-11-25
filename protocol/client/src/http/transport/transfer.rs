@@ -219,7 +219,7 @@ pub(crate) fn download_optional(
         }
         if head.header("Transfer-Encoding").is_some_and(|t| t.eq_ignore_ascii_case("chunked")) {
             let mut done = 0u64;
-            progress(0, None);
+            let mut throttle = Throttle::start(&mut |d, _| progress(d, None), u64::MAX);
             loop {
                 let line = reader.line()?;
                 let size_text = line.split(';').next().unwrap_or_default().trim();
@@ -237,9 +237,12 @@ pub(crate) fn download_optional(
                     reader.buffer.drain(..take);
                     done += take as u64;
                     left -= take;
-                    progress(done, None);
+                    throttle.update(&mut |d, _| progress(d, None), done);
                 }
                 if !reader.line()?.is_empty() { return Err(Error::Malformed("invalid chunk terminator".into())); }
+            }
+            if done > throttle.reported {
+                progress(done, None);
             }
             sink.flush()?;
             return Ok(head.into_response(Vec::new()));

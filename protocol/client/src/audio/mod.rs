@@ -204,7 +204,7 @@ impl AudioReceiver {
         iv[..4].copy_from_slice(&key_id.wrapping_add(u32::from(seq)).to_be_bytes());
         plain.clear();
         plain.extend_from_slice(payload);
-        let cipher = cbc::Decryptor::<aes::Aes128>::inner_iv_init(cipher.clone(), &iv.into());
+        let cipher = cbc::Decryptor::<&aes::Aes128>::inner_iv_init(cipher, &iv.into());
         match cipher.decrypt_padded_mut::<Pkcs7>(plain) {
             Ok(opus) => out(AudioOutput::Packet(opus)),
             Err(_) => stats.decrypt_failures += 1,

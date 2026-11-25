@@ -174,38 +174,39 @@ pub fn run_jumbo_probe(
         JUMBO_PROBE_FPS,
         JUMBO_PROBE_KBPS,
     );
-    let control = if probe_size == 1392 {
-        None
-    } else {
-        probe_fn(JUMBO_PROBE_KBPS, 1392, JUMBO_PROBE_FPS, JUMBO_PROBE_KBPS)
-            .ok()
-            .filter(|m| m.measured())
-    };
     match jumbo {
-        Ok(measurement) if jumbo_probe_passes(&measurement, control.as_ref()) => {
-            eprintln!(
-                "nightjar: jumbo video packets: asking for {candidate} bytes ({probe_size} probed, {:.2}% loss)",
-                measurement.loss
-            );
-            JumboProbeOutcome {
-                packet_size: i32::from(candidate),
-                passed: true,
-                fallback_notice: false,
-            }
-        }
         Ok(measurement) => {
-            let control_loss = control.as_ref().map_or_else(
-                || "no smaller control".to_owned(),
-                |c| format!("{:.2}% at 1392", c.loss),
-            );
-            eprintln!(
-                "nightjar: jumbo video packets failed the field test ({:.2}% loss at {probe_size}, {control_loss}); streaming normal packets",
-                measurement.loss
-            );
-            JumboProbeOutcome {
-                packet_size: reset_packet_size(route_packet_size, requested_packet_size),
-                passed: false,
-                fallback_notice: jumbo_frames,
+            let control = if probe_size == 1392 {
+                None
+            } else {
+                probe_fn(JUMBO_PROBE_KBPS, 1392, JUMBO_PROBE_FPS, JUMBO_PROBE_KBPS)
+                    .ok()
+                    .filter(|m| m.measured())
+            };
+            if jumbo_probe_passes(&measurement, control.as_ref()) {
+                eprintln!(
+                    "nightjar: jumbo video packets: asking for {candidate} bytes ({probe_size} probed, {:.2}% loss)",
+                    measurement.loss
+                );
+                JumboProbeOutcome {
+                    packet_size: i32::from(candidate),
+                    passed: true,
+                    fallback_notice: false,
+                }
+            } else {
+                let control_loss = control.as_ref().map_or_else(
+                    || "no smaller control".to_owned(),
+                    |c| format!("{:.2}% at 1392", c.loss),
+                );
+                eprintln!(
+                    "nightjar: jumbo video packets failed the field test ({:.2}% loss at {probe_size}, {control_loss}); streaming normal packets",
+                    measurement.loss
+                );
+                JumboProbeOutcome {
+                    packet_size: reset_packet_size(route_packet_size, requested_packet_size),
+                    passed: false,
+                    fallback_notice: jumbo_frames,
+                }
             }
         }
         Err(err) => {
@@ -463,5 +464,17 @@ mod tests {
             JumboPreflight::Probe { candidate: 8192 }
         );
         assert_eq!(reset_packet_size(local_pkt, req_remote), 1392);
+    }
+
+    #[test]
+    fn jumbo_error_skips_redundant_1392_control_probe() {
+        let mut sizes = Vec::new();
+        let out = run_jumbo_probe(8192, 1392, 0, true, |_, pkt_size, _, _| {
+            sizes.push(pkt_size);
+            Err(http::Error::Cancelled)
+        });
+        assert!(!out.passed);
+        assert!(out.fallback_notice);
+        assert_eq!(sizes, vec![jumbo_probe_size(8192)]);
     }
 }

@@ -631,7 +631,8 @@ impl ConsoleRepository {
                 continue;
             };
             let mut games_map: BTreeMap<String, u32> = BTreeMap::new();
-            let mut duplicate_ids: Vec<String> = Vec::new();
+            let mut seen_lower: HashMap<String, String> = HashMap::new();
+            let mut duplicate_ids: HashSet<String> = HashSet::new();
             for g in &lib.games {
                 if g.install_id.is_empty() || g.app_id == 0 {
                     continue;
@@ -640,14 +641,11 @@ impl ConsoleRepository {
                 if duplicate_ids.contains(&lower) {
                     continue;
                 }
-                if let Some(prev_key) = games_map
-                    .keys()
-                    .find(|k| k.to_ascii_lowercase() == lower)
-                    .cloned()
-                {
+                if let Some(prev_key) = seen_lower.remove(&lower) {
                     games_map.remove(&prev_key);
-                    duplicate_ids.push(lower);
+                    duplicate_ids.insert(lower);
                 } else {
+                    seen_lower.insert(lower, g.install_id.clone());
                     games_map.insert(g.install_id.clone(), g.app_id);
                 }
             }

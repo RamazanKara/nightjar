@@ -647,16 +647,11 @@ pub fn project_home(
         shown
     };
     let played = Played { sources, recents };
-    let mut visible: Vec<&Entry> = filtered(pool, &active_filter, sort, played)
-        .into_iter()
-        .filter(|e| matches_query(e))
+    let mut visible: Vec<&Entry> = pool
+        .iter()
+        .filter(|e| active_filter.matches(e) && matches_query(e))
         .collect();
-
-    if words.is_empty() && active_filter == LibraryFilter::All {
-        // Keep stable sort already produced by `filtered`.
-    } else {
-        sort_entries(&mut visible, sort, played);
-    }
+    sort_entries(&mut visible, sort, played);
 
     let chips: Vec<ProjectedChip> = raw_chips
         .into_iter()
