@@ -73,10 +73,12 @@ public class DirectDecodeUnitSubmitTest {
     private static final byte[] HDR10_PLUS = Hdr10PlusSeiTest.bytes(Hdr10PlusSeiTest.HEVC_SEI);
     private static final byte[] VIVID = Hdr10PlusSeiTest.bytes(Hdr10PlusSeiTest.HEVC_VIVID);
     private static final byte[] SLICE = Hdr10PlusSeiTest.bytes(Hdr10PlusSeiTest.HEVC_SLICE);
+    // The RPU, NAL unit type 62: a Dolby Vision decoder gets no frame without one (nightjar#193).
+    private static final byte[] RPU = {0, 0, 0, 1, (byte) (62 << 1), 0x01, 0x19, 0x08, (byte) 0x80};
     private static final byte[] PADDING = new byte[37];
-    // An HEVC picture as the host sends HDR: both dynamic metadata SEIs, the slice, then FEC padding
-    // (the zeros) that Dolby Vision's trim drops.
-    private static final byte[] PICTURE = concat(AUD, HDR10_PLUS, VIVID, SLICE, PADDING);
+    // An HEVC picture as the host sends HDR: both dynamic metadata SEIs, the slice, the RPU, then FEC
+    // padding (the zeros) that Dolby Vision's trim drops.
+    private static final byte[] PICTURE = concat(AUD, HDR10_PLUS, VIVID, SLICE, RPU, PADDING);
     private static final int TRIMMED = PICTURE.length - PADDING.length;
 
     private static byte[] concat(byte[]... parts) {
@@ -201,7 +203,7 @@ public class DirectDecodeUnitSubmitTest {
     @Test
     public void theVividDropReadsADirectFrame() {
         ReflectionHelpers.setField(renderer, "vividSeiDropDecoder", "c2.mtk.hevc.decoder");
-        byte[] withoutVivid = concat(AUD, HDR10_PLUS, SLICE, PADDING);
+        byte[] withoutVivid = concat(AUD, HDR10_PLUS, SLICE, RPU, PADDING);
         assertEquals(MoonBridge.DR_OK, submitDirect());
         assertArrayEquals(withoutVivid, CapturingCodec.queuedBytes);
         assertEquals(MoonBridge.DR_OK, submitAfterTheCheck());
@@ -240,7 +242,7 @@ public class DirectDecodeUnitSubmitTest {
             ReflectionHelpers.setField(renderer, "dolbyVisionActive", dolbyVision);
             ReflectionHelpers.setField(renderer, "vividSeiDropDecoder", vivid ? "c2.mtk.hevc.decoder" : null);
             ReflectionHelpers.setField(renderer, "vulkanHdr10Plus", hdr10Plus);
-            byte[] expected = concat(AUD, HDR10_PLUS, vivid ? new byte[0] : VIVID, SLICE,
+            byte[] expected = concat(AUD, HDR10_PLUS, vivid ? new byte[0] : VIVID, SLICE, RPU,
                     dolbyVision ? new byte[0] : PADDING);
             byte[] t35 = hdr10Plus ? Hdr10PlusSeiTest.bytes(Hdr10PlusSeiTest.T35) : null;
 

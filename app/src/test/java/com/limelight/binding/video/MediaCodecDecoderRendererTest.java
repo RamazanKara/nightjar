@@ -300,6 +300,14 @@ public class MediaCodecDecoderRendererTest {
         assertFalse(MediaCodecDecoderRenderer.restartRecreates("c2.dolby.decoder.hevc", standard));
         assertFalse(MediaCodecDecoderRenderer.restartRecreates("c2.dolby.decoder.hevc",
                 java.util.Collections.singletonList("vendor.qti-ext-dec-picture-order.enable=0")));
+        // A Shield's Dolby Vision decoder, also one that got no keys (nightjar#193).
+        assertTrue(MediaCodecDecoderRenderer.restartRecreates("OMX.Nvidia.DOVI.decode", standard));
+        assertTrue(MediaCodecDecoderRenderer.restartRecreates("OMX.Nvidia.DOVI.decode",
+                java.util.Collections.<String>emptyList()));
+        assertTrue(MediaCodecDecoderRenderer.restartRecreates("OMX.Nvidia.DOVI.decode", null));
+        assertFalse(MediaCodecDecoderRenderer.restartRecreates("OMX.Nvidia.h265.decode",
+                java.util.Collections.<String>emptyList()));
+        assertFalse(MediaCodecDecoderRenderer.restartRecreates(null, standard));
     }
 
     /** The output format's hdr-static-info c2.mtk.dvhe.st.decoder showed in run b1fix. */

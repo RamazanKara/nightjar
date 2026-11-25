@@ -152,6 +152,23 @@ public class MediaCodecDolbyVisionTest {
         }
     }
 
+    @Test
+    public void anSdrReportOrA444StreamTakesTheBaseDecoder() {
+        try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
+            MediaCodecDecoderRenderer renderer = renderer(activity.get());
+            int hevc = MoonBridge.VIDEO_FORMAT_H265_MAIN10;
+            int av1 = MoonBridge.VIDEO_FORMAT_AV1_MAIN10;
+            assertNull(decoderFor(renderer, MoonBridge.VIDEO_FORMAT_H265_REXT10_444, HdrFormatPolicy.DV_81));
+            assertNull(decoderFor(renderer, MoonBridge.VIDEO_FORMAT_H265_REXT10_444, HdrFormatPolicy.DV_84));
+            ReflectionHelpers.setField(renderer, "currentHdrMode", Boolean.FALSE);
+            assertNull(decoderFor(renderer, hevc, HdrFormatPolicy.DV_81));
+            assertNull(decoderFor(renderer, av1, HdrFormatPolicy.DV_101));
+            ReflectionHelpers.setField(renderer, "currentHdrMode", Boolean.TRUE);
+            assertEquals(PROFILE_8, decoderFor(renderer, hevc, HdrFormatPolicy.DV_81));
+            assertEquals(PROFILE_10, decoderFor(renderer, av1, HdrFormatPolicy.DV_101));
+        }
+    }
+
     /** A slice alone, as a host that stopped sending RPUs sends it (nightjar#193). */
     private static final byte[] NO_RPU = {0, 0, 0, 1, 1 << 1, 0x01, 0x55, 0x55, (byte) 0x80};
     private static final byte[] WITH_RPU = {0, 0, 0, 1, 1 << 1, 0x01, 0x55, 0x55, (byte) 0x80,

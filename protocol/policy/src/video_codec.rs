@@ -175,7 +175,9 @@ pub fn restart_recreates(decoder_name: &str, tuning_keys_lines: &str) -> bool {
             .lines()
             .any(|key| key.starts_with("vendor.qti-ext-") && !key.ends_with("=0"))
     } else {
-        false
+        // Tegra's Dolby Vision decoder, whatever its keys: it and the hardware composer crashed on
+        // a Shield (nightjar#193), so no restart reuses its state.
+        lower.starts_with("omx.nvidia.dovi")
     }
 }
 

@@ -601,7 +601,10 @@ final class MediaCodecCodecSelector {
     }
 
     MediaCodecInfo dolbyVisionDecoderForStream() {
+        // Neither an SDR picture nor a 4:4:4 one carries RPUs.
         if (r.dolbyVisionFailed || r.packing != null || r.prefs.fullRange ||
+                Boolean.FALSE.equals(r.currentHdrMode) ||
+                (r.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_YUV444) != 0 ||
                 (r.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_10BIT) == 0) {
             return null;
         }

@@ -412,6 +412,9 @@ fn hdr_change_restart_recreates_and_static_info_match() {
         "c2.dolby.decoder.hevc",
         "vendor.qti-ext-dec-picture-order.enable=0"
     ));
+    assert!(restart_recreates("OMX.Nvidia.DOVI.decode", ""));
+    assert!(restart_recreates("OMX.Nvidia.DOVI.decode", standard));
+    assert!(!restart_recreates("OMX.Nvidia.h265.decode", ""));
 
     assert!(!decoder_carries_hdr_metadata(true));
     assert!(decoder_carries_hdr_metadata(false));
