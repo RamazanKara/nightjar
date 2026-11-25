@@ -1,7 +1,8 @@
 name: Device results
 
-# Adds the results of a "Device results" issue to the device table, publishes the data to
-# gh-pages, comments and closes the issue. See .github/scripts/device-results-issue.mjs.
+# Adds the results of a "Device results" issue to the device table on the device-results data
+# branch, publishes the data to gh-pages, comments and closes the issue.
+# See .github/scripts/device-results-issue.mjs.
 on:
   issues:
     types: [opened, edited, labeled]
@@ -10,8 +11,8 @@ permissions:
   contents: write
   issues: write
 
-# One run per issue; the script re-reads main before every push, so runs for different issues
-# can overlap without overwriting each other.
+# One run per issue; the script re-reads the data branch before every push, so runs for different
+# issues can overlap without overwriting each other.
 concurrency:
   group: device-results-${{ github.event.issue.number }}
 

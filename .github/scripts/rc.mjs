@@ -182,7 +182,7 @@ async function prune() {
     (release) =>
       (full && below(key(release.tag_name), key(full.tag_name))) ||
       // A draft older than the newest published RC is one whose build failed or was replaced.
-      (release.draft && latest && Date.parse(release.created_at) < Date.parse(latest.created_at)),
+      (release.draft && latest && (below(key(release.tag_name), key(latest.tag_name)) || Date.parse(release.created_at) < Date.parse(latest.created_at))),
   );
   for (const release of doomed) {
     if (!isRc(release)) continue; // never a full release
