@@ -1745,4 +1745,7 @@ sudo sysctl -w net.core.rmem_max={}", "Bộ đệm nhận: hệ thống chỉ c�
     ("Native {}% ({}x{})", "Gốc {0}% ({1}x{2})"),
     ("Windowed launcher", "Trình khởi chạy dạng cửa sổ"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "Mở các menu của Nightjar trong cửa sổ thông thường ngay cả khi Cửa sổ được đặt là Toàn màn hình hoặc Không viền. Luồng phát vẫn dùng cài đặt Cửa sổ của bạn. Bật tùy chọn này nếu bạn hay kéo Nightjar sang màn hình khác trước khi bắt đầu phát."),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Không thể lưu khóa ghép đôi, nên các PC đã ghép đôi với thiết bị này sẽ phải ghép đôi lại sau khi khởi động lại: {}"),
+    ("Another copy", "Bản sao khác"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "Trên thiết bị mới, chọn PC này trong Nightjar hoặc Moonlight."),
 ];

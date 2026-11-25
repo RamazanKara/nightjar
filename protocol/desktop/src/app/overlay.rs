@@ -163,6 +163,9 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     let input_only = s.facts.role == nightjar_core::http::AppRole::InputOnly;
     let small_stream = s.small_stream_input_only();
     let mic_only = s.mic_only();
+    if !s.menu_visible {
+        s.settle_bitrate_slider(nightjar_desktop_ui::stream_overlay_widgets::take_pending_bitrate_slider(&gui.ctx));
+    }
     if !s.overlay_visible && toast.is_none() && !input_only && !s.menu_visible {
         return false;
     }
@@ -406,7 +409,7 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
                                     ui.add_enabled_ui(!busy, |ui| {
                                         ui.horizontal(|ui| {
                                             ui.add_enabled_ui(!rates.bitrate_locked(), |ui| {
-                                                theme::step_value(ui, &mut rates.menu_kbps, 500..=800_000, 1000.0, |d| d.speed(100).suffix(" kbps"));
+                                                theme::step_value(ui, &mut rates.menu_kbps, 500..=2_000_000, 1000.0, |d| d.speed(100).suffix(" kbps"));
                                             });
                                             theme::step_value(ui, &mut rates.menu_fps, 10.0..=500.0, 1.0, |d| d.suffix(" fps").max_decimals(3));
                                         });

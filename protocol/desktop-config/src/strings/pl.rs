@@ -1745,4 +1745,7 @@ sudo sysctl -w net.core.rmem_max={}", "Bufor odbioru: system przydzielił {0} Ki
     ("Native {}% ({}x{})", "Natywna {0}% ({1}x{2})"),
     ("Windowed launcher", "Program uruchamiający w oknie"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "Otwiera menu Nightjar w zwykłym oknie, nawet gdy Okno jest ustawione na Pełny ekran lub Bez ramki. Strumienie nadal używają ustawienia Okno. Włącz tę opcję, jeśli przenosisz Nightjar między monitorami przed rozpoczęciem strumienia."),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Nie udało się zapisać klucza parowania, dlatego komputery sparowane z tym urządzeniem trzeba będzie sparować ponownie po restarcie: {}"),
+    ("Another copy", "Inna kopia"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "Na nowym urządzeniu wybierz ten komputer w Nightjar lub Moonlight."),
 ];

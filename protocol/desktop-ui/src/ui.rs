@@ -553,6 +553,9 @@ impl Launcher {
         let files_shown = match self.screen { Screen::Files(id) => Some(id), _ => None };
         if let Some((host, away)) = self.files.running_away(files_shown)
             && files::running_button(&ctx, away) {
+                if let Some(save) = self.screen.save_command() {
+                    commands.push(save);
+                }
                 commands.push(Command::OpenFiles(host));
             }
         self.draw_toast(&ctx);

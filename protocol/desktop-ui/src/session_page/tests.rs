@@ -336,7 +336,7 @@ fn a_second_write_is_refused_while_one_is_in_flight() {
     until("the panel", || page.state().radeon.panel.is_some());
     let row = editable_row(&page, "chill.max_fps");
     // The state a first write leaves behind until the worker answers.
-    lock(&page.shared).radeon.pending = Some("anti_lag.enabled".into());
+    lock(&page.shared).radeon.pending = Some((5, "anti_lag.enabled".into()));
     assert!(!page.write(&row, Value::Integer(110)));
     lock(&page.shared).radeon.pending = None;
     assert!(page.write(&row, Value::Integer(110)));
@@ -549,4 +549,48 @@ fn bench_menu_frame() {
             micros.iter().sum::<f64>() / micros.len() as f64
         );
     }
+}
+
+#[test]
+fn slow_reads_do_not_starve_buttons_between_or_across_cycles() {
+    struct SlowApi {
+        reads: Arc<AtomicUsize>,
+        actions: Arc<Mutex<Vec<ActionId>>>,
+        read_active: Arc<AtomicUsize>,
+    }
+    impl Api for SlowApi {
+        fn capabilities(&self) -> Result<Capabilities, Error> {
+            Ok(serde_json::from_str(
+                r#"{ "api_version": 1, "host": { "name": "PC", "version": "3", "unique_id": "x" }, "features": [],
+                     "permissions": { "list": true, "view": true, "launch": true, "host_control": true } }"#,
+            ).unwrap())
+        }
+        fn session(&self) -> Result<Session, Error> {
+            self.read_active.fetch_add(1, Ordering::SeqCst);
+            std::thread::sleep(Duration::from_millis(120));
+            Ok(session(SessionState::Streaming, &[(ActionId::End, true, None)]))
+        }
+        fn session_action(&self, action: ActionId) -> Result<Session, Error> {
+            self.actions.lock().unwrap().push(action);
+            Ok(session(SessionState::Stopping, &[]))
+        }
+        fn quit_app(&self) -> Result<bool, Error> { Ok(true) }
+        fn radeon(&self) -> Result<Radeon, Error> {
+            self.reads.fetch_add(1, Ordering::SeqCst);
+            std::thread::sleep(Duration::from_millis(120));
+            Ok(radeon_json(true))
+        }
+        fn write_radeon(&self, _: &SettingsWrite) -> Result<Radeon, Error> { Ok(radeon_json(true)) }
+    }
+
+    let reads = Arc::new(AtomicUsize::new(0));
+    let actions = Arc::new(Mutex::new(Vec::new()));
+    let read_active = Arc::new(AtomicUsize::new(0));
+    let api = SlowApi { reads: reads.clone(), actions: actions.clone(), read_active: read_active.clone() };
+    let page = Page::open_with(move || Ok(api), Arc::new(|| {}), Duration::from_millis(5), Duration::from_millis(5));
+    until("first session read started", || read_active.load(Ordering::SeqCst) >= 1);
+    let sent_at = Instant::now();
+    assert!(page.exit(HostExit::End));
+    until("action handled promptly between slow reads", || !actions.lock().unwrap().is_empty());
+    assert!(sent_at.elapsed() < Duration::from_millis(500), "action delayed by {:?}", sent_at.elapsed());
 }

@@ -243,8 +243,9 @@ pub(super) fn cover_uv(art: Vec2, box_size: Vec2) -> Rect {
 /// or the no-art tile; then the sheen and the rim. `text_w` is the width its tile's title is set for,
 /// so a cover springing bigger does not re-set its words every frame.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn cover_shapes(ui: &Ui, out: &mut Vec<Shape>, rect: Rect, text_w: f32, r: f32, title: &str, art: Option<&Art>, rim_boost: f32) {
+pub(super) fn cover_shapes(ui: &Ui, out: &mut Vec<Shape>, rect: Rect, text_w: f32, r: f32, cover_id: Id, title: &str, art: Option<&Art>, rim_boost: f32) {
     let ctx = ui.ctx();
+    let anim_id = Id::unique(("cover-in", cover_id));
     if !high_contrast() {
         glass::soft(out, ctx, rect.translate(vec2(0.0, t::COVER_SHADOW_Y)), r, t::COVER_SHADOW_BLUR, shade::COVER_SHADOW.get());
     }
@@ -253,7 +254,7 @@ pub(super) fn cover_shapes(ui: &Ui, out: &mut Vec<Shape>, rect: Rect, text_w: f3
             // Over its placeholder when it arrives while the cover is on screen; a cover that was
             // ready when it first showed is there at once.
             let seconds = if ui.style().animation_time > 0.0 { t::MOTION_COVER_IN_MS as f32 / 1000.0 } else { 0.0 };
-            let reveal = ctx.animate_bool_with_time(Id::unique(("cover-in", title)), true, seconds);
+            let reveal = ctx.animate_bool_with_time(anim_id, true, seconds);
             if reveal < 1.0 {
                 glass::solid(out, ctx, rect, r, shade::COVER_PLACEHOLDER.get());
             }
@@ -263,7 +264,7 @@ pub(super) fn cover_shapes(ui: &Ui, out: &mut Vec<Shape>, rect: Rect, text_w: f3
         }
         // One given up for room shows as one on its way: it is, from its file.
         Some(Art::Loading | Art::Dropped) => {
-            ctx.animate_bool_with_time(Id::unique(("cover-in", title)), false, 0.0);
+            ctx.animate_bool_with_time(anim_id, false, 0.0);
             glass::solid(out, ctx, rect, r, shade::COVER_PLACEHOLDER.get());
         }
         Some(Art::Missing) | None => tile_shapes(ui, out, rect, text_w, r, title),
@@ -327,10 +328,10 @@ pub(super) fn running_dot(out: &mut Vec<Shape>, cover: Rect) {
 }
 
 /// A cover outside a grid: the game page's and a List line's. It takes no focus of its own.
-pub(super) fn paint_cover(ui: &Ui, image: Rect, name: &str, art: Option<&Art>, running: bool) {
+pub(super) fn paint_cover(ui: &Ui, image: Rect, cover_id: Id, name: &str, art: Option<&Art>, running: bool) {
     let r = if image.width() < 80.0 { t::RADIUS_TILE } else { t::RADIUS_COVER };
     let mut shapes = Vec::new();
-    cover_shapes(ui, &mut shapes, image, image.width(), r, name, art, 1.0);
+    cover_shapes(ui, &mut shapes, image, image.width(), r, cover_id, name, art, 1.0);
     if running {
         running_dot(&mut shapes, image);
     }
@@ -354,14 +355,14 @@ pub(super) enum Badge {
 /// A game's cover, `width` wide at 2:3, its title on one line under it (a tile without art holds
 /// the whole title instead). Pointed at it rises a little and its rim brightens; focus springs it
 /// bigger, over its neighbours, with the ring. Its slot never changes size.
-pub(super) fn poster(ui: &mut Ui, name: &str, art: Option<&Art>, badge: Badge, width: f32) -> Response {
-    cover_slot(ui, name, art, badge, width, true)
+pub(super) fn poster(ui: &mut Ui, cover_id: Id, name: &str, art: Option<&Art>, badge: Badge, width: f32) -> Response {
+    cover_slot(ui, cover_id, name, art, badge, width, true)
 }
 
 /// A cover of an app grid: no label, as its art carries its title and so does a tile. Until the art
 /// comes the placeholder holds the name; a screen reader always hears it.
-pub(super) fn bare_poster(ui: &mut Ui, name: &str, art: Option<&Art>, badge: Badge, width: f32) -> Response {
-    cover_slot(ui, name, art, badge, width, false)
+pub(super) fn bare_poster(ui: &mut Ui, cover_id: Id, name: &str, art: Option<&Art>, badge: Badge, width: f32) -> Response {
+    cover_slot(ui, cover_id, name, art, badge, width, false)
 }
 
 /// A place in a grid while the list is on its way: where a cover will land, so nothing moves. Its
@@ -376,7 +377,7 @@ pub(super) fn cover_placeholder(ui: &mut Ui, width: f32, captioned: bool) {
     }
     let rect = Rect::from_min_size(slot.min, vec2(width, height));
     let mut shapes = Vec::new();
-    cover_shapes(ui, &mut shapes, rect, width, t::RADIUS_COVER, "", Some(&Art::Loading), 1.0);
+    cover_shapes(ui, &mut shapes, rect, width, t::RADIUS_COVER, Id::unique("cover-placeholder"), "", Some(&Art::Loading), 1.0);
     shimmer(&mut shapes, ui.ctx(), rect, t::RADIUS_COVER);
     if captioned {
         let bar = Rect::from_min_size(pos2(rect.left() + 2.0, rect.bottom() + space::S + 3.0), vec2(width * CAPTION_BAR_SHARE, CAPTION_BAR_H));
@@ -428,7 +429,7 @@ fn placeholder_title(ui: &Ui, out: &mut Vec<Shape>, rect: Rect, name: &str) {
     out.push(Shape::galley(rect.left_top() + Vec2::splat(inset), galley, *ON_SURFACE_VARIANT));
 }
 
-fn cover_slot(ui: &mut Ui, name: &str, art: Option<&Art>, badge: Badge, width: f32, captioned: bool) -> Response {
+fn cover_slot(ui: &mut Ui, cover_id: Id, name: &str, art: Option<&Art>, badge: Badge, width: f32, captioned: bool) -> Response {
     let height = cover_height(width);
     let caption = if captioned { POSTER_CAPTION } else { 0.0 };
     let (rect, response) = ui.allocate_exact_size(vec2(width, height + caption), Sense::click());
@@ -449,7 +450,7 @@ fn cover_slot(ui: &mut Ui, name: &str, art: Option<&Art>, badge: Badge, width: f
     ctx.data_mut(|d| d.insert_temp(response.id.with("shown"), shown));
     let boost = if feel.hovered || feel.focused { t::HOVER_RIM_BOOST } else { 1.0 };
     let mut shapes = Vec::new();
-    cover_shapes(ui, &mut shapes, shown, width, t::RADIUS_COVER, name, art, boost);
+    cover_shapes(ui, &mut shapes, shown, width, t::RADIUS_COVER, cover_id, name, art, boost);
     if !captioned && matches!(art, Some(Art::Loading | Art::Dropped)) {
         placeholder_title(ui, &mut shapes, shown, name);
     }
@@ -576,7 +577,7 @@ pub(super) const LIST_ROW_H: f32 = 88.0;
 
 /// A game as a line of Home's List layout: a small cover, the title, and under it `line` (its
 /// store and when it was last played).
-pub(super) fn list_row(ui: &mut Ui, name: &str, line: &str, art: Option<&Art>, badge: Badge, width: f32) -> Response {
+pub(super) fn list_row(ui: &mut Ui, cover_id: Id, name: &str, line: &str, art: Option<&Art>, badge: Badge, width: f32) -> Response {
     let (rect, response) = ui.allocate_exact_size(vec2(width, LIST_ROW_H), Sense::click());
     let said = match badge {
         Badge::Running => trf("{}, running", &[&name]),
@@ -591,7 +592,7 @@ pub(super) fn list_row(ui: &mut Ui, name: &str, line: &str, art: Option<&Art>, b
     card_fill(&painter, rect, &response);
     let cover_h = LIST_ROW_H - 2.0 * space::S;
     let image = Rect::from_min_size(rect.min + vec2(space::S, space::S), vec2((cover_h * t::COVER_ASPECT).round(), cover_h));
-    paint_cover(ui, image, name, art, badge == Badge::Running);
+    paint_cover(ui, image, cover_id, name, art, badge == Badge::Running);
     if badge == Badge::NotInstalled {
         ui.painter_at(image).rect_filled(image, CornerRadius::same(t::RADIUS_TILE as u8), Color32::from_black_alpha(120));
     }

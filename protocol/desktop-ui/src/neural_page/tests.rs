@@ -344,3 +344,61 @@ fn a_failed_read_is_not_retried_by_itself() {
     assert!(panel.state_for(1, 7).unwrap().error.is_some());
     assert_eq!(fake.calls.lock().unwrap().len(), 2);
 }
+
+#[test]
+fn a_failed_read_during_a_running_job_keeps_polling() {
+    struct FailOnceWhileWorking {
+        calls: Mutex<usize>,
+    }
+    impl NeuralSource for FailOnceWhileWorking {
+        fn neural(&self, _: &str) -> Result<Neural, Error> {
+            let mut n = self.calls.lock().unwrap();
+            *n += 1;
+            match *n {
+                1 => Ok(state(false, Some(NeuralPhase::Download))),
+                2 => Err(Error::Io(std::io::Error::from(std::io::ErrorKind::TimedOut))),
+                _ => Ok(state(true, Some(NeuralPhase::Done))),
+            }
+        }
+        fn write(&self, _: &NeuralWrite) -> Result<Neural, Error> {
+            unreachable!()
+        }
+        fn cancel(&self) {}
+    }
+    let api = Arc::new(FailOnceWhileWorking { calls: Mutex::new(0) });
+    let mut panel = NeuralPanel::default();
+    panel.open(1, 7, "uuid-1".into(), api.clone(), waker());
+    for _ in 0..400 {
+        panel.poll(Some((1, 7)));
+        if panel.state_for(1, 7).unwrap().state.is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(panel.state_for(1, 7).unwrap().state.as_ref().unwrap().working());
+
+    panel.read(Duration::ZERO);
+    for _ in 0..400 {
+        panel.poll(Some((1, 7)));
+        if panel.state_for(1, 7).unwrap().error.is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(panel.state_for(1, 7).unwrap().error.is_some());
+    assert!(panel.state_for(1, 7).unwrap().loading, "failed read during active job must keep POLL scheduled");
+
+    // Wait out POLL (~1.5s) and ensure poll(Some(...)) drives call 3 without manual read().
+    for _ in 0..450 {
+        panel.poll(Some((1, 7)));
+        if panel.state_for(1, 7).unwrap().error.is_none()
+            && !panel.state_for(1, 7).unwrap().state.as_ref().unwrap().working()
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(panel.state_for(1, 7).unwrap().error.is_none());
+    assert!(!panel.state_for(1, 7).unwrap().state.as_ref().unwrap().working());
+    assert!(*api.calls.lock().unwrap() >= 3);
+}

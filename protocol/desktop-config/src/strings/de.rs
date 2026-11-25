@@ -1746,4 +1746,7 @@ sudo sysctl -w net.core.rmem_max={2}"),
     ("Native {}% ({}x{})", "Nativ {0}% ({1}x{2})"),
     ("Windowed launcher", "Launcher im Fenster"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "Öffnet die Menüs von Nightjar in einem normalen Fenster, auch wenn Fenster auf Vollbild oder Randlos steht. Streams nutzen weiterhin die Fenster-Einstellung. Aktiviere dies, wenn du Nightjar vor dem Start eines Streams zwischen Monitoren verschiebst."),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Der Kopplungsschlüssel konnte nicht gespeichert werden, sodass die mit diesem Gerät gekoppelten PCs nach einem Neustart erneut gekoppelt werden müssen: {}"),
+    ("Another copy", "Weitere Kopie"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "Wähle auf dem neuen Gerät diesen PC in Nightjar oder Moonlight."),
 ];

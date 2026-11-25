@@ -186,19 +186,21 @@ fn radeon_panel(ui: &mut egui::Ui, page: &Page, state: &State) {
         }
         for row in &gpu.rows {
             draw_row(ui, page, state, row);
-            if let Some(failure) = failure.filter(|f| f.setting.as_deref() == Some(row.id.as_str())) {
+            if let Some(failure) = failure
+                .filter(|f| f.setting.as_deref() == Some(row.id.as_str()) && f.gpu.is_none_or(|g| g == row.gpu))
+            {
                 ui.colored_label(theme::ERROR, failure.text());
             }
         }
     }
     // A failure for a setting this panel does not list still has to be seen.
-    if let Some(failure) = failure.filter(|f| f.setting.as_deref().is_none_or(|id| panel.find(id).is_none())) {
+    if let Some(failure) = failure.filter(|f| f.setting.as_deref().is_none_or(|id| panel.find_on(f.gpu, id).is_none())) {
         ui.colored_label(theme::ERROR, failure.text());
     }
 }
 
 fn draw_row(ui: &mut egui::Ui, page: &Page, state: &State, row: &Row) {
-    let pending = state.radeon.pending.as_deref() == Some(row.id.as_str());
+    let pending = state.radeon.pending.as_ref().is_some_and(|(gpu, id)| *gpu == row.gpu && id == row.id.as_str());
     ui.horizontal(|ui| {
         ui.label(row.title());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| match row.mode {

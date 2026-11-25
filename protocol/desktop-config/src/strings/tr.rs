@@ -1745,4 +1745,7 @@ sudo sysctl -w net.core.rmem_max={}", "Alma arabelleği: sistem istenen {1} KiB'
     ("Native {}% ({}x{})", "Yerel %{0} ({1}x{2})"),
     ("Windowed launcher", "Pencereli başlatıcı"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "Pencere ayarı Tam ekran veya Kenarlıksız olsa bile Nightjar menülerini normal bir pencerede açar. Yayınlar Pencere ayarınızı kullanmaya devam eder. Yayını başlatmadan önce Nightjar’ı monitörler arasında taşıyorsanız bunu açın."),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Eşleştirme anahtarı kaydedilemediğinden bu cihazla eşleştirilen bilgisayarların yeniden başlatma sonrası tekrar eşleştirilmesi gerekir: {}"),
+    ("Another copy", "Başka bir kopya"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "Yeni cihazda Nightjar veya Moonlight’ta bu bilgisayarı seçin."),
 ];

@@ -322,7 +322,7 @@ fn a_long_word_on_a_tile_stays_whole() {
     crate::theme::apply(&ctx);
     let mut out = Vec::new();
     let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-        cover_shapes(ui, &mut out, Rect::from_min_size(Pos2::ZERO, vec2(155.0, 232.0)), 155.0, 16.0, "Brightwater", None, 1.0);
+        cover_shapes(ui, &mut out, Rect::from_min_size(Pos2::ZERO, vec2(155.0, 232.0)), 155.0, 16.0, Id::unique(("cover-in", "test")), "Brightwater", None, 1.0);
     });
     output.textures_delta.clear();
     let rows: Vec<usize> = out.iter().filter_map(|shape| match shape {
@@ -604,4 +604,27 @@ fn the_hero_is_the_running_game_then_the_last_played_then_the_first_installed() 
     f.hosts.list[0].native.library.as_mut().expect("a library").games[0].running = true;
     f.settle();
     assert_eq!(hero(&f).as_deref(), Some("Alpha"), "what runs");
+}
+
+#[test]
+fn identical_game_titles_on_two_pcs_do_not_share_cover_animation() {
+    let art_a = egui::ColorImage::filled([4, 4], egui::Color32::from_rgb(120, 40, 40));
+    let art_b = egui::ColorImage::filled([4, 4], egui::Color32::from_rgb(40, 40, 120));
+    let f = demo_frames(vec2(1000.0, 700.0));
+    // First PC has "Desktop" cover loaded; second PC switches in while both share the same title.
+    let id_a = Id::unique(("cover-in", 1_u64, 100_u32));
+    let id_b = Id::unique(("cover-in", 2_u64, 100_u32));
+    assert_ne!(id_a, id_b);
+    let art_a = crate::hosts_model::Art::Ready(f.ctx.load_texture("a", art_a, egui::TextureOptions::LINEAR));
+    let tex_b = f.ctx.load_texture("b", art_b, egui::TextureOptions::LINEAR);
+    let mut out_a = Vec::new();
+    let mut out_b = Vec::new();
+    let mut out = f.ctx.run_ui(egui::RawInput::default(), |ui| {
+        cover_shapes(ui, &mut out_a, Rect::from_min_size(Pos2::ZERO, vec2(155.0, 232.0)), 155.0, 16.0, id_a, "Desktop", Some(&art_a), 1.0);
+        cover_shapes(ui, &mut out_b, Rect::from_min_size(Pos2::new(200.0, 0.0), vec2(155.0, 232.0)), 155.0, 16.0, id_b, "Desktop", None, 1.0);
+    });
+    out.textures_delta.clear();
+    assert!(f.ctx.animate_bool_with_time(id_a, true, 0.09) > 0.0);
+    assert_eq!(f.ctx.animate_bool_with_time(id_b, false, 0.09), 0.0);
+    let _ = tex_b;
 }

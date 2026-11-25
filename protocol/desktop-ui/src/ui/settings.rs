@@ -641,6 +641,9 @@ impl Launcher {
         if reset_all {
             *s = reset_to_defaults(s);
             (*custom_size_on, *custom_fps_on) = (None, None);
+            if self.sign_in == Some(true) {
+                commands.push(Command::SetSignIn(false));
+            }
         }
         if *s != before {
             self.settings_dirty = true;

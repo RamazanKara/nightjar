@@ -472,3 +472,52 @@ fn native_metalfx_settings_roundtrip_without_requesting_sdl_gpu_shaders() {
         assert_eq!(serde_json::from_value::<Upscaling>(serde_json::json!(name)).unwrap(), value);
     }
 }
+
+#[test]
+fn pre_641_resolution_layers_do_not_inherit_main_native_scale() {
+    let base = Settings { width: 0, height: 0, native_scale: 75, ..Settings::default() };
+    let explicit: Overrides = serde_json::from_str(r#"{"width": 1920, "height": 1080}"#).unwrap();
+    let applied_explicit = explicit.apply(&base);
+    assert_eq!((applied_explicit.width, applied_explicit.height, applied_explicit.native_scale), (1920, 1080, 100));
+
+    let old_native: Overrides = serde_json::from_str(r#"{"width": 0, "height": 0}"#).unwrap();
+    let applied_old_native = old_native.apply(&base);
+    assert_eq!((applied_old_native.width, applied_old_native.height, applied_old_native.native_scale), (0, 0, 100));
+
+    let fps_only: Overrides = serde_json::from_str(r#"{"fps": 120}"#).unwrap();
+    let applied_fps = fps_only.apply(&base);
+    assert_eq!((applied_fps.width, applied_fps.height, applied_fps.native_scale, applied_fps.fps), (0, 0, 75, 120));
+
+    let scaled_layer: Overrides = serde_json::from_str(r#"{"width": 0, "height": 0, "native_scale": 50}"#).unwrap();
+    assert_eq!(scaled_layer.apply(&base).native_scale, 50);
+}
+
+#[test]
+fn unreadable_auxiliary_store_files_keep_their_place_and_bad_shortcuts_are_backed_up() {
+    let dir = std::env::temp_dir().join(format!("nightjar-unreadable-aux-{}", std::process::id()));
+    std::fs::remove_dir_all(&dir).ok();
+    let store = Store::at(dir.clone()).unwrap();
+
+    for name in ["window.json", "recent.json", "open_play.json", "favourites.json", "hidden-games.json", "shortcuts.json"] {
+        std::fs::create_dir(dir.join(name)).unwrap();
+    }
+    assert!(store.window_placement().is_none());
+    assert!(store.save_window_placement(&crate::window_place_types::Placement::default()).is_err());
+    assert!(store.recents().is_empty());
+    assert!(store.save_recents(&[]).is_err());
+    assert_eq!(store.open_play(), OpenPlayState::default());
+    assert!(store.save_open_play(&OpenPlayState::default()).is_err());
+    assert!(store.favourites().is_empty());
+    assert!(store.save_favourites(&[]).is_err());
+    assert!(store.hidden_games().is_empty());
+    assert!(store.save_hidden_games(&[]).is_err());
+    assert!(store.shortcuts().data.is_empty());
+    assert!(store.save_shortcuts(&crate::shortcuts::Shortcuts::default()).is_err());
+
+    let bad_dir = dir.join("bad-shortcuts");
+    let bad_store = Store::at(bad_dir.clone()).unwrap();
+    std::fs::write(bad_dir.join("shortcuts.json"), b"{not valid json").unwrap();
+    assert!(bad_store.shortcuts().data.is_empty());
+    assert!(bad_dir.join("shortcuts.json.bad").is_file(), "unparsable shortcuts keep a .bad copy");
+    std::fs::remove_dir_all(dir).ok();
+}

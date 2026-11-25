@@ -53,10 +53,9 @@ pub(crate) fn base_probe_sticky(key: ProbeKey, found: &stream::color_probe::Base
         return true;
     }
     let v4l2_label = Hardware::V4l2m2m.label();
-    let v4l2_in_play = hardware == Hardware::V4l2m2m
-        || found.backends.iter().any(|&(_, backend)| backend == Hardware::V4l2m2m)
-        || found.reason.contains(v4l2_label);
-    !v4l2_in_play
+    let v4l2_transient = (hardware == Hardware::V4l2m2m || found.reason.contains(v4l2_label))
+        && found.reason.contains("made no picture");
+    !v4l2_transient
 }
 
 /// Peeks the cached base probe for `key` without consuming a one-shot (`!sticky`) entry yet, so
@@ -70,10 +69,15 @@ pub(crate) fn peek_base_probe(
 }
 
 /// Clears a one-shot (`!sticky`) base probe entry for `key` once the triggering launch commits,
-/// leaving sticky entries cached for subsequent launches.
-pub(crate) fn consume_non_sticky_base_probe(cache: &mut Option<CachedBaseProbe>, key: ProbeKey) {
+/// recording the retry so a second identical failure stays cached instead of re-probing forever.
+pub(crate) fn consume_non_sticky_base_probe(
+    cache: &mut Option<CachedBaseProbe>,
+    retried: &mut Option<ProbeKey>,
+    key: ProbeKey,
+) {
     if cache.as_ref().is_some_and(|entry| entry.key == key && !entry.sticky) {
         *cache = None;
+        *retried = Some(key);
     }
 }
 

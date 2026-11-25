@@ -234,8 +234,8 @@ pub struct RadeonState {
     pub load_failure: Option<Failure>,
     /// The last write that failed, shown at its setting.
     pub write_failure: Option<Failure>,
-    /// The setting a write is in flight for.
-    pub pending: Option<String>,
+    /// The GPU and setting a write is in flight for.
+    pub pending: Option<(i32, String)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -363,7 +363,7 @@ impl Page {
         if !state.can_write(row) {
             return false;
         }
-        state.radeon.pending = Some(row.id.clone());
+        state.radeon.pending = Some((row.gpu, row.id.clone()));
         state.radeon.write_failure = None;
         drop(state);
         self.requests.send(Request::Write { gpu: row.gpu, id: row.id.clone(), value }).is_ok()
@@ -419,21 +419,44 @@ impl Worker {
             });
         }
         loop {
+            if !self.drain_requests(&api, &inbox) {
+                return;
+            }
             let due = self.gate.due(Instant::now());
             if due.session || due.radeon {
                 if due.session {
                     self.read_session(&api);
                 }
                 if due.radeon {
+                    if !self.drain_requests(&api, &inbox) {
+                        return;
+                    }
                     self.read_radeon(&api);
                 }
                 continue;
             }
             match inbox.recv_timeout(self.gate.wait(Instant::now())) {
-                Ok(Request::Write { gpu, id, value }) => self.write(&api, gpu, id, value),
-                Ok(Request::Exit(exit)) => self.exit(&api, exit),
+                Ok(request) => self.handle_request(&api, request),
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => return,
+            }
+        }
+    }
+
+    fn handle_request<A: Api>(&mut self, api: &A, request: Request) {
+        match request {
+            Request::Write { gpu, id, value } => self.write(api, gpu, id, value),
+            Request::Exit(exit) => self.exit(api, exit),
+        }
+    }
+
+    fn drain_requests<A: Api>(&mut self, api: &A, inbox: &std::sync::mpsc::Receiver<Request>) -> bool {
+        use std::sync::mpsc::TryRecvError;
+        loop {
+            match inbox.try_recv() {
+                Ok(request) => self.handle_request(api, request),
+                Err(TryRecvError::Empty) => return true,
+                Err(TryRecvError::Disconnected) => return false,
             }
         }
     }
@@ -495,7 +518,7 @@ impl Worker {
                     s.radeon.write_failure = None;
                 }
                 Err(error) if is_missing(&error) => s.radeon = RadeonState { hidden: true, ..RadeonState::default() },
-                Err(error) => s.radeon.write_failure = Some(Failure::of(&error, Some(&id))),
+                Err(error) => s.radeon.write_failure = Some(Failure::of_gpu(&error, Some(gpu), Some(&id))),
             }
         });
     }

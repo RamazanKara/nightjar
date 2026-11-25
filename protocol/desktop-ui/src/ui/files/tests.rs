@@ -577,3 +577,33 @@ fn every_problem_has_its_own_words() {
         assert_eq!(tr(problem_text(Problem::NoSpace)), "Auf dem PC ist nicht genug Platz frei.");
     });
 }
+
+#[test]
+fn an_upload_that_grows_while_queued_sends_all_bytes_and_updates_total() {
+    let downloads = Folder::new("grow-dl");
+    let here = Folder::new("grow-here");
+    let api = fake(true, true);
+    *api.hold.lock().unwrap() = true;
+    let mut files = Files { page: Some(page(api.clone(), &downloads)) };
+    let p = files.page.as_mut().unwrap();
+    until(p, "the list", |p| p.list.is_some());
+
+    let blocker = here.file("first.txt", b"123");
+    let growing = here.file("grow.txt", b"abc");
+    p.send(vec![blocker, growing.clone()]);
+    std::fs::write(&growing, b"abcdefghij").unwrap();
+
+    *api.hold.lock().unwrap() = false;
+    until(p, "both uploaded", |p| p.transfers.items().iter().filter(|t| t.state.is_finished()).count() == 2);
+
+    let received = api.received.lock().unwrap().clone();
+    assert!(received.iter().any(|(n, data)| n == "grow.txt" && data == b"abcdefghij"), "{received:?}");
+    let grow_item = p.transfers.items().iter().find(|t| t.name == "grow.txt").expect("grow item");
+    assert!(matches!(grow_item.state, nightjar_policy::http::transfers::State::Done { size: 10, .. }), "{grow_item:?}");
+
+    drop(files);
+    let until_done = Instant::now() + Duration::from_secs(10);
+    while Arc::strong_count(&api) > 1 && Instant::now() < until_done {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}

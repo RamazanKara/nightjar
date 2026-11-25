@@ -1745,4 +1745,7 @@ sudo sysctl -w net.core.rmem_max={}", "수신 버퍼: 시스템이 요청한 {1}
     ("Native {}% ({}x{})", "기본 {0}%({1}x{2})"),
     ("Windowed launcher", "런처를 창 모드로 표시"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "창 설정이 전체 화면이나 테두리 없음이어도 Nightjar 메뉴를 일반 창으로 엽니다. 스트림은 계속 창 설정을 따릅니다. 스트림을 시작하기 전에 Nightjar를 다른 모니터로 옮겨 쓴다면 켜세요."),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "페어링 키를 저장할 수 없어 재시작 후 이 기기와 페어링된 PC를 다시 페어링해야 합니다: {}"),
+    ("Another copy", "다른 사본"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "새 기기의 Nightjar 또는 Moonlight에서 이 PC를 선택하세요."),
 ];

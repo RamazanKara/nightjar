@@ -96,7 +96,7 @@ impl Launcher {
                         for (i, app) in chunk.iter().enumerate() {
                             let is_running = running.is_some_and(|r| app.matches_running_app(r, None));
                             let art = shown_art(view, id, app.id as u32);
-                            let response = bare_poster(ui, &app.name, art, if is_running { Badge::Running } else { Badge::None }, width);
+                            let response = bare_poster(ui, Id::unique(("cover-in", id, app.id)), &app.name, art, if is_running { Badge::Running } else { Badge::None }, width);
                             request_cover(ui, view, id, app.id as u32, &response, commands);
                             let first = if running.is_some() { is_running } else { row == 0 && i == 0 };
                             let key = format!("app:{}", app.id);
@@ -417,7 +417,8 @@ impl Launcher {
         } else {
             Badge::None
         };
-        let response = list_row(ui, &entry.title, line, art, badge, width);
+        let cover_id = cover.map_or_else(|| Id::unique(("cover-in", &entry.key)), |c| Id::unique(("cover-in", c.host, c.app_id)));
+        let response = list_row(ui, cover_id, &entry.title, line, art, badge, width);
         if let Some(c) = cover {
             request_cover(ui, view, c.host, c.app_id, &response, commands);
         }
@@ -446,7 +447,8 @@ impl Launcher {
             Badge::None
         };
         // Named under the cover, on Home's shelves and in the grid of all games alike.
-        let response = poster(ui, &entry.title, art, badge, width);
+        let cover_id = cover.map_or_else(|| Id::unique(("cover-in", &entry.key)), |c| Id::unique(("cover-in", c.host, c.app_id)));
+        let response = poster(ui, cover_id, &entry.title, art, badge, width);
         if let Some(c) = cover {
             request_cover(ui, view, c.host, c.app_id, &response, commands);
         }

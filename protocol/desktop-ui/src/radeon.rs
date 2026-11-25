@@ -314,7 +314,15 @@ impl Panel {
     }
 
     pub fn find(&self, id: &str) -> Option<&Row> {
-        self.gpus.iter().flat_map(|g| &g.rows).find(|r| r.id == id)
+        self.find_on(None, id)
+    }
+
+    pub fn find_on(&self, gpu: Option<i32>, id: &str) -> Option<&Row> {
+        self.gpus
+            .iter()
+            .filter(|g| gpu.is_none_or(|wanted| g.id == wanted))
+            .flat_map(|g| &g.rows)
+            .find(|r| r.id == id)
     }
 
     /// Whether a Radeon write is possible at all right now: host control, an owned session.
@@ -369,6 +377,8 @@ fn controllable(setting: &Setting) -> bool {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Failure {
     pub kind: FailureKind,
+    /// The GPU the write targeted, or None for whole-request / legacy failures.
+    pub gpu: Option<i32>,
     /// The setting the host named, or None when the failure is about the whole request.
     pub setting: Option<String>,
     /// The host's own text, shown when there is no better one.
@@ -390,6 +400,10 @@ pub enum FailureKind {
 impl Failure {
     /// The host's code decides, not its English.
     pub fn of(error: &Error, requested: Option<&str>) -> Failure {
+        Self::of_gpu(error, None, requested)
+    }
+
+    pub fn of_gpu(error: &Error, gpu: Option<i32>, requested: Option<&str>) -> Failure {
         let (kind, setting, host_message) = match error {
             Error::Api { status, error } => {
                 let kind = match error.code {
@@ -409,7 +423,7 @@ impl Failure {
             }
             other => (FailureKind::Generic, None, Some(other.to_string())),
         };
-        Failure { kind, setting: setting.or_else(|| requested.map(str::to_owned)), host_message }
+        Failure { kind, gpu, setting: setting.or_else(|| requested.map(str::to_owned)), host_message }
     }
 
     pub fn text(&self) -> String {

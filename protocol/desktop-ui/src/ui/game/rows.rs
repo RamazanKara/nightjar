@@ -211,15 +211,27 @@ impl Launcher {
             })
             .unwrap_or_default();
         for copy in others {
+            let same_pc = copy.host == host.id;
+            let where_name = if same_pc {
+                copy.store_name
+                    .as_deref()
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| (!copy.title.is_empty() && copy.title != game.title).then_some(copy.title.as_str()))
+                    .unwrap_or(copy.host_name.as_str())
+                    .to_owned()
+            } else {
+                copy.host_name.clone()
+            };
             // A copy there that is not installed opens, but says so first.
             let name = if copy.installed {
-                copy.host_name.clone()
+                where_name
             } else {
-                trf("{}, not installed", &[&copy.host_name])
+                trf("{}, not installed", &[&where_name])
             };
+            let label = if same_pc { tr("Another copy") } else { tr("Also on") }.to_owned();
             rows.push(ArtRow {
-                key: format!("copy:{}", copy.host),
-                label: tr("Also on").to_owned(),
+                key: format!("copy:{}:{}", copy.host, copy.app_id),
+                label,
                 sub: Some((name, *ON_SURFACE_VARIANT)),
                 said: None,
                 wrap: false,

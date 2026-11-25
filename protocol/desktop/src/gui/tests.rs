@@ -449,3 +449,68 @@ fn focus_on_a_header_above_a_scrolled_area_does_not_scroll_it() {
     for n in 4..8 { offset = frame(n, false); }
     assert_eq!(offset, 300.0, "the rows stay scrolled");
 }
+
+#[test]
+fn gui_event_updates_egui_modifiers_and_clipboard_shortcuts() {
+    let scale = Scale { pixels_per_point: 1.0, density: 1.0, size: Vec2::new(800.0, 600.0) };
+    let mut gui = Gui::new();
+    let cmd_mod = if cfg!(target_os = "macos") { SDL_KMOD_GUI } else { SDL_KMOD_CTRL };
+
+    let key_event = |kind: SDL_EventType, key: SDL_Keycode, mods: SDL_Keymod, down: bool| -> SDL_Event {
+        // SAFETY: an all-zero SDL_Event is a valid value of the C union.
+        let mut ev: SDL_Event = unsafe { std::mem::zeroed() };
+        ev.r#type = kind.0;
+        ev.key.key = key;
+        ev.key.r#mod = mods;
+        ev.key.down = down;
+        ev
+    };
+
+    // Pure modifier press alone notifies egui so Shift+click and chords observe it in i.modifiers.
+    gui.handle(&key_event(SDL_EVENT_KEY_DOWN, SDLK_LSHIFT, SDL_KMOD_SHIFT, true), scale);
+    assert!(gui.events.iter().any(|e| matches!(e, Event::ModifiersChanged(m) if m.shift)));
+
+    let run = |gui: &mut Gui| {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0))),
+            events: std::mem::take(&mut gui.events),
+            ..Default::default()
+        };
+        let mut saw_shift = false;
+        let mut saw_cmd = false;
+        let mut out = gui.ctx.run_ui(input, |ui| {
+            saw_shift = ui.input(|i| i.modifiers.shift);
+            saw_cmd = ui.input(|i| i.modifiers.command);
+        });
+        out.textures_delta.clear();
+        (saw_shift, saw_cmd)
+    };
+
+    assert_eq!(run(&mut gui), (true, false));
+
+    // Ctrl+F / Ctrl+Plus / Ctrl+0 chords see command modifier active in egui input state.
+    gui.handle(&key_event(SDL_EVENT_KEY_DOWN, SDLK_F, cmd_mod, true), scale);
+    assert!(gui.events.iter().any(|e| matches!(e, Event::ModifiersChanged(m) if m.command)));
+    assert_eq!(run(&mut gui), (false, true));
+
+    // Clipboard Cut/Copy variants (Cmd+X, Shift+Delete, Ctrl+Insert) reach events directly.
+    gui.handle(&key_event(SDL_EVENT_KEY_DOWN, SDLK_X, cmd_mod, true), scale);
+    assert!(gui.events.iter().any(|e| matches!(e, Event::Cut)));
+    gui.events.clear();
+
+    gui.handle(&key_event(SDL_EVENT_KEY_DOWN, SDLK_DELETE, SDL_KMOD_SHIFT, true), scale);
+    assert!(gui.events.iter().any(|e| matches!(e, Event::Cut)));
+    gui.events.clear();
+
+    gui.handle(&key_event(SDL_EVENT_KEY_DOWN, SDLK_INSERT, SDL_KMOD_CTRL, true), scale);
+    assert!(gui.events.iter().any(|e| matches!(e, Event::Copy)));
+    gui.events.clear();
+
+    // Window focus loss resets stale modifiers.
+    // SAFETY: an all-zero SDL_Event is a valid value of the C union.
+    let mut lost: SDL_Event = unsafe { std::mem::zeroed() };
+    lost.r#type = SDL_EVENT_WINDOW_FOCUS_LOST.0;
+    gui.handle(&lost, scale);
+    assert!(gui.events.iter().any(|e| matches!(e, Event::ModifiersChanged(m) if *m == Modifiers::NONE)));
+    assert_eq!(run(&mut gui), (false, false));
+}

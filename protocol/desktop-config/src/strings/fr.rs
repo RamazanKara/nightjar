@@ -1745,4 +1745,7 @@ sudo sysctl -w net.core.rmem_max={}", "Tampon de réception : le système a acco
     ("Native {}% ({}x{})", "Native {0} % ({1}x{2})"),
     ("Windowed launcher", "Lanceur fenêtré"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "Ouvre les menus de Nightjar dans une fenêtre ordinaire même lorsque Fenêtre est réglé sur Plein écran ou Sans bordure. Les flux continuent d’utiliser votre réglage Fenêtre. Activez-le si vous déplacez Nightjar entre vos écrans avant de lancer un flux."),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Impossible d’enregistrer la clé d’appairage : les PC appairés avec cet appareil devront être appairés à nouveau après un redémarrage : {}"),
+    ("Another copy", "Autre copie"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "Sur le nouvel appareil, sélectionnez ce PC dans Nightjar ou Moonlight."),
 ];

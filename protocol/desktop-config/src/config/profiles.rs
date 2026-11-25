@@ -46,7 +46,15 @@ impl Overrides {
 
     pub fn apply(&self, base: &Settings) -> Settings {
         let mut values = serde_json::to_value(base).expect("settings serialize");
-        values.as_object_mut().unwrap().extend(self.0.clone());
+        let obj = values.as_object_mut().unwrap();
+        obj.extend(self.0.clone());
+        // Resolution spans `width`, `height`, and `native_scale`: pre-6.4.1 layers that set pixel
+        // dimensions without `native_scale` must keep full 100% scale rather than inheriting main's.
+        if (self.0.contains_key("width") || self.0.contains_key("height"))
+            && !self.0.contains_key("native_scale")
+        {
+            obj.insert("native_scale".to_owned(), serde_json::json!(100));
+        }
         // A value this version cannot read is left out with the base's own, not a panic on the
         // UI thread: a file from a newer Nightjar, or a hand edit, costs its entry alone.
         serde_json::from_value(values).unwrap_or_else(|e| {

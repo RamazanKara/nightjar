@@ -1745,4 +1745,7 @@ sudo sysctl -w net.core.rmem_max={}", "受信バッファー：システムは�
     ("Native {}% ({}x{})", "ネイティブ {0}%（{1}x{2}）"),
     ("Windowed launcher", "ランチャーをウィンドウ表示"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "ウィンドウがフルスクリーンまたはボーダーレスでも、Nightjar のメニューを通常のウィンドウで開きます。ストリームでは引き続きウィンドウの設定が使われます。ストリーム開始前に Nightjar を別のモニターへ移動する場合はオンにしてください。"),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "ペアリング鍵を保存できなかったため、このデバイスとペアリングされた PC は再起動後に再ペアリングが必要です: {}"),
+    ("Another copy", "別のコピー"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "新しいデバイスの Nightjar または Moonlight でこの PC を選択します。"),
 ];

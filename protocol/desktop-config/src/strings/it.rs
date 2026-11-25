@@ -1745,4 +1745,7 @@ sudo sysctl -w net.core.rmem_max={}", "Buffer di ricezione: il sistema ha conces
     ("Native {}% ({}x{})", "Nativa {0}% ({1}x{2})"),
     ("Windowed launcher", "Avvio in finestra"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "Apre i menu di Nightjar in una normale finestra anche quando Finestra è impostata su Schermo intero o Senza bordi. Gli stream continuano a usare l’impostazione Finestra. Attivala se sposti Nightjar tra più monitor prima di avviare uno stream."),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Impossibile salvare la chiave di abbinamento, quindi i PC abbinati a questo dispositivo dovranno essere abbinati di nuovo dopo un riavvio: {}"),
+    ("Another copy", "Altra copia"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "Sul nuovo dispositivo, seleziona questo PC in Nightjar o Moonlight."),
 ];

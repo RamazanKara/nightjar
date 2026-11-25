@@ -6,6 +6,16 @@ mod types;
 use super::*;
 pub(crate) use types::*;
 
+/// Whether a `--quit-on-exit` session is settled enough to inspect any final dialog message and close.
+pub(crate) fn cli_stream_settled(
+    streaming: bool,
+    connecting: bool,
+    pending_reconnect: bool,
+    pending_end: bool,
+) -> bool {
+    !streaming && !connecting && !pending_reconnect && !pending_end
+}
+
 impl App {
     /// Resends the wake packets while the PC stays away, and ends the wait when it answers or the
     /// time is up.
@@ -114,8 +124,14 @@ impl App {
         let Some(cli) = self.cli.as_mut() else { return };
         if cli.failed.is_some() { return; }
         let message = self.launcher.message_shown();
-        // The stream and any reconnect are over: --quit-on-exit closes Nightjar.
-        if self.streaming.is_none() && !self.attempts.is_connecting() && !pending_reconnect && cli.stream_ended(message.clone()) {
+        // The stream and any reconnect are over: --quit-on-exit closes Nightjar once any host reason arrives.
+        if cli_stream_settled(
+            self.streaming.is_some(),
+            self.attempts.is_connecting(),
+            pending_reconnect,
+            self.pending_end.is_some(),
+        ) && cli.stream_ended(message.clone())
+        {
             self.running = false;
             return;
         }
@@ -307,7 +323,10 @@ impl App {
                     ProbeResult::ColorAndBase { color, base } => {
                         if let Some((key, found)) = color { self.color_probed = Some((key, found)); }
                         if let Some((key, found)) = base {
-                            let sticky = base_probe_sticky(key, &found);
+                            let sticky = base_probe_sticky(key, &found) || self.base_probe_retried == Some(key);
+                            if key.1 & !found.decodable == 0 {
+                                self.base_probe_retried = None;
+                            }
                             self.base_probed = Some(CachedBaseProbe { key, result: found, sticky });
                         }
                     }
@@ -614,8 +633,8 @@ impl App {
             return;
         };
         // All probe/guard early returns passed: consume any one-shot V4L2 base probe so the next
-        // launch probes again while this launch proceeds with `base_decodable`.
-        consume_non_sticky_base_probe(&mut self.base_probed, base_key);
+        // launch re-probes at most once while this launch proceeds with `base_decodable`.
+        consume_non_sticky_base_probe(&mut self.base_probed, &mut self.base_probe_retried, base_key);
         let display = display_of(self.window);
         log_display(self.window, display);
         self.launcher.display = display;

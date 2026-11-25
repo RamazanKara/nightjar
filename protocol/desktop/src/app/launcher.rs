@@ -295,8 +295,13 @@ impl App {
                         };
                         if let Err(e) = self.identity_store.save_identity(&saved) {
                             eprintln!("nightjar: saving the pairing key failed: {e}");
-                            self.launcher.notify(crate::strings::tr("Could not save this choice"),
-                                format!("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {e}"));
+                            self.launcher.notify(
+                                crate::strings::tr("Could not save this choice"),
+                                crate::strings::trf(
+                                    "The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}",
+                                    &[&e],
+                                ),
+                            );
                         }
                         self.hosts.set_identity(Arc::new(identity));
                         self.launcher.identity_ready = true;
@@ -342,6 +347,12 @@ impl App {
                     }
                 }
                 HostEvent::Paired { id, result, .. } => {
+                    let id = self.hosts.canonical_id(id);
+                    if let Dialog::Pairing { host, .. } = &mut self.launcher.dialog
+                        && self.hosts.canonical_id(*host) == id
+                    {
+                        *host = id;
+                    }
                     // The first pairing on this install: Home says what Auto set up for this PC.
                     if result.is_ok() && self.launcher.offer_setup_card(id, self.hosts.paired_with(id))
                         && let Err(e) = self.store.save_settings(&self.launcher.settings) {
@@ -360,13 +371,15 @@ impl App {
                     }
                     Ok(()) => {
                         if self.quitting_on_leave.as_ref().is_some_and(|(host, _)| *host == id) { self.quitting_on_leave = None; }
-                        if let Some((host, app)) = self.pending_launch.take()
-                            && host == id {
-                                self.launch(host, app, false, LaunchKind::Stream, LaunchFrom::Replace);
-                            }
+                        if self.pending_launch.is_some_and(|(host, _)| host == id) {
+                            let (_, app) = self.pending_launch.take().expect("checked above");
+                            self.launch(id, app, false, LaunchKind::Stream, LaunchFrom::Replace);
+                        }
                     }
                     Err(e) => {
-                        self.pending_launch = None;
+                        if self.pending_launch.is_some_and(|(host, _)| host == id) {
+                            self.pending_launch = None;
+                        }
                         let name = self.hosts.get(id).map_or_else(|| tr("the running app").to_owned(), |h| crate::ui::running_name(&h.ui_view()));
                         self.launcher.notify(tr("Could not quit the game"), crate::hosts::quit_failure(&e, &name));
                     }

@@ -31,6 +31,9 @@ fn an_empty_request_list_says_what_to_do_on_the_new_device() {
     f.l.focus_dialog = true;
     f.settle();
     assert!(f.placed.iter().any(|(t, ..)| t.contains("Nightjar or Moonlight")), "{:?}", f.placed.iter().map(|p| &p.0).collect::<Vec<_>>());
+    f.l.dialog = Dialog::PairRequests { only: None };
+    f.settle();
+    assert!(f.placed.iter().any(|(t, ..)| t.contains("select this PC in Nightjar or Moonlight")), "{:?}", f.drawn);
 }
 
 #[test]
@@ -409,7 +412,7 @@ fn quit_game_questions_open_with_focus_on_cancel() {
         assert!(shows(&f, "Quit game") || shows(&f, "Quit and start"), "{:?}", f.drawn);
         assert!(!shows(&f, "Quit app"), "one name for the action: {:?}", f.drawn);
         let commands = f.press(Key::Enter);
-        assert!(!commands.iter().any(|c| matches!(c, Command::CloseGame(_) | Command::QuitApp(_) | Command::QuitAndLaunch { .. })), "Cancel has focus");
+        assert!(!commands.iter().any(|c| matches!(c, Command::CloseGame(_) | Command::QuitApp { .. } | Command::QuitAndLaunch { .. })), "Cancel has focus");
         assert!(f.no_dialog(), "Enter on the focused Cancel");
     }
 }
@@ -567,4 +570,62 @@ fn the_first_pairing_offers_the_setup_card_once() {
     let id = f.hosts.list[0].id;
     assert!(!f.hosts.list[0].paired());
     assert_eq!(f.hosts.paired_with(id), 1);
+}
+
+#[test]
+fn multiple_copies_on_same_or_other_pc_get_distinct_click_targets_and_labels() {
+    use rubylight_native_api::library::{Artwork, Game, Library, Store};
+    let lib_game = |app_id: u32, title: &str, store: (&str, &str)| Game {
+        install_id: format!("install-{app_id}"),
+        app_id,
+        title: title.into(),
+        game_id: Some("steam:same-game".into()),
+        store: Some(Store { source: store.0.into(), id: "same".into(), name: store.1.into() }),
+        installed: Some(true),
+        running: false,
+        artwork: Artwork { cover: None, version: String::new() },
+        last_played: None,
+        playtime_minutes: None,
+        collections: Vec::new(),
+    };
+    let mut f = home_with_games(1);
+    let mut hosts = Hosts::without_discovery(vec![record("Desk", true, false), record("Den", true, false)], Arc::new(|| {}));
+    for host in &mut hosts.list {
+        host.reach = Reach::Online;
+        host.info = f.hosts.list[0].info.clone();
+    }
+    hosts.list[0].native.library = Some(Library {
+        revision: "r1".into(),
+        games: vec![
+            lib_game(100, "Game A", ("steam", "Steam")),
+            lib_game(101, "Game A (Epic)", ("epic", "Epic Games")),
+        ],
+    });
+    hosts.list[1].native.library = Some(Library {
+        revision: "r2".into(),
+        games: vec![
+            lib_game(201, "Game A", ("steam", "Steam")),
+            lib_game(202, "Game A (GOG)", ("gog", "GOG")),
+        ],
+    });
+    f.hosts = hosts;
+    let pc0 = f.hosts.list[0].id;
+    let pc1 = f.hosts.list[1].id;
+    f.l.go(Screen::Game { host: pc0, app: 100 });
+    f.settle();
+    assert!(shows(&f, "Another copy"), "{:?}", f.drawn);
+    assert!(shows(&f, "Epic Games"), "{:?}", f.drawn);
+    assert!(!shows(&f, "Also on Desk"), "{:?}", f.drawn);
+
+    // Clicking the first copy on Den and then the second copy on Den must open their own app ids cleanly.
+    let targets: Vec<_> = f.placed.iter().filter(|(t, ..)| t == "Den").map(|p| p.1.center()).collect();
+    assert_eq!(targets.len(), 2, "two separate Den copy rows: {:?}", f.drawn);
+    assert_ne!(Id::unique(("game-row", format!("copy:{pc1}:201"))), Id::unique(("game-row", format!("copy:{pc1}:202"))));
+    f.click_at(targets[0], egui::PointerButton::Primary);
+    assert_eq!(f.l.screen, Screen::Game { host: pc1, app: 201 });
+    f.l.go(Screen::Game { host: pc0, app: 100 });
+    f.settle();
+    let targets: Vec<_> = f.placed.iter().filter(|(t, ..)| t == "Den").map(|p| p.1.center()).collect();
+    f.click_at(targets[1], egui::PointerButton::Primary);
+    assert_eq!(f.l.screen, Screen::Game { host: pc1, app: 202 });
 }

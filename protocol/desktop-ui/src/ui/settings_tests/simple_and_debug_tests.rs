@@ -582,3 +582,28 @@ fn vibration_is_one_choice_over_the_two_stored_fields() {
     in_section(&mut f, "Controls");
     assert!(shows(&f, "Vibration") && !shows(&f, "Turn off vibration") && !shows(&f, "Rumble feel"), "{:?}", f.drawn);
 }
+
+#[test]
+fn reset_all_disables_sign_in_when_signed_in_enabled() {
+    let mut f = settings_with(Settings { fps: 120, ..Settings::default() });
+    f.l.sign_in = Some(true);
+    open_folds(&mut f);
+    in_section(&mut f, "App");
+    click_text(&mut f, "Reset all…");
+    let commands = click_text(&mut f, "Reset all");
+    assert!(commands.iter().any(|c| matches!(c, Command::SetSignIn(false))), "Reset all must also reset sign-in");
+}
+
+#[test]
+fn displayed_refresh_rate_matches_stream_mode_for_every_preset_and_high_refresh_panel() {
+    for hz in [60.0_f32, 120.0, 240.0, 360.0, 480.0] {
+        let display = Display { width: 1920, height: 1080, refresh_hz: hz, refresh_reported: true };
+        let s = Settings { fps: 0, ..Settings::default() };
+        let (_, _, fps, _) = crate::stream_types::stream_mode(&s, display);
+        assert_eq!(fps, hz.round() as u32, "Display({hz}) asks for matching rate");
+        assert!(
+            value_text("fps", &s, &display, crate::glyphs::Style::Xbox).contains(&format!("{fps}")),
+            "Settings value label reflects {fps} Hz"
+        );
+    }
+}

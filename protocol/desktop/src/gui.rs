@@ -456,17 +456,33 @@ impl Gui {
                 }
                 SDL_EVENT_KEY_DOWN | SDL_EVENT_KEY_UP => {
                     let k = event.key;
-                    self.modifiers = modifiers_of(k.r#mod);
+                    self.sync_modifiers(modifiers_of(k.r#mod));
                     if let Some(key) = key_of(k.key) {
-                        if k.down && key == Key::V && self.modifiers.command {
-                            let text = SDL_GetClipboardText();
-                            if !text.is_null() {
-                                let pasted = std::ffi::CStr::from_ptr(text).to_string_lossy().into_owned();
-                                SDL_free(text.cast());
-                                self.events.push(Event::Paste(pasted));
+                        if k.down {
+                            let paste = (key == Key::V && self.modifiers.command)
+                                || (key == Key::Insert
+                                    && self.modifiers.shift
+                                    && !self.modifiers.command
+                                    && !self.modifiers.ctrl);
+                            let cut = (key == Key::X && self.modifiers.command)
+                                || (key == Key::Delete
+                                    && self.modifiers.shift
+                                    && !self.modifiers.command
+                                    && !self.modifiers.ctrl);
+                            let copy = (key == Key::C && self.modifiers.command)
+                                || (key == Key::Insert
+                                    && self.modifiers.ctrl
+                                    && !self.modifiers.shift
+                                    && !self.modifiers.alt);
+                            if paste {
+                                if let Some(pasted) = clipboard_text() {
+                                    self.events.push(Event::Paste(pasted));
+                                }
+                            } else if cut {
+                                self.events.push(Event::Cut);
+                            } else if copy {
+                                self.events.push(Event::Copy);
                             }
-                        } else if k.down && key == Key::C && self.modifiers.command {
-                            self.events.push(Event::Copy);
                         }
                         self.events.push(Event::Key {
                             key,
@@ -486,11 +502,13 @@ impl Gui {
                 SDL_EVENT_WINDOW_FOCUS_GAINED => {
                     self.focused = true;
                     if let Some(a11y) = &mut self.a11y { a11y.focus(true); }
+                    self.sync_modifiers(modifiers_of(SDL_GetModState()));
                     self.events.push(Event::WindowFocused(true));
                 }
                 SDL_EVENT_WINDOW_FOCUS_LOST => {
                     self.focused = false;
                     if let Some(a11y) = &mut self.a11y { a11y.focus(false); }
+                    self.sync_modifiers(Modifiers::NONE);
                     self.events.push(Event::WindowFocused(false));
                 }
                 SDL_EVENT_RENDER_TARGETS_RESET => {
@@ -506,6 +524,13 @@ impl Gui {
             }
         }
         true
+    }
+
+    fn sync_modifiers(&mut self, modifiers: Modifiers) {
+        if modifiers != self.modifiers {
+            self.modifiers = modifiers;
+            self.events.push(Event::ModifiersChanged(modifiers));
+        }
     }
 
     /// Runs one egui pass over the window.

@@ -107,6 +107,9 @@ impl Hosts {
         }
         info.set_keys(keys);
         self.facts_asked.clear();
+        if !info.keys().info() {
+            self.facts.clear();
+        }
         for host in &mut self.list {
             host.art.retain(|_, art| !matches!(art, Art::Missing));
         }
@@ -126,7 +129,8 @@ impl Hosts {
         let Some(worker) = &self.facts_worker else { return };
         for game in games {
             let key = nightjar_policy::game_info::names::key(&game.name, game.steam);
-            if self.facts_asked.insert(key) && worker.send(game).is_err() {
+            if self.facts_asked.insert(key.clone()) && worker.send(game).is_err() {
+                self.facts_asked.remove(&key);
                 return;
             }
         }
@@ -134,12 +138,17 @@ impl Hosts {
 
     /// Takes in a record a worker finished.
     pub(super) fn game_info_landed(&mut self, record: Record) {
+        let retry = record.info == nightjar_policy::game_info::cache::Outcome::Failed;
+        let key = record.key;
         match record.facts.filter(|f| !f.is_empty()) {
             Some(facts) => {
-                self.facts.insert(record.key, facts);
+                self.facts.insert(key, facts);
             }
             None => {
-                self.facts.remove(&record.key);
+                self.facts.remove(&key);
+                if retry {
+                    self.facts_asked.remove(&key);
+                }
             }
         }
     }

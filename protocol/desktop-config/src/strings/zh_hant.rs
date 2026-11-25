@@ -1745,4 +1745,7 @@ sudo sysctl -w net.core.rmem_max={}", "接收緩衝區：系統只分配了所�
     ("Native {}% ({}x{})", "原生 {0}%（{1}x{2}）"),
     ("Windowed launcher", "視窗化啟動器"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "即使視窗設為全屏或無邊框，仍在一般視窗中開啟 Nightjar 選單。串流仍使用你的視窗設定。如果你常在開始串流前將 Nightjar 拖到其他顯示器，請開啟此項。"),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "無法儲存配對金鑰，因此重新啟動後需要重新配對已與此裝置配對的電腦：{}"),
+    ("Another copy", "另一份複本"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "在新裝置上，於 Nightjar 或 Moonlight 中選擇這台電腦。"),
 ];

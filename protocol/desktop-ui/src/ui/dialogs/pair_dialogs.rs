@@ -120,8 +120,14 @@ impl Launcher {
                     ui.label(RichText::new(tr("Pair another device")).font(semibold(text::SECTION)));
                     let waiting: Vec<_> = view.hosts.list.iter().filter(|h| only.is_none_or(|id| h.id == id)).flat_map(|h| h.waiting_to_pair().iter().map(move |r| (h, r))).collect();
                     if waiting.is_empty() {
-                        let pc = only.and_then(|id| view.hosts.get(id)).map_or("", |h| h.display_name());
-                        ui.label(RichText::new(trf("On the new device, select {} in Nightjar or Moonlight.", &[&pc])).color(ON_SURFACE_VARIANT));
+                        let prompt = match only.and_then(|id| view.hosts.get(id)) {
+                            Some(host) => trf(
+                                "On the new device, select {} in Nightjar or Moonlight.",
+                                &[&host.display_name()],
+                            ),
+                            None => tr("On the new device, select this PC in Nightjar or Moonlight.").to_owned(),
+                        };
+                        ui.label(RichText::new(prompt).color(ON_SURFACE_VARIANT));
                     }
                     ui.add_space(space::S);
                     for (index, (host, request)) in waiting.iter().enumerate() {

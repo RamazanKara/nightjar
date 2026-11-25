@@ -602,3 +602,16 @@ fn restart_and_shut_down_wait_for_the_offer_keep_cancel_focused_and_warn_before_
     assert_eq!(late(PcPower::ShutDown, Ok(PcPowerStep::Unconfirmed(unanswered.into()))).0, "PC may still shut down");
     assert_eq!(late(PcPower::Restart, Err("Windows refused to restart the PC: no (exit code 1191)".into())).0, "Could not restart PC");
 }
+
+#[test]
+fn connection_test_judges_configured_stream_mode_bitrate() {
+    let mut f = Frames::new(record("Desk", true, false), Reach::Online);
+    f.l.settings = Settings { width: 3840, height: 2160, fps: 120, bitrate_kbps: 0, ..Settings::default() };
+    let expected = crate::stream_types::stream_mode(&f.l.settings, f.l.display).3;
+    let baseline_1080p60 = crate::stream_types::stream_mode(
+        &Settings { width: 1920, height: 1080, fps: 60, bitrate_kbps: 0, ..Settings::default() },
+        f.l.display,
+    ).3;
+    assert_eq!(f.l.stream_bitrate_kbps(&f.hosts, None), expected);
+    assert!(expected > baseline_1080p60, "4K120 bitrate ({expected}) must exceed 1080p60 ({baseline_1080p60})");
+}

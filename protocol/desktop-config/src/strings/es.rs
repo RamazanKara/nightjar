@@ -1745,4 +1745,7 @@ sudo sysctl -w net.core.rmem_max={}", "Búfer de recepción: el sistema concedi�
     ("Native {}% ({}x{})", "Nativa {0}% ({1}x{2})"),
     ("Windowed launcher", "Lanzador en ventana"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "Abre los menús de Nightjar en una ventana normal incluso cuando Ventana está en Pantalla completa o Sin bordes. Las transmisiones siguen usando tu ajuste de Ventana. Actívalo si mueves Nightjar entre monitores antes de iniciar una transmisión."),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "No se pudo guardar la clave de emparejamiento, por lo que los PC emparejados con este dispositivo deberán volver a emparejarse tras reiniciar: {}"),
+    ("Another copy", "Otra copia"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "En el nuevo dispositivo, selecciona este PC en Nightjar o Moonlight."),
 ];

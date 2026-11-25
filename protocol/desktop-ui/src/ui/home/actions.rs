@@ -254,6 +254,7 @@ impl Launcher {
                 cover,
                 cover.width(),
                 8.0,
+                Id::unique(("cover-in", item.host, item.app)),
                 &item.title,
                 art,
                 1.0,

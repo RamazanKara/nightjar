@@ -581,3 +581,75 @@ pub(super) fn send(hosts: &mut Hosts, event: Event) {
     hosts.sender.send(event).unwrap();
     hosts.drain(&egui::Context::default());
 }
+
+#[test]
+fn wait_quits_blocks_until_inflight_quit_guard_finishes() {
+    let mut hosts = Hosts::without_discovery(vec![], Arc::new(|| {}));
+    assert!(!hosts.has_pending_quits());
+    let pending = Arc::new((Mutex::new(false), Condvar::new()));
+    hosts.pending_quits.push(Arc::clone(&pending));
+    assert!(hosts.has_pending_quits());
+
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let done_bg = Arc::clone(&done);
+    let guard = QuitGuard(pending);
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(30));
+        done_bg.store(true, std::sync::atomic::Ordering::Release);
+        drop(guard);
+    });
+
+    hosts.wait_quits(Duration::from_secs(2));
+    assert!(done.load(std::sync::atomic::Ordering::Acquire), "shutdown wait must block until QuitGuard drops");
+    assert!(!hosts.has_pending_quits());
+}
+
+#[test]
+fn game_info_keys_removed_clears_cached_facts_and_retries_failed_entries() {
+    struct NoopHttp;
+    impl crate::game_info::Http for NoopHttp {
+        fn send(&self, _: &nightjar_policy::game_info::job::Request) -> crate::game_info::Answer {
+            crate::game_info::Answer { status: 0, retry_after: None, body: Vec::new() }
+        }
+    }
+
+    let mut hosts = Hosts::without_discovery(vec![], Arc::new(|| {}));
+    hosts.facts.insert(
+        "entry-1".into(),
+        nightjar_policy::game_info::cache::Facts {
+            genres: vec!["Action".into()],
+            ..Default::default()
+        },
+    );
+    hosts.facts_asked.insert("entry-1".into());
+    hosts.sender.send(Event::GameInfo(Box::new(nightjar_policy::game_info::cache::Record {
+        key: "entry-1".into(),
+        info: nightjar_policy::game_info::cache::Outcome::Failed,
+        ..Default::default()
+    }))).unwrap();
+    hosts.drain(&egui::Context::default());
+    assert!(!hosts.facts_asked.contains("entry-1"));
+    assert!(!hosts.facts.contains_key("entry-1"));
+
+    let keys = nightjar_policy::game_info::job::Keys {
+        igdb_client_id: "id".into(),
+        igdb_client_secret: "secret".into(),
+        ..Default::default()
+    };
+    hosts.game_info = Some(Arc::new(crate::game_info::GameInfo::new(
+        &std::env::temp_dir().join("nightjar-game-info-unused"),
+        keys,
+        Box::new(NoopHttp),
+    )));
+    hosts.facts.insert(
+        "entry-2".into(),
+        nightjar_policy::game_info::cache::Facts {
+            genres: vec!["RPG".into()],
+            ..Default::default()
+        },
+    );
+    hosts.facts_asked.insert("entry-2".into());
+    hosts.set_game_info_keys(nightjar_policy::game_info::job::Keys::default());
+    assert!(hosts.facts.is_empty());
+    assert!(hosts.facts_asked.is_empty());
+}

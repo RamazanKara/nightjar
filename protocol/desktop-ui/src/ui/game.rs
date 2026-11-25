@@ -321,6 +321,7 @@ impl Launcher {
             cover,
             cover.width(),
             t::RADIUS_COVER,
+            Id::unique(("cover-in", host_id, app_id)),
             &game.title,
             art,
             1.0,

@@ -1745,4 +1745,7 @@ sudo sysctl -w net.core.rmem_max={}", "Buffer de recepção: o sistema concedeu 
     ("Native {}% ({}x{})", "Nativa {0}% ({1}x{2})"),
     ("Windowed launcher", "Inicializador em janela"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "Abre os menus do Nightjar em uma janela comum mesmo quando Janela está em Tela cheia ou Sem bordas. As transmissões continuam usando sua opção de Janela. Ative se você costuma mover o Nightjar entre monitores antes de iniciar uma transmissão."),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Não foi possível salvar a chave de pareamento, então os PCs pareados com este dispositivo precisarão ser pareados novamente após reiniciar: {}"),
+    ("Another copy", "Outra cópia"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "No novo dispositivo, selecione este PC no Nightjar ou Moonlight."),
 ];

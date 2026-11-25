@@ -188,6 +188,7 @@ impl NeuralPanel {
         });
         if let Err(e) = started {
             open.writing = false;
+            open.loading = false;
             open.error = Some(e);
         }
     }
@@ -235,8 +236,14 @@ impl NeuralPanel {
                     open.error = Some(error);
                     open.refused = wrote;
                     // A refused write may still have changed something: show it as it is now.
-                    // A failed read waits for the player's next visit or press instead.
-                    again = wrote.then_some(Duration::ZERO);
+                    // Keep polling while an operation is already working instead of stalling on one failed read.
+                    again = if wrote {
+                        Some(Duration::ZERO)
+                    } else if open.state.as_ref().is_some_and(Neural::working) {
+                        Some(POLL)
+                    } else {
+                        None
+                    };
                 }
             }
         }

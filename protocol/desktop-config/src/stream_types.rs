@@ -100,7 +100,7 @@ pub fn stream_mode(settings: &Settings, display: Display) -> (u32, u32, u32, u32
     w = (w.max(320) + 1) & !1;
     h = (h.max(240) + 1) & !1;
     let fps = if settings.fps == 0 {
-        (display.refresh_hz.round() as u32).clamp(30, 240)
+        (display.refresh_hz.round() as u32).clamp(30, 480)
     } else {
         settings.fps
     };

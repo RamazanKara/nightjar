@@ -102,6 +102,7 @@ impl Hosts {
                     if request != self.pairing_generation {
                         continue;
                     }
+                    let id = self.canonical_id(id);
                     self.pairing = None;
                     if let (Ok(pem), Some(host)) = (&result, self.get_mut(id)) {
                         host.record.server_certificate = Some(pem.clone());
@@ -445,10 +446,21 @@ impl Hosts {
                     self.drop_link_claiming_known_pc(id);
                     return true;
                 }
+            let colliding_certs = |a: &Host, b: &Host| {
+                matches!(
+                    (&a.record.server_certificate, &b.record.server_certificate),
+                    (Some(ca), Some(cb)) if ca != cb
+                )
+            };
             if let Some(other) = self
                 .list
                 .iter()
-                .position(|h| h.id != id && !h.record.unique_id.is_empty() && h.record.unique_id == info.unique_id)
+                .position(|h| {
+                    h.id != id
+                        && !h.record.unique_id.is_empty()
+                        && h.record.unique_id == info.unique_id
+                        && !colliding_certs(h, &self.list[index])
+                })
             {
                 let (keep, drop) = if self.list[other].record.server_certificate.is_some()
                     || !self.list[index].record.server_certificate.is_some()
@@ -460,6 +472,9 @@ impl Hosts {
                 let dropped = self.list[drop].record.clone();
                 let keep_id = self.list[keep].id;
                 let kept = &mut self.list[keep].record;
+                if kept.server_certificate.is_none() {
+                    kept.server_certificate = dropped.server_certificate;
+                }
                 // The PC keeps the port it is listed under. It answered on the dropped one's too,
                 // so a sighting there is that PC from now on, also after Nightjar restarts.
                 let own = http_port(kept.http_port);
@@ -498,6 +513,15 @@ impl Hosts {
                     kept.remote_address = dropped.remote_address;
                 }
                 let gone = self.list.remove(drop).id;
+                self.record_merge(gone, keep_id);
+                if let Some((pair_id, _)) = &mut self.pairing
+                    && *pair_id == gone
+                {
+                    *pair_id = keep_id;
+                }
+                if let Some(claim) = self.link_claims.remove(&gone) {
+                    self.link_claims.entry(keep_id).or_insert(claim);
+                }
                 self.drop_workers(gone);
                 changed = true;
                 let index = self.list.iter().position(|h| h.id == keep_id).unwrap_or(0);

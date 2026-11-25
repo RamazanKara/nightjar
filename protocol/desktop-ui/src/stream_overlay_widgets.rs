@@ -13,9 +13,9 @@ use nightjar_policy::http::{
 use crate::strings::{en, tr, trf};
 
 const MIN_KBPS: u32 = 500;
-const MAX_KBPS: u32 = 800_000;
+const MAX_KBPS: u32 = 2_000_000;
 /// Each segment's top and step, in kbps: fine steps where a few Mbps matter, coarse ones above.
-const SEGMENTS: [(u32, u32); 7] = [
+const SEGMENTS: [(u32, u32); 8] = [
     (5_000, 500),
     (20_000, 1_000),
     (50_000, 2_000),
@@ -23,6 +23,7 @@ const SEGMENTS: [(u32, u32); 7] = [
     (200_000, 10_000),
     (400_000, 50_000),
     (800_000, 100_000),
+    (2_000_000, 100_000),
 ];
 /// The idle time after the last keyboard or gamepad step before the bitrate is sent.
 pub const COMMIT_DELAY: Duration = Duration::from_millis(450);
@@ -397,13 +398,13 @@ mod tests {
 
     #[test]
     fn the_scale_matches_v_plus_and_round_trips() {
-        assert_eq!(positions(), 9 + 15 + 15 + 10 + 10 + 4 + 4);
+        assert_eq!(positions(), 9 + 15 + 15 + 10 + 10 + 4 + 4 + 12);
         assert_eq!(kbps(0.0), 500);
         assert_eq!(kbps(9.0), 5_000);
         assert_eq!(kbps(24.0), 20_000);
-        assert_eq!(kbps(f64::from(positions())), 800_000);
+        assert_eq!(kbps(f64::from(positions())), 2_000_000);
         assert_eq!(kbps(-3.0), 500);
-        assert_eq!(kbps(1e9), 800_000);
+        assert_eq!(kbps(1e9), 2_000_000);
         let mut previous = 0;
         for at in 0..=positions() {
             let k = kbps(f64::from(at));
@@ -411,7 +412,8 @@ mod tests {
             assert_eq!(position(k), f64::from(at), "{k} kbps");
             previous = k;
         }
-        assert_eq!(position(2_000_000), f64::from(positions()), "a higher stream bitrate sits at the end");
+        assert_eq!(position(1_500_000).fract(), 0.0, "1.5 Gbps sits on an exact slider step");
+        assert_eq!(position(2_500_000), f64::from(positions()), "a bitrate above the ceiling sits at the end");
         assert_eq!(position(5_500), 9.5, "between steps");
         assert_eq!(kbps(9.5), 5_500, "a typed value off the steps is kept");
     }

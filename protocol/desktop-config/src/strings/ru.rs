@@ -1745,4 +1745,7 @@ sudo sysctl -w net.core.rmem_max={}", "Буфер приёма: система �
     ("Native {}% ({}x{})", "Исходное {0}% ({1}x{2})"),
     ("Windowed launcher", "Меню в окне"),
     ("Opens Nightjar’s menus in an ordinary window even when Window is Fullscreen or Borderless. Streams still use your Window setting. Turn it on if you move Nightjar between monitors before starting a stream.", "Открывает меню Nightjar в обычном окне, даже если для параметра Окно выбрано Полный экран или Без рамки. Потоки по-прежнему используют выбранный режим Окно. Включите, если переносите Nightjar между мониторами перед запуском потока."),
+    ("The pairing key could not be saved, so the PCs paired with this device have to be paired again after a restart: {}", "Не удалось сохранить ключ сопряжения, поэтому ПК, сопряжённые с этим устройством, придётся сопрячь заново после перезапуска: {}"),
+    ("Another copy", "Другая копия"),
+    ("On the new device, select this PC in Nightjar or Moonlight.", "На новом устройстве выберите этот ПК в Nightjar или Moonlight."),
 ];

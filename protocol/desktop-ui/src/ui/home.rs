@@ -276,7 +276,14 @@ impl Launcher {
                             ui.spacing_mut().item_spacing = vec2(POSTER_GAP, POSTER_GAP);
                             for (index, item) in starred.iter().enumerate() {
                                 let art = shown_art(view, item.host, item.app_id);
-                                let response = poster(ui, &item.title, art, Badge::None, cover_w);
+                                let response = poster(
+                                    ui,
+                                    Id::unique(("cover-in", item.host, item.app_id)),
+                                    &item.title,
+                                    art,
+                                    Badge::None,
+                                    cover_w,
+                                );
                                 if has_cover(item.host, item.app_id) {
                                     request_cover(ui, view, item.host, item.app_id, &response, commands);
                                 }
@@ -307,7 +314,14 @@ impl Launcher {
                             ui.spacing_mut().item_spacing = vec2(POSTER_GAP, POSTER_GAP);
                             for item in &spill {
                                 let art = shown_art(view, item.host, item.app);
-                                let response = poster(ui, &item.title, art, Badge::None, cover_w);
+                                let response = poster(
+                                    ui,
+                                    Id::unique(("cover-in", item.host, item.app)),
+                                    &item.title,
+                                    art,
+                                    Badge::None,
+                                    cover_w,
+                                );
                                 if item.has_cover {
                                     request_cover(ui, view, item.host, item.app, &response, commands);
                                 }
@@ -525,6 +539,7 @@ impl Launcher {
             shown,
             HERO_COVER.x,
             t::RADIUS_COVER,
+            Id::unique(("cover-in", hero.host, hero.app)),
             &hero.title,
             art,
             boost,

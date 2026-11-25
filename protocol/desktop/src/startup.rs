@@ -279,8 +279,34 @@ pub(crate) fn prepare_process_env() -> Vec<String> {
     }
     // Before SDL, VAAPI or Vulkan load Mesa.
     #[cfg(target_os = "linux")]
-    amd_decode::request();
+    {
+        let get = |name: &str| std::env::var(name).ok();
+        notes.push(amd_decode_note(
+            get("NIGHTJAR_AMD_LOW_LATENCY_DECODE").as_deref(),
+            get("AMD_DEBUG").as_deref(),
+            get("R600_DEBUG").as_deref(),
+            get("RADV_PERFTEST").as_deref(),
+        ));
+        amd_decode::request();
+    }
     notes
+}
+
+/// Formats the AMD low-latency decode environment note before Mesa loads so `main` can write it
+/// once `logpipe` captures stderr.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) fn amd_decode_note(
+    switch: Option<&str>,
+    amd_debug: Option<&str>,
+    r600_debug: Option<&str>,
+    radv_perftest: Option<&str>,
+) -> String {
+    match amd_decode::variables(switch, amd_debug, r600_debug, radv_perftest) {
+        Some((amd, radv)) => format!(
+            "nightjar: AMD low-latency decode asked for: AMD_DEBUG={amd} RADV_PERFTEST={radv} (Mesa drivers with lowlatencydec use it)"
+        ),
+        None => "nightjar: AMD low-latency decode not asked for (NIGHTJAR_AMD_LOW_LATENCY_DECODE=0)".to_owned(),
+    }
 }
 
 /// Sets SDL hints, resolves Linux KMS/desktop backend selection, and initializes SDL subsystems.

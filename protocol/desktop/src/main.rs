@@ -171,8 +171,10 @@ struct App {
     /// switch drops it.
     color_probed: Option<(ProbeKey, (u32, String))>,
     /// The plain HEVC and AV1 decoder check (`color_probe::probe_base`), kept the same way for
-    /// the decoder and the formats it checked (one-shot when V4L2 M2M missed a wanted format).
+    /// the decoder and the formats it checked (one-shot when V4L2 M2M had a transient failure).
     base_probed: Option<app::CachedBaseProbe>,
+    /// Keys whose transient V4L2 base probe already retried once so a second failure stays cached.
+    base_probe_retried: Option<ProbeKey>,
     /// Linux's renderer as it was made ([`RendererState`]).
     #[cfg(target_os = "linux")]
     renderer_state: RendererState,
@@ -622,6 +624,7 @@ fn run(launch: Option<cli::Launch>, started: open_play::Started, link: Option<St
         second_screen: None,
         color_probed: None,
         base_probed: None,
+        base_probe_retried: None,
         #[cfg(target_os = "linux")]
         renderer_state: RendererState::for_launcher(
             settings.renderer,

@@ -337,7 +337,7 @@ impl Launcher {
                         if r.clicked() {
                             commands.push(match start {
                                 Some((app, _)) => Command::QuitAndLaunch { host, app, named },
-                                None => Command::QuitApp(host),
+                                None => Command::QuitApp { host, named },
                             });
                             close = true;
                         }

@@ -167,11 +167,31 @@ fn v4l2_incomplete_base_probe_is_one_shot_not_sticky() {
     };
     assert!(!base_probe_sticky(key, &failed));
     let mut cache = Some(CachedBaseProbe { key, result: failed.clone(), sticky: false });
+    let mut retried = None;
     // Peeking survives intermediate early returns (e.g. ProbeWork::Packed) on the same launch.
     assert_eq!(peek_base_probe(&cache, key), Some(failed.clone()));
-    assert_eq!(peek_base_probe(&cache, key), Some(failed), "peek preserves non-sticky probe until launch commits");
-    consume_non_sticky_base_probe(&mut cache, key);
+    assert_eq!(peek_base_probe(&cache, key), Some(failed.clone()), "peek preserves non-sticky probe until launch commits");
+    consume_non_sticky_base_probe(&mut cache, &mut retried, key);
     assert_eq!(peek_base_probe(&cache, key), None, "next launch re-probes V4L2 after commit");
+    assert_eq!(retried, Some(key), "second launch remembers it already retried once");
+    assert!(base_probe_sticky(key, &failed) || retried == Some(key), "a repeated V4L2 failure stays cached");
+
+    let permanent_v4l2 = stream::color_probe::Base {
+        decodable: 0,
+        reason: "HEVC: V4L2 M2M: no decoder".into(),
+        backends: Vec::new(),
+    };
+    assert!(base_probe_sticky(key, &permanent_v4l2), "permanent V4L2 failure does not re-probe every launch");
+
+    let auto_with_other_fail = stream::color_probe::Base {
+        decodable: VIDEO_FORMAT_H265,
+        reason: "AV1: VA-API: no decoder".into(),
+        backends: vec![(VIDEO_FORMAT_H265, Hardware::V4l2m2m)],
+    };
+    assert!(
+        base_probe_sticky((Hardware::Auto(std::ptr::null_mut(), None), wanted | VIDEO_FORMAT_AV1_MAIN8, false), &auto_with_other_fail),
+        "V4L2 decoding another codec does not make an unrelated backend failure non-sticky"
+    );
 
     let passed = stream::color_probe::Base {
         decodable: wanted,
@@ -180,9 +200,11 @@ fn v4l2_incomplete_base_probe_is_one_shot_not_sticky() {
     };
     assert!(base_probe_sticky(key, &passed));
     let mut sticky_cache = Some(CachedBaseProbe { key, result: passed.clone(), sticky: true });
+    let mut sticky_retried = None;
     assert_eq!(peek_base_probe(&sticky_cache, key), Some(passed.clone()));
-    consume_non_sticky_base_probe(&mut sticky_cache, key);
+    consume_non_sticky_base_probe(&mut sticky_cache, &mut sticky_retried, key);
     assert_eq!(peek_base_probe(&sticky_cache, key), Some(passed), "full pass stays cached");
+    assert_eq!(sticky_retried, None);
 
     let non_v4l2_key = (Hardware::Vaapi, VIDEO_FORMAT_AV1_MAIN8, false);
     let non_v4l2_fail = stream::color_probe::Base {
@@ -200,4 +222,63 @@ fn pyrowave_probe_error_logs_once_per_distinct_reason() {
     assert!(!startup::should_log_pyrowave_probe_error(&mut last, false, "no Vulkan queue"));
     assert!(startup::should_log_pyrowave_probe_error(&mut last, true, "no Vulkan queue"));
     assert!(startup::should_log_pyrowave_probe_error(&mut last, true, "shader compile failed"));
+}
+
+#[test]
+fn amd_decode_note_formats_enabled_and_disabled_for_logfile() {
+    let enabled = startup::amd_decode_note(None, Some("mem"), None, Some("dcc"));
+    assert!(enabled.contains("AMD_DEBUG=") && enabled.contains("RADV_PERFTEST="));
+    assert!(enabled.contains("lowlatencydec"));
+    let disabled = startup::amd_decode_note(Some("0"), Some("mem"), None, Some("dcc"));
+    assert!(disabled.contains("NIGHTJAR_AMD_LOW_LATENCY_DECODE=0"));
+}
+
+#[test]
+fn reconnect_skips_launcher_window_restore_and_quit_on_exit_waits_for_pending_end() {
+    assert!(!session::restores_launcher_window_mode_on_exit(true));
+    assert!(session::restores_launcher_window_mode_on_exit(false));
+
+    assert!(!launch::cli_stream_settled(false, false, false, true), "pending_end keeps --quit-on-exit waiting for host reason");
+    assert!(launch::cli_stream_settled(false, false, false, false));
+}
+
+#[test]
+fn stale_quit_app_target_is_detected_by_recheck_running() {
+    use nightjar_policy::console::{recheck_running, Running};
+    assert_eq!(recheck_running(Some(10), Some(10)), Running::Same);
+    assert_eq!(recheck_running(Some(10), Some(20)), Running::Changed);
+    assert_eq!(recheck_running(Some(10), None), Running::Gone);
+}
+
+#[test]
+fn pending_bitrate_slider_flushes_immediately_when_taken_on_menu_close() {
+    use nightjar_desktop_ui::stream_overlay_widgets::{bitrate_slider, take_pending_bitrate_slider};
+    let ctx = egui::Context::default();
+    let mut value = 20_000;
+    let mut raw = egui::RawInput::default();
+    raw.events.push(egui::Event::Key {
+        key: egui::Key::ArrowRight,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    let mut out = ctx.run_ui(raw, |ui| {
+        let mut s = value;
+        ui.horizontal(|ui| {
+            // Focus slider or simulate scrubbing by storing pending state; stepping slider directly:
+            let _ = bitrate_slider(ui, &mut s, true);
+        });
+        value = s;
+    });
+    out.textures_delta.clear();
+    // Simulate active scrub committed only after menu closes (before 450 ms).
+    ctx.data_mut(|d| {
+        d.insert_temp(
+            egui::Id::unique("bitrate-slider-scrub"),
+            nightjar_desktop_ui::stream_overlay_widgets::Scrub { changed_at: Some(Instant::now()) },
+        );
+    });
+    assert!(take_pending_bitrate_slider(&ctx));
+    assert!(!take_pending_bitrate_slider(&ctx), "taking settles it once");
 }

@@ -39,6 +39,7 @@ impl Hosts {
             || host.native.library.is_none()
             || !host.native.library_live
             || host.native.full_at.is_none_or(|t| t.elapsed() >= NATIVE_FULL_INTERVAL);
+        let prev_full_at = host.native.full_at;
         host.native.loading = true;
         if full {
             host.native.full_at = Some(Instant::now());
@@ -47,7 +48,7 @@ impl Hosts {
         host.native_seq += 1;
         let (epoch, seq) = (host.native_epoch, host.native_seq);
         let record = host.connect_record();
-        self.run_on(id, Lane::Asked, move || {
+        if !self.run_on(id, Lane::Asked, move || {
             let result = client_for(&identity, &record, &record.address).and_then(|client| {
                 let (capabilities, library) = if full {
                     (
@@ -92,7 +93,12 @@ impl Hosts {
                 }
             });
             Some(Event::Native { id, epoch, seq, result })
-        });
+        }) && let Some(host) = self.get_mut(id) {
+            host.native.loading = false;
+            if full {
+                host.native.full_at = prev_full_at;
+            }
+        }
     }
 
     /// Whether this PC offers moving its game's stream between devices.

@@ -278,11 +278,20 @@ impl Page {
 
     fn uploader(&self, start: Start, source: Option<PathBuf>) -> impl FnOnce() -> Event + Send + 'static + use<> {
         let (api, mut progress) = (self.api.clone(), self.progress(start.id));
+        let (sender, waker) = (self.sender.clone(), self.waker.clone());
         move || {
             let result = source
                 .ok_or_else(|| FileError::Local(std::io::Error::new(std::io::ErrorKind::NotFound, "the file to send is no longer listed")))
                 .and_then(|path| std::fs::File::open(path).map_err(FileError::Local))
-                .and_then(|mut file| api.upload(&start.name, &mut file, start.size, &mut progress, &start.cancel));
+                .and_then(|mut file| {
+                    // Re-measure the open file so growth while queued isn't truncated at queue-time length.
+                    let size = file.metadata().map_err(FileError::Local)?.len();
+                    if size != start.size {
+                        let _ = sender.send(Event::Progress { id: start.id, done: 0, total: size });
+                        waker();
+                    }
+                    api.upload(&start.name, &mut file, size, &mut progress, &start.cancel)
+                });
             Event::Uploaded { id: start.id, result }
         }
     }

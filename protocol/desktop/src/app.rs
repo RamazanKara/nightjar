@@ -88,7 +88,8 @@ impl App {
         self.pads.close_all();
         self.gui.destroy();
         let teardowns_pending = self.teardowns_busy();
-        if self.attempts.is_busy() || self.probe.is_some() || !self.ending_probes.is_empty() || teardowns_pending {
+        let quits_pending = self.hosts.has_pending_quits();
+        if self.attempts.is_busy() || self.probe.is_some() || !self.ending_probes.is_empty() || teardowns_pending || quits_pending {
             // Ending a launch or its decoder checks can take seconds: the window goes now rather
             // than sitting frozen meanwhile.
             // SAFETY: the window run() created, still alive.
@@ -133,6 +134,7 @@ impl App {
             }
         });
         for stop in abr_stops { stop.wait(); }
+        self.hosts.wait_quits(deadline.saturating_duration_since(Instant::now()));
     }
 
     /// Drops the saved library of a PC that is unpaired or removed.
@@ -317,9 +319,9 @@ pub(crate) const GAMEPAD_ACTIVITY_AXIS_THRESHOLD: u16 = 1024;
 /// `wait_launcher_events` when no navigation stick is held (~12%, filters stick drift, #179).
 pub(crate) const LAUNCHER_AXIS_WAKE_THRESHOLD: u16 = 4000;
 
-/// Minimum gyro angular velocity (rad/s, ~14 deg/s) treated as real controller motion; passive
-/// resting gyro bias and accelerometer gravity ticks do not hold 500 Hz polling active (#179).
-pub(crate) const GAMEPAD_ACTIVITY_GYRO_THRESHOLD: f32 = 0.25;
+/// Minimum gyro angular velocity (rad/s) treated as real controller motion; passive resting
+/// gyro bias and accelerometer gravity ticks do not hold 500 Hz polling active (#179).
+pub(crate) const GAMEPAD_ACTIVITY_GYRO_THRESHOLD: f32 = 0.03;
 
 /// Pure classification for [`is_gamepad_activity`], testable without constructing raw SDL unions.
 pub(crate) fn is_gamepad_activity_parts(
@@ -357,7 +359,13 @@ pub(crate) fn is_gamepad_activity(event: &SDL_Event) -> bool {
         };
         let gyro_peak = (kind == SDL_EVENT_GAMEPAD_SENSOR_UPDATE
             && SDL_SensorType(event.gsensor.sensor) == SDL_SENSOR_GYRO)
-            .then(|| event.gsensor.data.into_iter().map(f32::abs).fold(0.0_f32, f32::max));
+            .then(|| {
+                if event.gsensor.data.iter().all(|v| v.is_finite()) {
+                    event.gsensor.data.into_iter().map(f32::abs).fold(0.0_f32, f32::max)
+                } else {
+                    f32::NAN
+                }
+            });
         is_gamepad_activity_parts(kind, axis_value, gyro_peak)
     }
 }

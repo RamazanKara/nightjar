@@ -148,8 +148,9 @@ pub(super) fn draw_video_sections(
         let (w, h) = crate::stream_types::scaled_native_resolution(display, pct);
         trf("Native {}% ({}x{})", &[&pct, &w, &h])
     };
-    let custom_size = s.width != 0 && (*custom_size_on == Some(screen) || !RESOLUTIONS.contains(&(s.width, s.height)));
-    let current = if s.width == 0 {
+    let is_native = s.width == 0 || s.height == 0;
+    let custom_size = !is_native && (*custom_size_on == Some(screen) || !RESOLUTIONS.contains(&(s.width, s.height)));
+    let current = if is_native {
         if native_scale == 100 { native.clone() } else { scaled_label(native_scale) }
     } else if custom_size {
         trf("Custom ({}x{})", &[&s.width, &s.height])
@@ -163,24 +164,24 @@ pub(super) fn draw_video_sections(
             .selected_text(current)
             .height(640.0)
             .show_ui(ui, |ui| {
-                if ui.selectable_label(s.width == 0 && native_scale == 100, native).clicked() {
+                if ui.selectable_label(is_native && native_scale == 100, native).clicked() {
                     ((s.width, s.height, s.native_scale), chose) = ((0, 0, 100), Some(false));
                 }
                 for pct in crate::stream_types::NATIVE_SCALES {
                     let (sw, sh) = crate::stream_types::scaled_native_resolution(display, pct);
                     if (sw, sh) != (display.width, display.height)
-                        && ui.selectable_label(s.width == 0 && native_scale == pct, scaled_label(pct)).clicked()
+                        && ui.selectable_label(is_native && native_scale == pct, scaled_label(pct)).clicked()
                     {
                         ((s.width, s.height, s.native_scale), chose) = ((0, 0, pct), Some(false));
                     }
                 }
                 for (w, h) in RESOLUTIONS {
-                    if ui.selectable_label(s.width == w && s.height == h, format!("{w}x{h}")).clicked() {
+                    if ui.selectable_label(!is_native && s.width == w && s.height == h, format!("{w}x{h}")).clicked() {
                         ((s.width, s.height, s.native_scale), chose) = ((w, h, 100), Some(false));
                     }
                 }
                 if ui.selectable_label(custom_size, tr("Custom…")).clicked() {
-                    if s.width == 0 {
+                    if is_native {
                         (s.width, s.height) = crate::stream_types::scaled_native_resolution(display, native_scale);
                         s.native_scale = 100;
                     }
@@ -192,7 +193,7 @@ pub(super) fn draw_video_sections(
     if let Some(custom) = chose { *custom_size_on = custom.then_some(screen); }
     // Read again after the menu: a row drawn at Native or Display would clamp it to its range.
     // Stepping onto a preset keeps the row.
-    if s.width != 0 && (*custom_size_on == Some(screen) || !RESOLUTIONS.contains(&(s.width, s.height))) {
+    if !is_native && (*custom_size_on == Some(screen) || !RESOLUTIONS.contains(&(s.width, s.height))) {
         let before = (s.width, s.height);
         setting_row(ui, s, rows, &["width", "height", "native_scale"], "Custom resolution", "Width and height in pixels.", |ui, s| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {

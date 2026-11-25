@@ -612,3 +612,27 @@ fn a_pcs_own_display_scaling_is_offered_only_by_hosts_that_read_it() {
         assert_eq!(shows(&f, "PC display scaling"), drawn, "{host}: {:?}", f.drawn);
     }
 }
+
+#[test]
+fn opening_files_or_host_settings_from_settings_saves_edits_first() {
+    let mut f = Frames::new(record("Desk", true, false), Reach::Online);
+    f.hosts.list[0].reach = Reach::Online;
+    let id = f.hosts.list[0].id;
+    f.l.go(Screen::Settings);
+    f.l.settings.fps = 120;
+    f.settle();
+
+    let mut files_commands = Vec::new();
+    let dialog = f.l.choose_host_option(&f.hosts.list[0], HostOption::Files, &mut files_commands);
+    assert!(dialog.is_none());
+    assert_eq!(files_commands.len(), 2);
+    assert!(matches!(files_commands[0], Command::SaveSettings));
+    assert!(matches!(files_commands[1], Command::OpenFiles(h) if h == id));
+
+    let mut settings_commands = Vec::new();
+    let dialog = f.l.choose_host_option(&f.hosts.list[0], HostOption::Settings, &mut settings_commands);
+    assert!(dialog.is_none());
+    assert_eq!(settings_commands.len(), 2);
+    assert!(matches!(settings_commands[0], Command::SaveSettings));
+    assert!(matches!(settings_commands[1], Command::HostSettings(h) if h == id));
+}

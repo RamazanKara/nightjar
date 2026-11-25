@@ -70,6 +70,7 @@ for name in org.freedesktop.login1 org.freedesktop.NetworkManager org.freedeskto
 	flatpak info --show-permissions "$app_id" | grep -qxF "$name=talk" || { echo "error: the bundle cannot reach $name on the system bus" >&2; exit 1; }
 done
 flatpak info --show-permissions "$app_id" | grep -q 'xdg-run/gamescope-0' || { echo "error: the bundle cannot reach gamescope's socket (xdg-run/gamescope-0)" >&2; exit 1; }
+flatpak info --show-permissions "$app_id" | grep -q 'xdg-download' || { echo "error: the bundle cannot access the Downloads folder (xdg-download)" >&2; exit 1; }
 grep -q '^MimeType=.*x-scheme-handler/rubylight;' "$(flatpak info --show-location "$app_id")/export/share/applications/$app_id.desktop" || { echo "error: the bundle does not take rubylight: pairing links" >&2; exit 1; }
 flatpak uninstall --user -y --noninteractive "$app_id" >/dev/null
 echo "flatpak: the bundle installs, starts and uninstalls"
