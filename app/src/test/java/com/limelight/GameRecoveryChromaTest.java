@@ -298,4 +298,28 @@ public class GameRecoveryChromaTest {
             cleanupRecovery(game);
         }
     }
+
+    @Test
+    @Config(shadows = RecoveryBridge.class, instrumentedPackages = "com.limelight.nvstream.jni")
+    public void packedChromaFailureReportsStartFailureOnlyForActiveStreamListener() {
+        Game game = recoveryGame();
+        ReflectionHelpers.setStaticField(MoonBridge.class, "connectionListener", game);
+        ReflectionHelpers.setStaticField(MoonBridge.class, "startFailureReported", false);
+        try {
+            com.limelight.nvstream.NvConnectionListener otherStream =
+                    (com.limelight.nvstream.NvConnectionListener) java.lang.reflect.Proxy.newProxyInstance(
+                            MoonBridge.class.getClassLoader(),
+                            new Class<?>[] { com.limelight.nvstream.NvConnectionListener.class },
+                            (proxy, method, args) -> null);
+            MoonBridge.markStartFailureReported(otherStream);
+            assertFalse(MoonBridge.startFailureReported());
+
+            MoonBridge.markStartFailureReported(game);
+            assertTrue(MoonBridge.startFailureReported());
+        } finally {
+            ReflectionHelpers.setStaticField(MoonBridge.class, "connectionListener", null);
+            ReflectionHelpers.setStaticField(MoonBridge.class, "startFailureReported", false);
+            cleanupRecovery(game);
+        }
+    }
 }

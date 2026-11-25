@@ -220,6 +220,12 @@ public class MoonBridge extends MoonBridgeForwarders {
         return startFailureReported;
     }
 
+    public static void markStartFailureReported(NvConnectionListener listener) {
+        if (listener != null && listener == connectionListener) {
+            startFailureReported = true;
+        }
+    }
+
     public static void bridgeClStageFailed(int stage, int errorCode) {
         NvConnectionListener listener = connectionListener;
         if (listener != null) {

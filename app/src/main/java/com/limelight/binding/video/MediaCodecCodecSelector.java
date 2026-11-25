@@ -524,8 +524,15 @@ final class MediaCodecCodecSelector {
             }
             vulkan = true;
         }
-        int dolbyVisionDecoders = (r.dolbyVisionDecoder != null ? HdrFormatPolicy.DOLBY_VISION_HEVC : 0) |
-                (r.dolbyVisionAv1Decoder != null ? HdrFormatPolicy.DOLBY_VISION_AV1 : 0);
+        // Host Rubylight 6.4.1 omits Dolby Vision when full color range is enabled because
+        // Dolby Vision RPU base-layer profiles assume limited-range video. Asking for Dolby Vision
+        // or opening video/dolby-vision with COLOR_RANGE_FULL yields a solid green screen on
+        // decoders such as MediaTek c2.dolby.decoder.hevc (NJ#153).
+        boolean allowDolbyVision = !r.prefs.fullRange;
+        int dolbyVisionDecoders = allowDolbyVision ?
+                ((r.dolbyVisionDecoder != null ? HdrFormatPolicy.DOLBY_VISION_HEVC : 0) |
+                        (r.dolbyVisionAv1Decoder != null ? HdrFormatPolicy.DOLBY_VISION_AV1 : 0)) :
+                0;
         int format = HdrFormatPolicy.pick(hostHdrFormats, displayTypes, dolbyVisionDecoders, videoFormats, surface);
         // Game says these once per PC (takeVulkanHdrLimit, takePyroWaveHdrLimit).
         if (vulkan) {
@@ -540,6 +547,8 @@ final class MediaCodecCodecSelector {
         LimeLog.info("HDR formats: the PC offers 0x" + Integer.toHexString(hostHdrFormats) + ", asking for " +
                 HdrFormatPolicy.name(format) + (drawer != null ? " (" + drawer + " draws " +
                 (surface == HdrFormatPolicy.DrawnSurface.PQ_HLG ? "PQ and HLG" : "PQ only") + ")" :
+                !allowDolbyVision && (r.dolbyVisionDecoder != null || r.dolbyVisionAv1Decoder != null) ?
+                " (Dolby Vision off for full color range)" :
                 dolbyVisionDecoders == 0 ? " (no Dolby Vision decoder)" : "") +
                 (limit != HdrFormatPolicy.DrawnLimit.NONE ? ", without " + limit : ""));
         if (surface == HdrFormatPolicy.DrawnSurface.PQ_ONLY && !HdrPolicy.hasHdr10(displayTypes) &&
@@ -582,7 +591,8 @@ final class MediaCodecCodecSelector {
     }
 
     MediaCodecInfo dolbyVisionDecoderForStream() {
-        if (r.dolbyVisionFailed || r.packing != null || (r.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_10BIT) == 0) {
+        if (r.dolbyVisionFailed || r.packing != null || r.prefs.fullRange ||
+                (r.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_10BIT) == 0) {
             return null;
         }
         if ((r.announcedHdrFormat & HdrFormatPolicy.DOLBY_VISION_HEVC) != 0 &&

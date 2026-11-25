@@ -95,6 +95,31 @@ public class FrameWarpHdrFormatTest {
         assertFalse("the user asked for Vulkan; its notice names that setting", renderer.vulkanForFrameWarp());
     }
 
+    @Test
+    public void fullRangeDisablesDolbyVisionNegotiationAndDecoderSelection() {
+        PreferenceConfiguration direct = prefs(false, false);
+        direct.enableHdr = true;
+        direct.fullRange = true;
+        MediaCodecDecoderRenderer directRenderer = renderer(direct);
+        MediaCodecInfo dv8 = decoder("c2.dolby.decoder.hevc", HdrFormatPolicy.MIME_DOLBY_VISION,
+                CodecProfileLevel.DolbyVisionProfileDvheSt);
+        MediaCodecInfo dv10 = decoder("c2.dolby.decoder.av1", HdrFormatPolicy.MIME_DOLBY_VISION,
+                CodecProfileLevel.DolbyVisionProfileDvav110);
+        ReflectionHelpers.setField(directRenderer, "dolbyVisionDecoder", dv8);
+        ReflectionHelpers.setField(directRenderer, "dolbyVisionAv1Decoder", dv10);
+        assertEquals(0, directRenderer.pickHdrFormat(OFFERED, MoonBridge.VIDEO_FORMAT_H265_MAIN10, false, false));
+
+        // Even if an older host announces Dolby Vision, full-range streams keep the base HDR10 decoder.
+        ReflectionHelpers.setField(directRenderer, "announcedHdrFormat", HdrFormatPolicy.DV_81);
+        ReflectionHelpers.setField(directRenderer, "videoFormat", MoonBridge.VIDEO_FORMAT_H265_MAIN10);
+        org.junit.Assert.assertNull(ReflectionHelpers.callInstanceMethod(directRenderer, "dolbyVisionDecoderForStream"));
+
+        direct.fullRange = false;
+        assertEquals(HdrFormatPolicy.DV_81,
+                directRenderer.pickHdrFormat(OFFERED, MoonBridge.VIDEO_FORMAT_H265_MAIN10, false, false));
+        org.junit.Assert.assertNotNull(ReflectionHelpers.callInstanceMethod(directRenderer, "dolbyVisionDecoderForStream"));
+    }
+
     private static PreferenceConfiguration prefs(boolean frameWarp, boolean vulkanRender) {
         PreferenceConfiguration prefs = new PreferenceConfiguration();
         prefs.width = 3040;

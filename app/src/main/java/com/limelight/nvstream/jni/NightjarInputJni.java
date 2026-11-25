@@ -281,6 +281,16 @@ public final class NightjarInputJni {
             short lx, short ly, short rx, short ry,
             int scrollStickMode, int fixedStep, int[] out);
 
+    /**
+     * Computes 100 Hz mouse movement and scroll deltas for one tick.
+     *
+     * @param out 6-float buffer filled with {@code [move1X, move1Y, move2X, move2Y, scrollV, scrollH]}.
+     * @return bitmask {@code (hasMove1 ? 1 : 0) | (hasMove2 ? 2 : 0) | (hasScroll ? 4 : 0)}.
+     */
+    public static native int mouseTickStepFloat(
+            short lx, short ly, short rx, short ry,
+            int scrollStickMode, int fixedStep, int sensitivityPercent, float[] out);
+
     // --- 6. Rumble, Sensors, Gyro & Battery ---
 
     public static native boolean rumbleAllows(boolean rumbleDisabled);
