@@ -367,7 +367,7 @@ struct PoolState {
 
 /// Cross-device bridge between a dedicated `D3D11_CREATE_DEVICE_VIDEO_SUPPORT` decode device and
 /// SDL3's Direct3D 11 renderer device using NT-handle shared textures and monitored `ID3D11Fence`s.
-pub(super) struct DecodeBridge {
+pub(crate) struct DecodeBridge {
     id: u64,
     decode_device: ID3D11Device,
     decode_context: ID3D11DeviceContext,
@@ -531,6 +531,15 @@ impl DecodeBridge {
             return Err(format!("{SHARED_DEVICE_ENV}=1"));
         }
         let (decode_device, decode_context) = create_video_device_for(renderer_device)?;
+        Self::new_with_decode_device(renderer_device, decode_device, decode_context, pictures)
+    }
+
+    fn new_with_decode_device(
+        renderer_device: &ID3D11Device,
+        decode_device: ID3D11Device,
+        decode_context: ID3D11DeviceContext,
+        pictures: Pictures,
+    ) -> Result<Arc<Self>, String> {
         let decode_mt: ID3D10Multithread = decode_device.cast().map_err(|e| format!("decode ID3D10Multithread: {e}"))?;
         let decode_dev5: ID3D11Device5 = decode_device.cast().map_err(|e| format!("decode ID3D11Device5: {e}"))?;
         let decode_queue: ID3D11DeviceContext4 = decode_context.cast().map_err(|e| format!("decode ID3D11DeviceContext4: {e}"))?;

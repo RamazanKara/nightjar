@@ -35,6 +35,8 @@ pub(crate) mod wavelet_pool;
 pub use audio::{pcm_s16le, OpusDecoder};
 #[cfg(windows)]
 pub use d3d11::ProbeVideoDevice;
+#[cfg(all(windows, test))]
+pub(crate) use d3d11::DecodeBridge;
 #[cfg(test)]
 pub use decoder::v4l2_pts_round_trip;
 pub use decoder::{packet_timebase, Received, VideoDecoder, AGAIN};

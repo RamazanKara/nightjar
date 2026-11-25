@@ -503,3 +503,138 @@ fn draw_on_warp_error(info: &media::FrameInfo) -> String {
         pass.draw_frame(info, &[4, 2, 4, 2, 0, 3, 1 << 5, 1.0f32.to_bits()]).unwrap_err()
     }
 }
+
+#[test]
+fn bridged_packed_reads_shared_textures_without_copy_and_matches_copy_fallback() {
+    use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_11_1};
+    let warp_or_hw = |driver| unsafe {
+        let (mut device, mut context) = (None, None);
+        D3D11CreateDevice(
+            None, driver, HMODULE::default(), D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+            Some(&[D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0]), D3D11_SDK_VERSION,
+            Some(&mut device), None, Some(&mut context),
+        ).map(|()| (device.unwrap(), context.unwrap()))
+    };
+    let (device, context) = warp_or_hw(D3D_DRIVER_TYPE_WARP).expect("WARP device");
+    // Try WARP bridge first, or hardware bridge if WARP does not share NT handles across devices.
+    let (device, context, ten_bits) = if crate::media::DecodeBridge::new_for_test(
+        &device, crate::media::Pictures { ten_bit: false, chroma444: false, waiting: 2, ..Default::default() },
+    ).is_ok() {
+        (device, context, vec![false, true])
+    } else if let Ok((hw_dev, hw_ctx)) = warp_or_hw(D3D_DRIVER_TYPE_HARDWARE) {
+        (hw_dev, hw_ctx, vec![false, true])
+    } else {
+        panic!("neither WARP nor hardware D3D11 supported cross-device DecodeBridge");
+    };
+
+    for ten_bit in ten_bits {
+        let (w, h) = (16i32, 8i32);
+        let packed_h = h * 2;
+        let bridge = crate::media::DecodeBridge::new_for_test(
+            &device, crate::media::Pictures { ten_bit, chroma444: false, waiting: 2, ..Default::default() },
+        ).expect("DecodeBridge");
+        let format = if ten_bit { DXGI_FORMAT_P010 } else { DXGI_FORMAT_NV12 };
+        let stride = (w as usize) * if ten_bit { 2 } else { 1 };
+        let total_rows = packed_h as usize * 3 / 2;
+        let make_frame = |b: &std::sync::Arc<crate::media::DecodeBridge>, seed: u8| -> media::Frame {
+            let mut src_tex = None;
+            unsafe {
+                b.test_decode_device().CreateTexture2D(
+                    &D3D11_TEXTURE2D_DESC {
+                        Width: w as u32, Height: packed_h as u32, MipLevels: 1, ArraySize: 1, Format: format,
+                        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 }, Usage: D3D11_USAGE_DEFAULT,
+                        BindFlags: D3D11_BIND_SHADER_RESOURCE.0 as u32, ..Default::default()
+                    }, None, Some(&mut src_tex),
+                ).unwrap();
+                let src_tex = src_tex.unwrap();
+                let mut pattern = vec![0u8; stride * total_rows];
+                for (i, px) in pattern.iter_mut().enumerate() {
+                    *px = seed.wrapping_add(((i * 31 + 17) & 0xFF) as u8);
+                }
+                b.test_decode_context().UpdateSubresource(&src_tex, 0, None, pattern.as_ptr().cast(), stride as u32, 0);
+                b.test_export_frame(&src_tex, 0, w, packed_h, ten_bit).expect("export")
+            }
+        };
+
+        let parameters = [w as u32, h as u32, w as u32, h as u32, u32::from(ten_bit), 0, 1, 0, 1.0f32.to_bits(), 1, 0, 0];
+        let target_bridge = linear_target(&device, w as u32, h as u32);
+        let target_copy = linear_target(&device, w as u32, h as u32);
+        let packed_bridge = unsafe { Packed::new(device.as_raw(), target_bridge.as_raw(), w, packed_h, ten_bit, false) }.unwrap();
+        let packed_copy = unsafe { Packed::new(device.as_raw(), target_copy.as_raw(), w, packed_h, ten_bit, false) }.unwrap();
+        packed_copy.set_force_copy(true);
+
+        // 1. Packed::draw: zero-copy bridge vs forced copy fallback.
+        let frame1 = make_frame(&bridge, 11);
+        assert_eq!(bridge.test_counters(), (1, 0, 1));
+        assert!(packed_bridge.draw(&frame1, &parameters), "bridged draw");
+        assert!(!packed_bridge.has_copy_input(), "bridge draw must not allocate copy_input");
+        assert!(!packed_bridge.has_held_frame(), "draw must not hold extra frame ref");
+        assert_eq!(bridge.test_counters(), (1, 1, 1), "draw must advance reuse fence");
+        assert_eq!(packed_bridge.cached_shared_views_len(), 1);
+        // Second draw on same slot hits cached SRV without growing shared_views.
+        assert!(packed_bridge.draw(&frame1, &parameters), "cached bridged draw");
+        assert_eq!(packed_bridge.cached_shared_views_len(), 1);
+
+        assert!(packed_copy.draw(&frame1, &parameters), "copy fallback draw");
+        assert!(packed_copy.has_copy_input(), "copy fallback must allocate copy_input");
+        let px_bridge = read_back(&device, &context, &target_bridge);
+        let px_copy = read_back(&device, &context, &target_copy);
+        assert_eq!(px_bridge, px_copy, "ten_bit={ten_bit}: draw pixels must be bit-identical");
+        drop(frame1);
+        assert_eq!(bridge.test_counters().2, 0, "dropping draw frame must release slot");
+
+        // Changing bridge_id clears stale cached SRVs, and mismatched size/format rejects zero-copy cleanly.
+        let bridge2 = crate::media::DecodeBridge::new_for_test(
+            &device, crate::media::Pictures { ten_bit, chroma444: false, waiting: 1, ..Default::default() },
+        ).expect("DecodeBridge 2");
+        let frame_b2 = make_frame(&bridge2, 23);
+        assert!(packed_bridge.draw(&frame_b2, &parameters));
+        assert_eq!(packed_bridge.cached_shared_views_len(), 1, "new bridge_id replaces old SRV cache");
+        drop(frame_b2);
+        let packed_mismatch = unsafe { Packed::new(device.as_raw(), std::ptr::null_mut(), w * 2, packed_h, ten_bit, false) }.unwrap();
+        let packed_wrong_depth = unsafe { Packed::new(device.as_raw(), std::ptr::null_mut(), w, packed_h, !ten_bit, false) }.unwrap();
+        let frame_small = make_frame(&bridge, 29);
+        assert!(!packed_mismatch.can_share_views(&frame_small), "smaller bridged frame rejects direct SRV");
+        assert!(!packed_wrong_depth.can_share_views(&frame_small), "mismatched format rejects direct SRV");
+        assert!(!packed_mismatch.has_copy_input() && !packed_wrong_depth.has_copy_input());
+        drop(frame_small);
+
+        // 2. Packed::upload + Packed::present_target: zero-copy bridge vs forced copy fallback.
+        let (back_bridge, rtv_bridge) = direct::back_buffer(&device, &context, (w as u32, h as u32), DXGI_FORMAT_R16G16B16A16_FLOAT);
+        let (back_copy, rtv_copy) = direct::back_buffer(&device, &context, (w as u32, h as u32), DXGI_FORMAT_R16G16B16A16_FLOAT);
+        let present_bridge = unsafe { Packed::new(device.as_raw(), std::ptr::null_mut(), w, packed_h, ten_bit, false) }.unwrap();
+        let present_copy = unsafe { Packed::new(device.as_raw(), std::ptr::null_mut(), w, packed_h, ten_bit, false) }.unwrap();
+        present_copy.set_force_copy(true);
+
+        let frame2 = make_frame(&bridge, 53);
+        let reuse_before_upload = bridge.test_counters().1;
+        assert!(present_bridge.upload(&frame2), "bridged upload");
+        assert!(!present_bridge.has_copy_input(), "bridge upload must not allocate copy_input");
+        assert!(present_bridge.has_held_frame(), "bridge upload must hold frame lease");
+        drop(frame2);
+        assert_eq!(bridge.test_counters().2, 1, "upload held lease keeps slot in use after caller drops frame");
+        assert_eq!(bridge.test_counters().1, reuse_before_upload, "upload alone does not advance reuse fence");
+
+        let warp = crate::stream::frame_warp::WarpDraw::default();
+        let rect = [0.0, 0.0, w as f32, h as f32];
+        assert!(present_bridge.present_target(&rtv_bridge, (w, h), &parameters, &rect, true, 1.0, &warp), "bridged present");
+        assert!(present_bridge.present_target(&rtv_bridge, (w, h), &parameters, &rect, true, 1.0, &warp), "redraw present");
+        assert!(!present_bridge.has_copy_input(), "bridge present must not allocate copy_input");
+        assert_eq!(bridge.test_counters().1, reuse_before_upload + 2, "each present must advance reuse fence");
+
+        let frame2_copy = make_frame(&bridge, 53);
+        assert!(present_copy.upload(&frame2_copy), "copy upload");
+        assert!(present_copy.has_copy_input());
+        assert!(present_copy.present_target(&rtv_copy, (w, h), &parameters, &rect, true, 1.0, &warp), "copy present");
+        assert_eq!(read_back(&device, &context, &back_bridge), read_back(&device, &context, &back_copy), "ten_bit={ten_bit}: present pixels must be bit-identical");
+        drop(frame2_copy);
+
+        // Next upload releases prior held slot cleanly (slot count stays 1 for frame3 alone).
+        let frame3 = make_frame(&bridge, 99);
+        assert!(present_bridge.upload(&frame3));
+        drop(frame3);
+        assert_eq!(bridge.test_counters().2, 1, "uploading next frame must release prior held slot");
+        drop(present_bridge);
+        assert_eq!(bridge.test_counters().2, 0, "dropping Packed releases held slot");
+    }
+}

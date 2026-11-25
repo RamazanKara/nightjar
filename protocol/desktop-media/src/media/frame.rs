@@ -137,6 +137,24 @@ impl Frame {
         Some(frame)
     }
 
+    #[cfg(all(windows, test))]
+    pub(super) fn from_test_shared(shared: d3d11::SharedFrame, width: i32, height: i32, ten_bit: bool) -> Option<Self> {
+        let mut frame = Self::new(NonNull::new(unsafe { av_frame_alloc() })?);
+        frame.exported = Some(Box::new(ExportedMeta {
+            info: FrameInfo {
+                width, height, kind: FRAME_D3D11, ten_bit: i32::from(ten_bit), pts: 0,
+                data: [std::ptr::null_mut(); 3], linesize: [0; 3],
+                color_space: 1, color_range: 1, color_trc: 1, centred_chroma: false,
+            },
+            hdr10_plus: None,
+            dolby_vision: None,
+            format_name: if ten_bit { "p010le" } else { "nv12" }.into(),
+            corrupt: false,
+        }));
+        frame.shared = Some(shared);
+        Some(frame)
+    }
+
     /// Notes that `Present` flushed the renderer queue, skipping a redundant `SlotLease::drop` flush.
     pub fn mark_d3d11_flushed(&self) {
         #[cfg(windows)]

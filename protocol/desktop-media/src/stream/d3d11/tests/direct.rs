@@ -19,7 +19,7 @@ fn warp() -> (ID3D11Device, ID3D11DeviceContext) {
 }
 
 /// A render target standing for SDL's back buffer, cleared to magenta.
-fn back_buffer(device: &ID3D11Device, context: &ID3D11DeviceContext, size: (u32, u32), format: DXGI_FORMAT) -> (ID3D11Texture2D, ID3D11RenderTargetView) {
+pub(super) fn back_buffer(device: &ID3D11Device, context: &ID3D11DeviceContext, size: (u32, u32), format: DXGI_FORMAT) -> (ID3D11Texture2D, ID3D11RenderTargetView) {
     let mut texture = None;
     let mut view = None;
     // SAFETY: A plain texture and its view on a live device.

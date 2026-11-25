@@ -540,3 +540,54 @@ fn decode_bridge_handles_resolution_change_and_skips_drop_flush_after_present() 
         render_ctx.Unmap(&stage32, 0);
     }
 }
+
+impl DecodeBridge {
+    pub(crate) fn new_for_test(renderer_device: &ID3D11Device, pictures: Pictures) -> Result<Arc<Self>, String> {
+        if let Ok(bridge) = Self::new(renderer_device, pictures) {
+            return Ok(bridge);
+        }
+        // On WARP (which lacks `D3D11_CREATE_DEVICE_VIDEO_SUPPORT`), open a second device on the same adapter.
+        let (decode_device, decode_context) = unsafe {
+            let dxgi: IDXGIDevice = renderer_device.cast().map_err(|e| format!("querying IDXGIDevice: {e}"))?;
+            let adapter: IDXGIAdapter = dxgi.GetAdapter().map_err(|e| format!("reading DXGI adapter: {e}"))?;
+            let (mut device, mut context) = (None, None);
+            D3D11CreateDevice(
+                &adapter, D3D_DRIVER_TYPE_UNKNOWN, HMODULE::default(), D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                Some(&[D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0]), D3D11_SDK_VERSION,
+                Some(&mut device), None, Some(&mut context),
+            ).map_err(|e| format!("creating test decode device: {e}"))?;
+            let device = device.ok_or("no test decode device")?;
+            if let Ok(mt) = device.cast::<ID3D10Multithread>() { let _ = mt.SetMultithreadProtected(true); }
+            (device, context.ok_or("no test decode context")?)
+        };
+        Self::new_with_decode_device(renderer_device, decode_device, decode_context, pictures)
+    }
+
+    pub(crate) fn test_decode_device(&self) -> &ID3D11Device { &self.decode_device }
+
+    pub(crate) fn test_decode_context(&self) -> &ID3D11DeviceContext { &self.decode_context }
+
+    pub(crate) fn test_export_frame(
+        self: &Arc<Self>,
+        texture: &ID3D11Texture2D,
+        slice: u32,
+        width: i32,
+        height: i32,
+        ten_bit: bool,
+    ) -> Result<super::super::Frame, String> {
+        let mut raw: AVFrame = unsafe { std::mem::zeroed() };
+        raw.data[0] = texture.as_raw().cast();
+        raw.data[1] = slice as usize as *mut u8;
+        raw.width = width;
+        raw.height = height;
+        let shared = unsafe { self.export(&raw) }?;
+        super::super::Frame::from_test_shared(shared, width, height, ten_bit)
+            .ok_or_else(|| "allocating test AVFrame failed".into())
+    }
+
+    pub(crate) fn test_counters(&self) -> (u64, u64, usize) {
+        let in_use = self.pool.lock().unwrap().pool.as_ref()
+            .map_or(0, |p| p.slots.iter().filter(|s| s.in_use.load(Ordering::Acquire)).count());
+        (self.decode_counter.load(Ordering::Acquire), self.reuse_counter.load(Ordering::Acquire), in_use)
+    }
+}
