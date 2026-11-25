@@ -636,11 +636,12 @@ pub fn generate(p: &SdpParams<'_>) -> Sdp {
     };
     // The host's RPUs describe limited-range video. Host 6.4.1 sends a full-range stream without
     // RPUs, which takes an NVIDIA Shield down (nightjar#193).
-    let color_range = if hdr_format.is_some_and(|bit| bit & rubylight_protocol::hdr::DOLBY_VISION != 0) {
-        COLOR_RANGE_LIMITED
-    } else {
-        c.color_range
-    };
+    let color_range =
+        if hdr_format.is_some_and(|bit| bit & rubylight_protocol::hdr::DOLBY_VISION != 0) {
+            COLOR_RANGE_LIMITED
+        } else {
+            c.color_range
+        };
     if quad[0] >= 7 {
         a.add(
             "x-nv-video[0].encoderCscMode",

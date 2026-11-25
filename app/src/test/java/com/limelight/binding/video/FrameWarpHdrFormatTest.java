@@ -27,6 +27,7 @@ import org.robolectric.util.ReflectionHelpers;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -96,7 +97,7 @@ public class FrameWarpHdrFormatTest {
     }
 
     @Test
-    public void fullRangeDisablesDolbyVisionNegotiationAndDecoderSelection() {
+    public void fullRangeKeepsDolbyVisionNegotiationAndUsesLimitedRangeForDv() {
         PreferenceConfiguration direct = prefs(false, false);
         direct.enableHdr = true;
         direct.fullRange = true;
@@ -107,17 +108,18 @@ public class FrameWarpHdrFormatTest {
                 CodecProfileLevel.DolbyVisionProfileDvav110);
         ReflectionHelpers.setField(directRenderer, "dolbyVisionDecoder", dv8);
         ReflectionHelpers.setField(directRenderer, "dolbyVisionAv1Decoder", dv10);
-        assertEquals(0, directRenderer.pickHdrFormat(OFFERED, MoonBridge.VIDEO_FORMAT_H265_MAIN10, false, false));
+        assertEquals("full color range still asks for Dolby Vision", HdrFormatPolicy.DV_81,
+                directRenderer.pickHdrFormat(OFFERED, MoonBridge.VIDEO_FORMAT_H265_MAIN10, false, false));
 
-        // Even if an older host announces Dolby Vision, full-range streams keep the base HDR10 decoder.
+        // The host codes a Dolby Vision stream limited range with its RPUs (nightjar#193).
         ReflectionHelpers.setField(directRenderer, "announcedHdrFormat", HdrFormatPolicy.DV_81);
         ReflectionHelpers.setField(directRenderer, "videoFormat", MoonBridge.VIDEO_FORMAT_H265_MAIN10);
-        org.junit.Assert.assertNull(ReflectionHelpers.callInstanceMethod(directRenderer, "dolbyVisionDecoderForStream"));
+        assertSame(dv8, ReflectionHelpers.callInstanceMethod(directRenderer, "dolbyVisionDecoderForStream"));
+        assertEquals(MoonBridge.COLOR_RANGE_LIMITED, directRenderer.getPreferredColorRange());
 
-        direct.fullRange = false;
-        assertEquals(HdrFormatPolicy.DV_81,
-                directRenderer.pickHdrFormat(OFFERED, MoonBridge.VIDEO_FORMAT_H265_MAIN10, false, false));
-        org.junit.Assert.assertNotNull(ReflectionHelpers.callInstanceMethod(directRenderer, "dolbyVisionDecoderForStream"));
+        // HDR10 keeps full color range.
+        ReflectionHelpers.setField(directRenderer, "announcedHdrFormat", 0);
+        assertEquals(MoonBridge.COLOR_RANGE_FULL, directRenderer.getPreferredColorRange());
     }
 
     private static PreferenceConfiguration prefs(boolean frameWarp, boolean vulkanRender) {

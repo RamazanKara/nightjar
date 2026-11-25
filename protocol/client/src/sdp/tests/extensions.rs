@@ -241,7 +241,10 @@ fn hdr_format_and_audio_codec_are_sent_only_when_asked_for_and_offered() {
         (VIDEO_FORMAT_AV1_HIGH10_444, DV_101),
     ] {
         assert_eq!(hdr(format, bit), None, "{format:#x}");
-        let full = StreamConfig { color_range: COLOR_RANGE_FULL, ..Default::default() };
+        let full = StreamConfig {
+            color_range: COLOR_RANGE_FULL,
+            ..Default::default()
+        };
         let mut p = params(&full, SUNSHINE, "10.0.0.7", format);
         (p.hdr_format, p.hdr_formats_offered) = (bit, ALL);
         assert_eq!(generate(&p).color_range, COLOR_RANGE_FULL, "{format:#x}");
