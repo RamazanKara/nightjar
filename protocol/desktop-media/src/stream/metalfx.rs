@@ -5,9 +5,20 @@ use std::{ffi::c_void, ptr};
 
 const RING: usize = 4;
 
+/// SDL 3.4 exposes the renderer's shared `id<MTLCommandQueue>` under this property name.
+const PROP_RENDERER_METAL_COMMAND_QUEUE_POINTER: &std::ffi::CStr =
+    c"SDL.renderer.metal.command_queue";
+
 unsafe extern "C" {
     fn nj_metalfx_supported() -> bool;
-    fn nj_metalfx_new(layer: *mut c_void, iw: i32, ih: i32, ow: i32, oh: i32) -> *mut c_void;
+    fn nj_metalfx_new(
+        layer: *mut c_void,
+        shared_queue: *mut c_void,
+        iw: i32,
+        ih: i32,
+        ow: i32,
+        oh: i32,
+    ) -> *mut c_void;
     fn nj_metalfx_draw(
         context: *mut c_void,
         input: *mut c_void,
@@ -69,8 +80,19 @@ pub struct Spatial {
 impl Spatial {
     pub fn new(renderer: *mut SDL_Renderer, input: (i32, i32), output: (i32, i32)) -> Option<Self> {
         unsafe {
+            let props = SDL_GetRendererProperties(renderer);
+            let shared_queue = if props.0 != 0 {
+                SDL_GetPointerProperty(
+                    props,
+                    PROP_RENDERER_METAL_COMMAND_QUEUE_POINTER.as_ptr(),
+                    ptr::null_mut(),
+                )
+            } else {
+                ptr::null_mut()
+            };
             let context = nj_metalfx_new(
                 SDL_GetRenderMetalLayer(renderer),
+                shared_queue,
                 input.0,
                 input.1,
                 output.0,
@@ -99,7 +121,9 @@ impl Spatial {
             .filter(|texture| !texture.is_null())
     }
 
-    /// The caller keeps the decoded picture alive until this synchronous GPU submission completes.
+    /// Submits MetalFX scaling into the next ring slot. When sharing SDL's command queue, this
+    /// encodes asynchronously and retains `buffer` until GPU completion; otherwise it waits
+    /// synchronously for the fallback private command queue.
     pub unsafe fn draw(
         &mut self,
         renderer: *mut SDL_Renderer,
@@ -107,7 +131,7 @@ impl Spatial {
         info: &FrameInfo,
     ) -> Option<*mut SDL_Texture> {
         let parameters = conversion(info);
-        // SAFETY: Caller keeps the decoded picture `buffer` alive until this synchronous GPU submission completes.
+        // SAFETY: `buffer` is a valid `CVPixelBufferRef` (retained on the async shared queue until completion).
         unsafe {
             let slot = nj_metalfx_draw(self.context, buffer, parameters.as_ptr(), &mut self.gpu_ms);
             if slot < 0 || slot as usize >= RING {

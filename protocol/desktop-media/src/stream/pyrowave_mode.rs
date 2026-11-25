@@ -236,16 +236,26 @@ fn probe_in(
     }
     probes.results.push((ten_bit, None));
     let device = Raw(device);
-    let thread = std::thread::spawn(move || {
+    match std::thread::Builder::new().name("pyrowave-probe".into()).spawn(move || {
         let _hold = hold;
         let device = device;
         let result = probe(device.0, ten_bit);
         let mut probes = state.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(entry) = probes.results.iter_mut().find(|(key, _)| *key == ten_bit) { entry.1 = Some(result); }
-    });
-    probes.running.retain(|running| !running.is_finished());
-    probes.running.push(thread);
-    None
+    }) {
+        Ok(thread) => {
+            probes.running.retain(|running| !running.is_finished());
+            probes.running.push(thread);
+            None
+        }
+        Err(error) => {
+            let result = Err(format!("could not start PyroWave settings probe: {error}"));
+            if let Some(entry) = probes.results.iter_mut().find(|(key, _)| *key == ten_bit) {
+                entry.1 = Some(result.clone());
+            }
+            Some(result)
+        }
+    }
 }
 
 fn reset_in(state: &'static ProbeState) {

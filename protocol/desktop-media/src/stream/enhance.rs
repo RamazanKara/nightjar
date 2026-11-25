@@ -454,6 +454,7 @@ mod windows_impl {
             immediate: ID3D11DeviceContext,
             input: ID3D11Texture2D,
             output: ID3D11Texture2D,
+            last_bridge: Option<u64>,
         },
     }
 
@@ -536,7 +537,7 @@ mod windows_impl {
                             .map_err(|e| format!("cannot make AMF's pipeline state: {e}"))?;
                         let immediate = device.GetImmediateContext().map_err(|e| e.to_string())?;
                         let context = immediate.cast::<ID3D11DeviceContext1>().map_err(|e| e.to_string())?;
-                        Ok::<_, String>(Pass::Amf { scaler, state: state.unwrap(), context, immediate, input, output })
+                        Ok::<_, String>(Pass::Amf { scaler, state: state.unwrap(), context, immediate, input, output, last_bridge: None })
                     })();
                     return match built {
                         Ok(pass) => Ok(Self { key, texture, pass, label }),
@@ -581,7 +582,14 @@ mod windows_impl {
                         result?;
                     }
                     (Pass::Processor(processor), None) => processor.blt()?,
-                    (Pass::Amf { scaler, state, context, immediate, input, output }, held) => {
+                    (Pass::Amf { scaler, state, context, immediate, input, output, last_bridge }, held) => {
+                        let next_bridge = held.and_then(crate::media::Frame::d3d11_bridge_id);
+                        if *last_bridge != next_bridge {
+                            if last_bridge.is_some() {
+                                scaler.clear_surfaces();
+                            }
+                            *last_bridge = next_bridge;
+                        }
                         let mut run = |src: &ID3D11Texture2D| {
                             let mut previous = None;
                             context.SwapDeviceContextState(&*state, Some(&mut previous));

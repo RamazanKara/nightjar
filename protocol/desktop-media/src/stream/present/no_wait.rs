@@ -13,6 +13,8 @@ pub enum NoWait {
     Refused,
     /// Something else went wrong. SDL's own present recovers from what can be recovered from.
     Failed,
+    /// `SDL_RenderPresent` itself failed after committing to present (so no second present runs).
+    PresentFailed,
 }
 
 /// How long [`present_without_waiting`] sleeps (ns) after `DXGI_ERROR_WAS_STILL_DRAWING`, given
@@ -157,7 +159,7 @@ pub unsafe fn present_without_waiting(
     refresh_hz: f32,
 ) -> NoWait {
     use crate::stream::phase;
-    let Some(sample) = phase::egl_sync_sample(renderer, refresh_hz) else {
+    let Some(sample) = phase::egl_sync_sample_for_present(renderer, refresh_hz) else {
         return NoWait::Failed;
     };
     let Some(mut in_flight) = phase::egl_swap_check(sample.surface, sample.sbc) else {
@@ -195,7 +197,7 @@ pub unsafe fn present_without_waiting(
         phase::egl_swap_presented(last.surface, last.sbc);
         NoWait::Shown
     } else {
-        NoWait::Failed
+        NoWait::PresentFailed
     }
 }
 
@@ -226,7 +228,7 @@ pub unsafe fn present_after_egl_swap(
     refresh_hz: f32,
 ) -> Option<bool> {
     use crate::stream::phase;
-    let sample = phase::egl_sync_sample(renderer, refresh_hz)?;
+    let sample = phase::egl_sync_sample_for_present(renderer, refresh_hz)?;
     let mut in_flight = phase::egl_swap_check(sample.surface, sample.sbc)?;
     // SAFETY: caller guarantees `renderer` is the live renderer of this thread.
     if !unsafe { SDL_FlushRenderer(renderer) } {

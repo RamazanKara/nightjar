@@ -466,11 +466,14 @@ impl Streaming {
             let rtt_ms = stats.rtt.map(|(rtt, _)| rtt.as_secs_f64() * 1000.0);
             if let Some(feedback) = abr.due(tick.now_ms, rtt_ms) {
                 let shared = self.shared.clone();
-                std::thread::spawn(move || {
+                if let Err(error) = std::thread::Builder::new().name("host-abr".into()).spawn(move || {
                     let action = client.abr_feedback(&feedback)
                         .map_err(|e| eprintln!("nightjar: the PC's automatic bitrate report failed: {e}")).ok();
                     shared.notify(Notice::HostAbrAction(action));
-                });
+                }) {
+                    eprintln!("nightjar: could not spawn automatic bitrate feedback thread: {error}");
+                    self.shared.notify(Notice::HostAbrAction(None));
+                }
             }
         }
         // As on Android: no samples for input-only, or while a manual bitrate change or trial runs.

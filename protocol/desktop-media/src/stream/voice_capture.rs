@@ -218,7 +218,9 @@ unsafe fn open_dsp(choice: Choice) -> windows::core::Result<IMediaObject> {
 /// Bounds `IMediaObject::ProcessOutput` draining per wake so a wedged Voice Capture DMO cannot
 /// spin forever on `DMO_OUTPUT_DATA_BUFFERF_INCOMPLETE` or deadlock `VoiceCapture::drop`.
 const MAX_DRAIN_CALLS: usize = 16;
-const MAX_ZERO_INCOMPLETE: u32 = 2;
+/// Tolerates up to ~2 s of consecutive empty `INCOMPLETE` wakes (one per 10 ms tick) while
+/// Voice Capture initializes or recovers before disabling echo cancellation.
+const MAX_ZERO_INCOMPLETE: u32 = 200;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DrainAction {
@@ -252,9 +254,11 @@ impl DrainTracker {
             if self.zero_incomplete >= MAX_ZERO_INCOMPLETE {
                 return DrainAction::Stalled;
             }
-        } else {
-            self.zero_incomplete = 0;
+            // Yield until the next 10 ms wake so transient empty incomplete polls wait instead of
+            // burning retries in one tight loop.
+            return DrainAction::Done;
         }
+        self.zero_incomplete = 0;
         if !more {
             return DrainAction::Done;
         }
@@ -435,14 +439,21 @@ mod tests {
         assert_eq!(capped.step(true, 320, false), DrainAction::Done, "yields at cap");
         capped.begin_wake();
         assert_eq!(capped.step(true, 320, false), DrainAction::Continue, "next wake gets a fresh budget");
-        // Transient single zero-length INCOMPLETE followed by audio recovers; consecutive ones stall.
+        // Transient empty INCOMPLETE polls yield for the next wake and reset when audio arrives;
+        // only sustained empty INCOMPLETE across MAX_ZERO_INCOMPLETE wakes stalls.
         let mut stalled = DrainTracker::default();
+        for _ in 0..MAX_ZERO_INCOMPLETE - 1 {
+            stalled.begin_wake();
+            assert_eq!(stalled.step(true, 0, false), DrainAction::Done, "transient empty yields");
+        }
         stalled.begin_wake();
-        assert_eq!(stalled.step(true, 0, false), DrainAction::Continue);
-        assert_eq!(stalled.step(false, 320, false), DrainAction::Done, "recovered");
+        assert_eq!(stalled.step(false, 320, false), DrainAction::Done, "audio resets zero_incomplete streak");
+        for _ in 0..MAX_ZERO_INCOMPLETE - 1 {
+            stalled.begin_wake();
+            assert_eq!(stalled.step(true, 0, false), DrainAction::Done);
+        }
         stalled.begin_wake();
-        assert_eq!(stalled.step(true, 0, false), DrainAction::Continue);
-        assert_eq!(stalled.step(true, 0, false), DrainAction::Stalled, "consecutive empty INCOMPLETE stalls");
+        assert_eq!(stalled.step(true, 0, false), DrainAction::Stalled, "sustained empty INCOMPLETE stalls");
     }
 
     /// Opens the DSP on this PC's default devices for half a second: needs a microphone and

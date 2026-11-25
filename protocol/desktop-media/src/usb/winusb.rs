@@ -8,11 +8,14 @@
 
 #[path = "winusb_ffi.rs"]
 mod ffi;
+#[path = "winusb_iso.rs"]
+pub(super) mod iso_coord;
 
 #[cfg(test)]
 pub(super) use ffi::{
-    control_target_endpoint, control_target_interface, pack_winusb_iso_in, pack_winusb_iso_out,
-    usbd_status_to_errno, win32_error_to_errno, UsbdIsoPacketDescriptor,
+    control_target_endpoint, control_target_interface, overlapped_error_to_errno,
+    pack_winusb_iso_in, pack_winusb_iso_out, usbd_status_to_errno,
+    validate_winusb_iso_out_table, win32_error_to_errno, UsbdIsoPacketDescriptor,
 };
 
 #[cfg(windows)]
@@ -23,23 +26,20 @@ mod platform {
     use std::time::{Duration, Instant};
 
     use nightjar_core::usb::{wire, Blocking, BlockingDevice, Direction, Reply, Transfer, UsbDevice};
-    use windows::core::PCWSTR;
-    use windows::Win32::Foundation::{
-        CloseHandle, GetLastError, ERROR_IO_PENDING, GENERIC_READ, GENERIC_WRITE, HANDLE,
-        WAIT_OBJECT_0, WAIT_TIMEOUT,
-    };
-    use windows::Win32::Storage::FileSystem::{
-        CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_FLAG_OVERLAPPED, FILE_SHARE_READ,
-        FILE_SHARE_WRITE, OPEN_EXISTING,
-    };
+    use windows::Win32::Foundation::{GetLastError, ERROR_IO_PENDING, WAIT_OBJECT_0, WAIT_TIMEOUT};
     use windows::Win32::System::IO::{CancelIoEx, OVERLAPPED};
     use windows::Win32::System::Threading::WaitForSingleObject;
 
     use super::ffi::{
-        api, control_target_endpoint, control_target_interface, pack_winusb_iso_in,
-        pack_winusb_iso_out, win32_error_to_errno, IsochBufferGuard, IsochBufferHandle,
-        OwnedEvent, UsbInterfaceDescriptor, UsbdIsoPacketDescriptor, WinBool, WinUsbApi,
-        WinUsbHandle, WinUsbSetupPacket,
+        api, control_target_endpoint, control_target_interface, overlapped_error_to_errno,
+        pack_winusb_iso_in, pack_winusb_iso_out, validate_winusb_iso_out_table,
+        win32_error_to_errno, OwnedEvent, UsbdIsoPacketDescriptor, WinBool, WinUsbApi,
+        WinUsbPipeInformationEx, WinUsbSetupPacket, USBD_PIPE_TYPE_ISOCHRONOUS,
+    };
+    use super::iso_coord::{
+        acquire_iso_slot, drain_iso_pools, release_iso_slot, submit_pipelined, winusb_reset_port,
+        EndpointInfo, Handles, InterfaceEntry, IsoEndpointState, IsoSlot, PooledEvent,
+        ResettableState, WinUsbPortReset,
     };
     use crate::usb::iso::iso_plan;
     use crate::usb::libusb::{standard, Standard};
@@ -47,64 +47,11 @@ mod platform {
     const URB_ZERO_PACKET: u32 = 0x40;
     const CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
     const ISO_TIMEOUT: Duration = Duration::from_secs(5);
-    const POLL_MS: u32 = 50;
-
-    #[derive(Clone, Copy)]
-    struct InterfaceEntry {
-        winusb: WinUsbHandle,
-        file: HANDLE,
-        associated: bool,
-    }
-
-    // SAFETY: WinUSB handles opened with `FILE_FLAG_OVERLAPPED` are safe to submit I/O on across
-    // threads; handle teardown happens in `close()` after `Blocking::close()` joins all lanes.
-    unsafe impl Send for InterfaceEntry {}
-    unsafe impl Sync for InterfaceEntry {}
-
-    #[derive(Clone, Copy)]
-    struct EndpointInfo {
-        interface: u8,
-        max_packet: u16,
-    }
-
-    struct Handles {
-        interfaces: HashMap<u8, InterfaceEntry>,
-        files: Vec<HANDLE>,
-        default_interface: u8,
-    }
-
-    // SAFETY: Handles are freed exclusively after all I/O lanes have stopped.
-    unsafe impl Send for Handles {}
-    unsafe impl Sync for Handles {}
-
-    impl Handles {
-        fn close_all(&mut self, api: &WinUsbApi) {
-            // WinUSB requires freeing associated interface handles before their base handle.
-            for entry in self.interfaces.values().filter(|e| e.associated) {
-                unsafe {
-                    let _ = (api.free)(entry.winusb);
-                }
-            }
-            for entry in self.interfaces.values().filter(|e| !e.associated) {
-                unsafe {
-                    let _ = (api.free)(entry.winusb);
-                }
-            }
-            self.interfaces.clear();
-            for file in self.files.drain(..) {
-                unsafe {
-                    let _ = CloseHandle(file);
-                }
-            }
-        }
-    }
+    const POLL_MS: u32 = 10;
 
     struct State {
         configuration: u8,
         active: u8,
-        endpoints: HashMap<u8, EndpointInfo>,
-        alt_endpoints: HashMap<(u8, u8), Vec<(u8, u16)>>,
-        streaming: HashMap<u8, bool>,
         handles: Handles,
     }
 
@@ -114,6 +61,10 @@ mod platform {
         class: u8,
         closed: AtomicBool,
         state: Mutex<State>,
+        resettable: Arc<Mutex<ResettableState>>,
+        iso_streams: Mutex<HashMap<u8, Arc<Mutex<IsoEndpointState>>>>,
+        iso_pools: Mutex<HashMap<u8, Vec<IsoSlot>>>,
+        event_pool: Arc<Mutex<Vec<OwnedEvent>>>,
     }
 
     impl WinUsbDevice {
@@ -137,10 +88,28 @@ mod platform {
         }
 
         fn endpoint_entry(&self, address: u8) -> Option<(InterfaceEntry, EndpointInfo)> {
+            let info = *self
+                .resettable
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .endpoints
+                .get(&address)?;
             let state = self.state();
-            let info = *state.endpoints.get(&address)?;
             let entry = *state.handles.interfaces.get(&info.interface)?;
             Some((entry, info))
+        }
+
+        fn iso_stream(&self, address: u8) -> Arc<Mutex<IsoEndpointState>> {
+            self.iso_streams
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .entry(address)
+                .or_default()
+                .clone()
+        }
+
+        fn drain_iso_pools(&self, interface: Option<u8>) {
+            drain_iso_pools(&self.iso_pools, interface);
         }
 
         /// Finishes an overlapped WinUSB request synchronously and checks its result.
@@ -215,11 +184,14 @@ mod platform {
                 return Ok(transferred);
             }
             let err = unsafe { GetLastError().0 };
-            if err == 995 {
-                // ERROR_OPERATION_ABORTED: preserve timeout vs cancel distinction.
-                return Err(cancel_reason.unwrap_or(wire::ECONNRESET));
-            }
-            Err(win32_error_to_errno(err))
+            let final_reason = if cancel_reason.is_none()
+                && (cancelled.load(Ordering::SeqCst) || self.closed.load(Ordering::Acquire))
+            {
+                Some(wire::ECONNRESET)
+            } else {
+                cancel_reason
+            };
+            Err(overlapped_error_to_errno(err, final_reason))
         }
 
         fn set_interface(&self, interface: u8, setting: u8) -> Reply {
@@ -230,26 +202,47 @@ mod platform {
                 };
                 entry
             };
+            let removed_eps: Vec<u8> = {
+                let resettable = self.resettable.lock().unwrap_or_else(PoisonError::into_inner);
+                resettable
+                    .endpoints
+                    .iter()
+                    .filter_map(|(&ep, info)| (info.interface == interface).then_some(ep))
+                    .collect()
+            };
+            self.drain_iso_pools(Some(interface));
             // SAFETY: `entry.winusb` is an open WinUSB handle for `interface`.
             let ok = unsafe { (self.api.set_alt)(entry.winusb, setting) };
             if ok == 0 {
                 let err = unsafe { GetLastError().0 };
                 return Reply::failed(win32_error_to_errno(err));
             }
-            let mut state = self.state();
-            let old_eps: Vec<u8> = state
-                .endpoints
-                .iter()
-                .filter_map(|(&ep, info)| (info.interface == interface).then_some(ep))
-                .collect();
-            for ep in old_eps {
-                state.endpoints.remove(&ep);
-                state.streaming.insert(ep, false);
-            }
-            if let Some(updated) = state.alt_endpoints.get(&(interface, setting)).cloned() {
-                for (ep, max_packet) in updated {
-                    state.endpoints.insert(ep, EndpointInfo { interface, max_packet });
-                    state.streaming.insert(ep, false);
+            let updated_eps = {
+                let mut resettable = self.resettable.lock().unwrap_or_else(PoisonError::into_inner);
+                for ep in &removed_eps {
+                    resettable.endpoints.remove(ep);
+                }
+                let updated = resettable.alt_endpoints.get(&(interface, setting)).cloned();
+                let mut touched = removed_eps;
+                if let Some(updated) = updated {
+                    for (ep, max_packet, max_bytes_per_interval) in updated {
+                        resettable.endpoints.insert(
+                            ep,
+                            EndpointInfo {
+                                interface,
+                                max_packet,
+                                max_bytes_per_interval,
+                            },
+                        );
+                        touched.push(ep);
+                    }
+                }
+                touched
+            };
+            let streams = self.iso_streams.lock().unwrap_or_else(PoisonError::into_inner);
+            for ep in updated_eps {
+                if let Some(stream) = streams.get(&ep) {
+                    stream.lock().unwrap_or_else(PoisonError::into_inner).reset();
                 }
             }
             Reply::sent(0)
@@ -261,7 +254,10 @@ mod platform {
             };
             // SAFETY: `entry.winusb` owns `endpoint`.
             let ok = unsafe { (self.api.reset_pipe)(entry.winusb, endpoint) };
-            self.state().streaming.insert(endpoint, false);
+            self.iso_stream(endpoint)
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .reset();
             if ok == 0 {
                 let err = unsafe { GetLastError().0 };
                 Reply::failed(win32_error_to_errno(err))
@@ -271,27 +267,39 @@ mod platform {
         }
 
         fn reset_port(&self) -> Reply {
-            let pipes: Vec<(InterfaceEntry, u8)> = {
-                let mut state = self.state();
-                state.streaming.clear();
-                state
-                    .endpoints
-                    .iter()
-                    .filter_map(|(&ep, info)| {
-                        state.handles.interfaces.get(&info.interface).map(|&e| (e, ep))
-                    })
-                    .collect()
-            };
-            for (entry, ep) in pipes {
-                unsafe {
-                    let _ = (self.api.abort_pipe)(entry.winusb, ep);
-                    if ep & 0x80 != 0 {
-                        let _ = (self.api.flush_pipe)(entry.winusb, ep);
+            struct DevicePortReset<'a>(&'a WinUsbDevice);
+            impl WinUsbPortReset for DevicePortReset<'_> {
+                fn reset_pipe(&self, interface: u8, endpoint: u8) -> Result<(), i32> {
+                    let Some(entry) = self.0.interface_handle(Some(interface)) else {
+                        return Err(wire::ENODEV);
+                    };
+                    unsafe {
+                        let _ = (self.0.api.abort_pipe)(entry.winusb, endpoint);
+                        if endpoint & 0x80 != 0 {
+                            let _ = (self.0.api.flush_pipe)(entry.winusb, endpoint);
+                        }
+                        if (self.0.api.reset_pipe)(entry.winusb, endpoint) == 0 {
+                            let err = GetLastError().0;
+                            return Err(win32_error_to_errno(err));
+                        }
                     }
-                    let _ = (self.api.reset_pipe)(entry.winusb, ep);
+                    Ok(())
+                }
+
+                fn set_alt(&self, interface: u8, setting: u8) -> Result<(), i32> {
+                    let Some(entry) = self.0.interface_handle(Some(interface)) else {
+                        return Err(wire::ENODEV);
+                    };
+                    if unsafe { (self.0.api.set_alt)(entry.winusb, setting) } == 0 {
+                        let err = unsafe { GetLastError().0 };
+                        return Err(win32_error_to_errno(err));
+                    }
+                    Ok(())
                 }
             }
-            Reply::sent(0)
+
+            self.drain_iso_pools(None);
+            winusb_reset_port(&DevicePortReset(self), &self.resettable, &self.iso_streams)
         }
 
         fn control(&self, transfer: &Transfer, cancelled: &AtomicBool) -> Reply {
@@ -321,8 +329,14 @@ mod platform {
             }
 
             let target_iface = control_target_interface(setup).or_else(|| {
-                control_target_endpoint(setup)
-                    .and_then(|ep| self.state().endpoints.get(&ep).map(|i| i.interface))
+                control_target_endpoint(setup).and_then(|ep| {
+                    self.resettable
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .endpoints
+                        .get(&ep)
+                        .map(|i| i.interface)
+                })
             });
             let Some(entry) = self.interface_handle(target_iface) else {
                 return Reply::failed(wire::ENODEV);
@@ -341,11 +355,11 @@ mod platform {
                 transfer.data.len()
             };
             let mut buffer = if is_in { vec![0u8; len] } else { transfer.data.clone() };
-            let event = match OwnedEvent::new() {
+            let event = match PooledEvent::acquire(&self.event_pool) {
                 Ok(e) => e,
                 Err(status) => return Reply::failed(status),
             };
-            let mut overlapped = OVERLAPPED { hEvent: event.0, ..Default::default() };
+            let mut overlapped = OVERLAPPED { hEvent: event.handle(), ..Default::default() };
             let buf_ptr = if buffer.is_empty() { std::ptr::null_mut() } else { buffer.as_mut_ptr() };
             // SAFETY: `buffer` and `overlapped` remain pinned until overlapped completion returns.
             // Per WinUSB docs, `LengthTransferred` must be NULL when `Overlapped` is non-NULL.
@@ -388,8 +402,8 @@ mod platform {
             cancelled: &AtomicBool,
         ) -> Reply {
             let submit = |buf: *mut u8, len: u32, is_in: bool| -> Result<u32, i32> {
-                let event = OwnedEvent::new()?;
-                let mut overlapped = OVERLAPPED { hEvent: event.0, ..Default::default() };
+                let event = PooledEvent::acquire(&self.event_pool)?;
+                let mut overlapped = OVERLAPPED { hEvent: event.handle(), ..Default::default() };
                 let call = if is_in { self.api.read_pipe } else { self.api.write_pipe };
                 // SAFETY: caller keeps `buf` alive until overlapped completion returns.
                 // Per WinUSB docs, `LengthTransferred` must be NULL when `Overlapped` is non-NULL.
@@ -446,37 +460,36 @@ mod platform {
                 Ok(total) => total,
                 Err(status) => return Reply::failed(status),
             };
-            let Some((entry, _)) = self.endpoint_entry(address) else {
+            let Some((entry, ep_info)) = self.endpoint_entry(address) else {
                 return Reply::failed(wire::EPIPE);
             };
-            let mut buffer = match transfer.direction {
-                Direction::In => vec![0u8; total],
-                Direction::Out => transfer.data[..total].to_vec(),
-            };
-            let mut iso_handle: IsochBufferHandle = std::ptr::null_mut();
-            // SAFETY: `buffer` stays pinned until `_iso_guard` drops after I/O finishes.
-            let reg = unsafe {
-                (self.api.register_isoch_buffer)(
-                    entry.winusb,
-                    address,
-                    buffer.as_mut_ptr(),
-                    total as u32,
-                    &mut iso_handle,
-                )
-            };
-            if reg == 0 || iso_handle.is_null() {
-                let err = unsafe { GetLastError().0 };
-                return Reply::failed(win32_error_to_errno(err));
+            if transfer.direction == Direction::Out
+                && let Err(status) = validate_winusb_iso_out_table(&transfer.iso, ep_info.max_bytes_per_interval)
+            {
+                return Reply::failed(status);
             }
-            let _iso_guard = IsochBufferGuard { api: self.api, handle: iso_handle };
-            let continue_stream = self.state().streaming.get(&address).copied().unwrap_or(false);
+            let mut slot = match acquire_iso_slot(
+                self.api,
+                entry.winusb,
+                &self.iso_pools,
+                ep_info.interface,
+                address,
+                total,
+            ) {
+                Ok(slot) => slot,
+                Err(status) => return Reply::failed(status),
+            };
+            if transfer.direction == Direction::Out {
+                slot.buffer[..total].copy_from_slice(&transfer.data[..total]);
+            }
+            let ep_stream = self.iso_stream(address);
 
-            match transfer.direction {
+            let reply = match transfer.direction {
                 Direction::In => {
                     let mut descs = vec![UsbdIsoPacketDescriptor::default(); transfer.iso.len()];
-                    let result = self.submit_iso(entry, continue_stream, cancelled, |try_cont, ov| unsafe {
+                    let result = self.submit_iso(entry, &ep_stream, cancelled, |try_cont, ov| unsafe {
                         (self.api.read_isoch_pipe_asap)(
-                            iso_handle,
+                            slot.handle,
                             0,
                             total as u32,
                             WinBool::from(try_cont),
@@ -486,20 +499,14 @@ mod platform {
                         )
                     });
                     match result {
-                        Ok(_) => {
-                            self.state().streaming.insert(address, true);
-                            pack_winusb_iso_in(transfer.length, &transfer.iso, &descs, &buffer)
-                        }
-                        Err(status) => {
-                            self.state().streaming.insert(address, false);
-                            Reply::failed(status)
-                        }
+                        Ok(_) => pack_winusb_iso_in(transfer.length, &transfer.iso, &descs, &slot.buffer[..total]),
+                        Err(status) => Reply::failed(status),
                     }
                 }
                 Direction::Out => {
-                    let result = self.submit_iso(entry, continue_stream, cancelled, |try_cont, ov| unsafe {
+                    let result = self.submit_iso(entry, &ep_stream, cancelled, |try_cont, ov| unsafe {
                         (self.api.write_isoch_pipe_asap)(
-                            iso_handle,
+                            slot.handle,
                             0,
                             total as u32,
                             WinBool::from(try_cont),
@@ -507,51 +514,54 @@ mod platform {
                         )
                     });
                     match result {
-                        Ok(transferred) => {
-                            self.state().streaming.insert(address, true);
-                            pack_winusb_iso_out(transfer.length, &transfer.iso, transferred)
-                        }
-                        Err(status) => {
-                            self.state().streaming.insert(address, false);
-                            Reply::failed(status)
-                        }
+                        Ok(transferred) => pack_winusb_iso_out(transfer.length, &transfer.iso, transferred),
+                        Err(status) => Reply::failed(status),
                     }
                 }
-            }
+            };
+            release_iso_slot(&self.closed, &self.resettable, &self.iso_pools, address, slot);
+            reply
         }
 
         fn submit_iso(
             &self,
             entry: InterfaceEntry,
-            continue_stream: bool,
+            ep_stream: &Arc<Mutex<IsoEndpointState>>,
             cancelled: &AtomicBool,
             mut issue: impl FnMut(bool, *mut OVERLAPPED) -> WinBool,
         ) -> Result<u32, i32> {
-            let mut try_continue = continue_stream;
-            for attempt in 0..2 {
-                let event = OwnedEvent::new()?;
-                let mut overlapped = OVERLAPPED { hEvent: event.0, ..Default::default() };
+            let event = PooledEvent::acquire(&self.event_pool)?;
+            let mut overlapped = OVERLAPPED { hEvent: event.handle(), ..Default::default() };
+            let (immediate, ticket) = submit_pipelined(ep_stream, |try_continue| {
+                // SAFETY: `overlapped` stays pinned across submission and wait below.
                 if issue(try_continue, &mut overlapped) != 0 {
-                    return self.complete_overlapped(entry, &mut overlapped);
+                    Ok(true)
+                } else {
+                    let err = unsafe { GetLastError().0 };
+                    if err == ERROR_IO_PENDING.0 {
+                        Ok(false)
+                    } else {
+                        Err((err, win32_error_to_errno(err)))
+                    }
                 }
-                let err = unsafe { GetLastError().0 };
-                if err == ERROR_IO_PENDING.0 {
-                    return self.wait_overlapped(entry, &mut overlapped, Some(ISO_TIMEOUT), cancelled);
-                }
-                // If ContinueStream failed because the stream lapsed, retry once with ContinueStream = FALSE.
-                if attempt == 0 && try_continue && matches!(err, 21 | 59 | 87) {
-                    try_continue = false;
-                    continue;
-                }
-                return Err(win32_error_to_errno(err));
-            }
-            Err(wire::EPROTO)
+            })?;
+            let result = if immediate {
+                self.complete_overlapped(entry, &mut overlapped)
+            } else {
+                self.wait_overlapped(entry, &mut overlapped, Some(ISO_TIMEOUT), cancelled)
+            };
+            ep_stream
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .finish(ticket, result.is_ok());
+            result
         }
     }
 
     impl Drop for WinUsbDevice {
         fn drop(&mut self) {
             self.closed.store(true, Ordering::Release);
+            self.drain_iso_pools(None);
             self.state().handles.close_all(self.api);
         }
     }
@@ -587,6 +597,7 @@ mod platform {
 
         fn close(&self) {
             self.closed.store(true, Ordering::Release);
+            self.drain_iso_pools(None);
             self.state().handles.close_all(self.api);
         }
     }
@@ -622,98 +633,54 @@ mod platform {
             .active_config_descriptor()
             .map_err(|e| format!("The device's active USB configuration could not be read: {e}"))?;
 
-        let mut handles = Handles {
-            interfaces: HashMap::new(),
-            files: Vec::new(),
-            default_interface: 0,
-        };
+        let handles = Handles::open_paths(api, paths)?;
 
-        let open_all = (|| -> Result<(), String> {
-            for path in paths {
-                let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
-                // SAFETY: `wide` is NUL-terminated; file handle is stored in `handles.files` immediately.
-                let file = unsafe {
-                    CreateFileW(
-                        PCWSTR(wide.as_ptr()),
-                        GENERIC_READ.0 | GENERIC_WRITE.0,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE,
-                        None,
-                        OPEN_EXISTING,
-                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-                        None,
-                    )
-                }
-                .map_err(|e| format!("Windows refused to open the WinUSB device; another program may be using it ({e})."))?;
-                handles.files.push(file);
+        let mut active_alts = HashMap::new();
+        for (&num, &entry) in &handles.interfaces {
+            let mut current_alt = 0u8;
+            if unsafe { (api.get_alt)(entry.winusb, &mut current_alt) } == 0 {
+                current_alt = 0;
+            }
+            active_alts.insert(num, current_alt);
+        }
 
-                let mut base: WinUsbHandle = std::ptr::null_mut();
-                // SAFETY: `file` is an open WinUSB device handle.
-                if unsafe { (api.initialize)(file, &mut base) } == 0 || base.is_null() {
-                    let err = unsafe { GetLastError().0 };
-                    return Err(format!("WinUsb_Initialize failed with Win32 error {err}."));
-                }
-                let mut desc = UsbInterfaceDescriptor::default();
-                let base_num = if unsafe { (api.query_settings)(base, 0, &mut desc) } != 0 {
-                    desc.b_interface_number
-                } else {
-                    0
-                };
-                if handles.interfaces.is_empty() {
-                    handles.default_interface = base_num;
-                }
-                if let std::collections::hash_map::Entry::Vacant(slot) = handles.interfaces.entry(base_num) {
-                    slot.insert(InterfaceEntry { winusb: base, file, associated: false });
-                } else {
-                    // SAFETY: duplicate interface handle not stored in `handles.interfaces`.
-                    unsafe {
-                        let _ = (api.free)(base);
-                    }
-                    continue;
-                }
-
-                // Claim every associated interface exposed under the same WinUSB device handle.
-                for idx in 0u8..=254 {
-                    let mut assoc: WinUsbHandle = std::ptr::null_mut();
-                    if unsafe { (api.get_associated)(base, idx, &mut assoc) } == 0 || assoc.is_null() {
-                        break;
-                    }
-                    let mut assoc_desc = UsbInterfaceDescriptor::default();
-                    let num = if unsafe { (api.query_settings)(assoc, 0, &mut assoc_desc) } != 0 {
-                        assoc_desc.b_interface_number
-                    } else {
-                        base_num.saturating_add(idx + 1)
-                    };
-                    if let std::collections::hash_map::Entry::Vacant(slot) = handles.interfaces.entry(num) {
-                        slot.insert(InterfaceEntry { winusb: assoc, file, associated: true });
-                    } else {
-                        // SAFETY: duplicate associated handle not stored in `handles.interfaces`.
-                        unsafe {
-                            let _ = (api.free)(assoc);
+        let mut interfaces = Vec::new();
+        let mut endpoints = HashMap::new();
+        let mut alt_endpoints: super::iso_coord::AltEndpointsMap = HashMap::new();
+        for interface in config.interfaces() {
+            let num = interface.number();
+            interfaces.push(num);
+            let entry = handles.interfaces.get(&num).copied();
+            let active_alt = active_alts.get(&num).copied().unwrap_or(0);
+            for setting in interface.descriptors() {
+                let alt = setting.setting_number();
+                let mut pipe_ex_map = HashMap::new();
+                if let Some(entry) = entry {
+                    for pipe_idx in 0..setting.num_endpoints() {
+                        let mut pipe_info = WinUsbPipeInformationEx::default();
+                        if unsafe { (api.query_pipe_ex)(entry.winusb, alt, pipe_idx, &mut pipe_info) } != 0 {
+                            pipe_ex_map.insert(pipe_info.pipe_id, pipe_info);
                         }
                     }
                 }
-            }
-            Ok(())
-        })();
-
-        if let Err(err) = open_all {
-            handles.close_all(api);
-            return Err(err);
-        }
-
-        let mut endpoints = HashMap::new();
-        let mut alt_endpoints: HashMap<(u8, u8), Vec<(u8, u16)>> = HashMap::new();
-        for interface in config.interfaces() {
-            let num = interface.number();
-            for setting in interface.descriptors() {
-                let alt = setting.setting_number();
                 let mut list = Vec::new();
                 for ep in setting.endpoint_descriptors() {
                     let addr = ep.address();
                     let max_packet = ep.max_packet_size() & 0x7ff;
-                    list.push((addr, max_packet));
-                    if alt == 0 {
-                        endpoints.insert(addr, EndpointInfo { interface: num, max_packet });
+                    let max_bytes_per_interval = if let Some(info) = pipe_ex_map.get(&addr) {
+                        if info.pipe_type == USBD_PIPE_TYPE_ISOCHRONOUS {
+                            info.maximum_bytes_per_interval
+                        } else {
+                            u32::from(max_packet)
+                        }
+                    } else if ep.transfer_type() == rusb::TransferType::Isochronous {
+                        0
+                    } else {
+                        u32::from(max_packet)
+                    };
+                    list.push((addr, max_packet, max_bytes_per_interval));
+                    if alt == active_alt {
+                        endpoints.insert(addr, EndpointInfo { interface: num, max_packet, max_bytes_per_interval });
                     }
                 }
                 alt_endpoints.insert((num, alt), list);
@@ -759,11 +726,16 @@ mod platform {
             state: Mutex::new(State {
                 configuration,
                 active: configuration,
-                endpoints,
-                alt_endpoints,
-                streaming: HashMap::new(),
                 handles,
             }),
+            resettable: Arc::new(Mutex::new(ResettableState {
+                interfaces,
+                endpoints,
+                alt_endpoints,
+            })),
+            iso_streams: Mutex::new(HashMap::new()),
+            iso_pools: Mutex::new(HashMap::new()),
+            event_pool: Arc::new(Mutex::new(Vec::new())),
         };
         Ok(Arc::new(Blocking::new(device)))
     }

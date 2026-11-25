@@ -11,6 +11,8 @@ use crate::stream::stage_times::Stages;
 
 use super::decoder::{Received, VideoDecoder, AGAIN};
 use super::ffi::*;
+#[cfg(windows)]
+use super::frame::ExportedMeta;
 use super::frame::Frame;
 use super::hardware::Hardware;
 
@@ -454,7 +456,20 @@ impl VideoDecoder {
             #[cfg(windows)]
             if format == AV_PIX_FMT_D3D11 && let Some(bridge) = &self.d3d11_bridge {
                 match bridge.export(raw.as_ref()) {
-                    Ok(shared) => { frame.shared = Some(shared); return Received::Frame(frame); }
+                    Ok(shared) => {
+                        // Snapshot side data/properties before releasing FFmpeg's D3D11VA surface.
+                        let exported = Box::new(ExportedMeta {
+                            info: frame.info(),
+                            hdr10_plus: frame.hdr10_plus_peak(),
+                            dolby_vision: frame.dolby_vision(),
+                            format_name: frame.format_name(),
+                            corrupt: frame.corrupt(),
+                        });
+                        av_frame_unref(raw.as_ptr());
+                        frame.exported = Some(exported);
+                        frame.shared = Some(shared);
+                        return Received::Frame(frame);
+                    }
                     Err(why) => { eprintln!("nightjar: D3D11 decode bridge export failed: {why}"); return Received::Error; }
                 }
             }

@@ -30,7 +30,7 @@ mod decoder;
 mod decoder_io;
 mod frame;
 mod hardware;
-mod wavelet_pool;
+pub(crate) mod wavelet_pool;
 
 pub use audio::{pcm_s16le, OpusDecoder};
 #[cfg(windows)]
@@ -78,6 +78,7 @@ pub struct FrameInfo {
     pub color_space: c_int,
     pub color_range: c_int,
     pub color_trc: c_int,
+    pub centred_chroma: bool,
 }
 
 /// Whether chroma at `location` sits midway between two luma columns. Unspecified counts as

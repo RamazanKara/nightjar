@@ -193,7 +193,7 @@ impl Decoder {
     /// that fails.
     fn rebuild(&mut self, setup: &VideoSetup) {
         self.decoder = None;
-        if self.setup(setup).is_err() || self.decoder.is_none() {
+        if self.setup_with_notice(setup, false).is_err() || self.decoder.is_none() {
             self.failing.given_up = true;
             self.shared.notify(Notice::DecoderFailed(crate::strings::tr("The video decoder stopped working and could not be opened again.").to_owned()));
         }
@@ -401,8 +401,8 @@ fn say_cuda_fallback(shared: &Shared, decoder: &mut media::VideoDecoder) {
     }
 }
 
-impl VideoDecoder for Decoder {
-    fn setup(&mut self, setup: &VideoSetup) -> Result<(), i32> {
+impl Decoder {
+    fn setup_with_notice(&mut self, setup: &VideoSetup, notify_failure: bool) -> Result<(), i32> {
         lock(&self.shared.slices).clear();
         self.setup = Some(*setup);
         self.generation = super::decoder_cache::generation();
@@ -458,12 +458,19 @@ impl VideoDecoder for Decoder {
                     *lock(&self.shared.decoder_name) = name;
                     Ok(())
                 }
-                Err(notice) => { self.shared.notify(notice); Err(-1) }
+                Err(notice) => {
+                    if notify_failure || !matches!(notice, Notice::DecoderFailed(_)) {
+                        self.shared.notify(notice);
+                    }
+                    Err(-1)
+                }
             };
         }
         if setup.chroma_packing != 0 && self.hardware == Hardware::None {
             eprintln!("nightjar: packed 4:4:4 needs a hardware decoder, and the stream has none");
-            self.shared.notify(Notice::DecoderFailed(crate::strings::tr(PACKED_NEEDS_HARDWARE).to_owned()));
+            if notify_failure {
+                self.shared.notify(Notice::DecoderFailed(crate::strings::tr(PACKED_NEEDS_HARDWARE).to_owned()));
+            }
             return Err(-1);
         }
         let codec = codec_of(setup);
@@ -500,7 +507,7 @@ impl VideoDecoder for Decoder {
                     // Every hardware decoder gave way to software this stream, which was said then.
                     return match media::VideoDecoder::open(codec, Hardware::None, self.software_threads, false) {
                         Ok(decoder) => { self.install(decoder, setup); Ok(()) }
-                        Err(e) => { no_decoder(&self.shared, &e); Err(-1) }
+                        Err(e) => { if notify_failure { no_decoder(&self.shared, &e); } Err(-1) }
                     };
                 }
                 media::VideoDecoder::open_any(codec, pictures, order, setup.chroma_packing != 0, log_unavailable).or_else(|e| {
@@ -519,10 +526,16 @@ impl VideoDecoder for Decoder {
                 Ok(())
             }
             Err(e) => {
-                no_decoder(&self.shared, &e);
+                if notify_failure { no_decoder(&self.shared, &e); }
                 Err(-1)
             }
         }
+    }
+}
+
+impl VideoDecoder for Decoder {
+    fn setup(&mut self, setup: &VideoSetup) -> Result<(), i32> {
+        self.setup_with_notice(setup, true)
     }
 
     fn wants_early_chunks(&self) -> bool {
@@ -624,6 +637,9 @@ impl VideoDecoder for Decoder {
         }
         self.decoder = None;
         self.pyrowave = None;
+        if !keep {
+            crate::media::wavelet_pool::clear();
+        }
     }
 }
 

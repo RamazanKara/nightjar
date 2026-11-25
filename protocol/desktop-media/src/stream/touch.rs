@@ -7,6 +7,8 @@ use sdl3_sys::everything::*;
 #[derive(Default)]
 pub struct Touch {
     contacts: HashMap<(u64, u64), u32>,
+    /// Finger UP/CANCEL packets refused by a full input queue, keeping their slot reserved until sent.
+    pending_ends: Vec<(u8, u32, f32, f32, f32)>,
     pen: Option<Pen>,
 }
 
@@ -21,6 +23,7 @@ struct Pen {
     roll: u16,
     sent: bool,
     down: bool,
+    pending_up: bool,
 }
 
 /// SDL's x and y tilt as Moonlight's tilt direction (degrees clockwise, the host's inverse of
@@ -42,33 +45,64 @@ fn position(x: f32, y: f32, rect: SDL_FRect, clamp: bool) -> Option<(f32, f32)> 
 impl Pen {
     fn new(id: SDL_PenID) -> Self {
         Self { id, position: (0.0, 0.0), state: SDL_PenInputFlags(0), pressure: 0.0,
-            distance: 0.0, tilt: [None, None], roll: ROLL_UNKNOWN, sent: false, down: false }
+            distance: 0.0, tilt: [None, None], roll: ROLL_UNKNOWN, sent: false, down: false, pending_up: false }
     }
 
-    fn send(&mut self, event: u8, queue: &mut InputQueue) {
+    fn send(&mut self, event: u8, queue: &mut InputQueue) -> bool {
         let tool = if self.state & SDL_PEN_INPUT_ERASER_TIP != SDL_PenInputFlags(0) { 2 } else { 1 };
         let buttons = ((self.state.0 >> 1) & 7) as u8;
         let (rotation, tilt) = tilt(self.tilt);
-        if queue.send_pen(event, tool, buttons, self.position.0, self.position.1,
-            if self.down { self.pressure } else { self.distance }, 0.0, 0.0, rotation, tilt, self.roll).is_ok() { self.sent = true; }
+        let ok = queue.send_pen(event, tool, buttons, self.position.0, self.position.1,
+            if self.down { self.pressure } else { self.distance }, 0.0, 0.0, rotation, tilt, self.roll).is_ok();
+        if ok {
+            self.sent = true;
+            if matches!(event, touch_event::UP | touch_event::CANCEL | touch_event::HOVER_LEAVE) {
+                self.down = false;
+                self.pending_up = false;
+            }
+        }
+        ok
     }
 }
 
 impl Touch {
+    fn flush_pending_ends(&mut self, queue: &mut InputQueue) {
+        let mut i = 0;
+        while i < self.pending_ends.len() {
+            let (action, id, x, y, pressure) = self.pending_ends[i];
+            if queue.send_touch(action, id, x, y, pressure, 0.0, 0.0, u16::MAX).is_ok() {
+                self.pending_ends.swap_remove(i);
+            } else {
+                i += 1;
+            }
+        }
+        if let Some(pen) = self.pen.as_mut()
+            && pen.pending_up
+        {
+            let _ = pen.send(touch_event::UP, queue);
+        }
+    }
+
     pub fn release(&mut self, queue: &mut InputQueue) {
-        if !self.contacts.is_empty() {
-            let _ = queue.send_touch(touch_event::CANCEL_ALL, 0, 0.0, 0.0, 0.0, 0.0, 0.0, u16::MAX);
-            self.contacts.clear();
+        self.flush_pending_ends(queue);
+        if !self.contacts.is_empty() || !self.pending_ends.is_empty() {
+            if queue.send_touch(touch_event::CANCEL_ALL, 0, 0.0, 0.0, 0.0, 0.0, 0.0, u16::MAX).is_ok() {
+                self.contacts.clear();
+                self.pending_ends.clear();
+            } else {
+                self.contacts.clear();
+            }
         }
         if let Some(mut pen) = self.pen.take()
-            && pen.sent {
+            && (pen.sent || pen.down) {
                 pen.state = SDL_PenInputFlags(0);
-                pen.send(touch_event::CANCEL, queue);
-                pen.send(touch_event::HOVER_LEAVE, queue);
+                let _ = pen.send(touch_event::CANCEL, queue);
+                let _ = pen.send(touch_event::HOVER_LEAVE, queue);
             }
     }
 
     pub fn handle(&mut self, event: &SDL_Event, rect: SDL_FRect, area: (i32, i32), density: f32, queue: &mut InputQueue) {
+        self.flush_pending_ends(queue);
         // SAFETY: each union member is selected by its SDL event type.
         unsafe {
             let kind = SDL_EventType(event.r#type);
@@ -79,7 +113,10 @@ impl Touch {
                 let Some((x, y)) = position(finger.x * area.0 as f32, finger.y * area.1 as f32, rect, !down) else { return; };
                 let id = if down {
                     if self.contacts.contains_key(&key) { return; }
-                    let Some(id) = (0..32).find(|id| !self.contacts.values().any(|value| value == id)) else { return; };
+                    let Some(id) = (0..32).find(|id| {
+                        !self.contacts.values().any(|value| value == id)
+                            && !self.pending_ends.iter().any(|(_, pending_id, ..)| pending_id == id)
+                    }) else { return; };
                     id
                 } else {
                     let Some(id) = self.contacts.get(&key).copied() else { return; };
@@ -91,9 +128,13 @@ impl Touch {
                     SDL_EVENT_FINGER_CANCELED => touch_event::CANCEL,
                     _ => touch_event::MOVE,
                 };
-                if queue.send_touch(action, id, x, y, finger.pressure.clamp(0.0, 1.0), 0.0, 0.0, u16::MAX).is_ok() {
+                let pressure = finger.pressure.clamp(0.0, 1.0);
+                if queue.send_touch(action, id, x, y, pressure, 0.0, 0.0, u16::MAX).is_ok() {
                     if down { self.contacts.insert(key, id); }
                     else if matches!(action, touch_event::UP | touch_event::CANCEL) { self.contacts.remove(&key); }
+                } else if matches!(action, touch_event::UP | touch_event::CANCEL) {
+                    self.contacts.remove(&key);
+                    self.pending_ends.push((action, id, x, y, pressure));
                 }
                 return;
             }
@@ -101,9 +142,9 @@ impl Touch {
                 if self.pen.as_ref().is_some_and(|p| p.id == event.pproximity.which)
                     && let Some(mut pen) = self.pen.take() {
                         pen.state = SDL_PenInputFlags(0);
-                        if pen.sent {
-                            if pen.down { pen.send(touch_event::CANCEL, queue); }
-                            pen.send(touch_event::HOVER_LEAVE, queue);
+                        if pen.sent || pen.down {
+                            if pen.down || pen.pending_up { let _ = pen.send(touch_event::CANCEL, queue); }
+                            let _ = pen.send(touch_event::HOVER_LEAVE, queue);
                         }
                     }
                 return;
@@ -131,21 +172,32 @@ impl Touch {
                 }
             }
             let Some(position) = position(x * density, y * density, rect, pen.down) else {
-                if pen.sent { pen.send(touch_event::HOVER_LEAVE, queue); pen.sent = false; }
+                if pen.sent && pen.send(touch_event::HOVER_LEAVE, queue) {
+                    pen.sent = false;
+                }
                 return;
             };
             pen.position = position;
             pen.state = state;
             let action = match kind {
-                SDL_EVENT_PEN_DOWN => { pen.down = true; touch_event::DOWN }
-                SDL_EVENT_PEN_UP if pen.down => { pen.down = false; touch_event::UP }
+                SDL_EVENT_PEN_DOWN => {
+                    pen.pending_up = false;
+                    if pen.send(touch_event::DOWN, queue) { pen.down = true; }
+                    return;
+                }
+                SDL_EVENT_PEN_UP if pen.down => {
+                    if !pen.send(touch_event::UP, queue) {
+                        pen.pending_up = true;
+                    }
+                    return;
+                }
                 SDL_EVENT_PEN_UP => return,
                 SDL_EVENT_PEN_BUTTON_DOWN | SDL_EVENT_PEN_BUTTON_UP => touch_event::BUTTON_ONLY,
                 _ if pen.down => touch_event::MOVE,
                 _ if state & SDL_PEN_INPUT_DOWN != SDL_PenInputFlags(0) => return,
                 _ => touch_event::HOVER,
             };
-            pen.send(action, queue);
+            let _ = pen.send(action, queue);
         }
     }
 }
@@ -240,5 +292,54 @@ mod tests {
         assert!((x.to_radians().tan() / y.to_radians().tan() - 20f32.to_radians().tan() / -10f32.to_radians().tan()).abs() < 0.05, "{x} {y}");
         assert!(x > 0.0 && y < 0.0, "{x} {y}");
         assert_eq!(tilt(super::Pen::new(SDL_PenID(1)).tilt), (u16::MAX, u8::MAX));
+    }
+
+    #[test]
+    fn refused_up_on_full_queue_retries_and_keeps_pen_state() {
+        let mut touch = Touch::default();
+        let mut q = InputQueue::new(&HostCapabilities { feature_flags: 1, ..Default::default() });
+        let full = |q: &mut InputQueue| {
+            let mut n = 0;
+            while q.send_mouse_button(1, true).is_ok() {
+                n += 1;
+            }
+            while q.send_mouse_button(1, false).is_ok() {
+                n += 1;
+            }
+            n
+        };
+        let drain_all = |q: &mut InputQueue| {
+            let mut out = Vec::new();
+            q.drain(std::time::Instant::now(), false, &mut out);
+            out
+        };
+        let area = (100, 100);
+        let rect = letterbox(area, area);
+        // Finger down -> full queue -> finger up refused -> drained -> next event flushes UP.
+        let down = SDL_TouchFingerEvent { r#type: SDL_EVENT_FINGER_DOWN, touchID: SDL_TouchID(1), fingerID: SDL_FingerID(2), x: 0.5, y: 0.5, pressure: 0.5, ..Default::default() };
+        touch.handle(&SDL_Event { tfinger: down }, rect, area, 1.0, &mut q);
+        let _ = full(&mut q);
+        let up = SDL_TouchFingerEvent { r#type: SDL_EVENT_FINGER_UP, ..down };
+        touch.handle(&SDL_Event { tfinger: up }, rect, area, 1.0, &mut q);
+        assert_eq!(touch.pending_ends.len(), 1);
+        let _ = drain_all(&mut q);
+        touch.release(&mut q);
+        let packets = drain_all(&mut q);
+        assert!(packets.iter().any(|p| p.data.get(8) == Some(&touch_event::UP)));
+
+        // Pen down -> full queue -> pen UP refused keeps `down == true` -> drained -> flushed.
+        let pen_down = SDL_PenTouchEvent { r#type: SDL_EVENT_PEN_DOWN, which: SDL_PenID(3), x: 50.0, y: 50.0, pen_state: SDL_PEN_INPUT_DOWN, down: true, ..Default::default() };
+        touch.handle(&SDL_Event { ptouch: pen_down }, rect, area, 1.0, &mut q);
+        assert!(touch.pen.as_ref().unwrap().down);
+        let _ = full(&mut q);
+        let pen_up = SDL_PenTouchEvent { r#type: SDL_EVENT_PEN_UP, which: SDL_PenID(3), x: 50.0, y: 50.0, pen_state: SDL_PenInputFlags(0), down: false, ..Default::default() };
+        touch.handle(&SDL_Event { ptouch: pen_up }, rect, area, 1.0, &mut q);
+        assert!(touch.pen.as_ref().unwrap().down, "refused UP must not mark pen up before host gets it");
+        assert!(touch.pen.as_ref().unwrap().pending_up);
+        let _ = drain_all(&mut q);
+        touch.handle(&SDL_Event { ptouch: SDL_PenTouchEvent { r#type: SDL_EVENT_PEN_UP, ..pen_up } }, rect, area, 1.0, &mut q);
+        assert!(!touch.pen.as_ref().unwrap().down);
+        let packets = drain_all(&mut q);
+        assert!(packets.iter().any(|p| p.data.get(8) == Some(&touch_event::UP)));
     }
 }

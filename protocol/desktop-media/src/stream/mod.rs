@@ -275,6 +275,8 @@ pub struct Streaming {
     skipped: present::SkippedPicture,
     /// That picture, counted as shown if it is drawn after all and as replaced if a newer one comes.
     skipped_picture: Option<present::Pending>,
+    /// `VideoTexture::destroy_epoch` when `skipped_picture` was uploaded (or drawn into it).
+    uploaded_epoch: u64,
     /// Finds pictures that missed their refresh, for `skipped`.
     miss_watch: present::MissWatch,
     /// How long a stream that skips keeps a new place from the host (`phase::SteadyReports`), from

@@ -199,7 +199,7 @@ impl Streaming {
         let Some(client) = self.guests_client() else { return };
         let (shared, offered) = (self.shared.clone(), self.guests.offered);
         self.guests.busy = true;
-        std::thread::spawn(move || {
+        if let Err(error) = std::thread::Builder::new().name("guests-poll".into()).spawn(move || {
             if offered.is_none() {
                 match client.native_capabilities_with_files() {
                     Ok(caps) if !caps.offers_session_guests() && !caps.offers_guest_invites() => {
@@ -215,7 +215,10 @@ impl Streaming {
                 }
             }
             shared.notify(Notice::Guests(GuestsAnswer::Read(client.session_guests().map_err(|e| e.to_string()))));
-        });
+        }) {
+            self.guests.busy = false;
+            eprintln!("nightjar: could not poll guests: {error}");
+        }
     }
 
     /// Sends one action, or keeps it until the read or action out answers; the PC's answer is the
@@ -224,10 +227,13 @@ impl Streaming {
         let Some(client) = self.guests_client() else { return };
         let Some(action) = self.guests.queue(action) else { return };
         let shared = self.shared.clone();
-        std::thread::spawn(move || {
+        if let Err(error) = std::thread::Builder::new().name("guest-action".into()).spawn(move || {
             let answer = client.guest_action(&action).map_err(|e| e.to_string());
             shared.notify(Notice::Guests(GuestsAnswer::Changed(answer)));
-        });
+        }) {
+            self.guests.busy = false;
+            self.shared.notify(Notice::Guests(GuestsAnswer::Changed(Err(error.to_string()))));
+        }
     }
 
     /// Makes an invite to play over the internet with the PC's default permission, on a thread.
@@ -237,12 +243,15 @@ impl Streaming {
         };
         self.guests.invite = Invite::Making;
         let shared = self.shared.clone();
-        std::thread::spawn(move || {
+        if let Err(error) = std::thread::Builder::new().name("guest-invite".into()).spawn(move || {
             let answer = client
                 .create_invite(&InviteCreate::default())
                 .map_err(|e| e.to_string());
             shared.notify(Notice::Guests(GuestsAnswer::Invite(answer)));
-        });
+        }) {
+            self.guests.invite = Invite::None;
+            self.shared.notify(Notice::Guests(GuestsAnswer::Invite(Err(error.to_string()))));
+        }
     }
 
     /// Resets the generated invite back to None.

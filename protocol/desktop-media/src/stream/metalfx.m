@@ -7,16 +7,22 @@
 #import <IOSurface/IOSurfaceRef.h>
 
 // Output images SDL draws. Rust pools one SDL_Texture per ring slot, so slots rotate round-robin
-// without checking IOSurface use counts (pooled textures keep the IOSurface referenced) and the
-// synchronous wait guarantees the current slot's write finishes before SDL's queue reads it.
+// without checking IOSurface use counts (pooled textures keep the IOSurface referenced). When SDL's
+// shared MTLCommandQueue is provided, MetalFX submits asynchronously and relies on same-queue FIFO
+// ordering with SDL's subsequent draw, retaining the input CVPixelBufferRef/textures until GPU
+// completion; otherwise it falls back to a private queue with waitUntilCompleted.
 #define NJ_RING 4
 
 @interface NJSpatial : NSObject {
 @public
     CVPixelBufferRef ring[NJ_RING];
     __strong id<MTLTexture> targets[NJ_RING];
+    __strong id<MTLCommandBuffer> inFlight[NJ_RING];
+    BOOL sharedQueue;
     int next;
     unsigned int frames;
+    double lastGpuMs;
+    NSLock *gpuMsLock;
 }
 @property id<MTLDevice> device;
 @property id<MTLCommandQueue> queue;
@@ -28,8 +34,14 @@
 @end
 @implementation NJSpatial
 - (void)dealloc {
+    for (int i = 0; i < NJ_RING; i++) {
+        if (inFlight[i]) {
+            [inFlight[i] waitUntilCompleted];
+            inFlight[i] = nil;
+        }
+    }
     if (_cache) CFRelease(_cache);
-    for (int i=0;i<NJ_RING;i++) if (ring[i]) CFRelease(ring[i]);
+    for (int i = 0; i < NJ_RING; i++) if (ring[i]) CFRelease(ring[i]);
 }
 @end
 
@@ -92,14 +104,21 @@ static id<MTLComputePipelineState> nj_conversion_pipeline(id<MTLDevice> device) 
     return pipeline;
 }
 
-void *nj_metalfx_new(void *layer, int iw, int ih, int ow, int oh) {
+void *nj_metalfx_new(void *layer, void *shared_queue, int iw, int ih, int ow, int oh) {
     @autoreleasepool {
         if (@available(macOS 13.0, *)) {
             if (!layer || iw <= 0 || ih <= 0 || ow < iw || oh < ih) return NULL;
             NJSpatial *s = [NJSpatial new];
             s.device = ((__bridge CAMetalLayer *)layer).device;
             if (!s.device || ![MTLFXSpatialScalerDescriptor supportsDevice:s.device]) return NULL;
-            s.queue = [s.device newCommandQueue];
+            s->gpuMsLock = [NSLock new];
+            if (shared_queue) {
+                s.queue = (__bridge id<MTLCommandQueue>)shared_queue;
+                s->sharedQueue = YES;
+            } else {
+                s.queue = [s.device newCommandQueue];
+                s->sharedQueue = NO;
+            }
             s.convert = nj_conversion_pipeline(s.device);
             MTLFXSpatialScalerDescriptor *d = [MTLFXSpatialScalerDescriptor new];
             d.inputWidth=iw; d.inputHeight=ih; d.outputWidth=ow; d.outputHeight=oh;
@@ -140,6 +159,10 @@ int nj_metalfx_draw(void *context, void *input, const float *parameters, double 
         CVMetalTextureRef planes[2] = {NULL, NULL};
         int slot = s->next;
         int result = -1;
+        if (s->inFlight[slot]) {
+            [s->inFlight[slot] waitUntilCompleted];
+            s->inFlight[slot] = nil;
+        }
         for (int i = 0; i < 2; i++) {
             MTLPixelFormat f = i ? (ten ? MTLPixelFormatRG16Unorm : MTLPixelFormatRG8Unorm)
                 : (ten ? MTLPixelFormatR16Unorm : MTLPixelFormatR8Unorm);
@@ -155,6 +178,9 @@ int nj_metalfx_draw(void *context, void *input, const float *parameters, double 
         }
         {
             id<MTLCommandBuffer> command = [s.queue commandBuffer];
+            if (!command) {
+                goto cleanup;
+            }
             id<MTLComputeCommandEncoder> e = [command computeCommandEncoder];
             [e setComputePipelineState:s.convert];
             [e setTexture:CVMetalTextureGetTexture(planes[0]) atIndex:0];
@@ -172,15 +198,53 @@ int nj_metalfx_draw(void *context, void *input, const float *parameters, double 
             id<MTLBlitCommandEncoder> blit = [command blitCommandEncoder];
             [blit copyFromTexture:s.scaled toTexture:s->targets[slot]];
             [blit endEncoding];
-            [command commit];
-            [command waitUntilCompleted];
-            if (command.status == MTLCommandBufferStatusError) {
-                NSLog(@"Nightjar MetalFX: %@", command.error);
-            } else {
+            if (s->sharedQueue) {
+                CFRetain(buffer);
+                CVMetalTextureRef p0 = planes[0];
+                CVMetalTextureRef p1 = planes[1];
+                planes[0] = NULL;
+                planes[1] = NULL;
+                __weak NJSpatial *weakSelf = s;
+                [command addCompletedHandler:^(id<MTLCommandBuffer> cb) {
+                    CFRelease(p0);
+                    CFRelease(p1);
+                    CFRelease(buffer);
+                    if (cb.status == MTLCommandBufferStatusError) {
+                        NSLog(@"Nightjar MetalFX: %@", cb.error);
+                    } else {
+                        NJSpatial *strongSelf = weakSelf;
+                        if (strongSelf) {
+                            double ms = (cb.GPUEndTime - cb.GPUStartTime) * 1000.0;
+                            [strongSelf->gpuMsLock lock];
+                            strongSelf->lastGpuMs = ms;
+                            [strongSelf->gpuMsLock unlock];
+                        }
+                    }
+                }];
+                s->inFlight[slot] = command;
+                [command commit];
                 s->next = (slot + 1) % NJ_RING;
                 result = slot;
+                if (gpu_ms) {
+                    [s->gpuMsLock lock];
+                    *gpu_ms = s->lastGpuMs;
+                    [s->gpuMsLock unlock];
+                }
+            } else {
+                [command commit];
+                [command waitUntilCompleted];
+                if (command.status == MTLCommandBufferStatusError) {
+                    NSLog(@"Nightjar MetalFX: %@", command.error);
+                } else {
+                    s->next = (slot + 1) % NJ_RING;
+                    result = slot;
+                }
+                double ms = (command.GPUEndTime - command.GPUStartTime) * 1000.0;
+                [s->gpuMsLock lock];
+                s->lastGpuMs = ms;
+                if (gpu_ms) *gpu_ms = ms;
+                [s->gpuMsLock unlock];
             }
-            if (gpu_ms) *gpu_ms = (command.GPUEndTime - command.GPUStartTime) * 1000;
         }
 cleanup:
         for (int i = 0; i < 2; i++) if (planes[i]) CFRelease(planes[i]);
@@ -198,4 +262,17 @@ void *nj_metalfx_slot_buffer(void *context, int slot) {
     return s->ring[slot];
 }
 
-void nj_metalfx_free(void *context) { @autoreleasepool { (void)CFBridgingRelease(context); } }
+void nj_metalfx_free(void *context) {
+    @autoreleasepool {
+        if (context) {
+            NJSpatial *s = (__bridge NJSpatial *)context;
+            for (int i = 0; i < NJ_RING; i++) {
+                if (s->inFlight[i]) {
+                    [s->inFlight[i] waitUntilCompleted];
+                    s->inFlight[i] = nil;
+                }
+            }
+        }
+        (void)CFBridgingRelease(context);
+    }
+}

@@ -5,26 +5,30 @@
 //! concealed from the playout, as SDL's request callback does.
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use rubylight_protocol::audio_ext::{CHANNELS_714, CHANNEL_MASK_714};
-use windows::core::{GUID, PCWSTR};
-use windows::Win32::Foundation::{CloseHandle, E_UNEXPECTED, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
+use windows::core::{implement, GUID, PCWSTR};
+use windows::Win32::Foundation::{
+    CloseHandle, E_UNEXPECTED, HANDLE, PROPERTYKEY, WAIT_OBJECT_0, WAIT_TIMEOUT,
+};
 use windows::Win32::Media::Audio::{
-    eConsole, eRender, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator, MMDeviceEnumerator,
-    AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-    AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, WAVEFORMATEX, WAVEFORMATEXTENSIBLE, WAVEFORMATEXTENSIBLE_0,
+    eConsole, eRender, EDataFlow, ERole, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator,
+    IMMNotificationClient, IMMNotificationClient_Impl, MMDeviceEnumerator, AUDCLNT_SHAREMODE_SHARED,
+    AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+    AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, DEVICE_STATE, WAVEFORMATEX, WAVEFORMATEXTENSIBLE,
+    WAVEFORMATEXTENSIBLE_0,
 };
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED,
 };
 use windows::Win32::System::Threading::{
     AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsW, CreateEventW, GetCurrentThread,
-    SetThreadPriority, WaitForSingleObject, THREAD_PRIORITY_TIME_CRITICAL,
+    SetEvent, SetThreadPriority, WaitForSingleObject, THREAD_PRIORITY_TIME_CRITICAL,
 };
 
 use super::pipeline::lock;
@@ -78,6 +82,67 @@ impl Drop for Com {
     }
 }
 
+struct WakeHandle(Option<HANDLE>);
+
+// SAFETY: Only mutated by the render thread (cleared before closing the event); `SetEvent` is thread-safe.
+unsafe impl Send for WakeHandle {}
+unsafe impl Sync for WakeHandle {}
+
+#[implement(IMMNotificationClient)]
+struct DefaultDeviceWatch {
+    reopen: Arc<AtomicBool>,
+    wake: Arc<Mutex<WakeHandle>>,
+}
+
+impl IMMNotificationClient_Impl for DefaultDeviceWatch_Impl {
+    fn OnDeviceStateChanged(&self, _: &PCWSTR, _: DEVICE_STATE) -> windows::core::Result<()> {
+        Ok(())
+    }
+    fn OnDeviceAdded(&self, _: &PCWSTR) -> windows::core::Result<()> {
+        Ok(())
+    }
+    fn OnDeviceRemoved(&self, _: &PCWSTR) -> windows::core::Result<()> {
+        Ok(())
+    }
+    fn OnDefaultDeviceChanged(&self, flow: EDataFlow, role: ERole, _: &PCWSTR) -> windows::core::Result<()> {
+        if flow == eRender && role == eConsole {
+            self.reopen.store(true, Ordering::Release);
+            if let Some(handle) = lock(&self.wake).0 {
+                // SAFETY: `Device::render` clears `wake` before dropping its `Event`.
+                let _ = unsafe { SetEvent(handle) };
+            }
+        }
+        Ok(())
+    }
+    fn OnPropertyValueChanged(&self, _: &PCWSTR, _: &PROPERTYKEY) -> windows::core::Result<()> {
+        Ok(())
+    }
+}
+
+struct NotificationRegistration {
+    enumerator: IMMDeviceEnumerator,
+    client: IMMNotificationClient,
+}
+
+impl NotificationRegistration {
+    fn install(reopen: Arc<AtomicBool>, wake: Arc<Mutex<WakeHandle>>) -> Option<Self> {
+        let client: IMMNotificationClient = DefaultDeviceWatch { reopen, wake }.into();
+        // SAFETY: COM is initialized on the render thread; paired with unregister on drop.
+        unsafe {
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+            enumerator.RegisterEndpointNotificationCallback(&client).ok()?;
+            Some(Self { enumerator, client })
+        }
+    }
+}
+
+impl Drop for NotificationRegistration {
+    fn drop(&mut self) {
+        // SAFETY: registered above on the same enumerator.
+        let _ = unsafe { self.enumerator.UnregisterEndpointNotificationCallback(&self.client) };
+    }
+}
+
 fn default_client() -> windows::core::Result<IAudioClient> {
     // SAFETY: COM is initialised on the calling thread.
     unsafe {
@@ -89,7 +154,7 @@ fn default_client() -> windows::core::Result<IAudioClient> {
 /// The default output's mix format has 12 or more channels. Run on a thread of its own so the
 /// caller's COM apartment is never touched.
 pub fn plays_714() -> bool {
-    std::thread::spawn(|| {
+    let Ok(thread) = std::thread::Builder::new().name("wasapi-714".into()).spawn(|| {
         let _com = Com::init();
         let Ok(client) = default_client() else { return 0 };
         // SAFETY: the mix format is read and freed once.
@@ -99,9 +164,12 @@ pub fn plays_714() -> bool {
             CoTaskMemFree(Some(mix.cast_const().cast()));
             channels
         }
-    })
-    .join()
-    .is_ok_and(|channels| usize::from(channels) >= CHANNELS)
+    }) else {
+        return false;
+    };
+    thread
+        .join()
+        .is_ok_and(|channels| usize::from(channels) >= CHANNELS)
 }
 
 struct Offer {
@@ -118,11 +186,15 @@ pub fn offered() -> bool {
     let mut offer = lock(&OFFER);
     if !offer.probing && offer.checked.is_none_or(|at| at.elapsed() >= OFFER_FOR) {
         offer.probing = true;
-        std::thread::spawn(|| {
+        if let Err(error) = std::thread::Builder::new().name("wasapi-offer".into()).spawn(|| {
             let plays = plays_714();
             let mut offer = lock(&OFFER);
             *offer = Offer { plays, checked: Some(Instant::now()), probing: false };
-        });
+        }) {
+            offer.probing = false;
+            offer.checked = Some(Instant::now());
+            eprintln!("nightjar: could not spawn 7.1.4 audio offer check: {error}");
+        }
     }
     offer.plays
 }
@@ -232,15 +304,31 @@ impl Device {
         }
     }
 
-    /// Plays until `stop`, or until the device fails (unplugged, or the default output changed).
-    fn render(&self, queue: &Mutex<Queue>, stop: &AtomicBool) -> windows::core::Result<()> {
+    /// Plays until `stop`, `reopen` (default audio endpoint changed), or device failure.
+    fn render(
+        &self,
+        queue: &Mutex<Queue>,
+        stop: &AtomicBool,
+        reopen: &AtomicBool,
+        wake: &Mutex<WakeHandle>,
+    ) -> windows::core::Result<bool> {
         // SAFETY: the client and render client are this device's; the buffer WASAPI hands out
         // holds `frames` frames of the stream's format until it is released.
         unsafe {
+            lock(wake).0 = Some(self.event.0);
             self.client.Start()?;
+            let mut switch = false;
             let played = (|| {
                 while !stop.load(Ordering::Relaxed) {
+                    if reopen.swap(false, Ordering::AcqRel) {
+                        switch = true;
+                        break;
+                    }
                     let waited = WaitForSingleObject(self.event.0, 200);
+                    if reopen.swap(false, Ordering::AcqRel) {
+                        switch = true;
+                        break;
+                    }
                     if waited == WAIT_TIMEOUT {
                         continue;
                     }
@@ -260,9 +348,10 @@ impl Device {
                     fill(&mut lock(queue), out);
                     self.render.ReleaseBuffer(frames, 0)?;
                 }
-                Ok(())
+                Ok(switch)
             })();
             let _ = self.client.Stop();
+            lock(wake).0 = None;
             played
         }
     }
@@ -273,8 +362,8 @@ pub struct Output {
     pub queue: Arc<Mutex<Queue>>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
-    /// Frames the device takes at once, at 48 kHz.
-    pub period_frames: usize,
+    /// Frames the active device takes at once, at 48 kHz (updated on device reopen).
+    period_frames: Arc<AtomicUsize>,
 }
 
 impl Output {
@@ -282,22 +371,27 @@ impl Output {
     pub fn open() -> Result<Self, String> {
         let queue = Arc::new(Mutex::new(Queue::default()));
         let stop = Arc::new(AtomicBool::new(false));
+        let period_frames = Arc::new(AtomicUsize::new(0));
         let (opened, first) = mpsc::channel();
         let thread = {
-            let (queue, stop) = (queue.clone(), stop.clone());
+            let (queue, stop, period_frames) = (queue.clone(), stop.clone(), period_frames.clone());
             std::thread::Builder::new()
                 .name("nightjar-wasapi".into())
-                .spawn(move || run(&queue, &stop, opened))
+                .spawn(move || run(&queue, &stop, &period_frames, opened))
                 .map_err(|e| e.to_string())?
         };
         match first.recv() {
-            Ok(Ok(period)) => Ok(Self { queue, stop, thread: Some(thread), period_frames: period as usize }),
+            Ok(Ok(_period)) => Ok(Self { queue, stop, thread: Some(thread), period_frames }),
             Ok(Err(e)) => {
                 let _ = thread.join();
                 Err(e)
             }
             Err(_) => Err("the output thread ended".into()),
         }
+    }
+
+    pub fn period_frames(&self) -> usize {
+        self.period_frames.load(Ordering::Acquire)
     }
 }
 
@@ -310,10 +404,18 @@ impl Drop for Output {
     }
 }
 
-/// The render thread: opens the default output, and opens it again (the default output may have
-/// changed) when it fails mid-stream, until stopped.
-fn run(queue: &Mutex<Queue>, stop: &AtomicBool, opened: mpsc::Sender<Result<u32, String>>) {
+/// The render thread: opens the default output, and opens it again immediately when the default
+/// endpoint changes or mid-stream errors occur, updating `period_frames` and the playout cushion.
+fn run(
+    queue: &Mutex<Queue>,
+    stop: &AtomicBool,
+    period_frames: &AtomicUsize,
+    opened: mpsc::Sender<Result<u32, String>>,
+) {
     let _com = Com::init();
+    let reopen = Arc::new(AtomicBool::new(false));
+    let wake = Arc::new(Mutex::new(WakeHandle(None)));
+    let _watch = NotificationRegistration::install(reopen.clone(), wake.clone());
     // As SDL's audio threads: the Pro Audio task, or time-critical priority without it.
     let mut task_index = 0;
     // SAFETY: the task name is a static string; the handle is reverted below on this thread.
@@ -325,17 +427,30 @@ fn run(queue: &Mutex<Queue>, stop: &AtomicBool, opened: mpsc::Sender<Result<u32,
     let mut opened = Some(opened);
     let mut failing = false;
     while !stop.load(Ordering::Relaxed) {
+        let mut switch_now = false;
+        reopen.store(false, Ordering::Release);
         match Device::open() {
             Ok(device) => {
+                period_frames.store(device.period as usize, Ordering::Release);
+                if let Some(playout) = lock(queue).playout.clone() {
+                    lock(&playout).set_device_frames(device.period as usize);
+                }
                 match opened.take() {
                     Some(tx) => {
                         let _ = tx.send(Ok(device.period));
                     }
-                    None => eprintln!("nightjar: audio: 7.1.4 output open again"),
+                    None => eprintln!("nightjar: audio: 7.1.4 output open again ({} frames a period)", device.period),
                 }
                 failing = false;
-                if let Err(e) = device.render(queue, stop) {
-                    eprintln!("nightjar: audio: the 7.1.4 output failed ({e}); opening the default output again");
+                match device.render(queue, stop, &reopen, &wake) {
+                    Ok(true) => {
+                        eprintln!("nightjar: audio: default 7.1.4 output changed; switching");
+                        switch_now = true;
+                    }
+                    Ok(false) => {}
+                    Err(e) => {
+                        eprintln!("nightjar: audio: the 7.1.4 output failed ({e}); opening the default output again");
+                    }
                 }
             }
             Err(e) => {
@@ -349,9 +464,12 @@ fn run(queue: &Mutex<Queue>, stop: &AtomicBool, opened: mpsc::Sender<Result<u32,
                 }
             }
         }
+        if switch_now {
+            continue;
+        }
         // Not straight back at a device that just failed.
         for _ in 0..5 {
-            if stop.load(Ordering::Relaxed) {
+            if stop.load(Ordering::Relaxed) || reopen.load(Ordering::Acquire) {
                 break;
             }
             std::thread::sleep(Duration::from_millis(100));
@@ -457,7 +575,7 @@ mod tests {
     fn the_default_output_takes_the_7_1_4_format() {
         eprintln!("plays 7.1.4: {}", plays_714());
         let output = Output::open().expect("the default output opens");
-        assert!(output.period_frames > 0 && output.period_frames <= 4800, "{}", output.period_frames);
+        assert!(output.period_frames() > 0 && output.period_frames() <= 4800, "{}", output.period_frames());
         std::thread::sleep(Duration::from_millis(300));
         assert!(output.thread.as_ref().is_some_and(|t| !t.is_finished()), "still rendering");
         drop(output);

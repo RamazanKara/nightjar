@@ -125,7 +125,9 @@ float4 fragment(float4 position : SV_Position) : SV_Target {
 // interleaved in planeCb (R8G8 or R16G16, from NV12, P010, NV24 or P410), and with flag 16 the
 // 10-bit samples in the high bits of each word (code * 64 / 65535). Flag 2048, Vulkan build only:
 // a mapped 4:4:4 VAAPI picture copied whole into planeCb, R8G8B8A8 holding Cr, Cb, Y (XYUV) or,
-// with flag 16, A2B10G10R10 holding Cb, Y, Cr (Y410 copied bit for bit).
+// with flag 16, A2B10G10R10 holding Cb, Y, Cr (Y410 copied bit for bit). Flag 16384: 4:2:0 chroma
+// is centred between its luma columns (PyroWave, or AVCHROMA_LOC_CENTER/TOP/BOTTOM); otherwise
+// left-sited (sampled +0.5 luma texel horizontally).
 #ifdef VULKAN
 Texture2D<float> planeY : register(t0, space2);
 Texture2D<float4> planeCb : register(t1, space2);
@@ -207,7 +209,8 @@ float4 planesDirect(float2 position) {
         uint2 lumaSize;
         planeY.GetDimensions(lumaSize.x, lumaSize.y);
         samples.x = planeY.SampleLevel(sampleLinear, at / float2(lumaSize), 0);
-        float2 uv = (flags & 32) != 0 ? at / float2(size) : clamp(at * 0.5, 0.5, visible * 0.5 - 0.5) / float2(size);
+        float2 chromaAt = at + float2((flags & 16384) != 0 ? 0.0 : 0.5, 0.0);
+        float2 uv = (flags & 32) != 0 ? at / float2(size) : clamp(chromaAt * 0.5, 0.5, visible * 0.5 - 0.5) / float2(size);
         samples.y = CB(planeCb.SampleLevel(sampleLinear, uv, 0));
         samples.z = CR(planeCb.SampleLevel(sampleLinear, uv, 0), planeCr.SampleLevel(sampleLinear, uv, 0));
     }
@@ -247,7 +250,8 @@ float4 planes(float4 position : SV_Position) : SV_Target {
             // Chroma is half size: sample it where the CPU path does.
             uint2 size;
             planeCb.GetDimensions(size.x, size.y);
-            float2 uv = clamp(position.xy * 0.5, 0.5, float2(width, height) * 0.5 - 0.5) / float2(size);
+            float2 chromaAt = position.xy + float2((flags & 16384) != 0 ? 0.0 : 0.5, 0.0);
+            float2 uv = clamp(chromaAt * 0.5, 0.5, float2(width, height) * 0.5 - 0.5) / float2(size);
             samples.y = CB(planeCb.SampleLevel(sampleLinear, uv, 0));
             samples.z = CR(planeCb.SampleLevel(sampleLinear, uv, 0), planeCr.SampleLevel(sampleLinear, uv, 0));
         }

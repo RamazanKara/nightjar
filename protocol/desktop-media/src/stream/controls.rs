@@ -14,13 +14,23 @@ impl Streaming {
     /// Notes a network change that moved the stream's route, whether or not the network was lost
     /// first: [`carried_packet_size`] reads it.
     pub(super) fn network_changed(&mut self, change: NetworkChange) {
-        if change != NetworkChange::CarriesOn { self.network_moved = true; }
+        if change != NetworkChange::CarriesOn {
+            self.network_moved = true;
+            #[cfg(windows)]
+            if self.facts.wlan_streaming {
+                self._wlan = wlan::StreamingMode::begin();
+            }
+        }
     }
 
     /// A network is back after the route was gone; `change`: what it means for the session
     /// ([`reconnects_on_return`]).
     pub(super) fn network_returned(&mut self, change: NetworkChange, metered: bool, away: bool) {
         if !std::mem::take(&mut self.network_lost) { return; }
+        #[cfg(windows)]
+        if self.facts.wlan_streaming {
+            self._wlan = wlan::StreamingMode::begin();
+        }
         if self.toast.as_ref().is_some_and(|(text, _)| *text == tr(NETWORK_LOST) || *text == tr(NETWORK_LOST_RECONNECTING)) {
             self.toast = None;
             self.needs_redraw = true;
@@ -306,15 +316,28 @@ impl Streaming {
         if !self.facts.clipboard || self.clipboard_busy { return; }
         let client = lock(&self.shared.host_client).clone().expect("connected HTTP client");
         let text = if send {
-            unsafe {
-                let text = SDL_GetClipboardText();
-                if text.is_null() {
-                    self.show_toast(tr(MSG_LOCAL_CLIPBOARD_READ_FAILED));
+            // SAFETY: SDL clipboard queries run on the main thread; SDL_GetClipboardText returns
+            // either null or a newly allocated NUL-terminated buffer freed with SDL_free.
+            let read = unsafe {
+                if !SDL_HasClipboardText() {
+                    Ok(String::new())
+                } else {
+                    let text = SDL_GetClipboardText();
+                    if text.is_null() {
+                        Err(())
+                    } else {
+                        let value = std::ffi::CStr::from_ptr(text).to_string_lossy().into_owned();
+                        SDL_free(text.cast());
+                        Ok(value)
+                    }
+                }
+            };
+            match non_empty_clipboard_text(read) {
+                Ok(value) => Some(value),
+                Err(message) => {
+                    self.show_toast(tr(message));
                     return;
                 }
-                let value = std::ffi::CStr::from_ptr(text).to_string_lossy().into_owned();
-                SDL_free(text.cast());
-                Some(value)
             }
         } else { None };
         let shared = self.shared.clone();
@@ -591,6 +614,18 @@ impl Streaming {
     pub fn check_render_device_lost(&mut self) -> bool { let lost = crate::render_device::event_pending() || self.device_removed(); if lost { self.note_render_device_lost(crate::render_device::lost_reason().into()); } lost }
 }
 
+const MSG_LOCAL_CLIPBOARD_NO_TEXT: &str = "The clipboard on this device holds no text.";
+
+/// Validates a local clipboard read before sending it to the PC: empty text refuses the send so
+/// an empty clipboard never wipes the PC's clipboard.
+fn non_empty_clipboard_text(read: Result<String, ()>) -> Result<String, &'static str> {
+    match read {
+        Err(()) => Err(MSG_LOCAL_CLIPBOARD_READ_FAILED),
+        Ok(value) if value.is_empty() => Err(MSG_LOCAL_CLIPBOARD_NO_TEXT),
+        Ok(value) => Ok(value),
+    }
+}
+
 /// Releases every key, mouse button and touch point currently held by either the main loop or
 /// `DirectMotion` (before SDL's queue has been drained).
 fn release_held_inputs(
@@ -659,5 +694,13 @@ mod direct_motion_raise_keys_tests {
         let mut dedup_packets = Vec::new();
         queue.drain(Instant::now(), false, &mut dedup_packets);
         assert_eq!(dedup_packets.len(), 2, "each held key/button is released once");
+    }
+
+    #[test]
+    fn empty_local_clipboard_is_refused_before_sending() {
+        assert_eq!(non_empty_clipboard_text(Ok(String::new())), Err(MSG_LOCAL_CLIPBOARD_NO_TEXT));
+        assert_eq!(non_empty_clipboard_text(Err(())), Err(MSG_LOCAL_CLIPBOARD_READ_FAILED));
+        assert_eq!(non_empty_clipboard_text(Ok("   ".into())), Ok("   ".into()));
+        assert_eq!(non_empty_clipboard_text(Ok("copied".into())), Ok("copied".into()));
     }
 }

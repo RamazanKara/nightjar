@@ -114,9 +114,15 @@ impl Filter {
             c.PSSetSamplers(0, Some(&self.sampler));
             c.PSSetConstantBuffers(0, Some(&self.constants));
             for &(index, ref parameters, area) in steps {
-                let Some(binding) = self.bindings.get(index) else { return false };
+                let Some(binding) = self.bindings.get(index) else {
+                    c.ClearState();
+                    return false;
+                };
                 let size = area.unwrap_or(binding.size);
-                if write_cb(c, cb, parameters).is_err() { return false; }
+                if write_cb(c, cb, parameters).is_err() {
+                    c.ClearState();
+                    return false;
+                }
                 let clear = binding.inputs.len().clamp(1, clear_srvs.len());
                 c.PSSetShaderResources(0, Some(&clear_srvs[..clear]));
                 c.OMSetRenderTargets(Some(&binding.target), None);
@@ -127,7 +133,10 @@ impl Filter {
                 c.Draw(3, 0);
             }
             let mut commands = None;
-            if c.FinishCommandList(false, Some(&mut commands)).is_err() { return false; }
+            if c.FinishCommandList(false, Some(&mut commands)).is_err() {
+                c.ClearState();
+                return false;
+            }
             self.context.ExecuteCommandList(commands.as_ref().unwrap(), true);
             true
         }

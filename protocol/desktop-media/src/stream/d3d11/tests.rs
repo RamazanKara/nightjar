@@ -73,7 +73,7 @@ fn bt709_limited_to_linear(code: [u16; 3], ten_bit: bool) -> [f32; 3] {
 /// A planar picture in padded rows, as FFmpeg hands it over: `code(plane, x, y)` per sample.
 fn picture(kind: i32, width: u32, height: u32, code: impl Fn(usize, u32, u32) -> u16) -> (Vec<Vec<u8>>, media::FrameInfo) {
     let mut info = media::FrameInfo { width: width as i32, height: height as i32, kind, ten_bit: i32::from(kind != media::FRAME_YUV444P),
-        pts: 0, data: [std::ptr::null_mut(); 3], linesize: [0; 3], color_space: 1, color_range: 1, color_trc: 1 };
+        pts: 0, data: [std::ptr::null_mut(); 3], linesize: [0; 3], color_space: 1, color_range: 1, color_trc: 1, centred_chroma: false };
     let layout = media::PlanarLayout::of(&info).unwrap();
     let bytes = if layout.ten_bit { 2 } else { 1 };
     let mut planes = Vec::new();
@@ -190,7 +190,7 @@ fn draw_surface_on_warp(format: DXGI_FORMAT, width: u32, height: u32, color_rang
     let pitch = bytes.len() as u32 / height;
     let info = media::FrameInfo { width: width as i32, height: height as i32, kind: media::FRAME_D3D11_444,
         ten_bit: i32::from(format != DXGI_FORMAT_AYUV), pts: 0, data: [std::ptr::null_mut(); 3], linesize: [0; 3],
-        color_space: 1, color_range, color_trc: 1 };
+        color_space: 1, color_range, color_trc: 1, centred_chroma: false };
     let layout = media::PlanarLayout::of_d3d11(&info).unwrap();
     let parameters = crate::stream::present::planar_parameters(&info, layout, false, 1.0, 1.0);
     // SAFETY: Plain D3D11 calls on a device made and used on this thread.
@@ -453,6 +453,31 @@ fn a_software_decoded_hlg_picture_is_drawn_as_hlg_not_pq() {
     let pixels = draw_on_warp(&info, &crate::stream::present::planar_parameters(&info, layout, true, 1.0, 1.0));
     let nits = super::super::direct::hlg_nits([0.75; 3], super::super::direct::hlg_display(1.0, 80.0))[1] as f32;
     assert_close(pixels[0], [nits / 203.0; 3], "HLG reference white on an SDR output");
+}
+
+#[test]
+fn a_420_chroma_sample_follows_left_and_centred_siting() {
+    // Grey 16x8 10-bit 4:2:0 picture with one reddish chroma sample at column 2 (luma columns 4 and 5).
+    let (_planes, mut info) = picture(media::FRAME_YUV420P10, 16, 8, |plane, x, _| match plane {
+        0 => 512,
+        1 => 512,
+        _ => if x == 2 { 672 } else { 512 },
+    });
+    let layout = media::PlanarLayout::of(&info).unwrap();
+
+    // Left-sited (standard H.264/HEVC/AV1 / AVCHROMA_LOC_LEFT): peak at column 4, half at 3 and 5.
+    info.centred_chroma = false;
+    let pixels = draw_on_warp(&info, &crate::stream::present::planar_parameters(&info, layout, false, 1.0, 1.0));
+    let red: Vec<f32> = (0..16).map(|x| pixels[4 * 16 + x][0] - pixels[4 * 16 + x][1]).collect();
+    assert!(red[4] > 0.2, "left-sited sample column not peaked: {red:?}");
+    assert!((red[3] - red[4] / 2.0).abs() < 0.03 && (red[5] - red[4] / 2.0).abs() < 0.03, "neighbours not half red: {red:?}");
+    assert!(red[2].abs() < 0.03 && red[6].abs() < 0.03, "unexpected chroma bleed: {red:?}");
+
+    // Centred (PyroWave / AVCHROMA_LOC_CENTER): equally split between columns 4 and 5.
+    info.centred_chroma = true;
+    let pixels = draw_on_warp(&info, &crate::stream::present::planar_parameters(&info, layout, false, 1.0, 1.0));
+    let red: Vec<f32> = (0..16).map(|x| pixels[4 * 16 + x][0] - pixels[4 * 16 + x][1]).collect();
+    assert!((red[4] - red[5]).abs() < 0.03 && red[4] > red[3] + 0.08, "centred chroma not centred: {red:?}");
 }
 
 #[test]

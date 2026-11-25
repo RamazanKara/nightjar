@@ -394,12 +394,19 @@ fn decoder_refused(result: PyroResult, why: &str) -> String {
 /// What a probe found, kept per adapter and plane format: the driver does not change under a
 /// running process, and a probe builds a Vulkan device.
 #[derive(Default)]
-struct ProbeCache(Mutex<HashMap<(Luid, bool), Result<(), String>>>);
+struct ProbeCache(Mutex<HashMap<(Luid, bool), ()>>);
 
 impl ProbeCache {
     fn get_or_probe(&self, luid: Luid, ten_bit: bool, probe: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
-        let mut found = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        found.entry((luid, ten_bit)).or_insert_with(probe).clone()
+        {
+            let found = self.0.lock().unwrap_or_else(|e| e.into_inner());
+            if found.contains_key(&(luid, ten_bit)) {
+                return Ok(());
+            }
+        }
+        probe()?;
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).insert((luid, ten_bit), ());
+        Ok(())
     }
 }
 

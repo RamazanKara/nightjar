@@ -3,7 +3,7 @@
 use super::*;
 
 impl Streaming {
-    pub fn new(connecting: Connecting, session: Session, facts: Facts, display: Display) -> Self {
+    pub fn new(connecting: Connecting, mut session: Session, facts: Facts, display: Display) -> Self {
         let min_interval = display.refresh_interval_us().unwrap_or(0);
         crate::sdl::alt_f4_to_host(true);
         crate::sdl::keep_screen_awake(true);
@@ -76,11 +76,13 @@ impl Streaming {
             eprintln!("nightjar: Never: keep my bitrate is chosen, but this PC takes no bitrate changes from the device; the stream runs as The PC decides");
         }
         let backlog = connecting.shared.pacer_backlog.clone();
-        // The stream controls read the attachments each time they are drawn.
-        let usb_refused = if settings.usb_forwarding { crate::usb::refusal(facts.usb) } else { None };
-        if let Some(why) = usb_refused { eprintln!("nightjar: USB forwarding is on, but no USB devices are offered: {why}"); }
-        let usb = if settings.usb_forwarding && usb_refused.is_none() { lock(&connecting.shared.host_client).clone() } else { None }
-            .map(|host| crate::usb::Panel::new(session.usb_forwarder(host, || {}), settings.usb_auto.clone()));
+        // The stream controls read the attachments each time they are drawn. If the host USB
+        // capabilities ask is still in flight, defer setup until `Streaming::pump` receives it.
+        let (usb, usb_refused) = if connecting.shared.usb_pending.load(std::sync::atomic::Ordering::Acquire) {
+            (None, None)
+        } else {
+            Self::init_usb(facts.usb, &settings, &connecting.shared, &mut session)
+        };
         let hdr_stream = present::hdr_negotiated(settings.hdr, facts.format);
         let vrr_fallback = present::without_vrr(&settings);
         let stream_fps = u32::try_from(facts.fps).unwrap_or(0);
@@ -121,6 +123,7 @@ impl Streaming {
         let direct_motion = direct_motion::DirectMotion::new(session.input_handle(), facts.touch);
         let warp_presenter = facts.frame_warp.clone().map(frame_warp::Presenter::new);
         phase::reset_display_timing();
+        let reconnect_recovery = connecting.plan.recovery.is_some();
         let mut streaming = Self {
             usb,
             usb_refused,
@@ -170,6 +173,7 @@ impl Streaming {
             no_wait_present: false,
             skipped: present::SkippedPicture::new(std::env::var("NIGHTJAR_PRESENT_HOLD_US").ok().and_then(|us| us.parse().ok()).map_or(present::REFUSED_HOLD, Duration::from_micros)),
             skipped_picture: None,
+            uploaded_epoch: 0,
             miss_watch: present::MissWatch::default(),
             phase_steady_windows: std::env::var("NIGHTJAR_PHASE_STEADY_WINDOWS").ok().and_then(|windows| windows.parse().ok()).unwrap_or(phase::STEADY_WINDOWS),
             scan_waits: (0, 0),
@@ -275,7 +279,7 @@ impl Streaming {
             captured: false,
             fullscreen: false,
             offset: ClockOffset::default(),
-            timing_csv: open_timing_csv(),
+            timing_csv: open_timing_csv(reconnect_recovery),
             #[cfg(target_os = "linux")]
             glass: wl_presentation::Glass::default(),
             #[cfg(target_os = "linux")]

@@ -346,6 +346,41 @@ pub fn split_restarted(mut args: Vec<OsString>) -> (Vec<OsString>, bool) {
     (args, found)
 }
 
+/// The adapter LUID Windows picks under `Automatic` (no per-app override): the hardware adapter
+/// driving the primary `(0, 0)` desktop output, or `gpus.power_saving` when no output claims it.
+fn automatic_luid(gpus: &Gpus) -> (u32, i32) {
+    // SAFETY: Plain DXGI adapter and output enumeration queries.
+    unsafe {
+        if let Ok(factory) = CreateDXGIFactory1::<IDXGIFactory1>() {
+            let mut fallback = None;
+            for index in 0.. {
+                let Ok(adapter) = factory.EnumAdapters1(index) else { break };
+                let Ok(desc) = adapter.GetDesc1() else { continue };
+                if desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0 {
+                    continue;
+                }
+                let luid = (desc.AdapterLuid.LowPart, desc.AdapterLuid.HighPart);
+                for out_index in 0.. {
+                    let Ok(output) = adapter.EnumOutputs(out_index) else { break };
+                    let Ok(out_desc) = output.GetDesc() else { continue };
+                    if !out_desc.AttachedToDesktop.as_bool() {
+                        continue;
+                    }
+                    fallback.get_or_insert(luid);
+                    let r = out_desc.DesktopCoordinates;
+                    if r.left <= 0 && r.top <= 0 && r.right > 0 && r.bottom > 0 {
+                        return luid;
+                    }
+                }
+            }
+            if let Some(luid) = fallback {
+                return luid;
+            }
+        }
+    }
+    gpus.power_saving.luid
+}
+
 /// Sets the preference for `choice` (`wants444`: some layer asks for YUV 4:4:4) and says whether
 /// it changed and the GPU the renderer would take now is not the one preferred.
 fn choose(choice: GraphicsCard, wants444: bool, dir: &Path) -> Option<(bool, bool, &'static Gpus, Option<u32>)> {
@@ -357,7 +392,8 @@ fn choose(choice: GraphicsCard, wants444: bool, dir: &Path) -> Option<(bool, boo
         eprintln!("nightjar: the graphics preference cannot be set: {why}");
         false
     });
-    let elsewhere = wanted.is_some_and(|preference| Some(gpus.preferred(preference).luid) != first_gpu());
+    let target_luid = wanted.map_or_else(|| automatic_luid(gpus), |preference| gpus.preferred(preference).luid);
+    let elsewhere = first_gpu().is_some_and(|first| first != target_luid);
     Some((changed, elsewhere, gpus, wanted))
 }
 
@@ -366,7 +402,7 @@ fn should_restart_at_start(changed: bool, elsewhere: bool, restarted: bool) -> b
 }
 
 fn should_restart_now(changed: bool, elsewhere: bool, wanted: Option<u32>) -> bool {
-    elsewhere || (changed && wanted.is_none())
+    elsewhere && (wanted.is_some() || changed)
 }
 
 /// Before the renderer is made, with the settings of every layer. True when this start should end
@@ -537,10 +573,13 @@ mod tests {
     }
 
     #[test]
-    fn choose_now_restarts_when_reverting_to_automatic_while_choose_at_start_stays_gated() {
+    fn choose_now_restarts_only_when_reverting_to_automatic_changes_gpu() {
         use super::{should_restart_at_start, should_restart_now};
-        // Switching HighPerformance -> Automatic removes Nightjar's preference: changed=true, wanted=None, elsewhere=false.
-        assert!(should_restart_now(true, false, None), "reverting to Automatic must restart");
+        // Switching HighPerformance -> Automatic when Windows' Automatic is another GPU (elsewhere=true): restarts.
+        assert!(should_restart_now(true, true, None), "reverting to Automatic must restart when GPU changes");
+        // Switching PowerSaving/HighPerformance -> Automatic when Automatic keeps the same GPU (elsewhere=false): no restart.
+        assert!(!should_restart_now(true, false, None), "reverting to Automatic must not restart when already on Automatic GPU");
+        assert!(!should_restart_now(false, true, None), "unchanged Automatic preference does not restart");
         assert!(!should_restart_now(false, false, None), "already Automatic does not restart");
         // Switching to a specific GPU restarts whenever the renderer is elsewhere.
         assert!(should_restart_now(true, true, Some(2)));
@@ -551,6 +590,6 @@ mod tests {
         assert!(should_restart_at_start(true, true, false));
         assert!(!should_restart_at_start(true, true, true), "never loops after restart");
         assert!(!should_restart_at_start(false, true, false));
-        assert!(!should_restart_at_start(true, false, false), "Automatic at start does not restart");
+        assert!(!should_restart_at_start(true, false, false), "Automatic on the same GPU at start does not restart");
     }
 }

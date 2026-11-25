@@ -16,7 +16,7 @@ use super::decoder_io::stage_summary;
 use super::error;
 use super::ffi::*;
 use super::frame::Frame;
-use super::hardware::{first_opened, mapped_extra, pool_extra, Codec, Hardware, Pictures};
+use super::hardware::{decoder_extra_hw_frames, first_opened, Codec, Hardware, Pictures};
 // Linux and macOS (unix): VAAPI render node path helper and node kind.
 #[cfg(unix)]
 use super::hardware::{vaapi_node_path, VaapiNode};
@@ -461,7 +461,11 @@ impl VideoDecoder {
                     Hardware::None | Hardware::V4l2m2m | Hardware::Auto(..) => unreachable!(),
                 }
                 context.get_format = Some(select_format);
-                context.extra_hw_frames = pool_extra(pictures.waiting) + mapped_extra(hardware, pictures);
+                #[cfg(windows)]
+                let d3d11_bridge = video.d3d11_bridge.is_some();
+                #[cfg(not(windows))]
+                let d3d11_bridge = false;
+                context.extra_hw_frames = decoder_extra_hw_frames(hardware, d3d11_bridge, pictures);
                 video.extra_hw_frames = context.extra_hw_frames;
             }
             context.thread_count = if hardware == Hardware::None {

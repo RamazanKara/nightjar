@@ -54,10 +54,36 @@ const ACTIONS: [Action; 4] = [Action::Quit, Action::Menu, Action::Mouse(false), 
 const POLL_ACTIVE_NS: u64 = 2_000_000;
 const POLL_IDLE_NS: u64 = 8_000_000;
 const POLL_ACTIVE_HOLD_US: u64 = 1_000_000;
-const AXIS_JITTER_THRESHOLD: i32 = 1024;
+/// Minimum analog stick/trigger change treated as intentional controller activity (~3%).
+pub const PAD_AXIS_ACTIVITY_THRESHOLD: i32 = 1024;
+/// Minimum gyro angular velocity (rad/s, ~1.7 deg/s) above resting noise treated as activity.
+pub const GYRO_ACTIVITY_THRESHOLD: f32 = 0.03;
+const AXIS_JITTER_THRESHOLD: i32 = PAD_AXIS_ACTIVITY_THRESHOLD;
 
+/// Returns whether a peak gyro sample (rad/s) exceeds [`GYRO_ACTIVITY_THRESHOLD`].
+pub fn is_gyro_peak_active(gyro_peak: Option<f32>) -> bool {
+    gyro_peak.is_some_and(|peak| peak.is_finite() && peak > GYRO_ACTIVITY_THRESHOLD)
+}
+
+/// Returns whether `event` is a gyroscope update above [`GYRO_ACTIVITY_THRESHOLD`]; non-gyro
+/// sensors (such as accelerometers) and non-finite samples return `false`.
+pub fn is_gyro_sensor_event(event: &SDL_Event) -> bool {
+    // SAFETY: `gsensor` is read only when `event.r#type == SDL_EVENT_GAMEPAD_SENSOR_UPDATE.0`.
+    unsafe {
+        if SDL_EventType(event.r#type) != SDL_EVENT_GAMEPAD_SENSOR_UPDATE
+            || SDL_SensorType(event.gsensor.sensor) != SDL_SENSOR_GYRO
+            || !event.gsensor.data.iter().all(|v| v.is_finite())
+        {
+            return false;
+        }
+        let peak = event.gsensor.data.into_iter().map(f32::abs).fold(0.0_f32, f32::max);
+        is_gyro_peak_active(Some(peak))
+    }
+}
+
+/// Stateful per-controller activity filter rejecting resting stick drift and sub-threshold sensor noise.
 #[derive(Default)]
-struct PadActivity {
+pub struct PadActivity {
     last_axis: HashMap<(u32, u8), i16>,
 }
 
@@ -69,8 +95,13 @@ impl PadActivity {
         self.last_axis.insert((pad, axis), value);
         true
     }
-    fn remove_pad(&mut self, pad: u32) { self.last_axis.retain(|&(id, _), _| id != pad); }
-    fn is_active(&mut self, event: &SDL_Event) -> bool {
+
+    /// Drops cached axis baselines when controller `pad` is removed.
+    pub fn remove_pad(&mut self, pad: u32) { self.last_axis.retain(|&(id, _), _| id != pad); }
+
+    /// Returns whether `event` represents intentional controller activity (buttons, touchpads,
+    /// above-threshold stick/trigger motion, or above-noise-floor gyroscope motion).
+    pub fn is_active(&mut self, event: &SDL_Event) -> bool {
         // SAFETY: union members read by event type.
         unsafe {
             match SDL_EventType(event.r#type) {
@@ -78,6 +109,7 @@ impl PadActivity {
                 | SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN | SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION
                 | SDL_EVENT_GAMEPAD_TOUCHPAD_UP => true,
                 SDL_EVENT_GAMEPAD_AXIS_MOTION => self.note_axis(event.gaxis.which.0, event.gaxis.axis, event.gaxis.value),
+                SDL_EVENT_GAMEPAD_SENSOR_UPDATE => is_gyro_sensor_event(event),
                 _ => false,
             }
         }
@@ -760,34 +792,3 @@ impl Drop for DirectMotion {
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-mod pad_jitter_tests {
-    use super::*;
-
-    fn ev(kind: SDL_EventType) -> SDL_Event {
-        let mut e: SDL_Event = unsafe { std::mem::zeroed() };
-        e.r#type = kind.0;
-        e
-    }
-
-    fn axis_ev(pad: u32, axis: u8, value: i16) -> SDL_Event {
-        let mut e = ev(SDL_EVENT_GAMEPAD_AXIS_MOTION);
-        (e.gaxis.which, e.gaxis.axis, e.gaxis.value) = (SDL_JoystickID(pad), axis, value);
-        e
-    }
-
-    #[test]
-    fn sub_threshold_stick_drift_and_sensors_do_not_keep_poller_hot() {
-        let mut act = PadActivity::default();
-        for drift in [1, -1, 64, -128, 256, -256, 0] { assert!(!act.is_active(&axis_ev(1, 0, drift))); }
-        assert!(!act.is_active(&ev(SDL_EVENT_GAMEPAD_SENSOR_UPDATE)));
-        assert!(!act.is_active(&ev(SDL_EVENT_JOYSTICK_BATTERY_UPDATED)));
-        assert!(act.is_active(&axis_ev(1, 0, 4000)));
-        for drift in [3900, 4150, 3750, 4250] { assert!(!act.is_active(&axis_ev(1, 0, drift))); }
-        assert!(act.is_active(&axis_ev(1, 0, 0)));
-        assert!(act.is_active(&ev(SDL_EVENT_GAMEPAD_BUTTON_DOWN)));
-        act.remove_pad(1);
-        assert!(act.last_axis.is_empty());
-    }
-}

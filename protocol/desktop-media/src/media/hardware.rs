@@ -419,6 +419,25 @@ pub fn vaapi_node(hardware: Hardware) -> VaapiNode {
     VaapiNode::Default
 }
 
+/// Surfaces a bridged D3D11 decoder pool keeps beyond FFmpeg's minimum when decoded pictures
+/// are exported to shared slots and the FFmpeg `AVFrame` is released immediately (`decoder_io`).
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+pub const BRIDGE_EXTRA_HW_FRAMES: i32 = 2;
+
+/// Extra hardware surfaces beyond FFmpeg's minimum for `hardware` (`d3d11_bridge` uses a small
+/// copy-ahead pool while other backends and shared-device fallback keep [`pool_extra`]).
+pub(super) fn decoder_extra_hw_frames(
+    hardware: Hardware,
+    d3d11_bridge: bool,
+    pictures: Pictures,
+) -> i32 {
+    if matches!(hardware, Hardware::D3d11(_)) && d3d11_bridge {
+        BRIDGE_EXTRA_HW_FRAMES
+    } else {
+        pool_extra(pictures.waiting) + mapped_extra(hardware, pictures)
+    }
+}
+
 /// The surfaces a VAAPI pool gets beyond [`pool_extra`] when its pictures will be mapped for the
 /// GPU renderer (`VaapiNode::Mapped`): those the presenter keeps until their copies are done.
 pub(super) fn mapped_extra(hardware: Hardware, pictures: Pictures) -> i32 {

@@ -288,18 +288,24 @@ impl Streaming {
         let mut latched = false;
         let (refused, present_failed, egl_paced) = unsafe {
             let done = if skips { present::present_without_waiting(renderer, self.skipped.hold(), self.plan.display.refresh_hz) } else { present::NoWait::Failed };
-            if skips { self.no_wait_present = done != present::NoWait::Failed; }
+            if skips { self.no_wait_present = !matches!(done, present::NoWait::Failed); }
             let egl_done = if egl_in_order { present::present_after_egl_swap(renderer, self.plan.display.refresh_hz) } else { None };
-            let failed = if let Some(ok) = blank { !ok } else if let Some(ok) = egl_done { !ok } else if done != present::NoWait::Failed { false } else {
-                // Sync interval 1 shows the picture whole at the next refresh when the wait for
-                // the scan would have cost the next picture its turn (`scan_sync::scan_wait`).
-                latched = latch && present::present_adaptive(renderer, true);
-                !latched && !SDL_RenderPresent(renderer)
+            let failed = if let Some(ok) = blank { !ok } else if let Some(ok) = egl_done { !ok } else {
+                match done {
+                    present::NoWait::Shown | present::NoWait::Refused => false,
+                    present::NoWait::PresentFailed => true,
+                    present::NoWait::Failed => {
+                        // Sync interval 1 shows the picture whole at the next refresh when the wait for
+                        // the scan would have cost the next picture its turn (`scan_sync::scan_wait`).
+                        latched = latch && present::present_adaptive(renderer, true);
+                        !latched && !SDL_RenderPresent(renderer)
+                    }
+                }
             };
             (done == present::NoWait::Refused, failed, egl_done.is_some())
         };
         let device_lost = crate::render_device::after_present_lost(present_failed, &self.plan.device);
-        if device_lost { self.note_render_device_lost(crate::render_device::lost_reason().into()); } else if !refused { self.texture.mark_d3d11_flushed(); #[cfg(target_os = "linux")] if !egl_paced && (!skips || !self.no_wait_present) { phase::note_external_present(); } }
+        if device_lost { self.note_render_device_lost(crate::render_device::lost_reason().into()); } else if !refused { self.texture.mark_d3d11_flushed(); #[cfg(target_os = "linux")] if !egl_paced && !present_failed && (!skips || !self.no_wait_present) { phase::note_external_present(); } }
         #[cfg(not(target_os = "linux"))]
         let _ = egl_paced;
         self.flip_guard.last_flip_us = Some(issued_us);
@@ -321,8 +327,31 @@ impl Streaming {
         Flipped { issued_us, returned_us, scan, refused, device_lost }
     }
 
+    fn handle_upload_failure(&mut self, p: &present::Pending) {
+        if p.decoded.setup.format & VIDEO_FORMAT_MASK_PYROWAVE != 0 {
+            self.end_pyrowave_unshown();
+        } else if p.decoded.setup.chroma_packing != 0 {
+            eprintln!("nightjar: packed full-chroma reconstruction failed: the decoded planes, GPU, or HDR output are unsupported");
+            self.exit = Some(Exit::Ended(Some(tr(PACKED_UNSHOWN).to_owned())));
+        } else {
+            // A picture format this presenter cannot show: after a few in a row the decoder
+            // gives way as a refused one does (the next backend, then software, from a key
+            // frame), saying so; when software's cannot be shown either, the stream ends.
+            let reason = self.texture.failure.take();
+            if let Some(ready_us) = self.unshown.failed(p.decoded.ready_us) {
+                eprintln!(
+                    "nightjar: {UNSHOWN_BEFORE_FALLBACK} {} pictures in a row could not be shown ({}); the decoder gives way",
+                    p.decoded.picture.format_name(),
+                    reason.as_deref().unwrap_or("no reason given")
+                );
+                self.shared.present_refused.store(ready_us, Ordering::Relaxed);
+            }
+        }
+    }
+
     /// Shows the due picture, if any. Returns whether something was drawn.
     pub fn present(&mut self, renderer: *mut SDL_Renderer, mut draw_overlay: impl FnMut(&mut Self, *mut SDL_Renderer)) -> bool {
+        phase::clear_frame_egl_sync();
         if self.exit.is_some() || self.check_render_device_lost() { return false; }
         // An HDR stream whose output stops showing HDR for a held second plays on in SDR: an HDR10
         // picture is drawn tone mapped to the output (SDL's draw of the texture, or the direct and
@@ -357,7 +386,7 @@ impl Streaming {
         dropped += replaced;
         self.window.dropped_pacing += dropped;
         self.shared.counters.replaced.fetch_add(u64::from(dropped), Ordering::Relaxed);
-        let has_picture = picture.is_some();
+        let mut has_picture = picture.is_some();
         // Without a picture or a redraw, the held picture may go out again: for a VRR panel
         // about to refresh by itself, or shifted anew by Frame Warp.
         let kept = !has_picture && !self.needs_redraw && !sliced && self.lfc_repeat(now);
@@ -369,6 +398,8 @@ impl Streaming {
         let mut raced = false;
         let mut rows = None;
         let mut freshly_uploaded = false;
+        let mut scanned_out = false;
+        let mut upload_failed: Option<present::Pending> = None;
         if let Some(p) = &mut picture {
             if self.facts.phase_lock && self.pacer.mode == PacingMode::Vsync && self.focused && !self.menu_visible {
                 // With no refreshes to spare a picture has to make the desktop's deadline, which comes before the refresh.
@@ -417,30 +448,58 @@ impl Streaming {
             // Only a picture on the screen counts as the stream's video (`has_picture`, the
             // no-video watchdog, `video_started`). A refused `skipped_picture` was already
             // uploaded into `self.texture` / `direct_planes` / `held`, so retrying it must not
-            // re-consume its `GpuPlanes` `Lease` or `Picture::Taken`.
+            // re-consume its `GpuPlanes` `Lease` or `Picture::Taken` unless the texture was destroyed.
+            if p.uploaded && self.uploaded_epoch != self.texture.destroy_epoch() {
+                p.uploaded = false;
+            }
             if p.uploaded {
                 self.unshown.shown();
-            } else if self.scan_out(&p.decoded) || self.texture.upload_take(renderer, &mut p.decoded, rows) {
-                p.uploaded = true;
+            } else if p.decoded.picture.is_taken() {
+                has_picture = false;
+            } else if self.scan_out(&p.decoded) {
+                scanned_out = true;
                 freshly_uploaded = true;
                 self.unshown.shown();
                 self.first_frame = true;
-            } else if p.decoded.setup.format & VIDEO_FORMAT_MASK_PYROWAVE != 0 {
-                self.end_pyrowave_unshown();
-            } else if p.decoded.setup.chroma_packing != 0 {
-                eprintln!("nightjar: packed full-chroma reconstruction failed: the decoded planes, GPU, or HDR output are unsupported");
-                self.exit = Some(Exit::Ended(Some(tr(PACKED_UNSHOWN).to_owned())));
+            } else if self.texture.upload_take(renderer, &mut p.decoded, rows) {
+                p.uploaded = true;
+                self.uploaded_epoch = self.texture.destroy_epoch();
+                freshly_uploaded = true;
+                self.unshown.shown();
+                self.first_frame = true;
             } else {
-                // A picture format this presenter cannot show: after a few in a row the decoder
-                // gives way as a refused one does (the next backend, then software, from a key
-                // frame), saying so; when software's cannot be shown either, the stream ends.
-                let reason = self.texture.failure.take();
-                if let Some(ready_us) = self.unshown.failed(p.decoded.ready_us) {
-                    eprintln!("nightjar: {UNSHOWN_BEFORE_FALLBACK} {} pictures in a row could not be shown ({}); the decoder gives way",
-                        p.decoded.picture.format_name(), reason.as_deref().unwrap_or("no reason given"));
-                    self.shared.present_refused.store(ready_us, Ordering::Relaxed);
-                }
+                has_picture = false;
+                let fallback_setup = p.decoded.setup;
+                upload_failed = Some(present::Pending {
+                    decoded: std::mem::replace(&mut p.decoded, super::pipeline::Decoded {
+                        number: 0,
+                        rtp: 0,
+                        receive_us: 0,
+                        enqueue_us: 0,
+                        input_us: 0,
+                        ready_us: 0,
+                        host_latency: 0,
+                        early: 0,
+                        first_block_us: 0,
+                        race_seq: 0,
+                        race: Default::default(),
+                        bands: Vec::new(),
+                        setup: fallback_setup,
+                        picture: crate::media::Picture::Taken,
+                        visible: None,
+                    }),
+                    present_us: p.present_us,
+                    hold_us: p.hold_us,
+                    late: p.late,
+                    uploaded: false,
+                });
             }
+        }
+        if !has_picture {
+            picture = None;
+        }
+        if let Some(failed) = upload_failed {
+            self.handle_upload_failure(&failed);
         }
         #[cfg(target_os = "linux")]
         if let Some(p) = &picture { self.glass.next_picture(p.decoded.number, p.decoded.ready_us); }
@@ -479,8 +538,27 @@ impl Streaming {
             self.texture.warp = warp.draw(None);
         }
         let (flipped, by_kms) = match self.kms_flip(window, &mut draw_overlay, has_picture) {
-            Some(flipped) => (flipped, true),
-            None => (self.render_flip(renderer, &mut draw_overlay, has_picture, freshly_uploaded, picture.as_ref().map(|p| p.present_us)), false),
+            Some(flipped) => {
+                if scanned_out && let Some(p) = &mut picture {
+                    p.uploaded = true;
+                }
+                (flipped, true)
+            }
+            None => {
+                if scanned_out && let Some(p) = picture.as_mut() {
+                    if !p.decoded.picture.is_taken() && self.texture.upload_take(renderer, &mut p.decoded, rows) {
+                        p.uploaded = true;
+                        self.uploaded_epoch = self.texture.destroy_epoch();
+                    } else {
+                        if let Some(failed) = picture.take() {
+                            self.handle_upload_failure(&failed);
+                        }
+                        has_picture = false;
+                        freshly_uploaded = false;
+                    }
+                }
+                (self.render_flip(renderer, &mut draw_overlay, has_picture, freshly_uploaded, picture.as_ref().map(|p| p.present_us)), false)
+            }
         };
         self.needs_redraw = false;
         if flipped.device_lost { return true; }
@@ -523,7 +601,7 @@ impl Streaming {
         if has_picture && self.skipped.shown() { eprintln!("nightjar: pacing: trying no-wait presents again (hold {:?})", self.skipped.hold()); }
         let presented = flipped.returned_us;
         let scan = flipped.scan;
-        let watches = has_picture && self.no_wait_present && !self.skipped.waits() && self.pacer.skips_instead_of_waiting(self.plan.display.refresh_hz);
+        let watches = cfg!(windows) && has_picture && self.no_wait_present && !self.skipped.waits() && self.pacer.skips_instead_of_waiting(self.plan.display.refresh_hz);
         let mut flip = if (self.timing_csv.is_some() || watches) && picture.is_some() { phase::present_stats(renderer) } else { Default::default() };
         (flip.held_wait_us, flip.issued_us) = (self.held_wait_us.take(), flipped.issued_us);
         if watches {

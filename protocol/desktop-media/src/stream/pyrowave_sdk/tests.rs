@@ -183,12 +183,14 @@ fn a_probe_result_is_kept_per_adapter_and_plane_format() {
         })
     };
     assert_eq!(ask(first, false, Err("no subgroup size control".into())), Err("no subgroup size control".into()));
-    // Remembered, errors included: the second ask neither probes nor changes the answer.
-    assert_eq!(ask(first, false, Ok(())), Err("no subgroup size control".into()));
-    assert_eq!(calls.get(), 1);
+    // Transient probe errors are not cached so subsequent asks retry cleanly (DM-L18).
+    assert_eq!(ask(first, false, Ok(())), Ok(()));
+    // Once a probe succeeds it is remembered per adapter + plane format without re-probing.
+    assert_eq!(ask(first, false, Err("unexpected re-probe".into())), Ok(()));
+    assert_eq!(calls.get(), 2);
     assert_eq!(ask(first, true, Ok(())), Ok(()));
     assert_eq!(ask(second, false, Ok(())), Ok(()));
-    assert_eq!(calls.get(), 3);
+    assert_eq!(calls.get(), 4);
 }
 
 #[test]

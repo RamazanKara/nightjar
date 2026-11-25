@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use image::{Rgba, RgbaImage};
@@ -13,6 +13,8 @@ pub const HIDE_DELAY: Duration = Duration::from_millis(150);
 #[derive(Default)]
 pub struct Cursor {
     cache: VecDeque<(u32, *mut SDL_Cursor)>,
+    /// Cursor ids whose image creation failed, so later `Show { id }` falls back quietly to default.
+    failed: HashSet<u32>,
     pub enabled: bool,
     /// When a hide from the PC takes effect, unless a show comes first.
     hide_at: Option<Instant>,
@@ -42,6 +44,10 @@ impl Cursor {
                 }
                 CursorShape::Default => self.default_cursor(),
                 CursorShape::Show { id } => {
+                    if self.failed.contains(&id) {
+                        self.default_cursor();
+                        return Ok(());
+                    }
                     let Some(index) = self.cache.iter().position(|(key, _)| *key == id) else {
                         self.default_cursor();
                         return Err("The PC referenced an unknown cursor.".into());
@@ -60,6 +66,12 @@ impl Cursor {
                     scale_percent,
                     rgba,
                 } => {
+                    let remove_stale = |this: &mut Self| {
+                        if let Some(index) = this.cache.iter().position(|(key, _)| *key == id) {
+                            let (_, old) = this.cache.remove(index).unwrap();
+                            SDL_DestroyCursor(old);
+                        }
+                    };
                     let width = u32::from(width);
                     let height = u32::from(height);
                     let (w, h, x, y) = geometry(width, height, hotspot_x, hotspot_y, scale_percent);
@@ -74,21 +86,23 @@ impl Cursor {
                         (w * 4) as i32,
                     );
                     if surface.is_null() {
+                        remove_stale(self);
+                        self.failed.insert(id);
                         self.default_cursor();
                         return Err(crate::sdl::error());
                     }
                     let cursor = SDL_CreateColorCursor(surface, x as i32, y as i32);
                     SDL_DestroySurface(surface);
                     if cursor.is_null() {
+                        remove_stale(self);
+                        self.failed.insert(id);
                         self.default_cursor();
                         return Err(crate::sdl::error());
                     }
+                    self.failed.remove(&id);
                     SDL_SetCursor(cursor);
                     SDL_ShowCursor();
-                    if let Some(index) = self.cache.iter().position(|(key, _)| *key == id) {
-                        let (_, old) = self.cache.remove(index).unwrap();
-                        SDL_DestroyCursor(old);
-                    }
+                    remove_stale(self);
                     self.cache.push_back((id, cursor));
                     if self.cache.len() > 32 {
                         let (_, old) = self.cache.pop_front().unwrap();
@@ -126,6 +140,7 @@ impl Cursor {
         for (_, cursor) in self.cache.drain(..) {
             unsafe { SDL_DestroyCursor(cursor) };
         }
+        self.failed.clear();
         self.enabled = false;
     }
 }

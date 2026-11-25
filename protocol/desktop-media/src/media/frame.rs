@@ -84,6 +84,19 @@ pub struct Frame {
     /// Renderer-visible NT-handle shared texture exported from a separate D3D11 decode device.
     #[cfg(windows)]
     pub(super) shared: Option<d3d11::SharedFrame>,
+    /// Picture metadata snapshotted before unreffing the decoder's `AVFrame` on bridge export.
+    #[cfg(windows)]
+    pub(super) exported: Option<Box<ExportedMeta>>,
+}
+
+#[cfg(windows)]
+#[derive(Clone)]
+pub(super) struct ExportedMeta {
+    pub(super) info: FrameInfo,
+    pub(super) hdr10_plus: Option<f32>,
+    pub(super) dolby_vision: Option<DolbyVision>,
+    pub(super) format_name: String,
+    pub(super) corrupt: bool,
 }
 
 // An owned AVFrame reference can be handed from the decoder to the renderer.
@@ -99,17 +112,28 @@ impl Frame {
             dmabuf: None,
             #[cfg(windows)]
             shared: None,
+            #[cfg(windows)]
+            exported: None,
         }
     }
 
     /// Another reference to the same picture (its surface, for a hardware one), without the
     /// export: what keeps an imported surface from going back to the decoder while it is shown.
     pub fn reference(&self) -> Option<Self> {
+        #[cfg(windows)]
+        if self.shared.is_some() {
+            // Bridged frames already released FFmpeg's `AVFrame`; carry only the shared surface
+            // lease and snapshotted metadata so callers hold no decoder surface across frames.
+            // SAFETY: `av_frame_alloc` returns an empty frame valid for `Frame::drop`.
+            let mut frame = Self::new(NonNull::new(unsafe { av_frame_alloc() })?);
+            frame.wavelet = self.wavelet;
+            frame.shared = self.shared.clone();
+            frame.exported = self.exported.clone();
+            return Some(frame);
+        }
         // SAFETY: a live frame; the clone is a new reference to its buffers.
         let mut frame = Self::new(NonNull::new(unsafe { av_frame_clone(self.raw.as_ptr()) })?);
         frame.wavelet = self.wavelet;
-        #[cfg(windows)]
-        { frame.shared = self.shared.clone(); }
         Some(frame)
     }
 
@@ -136,6 +160,10 @@ impl Frame {
     /// Whether FFmpeg says the picture is damaged: flagged corrupt (missing references, concealed
     /// slices) or with decode error flags.
     pub fn corrupt(&self) -> bool {
+        #[cfg(windows)]
+        if let Some(meta) = &self.exported {
+            return meta.corrupt;
+        }
         // SAFETY: a live frame.
         let frame = unsafe { self.raw.as_ref() };
         frame.flags & AV_FRAME_FLAG_CORRUPT as c_int != 0 || frame.decode_error_flags != 0
@@ -153,6 +181,10 @@ impl Frame {
     }
 
     pub fn info(&self) -> FrameInfo {
+        #[cfg(windows)]
+        if let Some(meta) = &self.exported {
+            return meta.info;
+        }
         unsafe {
             let frame = self.raw.as_ref();
             let (kind, ten_bit) = if self.wavelet {
@@ -178,11 +210,16 @@ impl Frame {
                 color_space: frame.colorspace as i32,
                 color_range: frame.color_range as i32,
                 color_trc: frame.color_trc as i32,
+                centred_chroma: centred_chroma(frame.chroma_location),
             }
         }
     }
 
     pub fn format_name(&self) -> String {
+        #[cfg(windows)]
+        if let Some(meta) = &self.exported {
+            return meta.format_name.clone();
+        }
         unsafe {
             let name = av_get_pix_fmt_name(self.raw.as_ref().format as AVPixelFormat);
             if name.is_null() {
@@ -208,6 +245,10 @@ impl Frame {
     /// Whether the picture's 4:2:0 chroma sits midway between its luma columns, as the stream
     /// says (`AVFrame::chroma_location`), rather than on the left one.
     pub fn centred_chroma(&self) -> bool {
+        #[cfg(windows)]
+        if let Some(meta) = &self.exported {
+            return meta.info.centred_chroma;
+        }
         // SAFETY: A plain field of the live AVFrame.
         centred_chroma(unsafe { self.raw.as_ref() }.chroma_location)
     }
@@ -235,6 +276,10 @@ impl Frame {
 
     pub fn is_d3d11_bridge(&self) -> bool { self.shared.is_some() }
 
+    pub fn d3d11_bridge_id(&self) -> Option<u64> {
+        self.shared.as_ref().map(d3d11::SharedFrame::bridge_id)
+    }
+
     pub fn with_decoder_lock(&self, f: &mut dyn FnMut()) {
         // SAFETY: `self.raw` is a live `AVFrame`.
         unsafe { d3d11::with_lock(self.raw.as_ref(), self.shared.as_ref(), f) }
@@ -248,6 +293,10 @@ impl Frame {
     /// processing window, as libplacebo maps it (`10000 * maxscl`). None without HDR10+ or when
     /// the peak is 0.
     pub fn hdr10_plus_peak(&self) -> Option<f32> {
+        #[cfg(windows)]
+        if let Some(meta) = &self.exported {
+            return meta.hdr10_plus;
+        }
         // SAFETY: Side data of the live AVFrame, sized as FFmpeg made it.
         unsafe {
             let side = av_frame_get_side_data(self.raw.as_ptr(), AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
@@ -271,6 +320,10 @@ impl Frame {
     /// What the frame's Dolby Vision RPU says, from the metadata FFmpeg's HEVC, AV1 and dav1d
     /// decoders attach to every frame with an RPU (`AV_FRAME_DATA_DOVI_METADATA`). None without one.
     pub fn dolby_vision(&self) -> Option<DolbyVision> {
+        #[cfg(windows)]
+        if let Some(meta) = &self.exported {
+            return meta.dolby_vision;
+        }
         // SAFETY: Side data of the live AVFrame, sized as FFmpeg made it; the offsets are FFmpeg's
         // and checked against that size.
         unsafe {
@@ -344,6 +397,10 @@ impl Picture {
             Self::Frame(frame) => frame,
             _ => unreachable!(),
         })
+    }
+
+    pub fn is_taken(&self) -> bool {
+        matches!(self, Self::Taken)
     }
 
     pub fn format_name(&self) -> String {

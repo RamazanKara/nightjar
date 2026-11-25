@@ -5,8 +5,8 @@
 # which the release workflow builds on so the packages need only glibc 2.35 (the AppImage catalog
 # tests on the oldest Ubuntu LTS still in standard support).
 #
-#   protocol/desktop/ffmpeg-deps-linux.sh <prefix>
-#   PKG_CONFIG_PATH=<prefix>/lib/pkgconfig protocol/desktop/ffmpeg-decode-only.sh <ffmpeg source> <ffmpeg prefix>
+#   protocol/desktop-media/ffmpeg-deps-linux.sh <prefix>
+#   PKG_CONFIG_PATH=<prefix>/lib/pkgconfig protocol/desktop-media/ffmpeg-decode-only.sh <ffmpeg source> <ffmpeg prefix>
 #
 # <prefix> gets dav1d as a shared library (ffmpeg-decode-only.sh ships it next to libavcodec)
 # with its licence in share/licenses/dav1d/COPYING, and the NVIDIA codec headers

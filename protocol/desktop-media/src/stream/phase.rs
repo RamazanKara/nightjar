@@ -7,9 +7,12 @@ use sdl3_sys::everything::*;
 mod linux;
 #[cfg(target_os = "linux")]
 pub(crate) use linux::{
-    egl_swap_check, egl_swap_presented, egl_sync_sample, glass_phase_timing, note_external_present,
-    timing_with_source, TimingSource,
+    clear_frame_egl_sync, egl_swap_check, egl_swap_presented, egl_sync_sample,
+    egl_sync_sample_for_present, glass_phase_timing, note_external_present, timing_with_source,
+    TimingSource,
 };
+#[cfg(not(target_os = "linux"))]
+pub(crate) use linux::clear_frame_egl_sync;
 pub use linux::reset_display_timing;
 
 /// Windows in a row a new place of the frames takes to reach the host of a stream with no refreshes

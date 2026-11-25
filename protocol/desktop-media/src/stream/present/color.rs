@@ -29,7 +29,8 @@ pub(in crate::stream) fn planar_parameters(info: &FrameInfo, layout: media::Plan
     let matrix = match info.color_space { 5 | 6 => 0, 9 | 10 => 2, _ => 1 };
     let hlg = planar_hlg(info, hdr, white_level, headroom);
     let flags = u32::from(info.color_range == 2) | (u32::from(hdr) << 1) | (matrix << 2) | (u32::from(layout.ten_bit) << 4)
-        | (u32::from(layout.chroma444) << 5) | (u32::from(layout.ten_bit) << 6) | (u32::from(hlg.is_some()) << 7);
+        | (u32::from(layout.chroma444) << 5) | (u32::from(layout.ten_bit) << 6) | (u32::from(hlg.is_some()) << 7)
+        | (u32::from(info.centred_chroma) << 14);
     match hlg {
         Some(display) => [layout.width, layout.height, layout.width, layout.height, display.peak.to_bits(), display.gamma.to_bits(), flags, (display.white / 80.0).to_bits()],
         None => [layout.width, layout.height, layout.width, layout.height, 0, 3, flags, white_level.to_bits()],

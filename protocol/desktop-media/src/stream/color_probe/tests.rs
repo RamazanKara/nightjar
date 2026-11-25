@@ -446,6 +446,7 @@ fn pictures_that_lost_their_chroma_or_depth_are_not_drawable() {
         color_space: 1,
         color_range: 1,
         color_trc: 1,
+        centred_chroma: false,
     };
     let planes = |_| Ok(());
     // Kind 4 is a picture nothing draws.

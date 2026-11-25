@@ -2,12 +2,15 @@
 //! grabbing it, so the desktop keeps its pointer and the main loop drops what it makes of them.
 //! Reading `/dev/input` needs the `input` group (or a seat ACL) on most distributions.
 
+use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::io::{ErrorKind, Read};
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::thread::JoinHandle;
+use std::time::Duration;
 
 use nightjar_core::input::touchpad::{length_mm, unit};
 use sdl3_sys::everything::SDL_Window;
@@ -27,6 +30,7 @@ const ABS_MT_TOOL_TYPE: u16 = 0x37;
 const ABS_MT_TRACKING_ID: u16 = 0x39;
 const ABS_MT_PRESSURE: u16 = 0x3a;
 const ABS_CNT: usize = 0x40;
+const KEY_CNT: usize = 0x300;
 const INPUT_PROP_POINTER: usize = 0x00;
 const INPUT_PROP_DIRECT: usize = 0x01;
 const MT_TOOL_PALM: i32 = 2;
@@ -52,6 +56,14 @@ fn properties(file: &File) -> Option<Vec<u8>> {
     let mut buffer = vec![0u8; 4];
     // SAFETY: the kernel writes at most the buffer's length.
     let n = unsafe { libc::ioctl(file.as_raw_fd(), ioc_read(0x09, buffer.len()), buffer.as_mut_ptr()) };
+    (n >= 0).then_some(buffer)
+}
+
+/// `EVIOCGKEY(len)`: global key/button states currently depressed on the device.
+fn key_bits(file: &File) -> Option<Vec<u8>> {
+    let mut buffer = vec![0u8; KEY_CNT / 8];
+    // SAFETY: the kernel writes at most the buffer's length.
+    let n = unsafe { libc::ioctl(file.as_raw_fd(), ioc_read(0x18, buffer.len()), buffer.as_mut_ptr()) };
     (n >= 0).then_some(buffer)
 }
 
@@ -186,6 +198,14 @@ impl State {
         self.slot = usize::try_from(value).map_or(0, |s| s.min(self.slots.len().saturating_sub(1)));
     }
 
+    /// Updates `BTN_LEFT` after a `SYN_DROPPED` resync (`EVIOCGKEY`) so a missed release never sticks.
+    pub fn set_button(&mut self, down: bool) {
+        if self.button != down {
+            self.button = down;
+            self.changed = true;
+        }
+    }
+
     /// Puts the slots read from the device in place, as after `SYN_DROPPED` or at the start.
     fn set_slots(&mut self, tracking: &[i32], x: &[i32], y: &[i32]) {
         for (i, slot) in self.slots.iter_mut().enumerate() {
@@ -237,7 +257,9 @@ impl Pad {
         ) {
             self.state.set_slots(&tracking, &x, &y);
         }
-        // BTN_LEFT's state (EVIOCGKEY) is left to the next press; a click across a drop is rare.
+        if let Some(keys) = key_bits(&self.file) {
+            self.state.set_button(has(&keys, usize::from(BTN_LEFT)));
+        }
     }
 
     /// The frames since the last call; Err when the touchpad is gone.
@@ -268,65 +290,157 @@ impl Pad {
     }
 }
 
-/// The touchpads' evdev devices.
+#[derive(Default)]
+struct ScanShared {
+    open_paths: HashSet<PathBuf>,
+    pending: Vec<Pad>,
+    stop: bool,
+}
+
+/// Scans `/dev/input/event*` for new touchpads outside `known`, returning newly opened pads and
+/// whether any candidate failed with `PermissionDenied`.
+fn scan_dir(known: &HashSet<PathBuf>) -> (Vec<Pad>, bool) {
+    let mut found = Vec::new();
+    let mut denied = false;
+    let Ok(entries) = std::fs::read_dir("/dev/input") else {
+        return (found, false);
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let is_event = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("event"));
+        if !is_event || known.contains(&path) {
+            continue;
+        }
+        match Pad::open(&path, 0) {
+            Ok(Some(pad)) => found.push(pad),
+            Ok(None) => {}
+            Err(e) if e.kind() == ErrorKind::PermissionDenied => denied = true,
+            Err(_) => {}
+        }
+    }
+    (found, denied)
+}
+
+fn scan_loop(shared: &(Mutex<ScanShared>, Condvar)) {
+    let (lock, wake) = shared;
+    let mut guard = lock.lock().unwrap_or_else(PoisonError::into_inner);
+    while !guard.stop {
+        let (next, _) = wake.wait_timeout(guard, RESCAN).unwrap_or_else(PoisonError::into_inner);
+        if next.stop {
+            return;
+        }
+        let known = next.open_paths.clone();
+        drop(next);
+        let (found, _) = scan_dir(&known);
+        guard = lock.lock().unwrap_or_else(PoisonError::into_inner);
+        if guard.stop {
+            return;
+        }
+        for pad in found {
+            if guard.open_paths.insert(pad.path.clone()) {
+                guard.pending.push(pad);
+            }
+        }
+    }
+}
+
+/// The touchpads' evdev devices. Hotplug rescans run on a background thread so drawing never
+/// stalls on `/dev/input` enumeration or `open()`.
 pub struct Evdev {
     pads: Vec<Pad>,
     next_device: usize,
-    scanned: Instant,
+    shared: Arc<(Mutex<ScanShared>, Condvar)>,
+    scanner: Option<JoinHandle<()>>,
 }
 
 impl Evdev {
     pub fn install(_window: *mut SDL_Window) -> Result<Evdev, String> {
-        let mut evdev = Evdev { pads: Vec::new(), next_device: 1, scanned: Instant::now() };
-        let denied = evdev.scan();
-        if evdev.pads.is_empty() {
+        let (initial, denied) = scan_dir(&HashSet::new());
+        if initial.is_empty() {
             return Err(if denied {
                 "Nightjar may not read the touchpad. Add your user to the input group, then sign in again.".into()
             } else {
                 "no touchpad found".into()
             });
         }
+        let shared = Arc::new((Mutex::new(ScanShared::default()), Condvar::new()));
+        let mut evdev = Evdev {
+            pads: Vec::new(),
+            next_device: 1,
+            shared: shared.clone(),
+            scanner: None,
+        };
+        {
+            let mut guard = shared.0.lock().unwrap_or_else(PoisonError::into_inner);
+            for mut pad in initial {
+                guard.open_paths.insert(pad.path.clone());
+                pad.state.device = evdev.next_device;
+                evdev.next_device += 1;
+                eprintln!(
+                    "nightjar: touchpad {} ({} x {} mm)",
+                    pad.path.display(),
+                    pad.state.size_mm.0,
+                    pad.state.size_mm.1
+                );
+                evdev.pads.push(pad);
+            }
+        }
+        if let Ok(handle) = std::thread::Builder::new()
+            .name("touchpad-scan".into())
+            .spawn(move || scan_loop(&shared))
+        {
+            evdev.scanner = Some(handle);
+        }
         Ok(evdev)
     }
 
-    /// Opens touchpads not open yet; true when a device could not be opened for lack of rights.
-    fn scan(&mut self) -> bool {
-        self.scanned = Instant::now();
-        let mut denied = false;
-        let Ok(entries) = std::fs::read_dir("/dev/input") else { return false };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let is_event = path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("event"));
-            if !is_event || self.pads.iter().any(|p| p.path == path) {
-                continue;
-            }
-            match Pad::open(&path, self.next_device) {
-                Ok(Some(pad)) => {
-                    eprintln!("nightjar: touchpad {} ({} x {} mm)", path.display(), pad.state.size_mm.0, pad.state.size_mm.1);
-                    self.next_device += 1;
-                    self.pads.push(pad);
-                }
-                Ok(None) => {}
-                Err(e) if e.kind() == ErrorKind::PermissionDenied => denied = true,
-                Err(_) => {}
-            }
-        }
-        denied
-    }
-
     pub fn take(&mut self) -> Vec<Event> {
+        let arrived = {
+            let mut guard = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
+            std::mem::take(&mut guard.pending)
+        };
+        for mut pad in arrived {
+            pad.state.device = self.next_device;
+            self.next_device += 1;
+            eprintln!(
+                "nightjar: touchpad {} ({} x {} mm)",
+                pad.path.display(),
+                pad.state.size_mm.0,
+                pad.state.size_mm.1
+            );
+            self.pads.push(pad);
+        }
         let mut out = Vec::new();
+        let mut removed = Vec::new();
         self.pads.retain_mut(|pad| match pad.read(&mut out) {
             Ok(()) => true,
             Err(()) => {
                 out.push(Event::Removed(pad.state.device));
+                removed.push(pad.path.clone());
                 false
             }
         });
-        if self.scanned.elapsed() >= RESCAN {
-            self.scan();
+        if !removed.is_empty() {
+            let mut guard = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
+            for path in removed {
+                guard.open_paths.remove(&path);
+            }
         }
         out
+    }
+}
+
+impl Drop for Evdev {
+    fn drop(&mut self) {
+        let (lock, wake) = &*self.shared;
+        lock.lock().unwrap_or_else(PoisonError::into_inner).stop = true;
+        wake.notify_all();
+        if let Some(thread) = self.scanner.take() {
+            let _ = thread.join();
+        }
     }
 }
 
@@ -416,6 +530,16 @@ mod tests {
         assert_eq!(s.slot, 0);
         s.set_slot(99);
         assert_eq!(s.slot, 4);
+
+        // EVIOCGKEY resync releases BTN_LEFT if its release event was dropped (DM-L27).
+        assert_eq!(s.event(EV_KEY, BTN_LEFT, 1), None);
+        let f = s.event(EV_SYN, SYN_REPORT, 0).unwrap();
+        assert!(f.button);
+        s.event(EV_SYN, SYN_DROPPED, 0);
+        assert_eq!(s.event(EV_SYN, SYN_REPORT, 0), None);
+        s.set_button(false);
+        let f = s.event(EV_SYN, SYN_REPORT, 0).unwrap();
+        assert!(!f.button, "resync clears BTN_LEFT when EVIOCGKEY reports it released");
     }
 
     #[test]

@@ -220,6 +220,8 @@ impl GpuStream {
 
     pub fn with_decoder(gpu: GpuDecoder) -> Self {
         let config = gpu.config();
+        #[cfg(target_os = "linux")]
+        let clocks = super::super::gpu_clocks::Sampler::start_for_device(gpu.pci_ids());
         Self {
             planes: super::super::gpu_planes::Planes::new(&gpu),
             records: Records::with_geometry(config.width, config.height, config.chroma444),
@@ -233,7 +235,7 @@ impl GpuStream {
             stages: Stages::new(GPU_STAGE_NAMES),
             race: None,
             #[cfg(target_os = "linux")]
-            clocks: super::super::gpu_clocks::Sampler::start(),
+            clocks,
         }
     }
 

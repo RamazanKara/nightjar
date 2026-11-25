@@ -234,6 +234,11 @@ impl HqScaler {
         }
     }
 
+    /// Drops all wrapped decoder textures (for example after a same-size decoder bridge reopen).
+    pub fn clear_surfaces(&mut self) {
+        self.surfaces.clear();
+    }
+
     /// Scales the top left input size of `input` (NV12 or P010, at least that size: a larger one
     /// is cropped, its alignment padding left out) and copies the result into the top left of
     /// `output` (at least the output size, same format) on `context`.

@@ -92,8 +92,18 @@ pub fn virtual_key(scancode: SDL_Scancode, system_keys: bool) -> Option<(u16, u8
         SDL_SCANCODE_APOSTROPHE => 0xDE,
         SDL_SCANCODE_INTERNATIONAL1 => return Some((0xE2, FLAG_NON_NORMALIZED)),
         SDL_SCANCODE_NONUSBACKSLASH => 0xE2,
-        SDL_SCANCODE_LANG1 => 0x1C,
-        SDL_SCANCODE_LANG2 => 0x1D,
+        SDL_SCANCODE_KP_EQUALS => 0x92,
+        SDL_SCANCODE_LANG1 | SDL_SCANCODE_INTERNATIONAL4 => 0x1C,
+        SDL_SCANCODE_LANG2 | SDL_SCANCODE_INTERNATIONAL5 => 0x1D,
+        SDL_SCANCODE_INTERNATIONAL2 | SDL_SCANCODE_LANG3 | SDL_SCANCODE_LANG4 => 0xF2,
+        SDL_SCANCODE_MUTE => 0xAD,
+        SDL_SCANCODE_VOLUMEDOWN => 0xAE,
+        SDL_SCANCODE_VOLUMEUP => 0xAF,
+        SDL_SCANCODE_MEDIA_NEXT_TRACK => 0xB0,
+        SDL_SCANCODE_MEDIA_PREVIOUS_TRACK => 0xB1,
+        SDL_SCANCODE_MEDIA_STOP => 0xB2,
+        SDL_SCANCODE_MEDIA_PLAY_PAUSE => 0xB3,
+        SDL_SCANCODE_MEDIA_SELECT => 0xB5,
         _ => return None,
     };
     Some((code, 0))
@@ -116,5 +126,14 @@ mod tests {
         assert_eq!(virtual_key(SDL_SCANCODE_LGUI, false), None);
         assert_eq!(virtual_key(SDL_SCANCODE_LGUI, true), Some((0x5B, 0)));
         assert_eq!(virtual_key(SDL_SCANCODE_INTERNATIONAL1, false), Some((0xE2, FLAG_NON_NORMALIZED)));
+        assert_eq!(virtual_key(SDL_SCANCODE_KP_EQUALS, false), Some((0x92, 0)));
+        assert_eq!(virtual_key(SDL_SCANCODE_INTERNATIONAL4, false), Some((0x1C, 0)));
+        assert_eq!(virtual_key(SDL_SCANCODE_INTERNATIONAL5, false), Some((0x1D, 0)));
+        assert_eq!(virtual_key(SDL_SCANCODE_INTERNATIONAL2, false), Some((0xF2, 0)));
+        assert_eq!(virtual_key(SDL_SCANCODE_LANG3, false), Some((0xF2, 0)));
+        assert_eq!(virtual_key(SDL_SCANCODE_MUTE, false), Some((0xAD, 0)));
+        assert_eq!(virtual_key(SDL_SCANCODE_VOLUMEDOWN, false), Some((0xAE, 0)));
+        assert_eq!(virtual_key(SDL_SCANCODE_VOLUMEUP, false), Some((0xAF, 0)));
+        assert_eq!(virtual_key(SDL_SCANCODE_MEDIA_PLAY_PAUSE, false), Some((0xB3, 0)));
     }
 }

@@ -204,7 +204,10 @@ impl Packed {
             // Recording on a deferred context preserves SDL's cached immediate-context state.
             let c = &self.deferred;
             c.ClearState();
-            if write_cb(c, self.constants[0].as_ref().unwrap(), parameters).is_err() { return false; }
+            if write_cb(c, self.constants[0].as_ref().unwrap(), parameters).is_err() {
+                c.ClearState();
+                return false;
+            }
             c.OMSetRenderTargets(Some(target), None);
             c.RSSetViewports(Some(&[D3D11_VIEWPORT {
                 TopLeftX: destination[0],
@@ -220,13 +223,17 @@ impl Packed {
             c.PSSetShaderResources(0, Some(&self.planes));
             c.PSSetConstantBuffers(0, Some(&self.constants));
             if let Some((presentation, mask)) = presentation {
-                if write_cb(c, self.presentation[0].as_ref().unwrap(), presentation).is_err() { return false; }
+                if write_cb(c, self.presentation[0].as_ref().unwrap(), presentation).is_err() {
+                    c.ClearState();
+                    return false;
+                }
                 c.PSSetConstantBuffers(1, Some(&self.presentation));
                 if mask.is_some() { c.PSSetShaderResources(2, Some(&[mask])); }
             }
             c.Draw(3, 0);
             let mut commands = None;
             if c.FinishCommandList(false, Some(&mut commands)).is_err() {
+                c.ClearState();
                 return false;
             }
             self.context

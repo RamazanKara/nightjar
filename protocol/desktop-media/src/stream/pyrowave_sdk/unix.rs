@@ -7,8 +7,9 @@
 //! the planes back into the buffers handed to `decode`, and the presenter uploads them to its own
 //! textures. The readback is one memcpy per plane out of host-visible memory.
 //!
-//! The shared device: `decode_into` decodes into a plane set of `SharedImages` and waits on the
-//! decode timeline, under the same watchdog, so a picture is just as final when it is handed on.
+//! The shared device: `decode_into` submits a decode into a plane set of `SharedImages`
+//! after the reuse timeline reaches `after` and returns the decode timeline value (`value`) for
+//! the presenter to wait on, running under the same watchdog without waiting on the GPU here.
 //!
 //! `decode` blocks until the GPU is done and the planes are in the buffers. The SDK's `complete`
 //! waits on its fence without a timeout (and `async` submits to the queue, which a lost device can
@@ -69,6 +70,24 @@ struct Shared {
     images: Arc<SharedImages>,
     /// What `pyrowave_create_device` was given, which the SDK device keeps pointing into.
     info: Box<ShareInfo>,
+    pci_ids: Option<(u32, u32)>,
+}
+
+fn pci_ids_of(
+    sdl: &SdlVulkan,
+    get_instance_proc_addr: vk::PFN_vkGetInstanceProcAddr,
+) -> Option<(u32, u32)> {
+    // SAFETY: `sdl.instance` and `sdl.physical_device` belong to the live SDL GPU device.
+    unsafe {
+        let proc_fn = get_instance_proc_addr(sdl.instance, c"vkGetPhysicalDeviceProperties".as_ptr())?;
+        let get_props = std::mem::transmute::<
+            unsafe extern "system" fn(),
+            unsafe extern "system" fn(vk::PhysicalDevice, *mut vk::PhysicalDeviceProperties),
+        >(proc_fn);
+        let mut props = vk::PhysicalDeviceProperties::default();
+        get_props(sdl.physical_device, &mut props);
+        Some((props.vendor_id, props.device_id))
+    }
 }
 
 /// Holds the queue lock `info` hands the SDK (SDL's queue mutex) until dropped.
@@ -296,10 +315,11 @@ impl GpuDecoder {
             // copy on SDL's queue reads what the decode wrote without an ownership transfer.
             let images = SharedImages::with_handoff(&sdl, get_instance_proc_addr, config, compute.map(|(_, slot)| slot.family), handoff)?;
             let info = ShareInfo::new(&sdl, get_instance_proc_addr, compute);
+            let pci_ids = pci_ids_of(&sdl, get_instance_proc_addr);
             let watchdog = Watchdog::new()?;
             let mut s = Self { api, config, device: ptr::null_mut(), decoder: ptr::null_mut(), watchdog, timeout: crate::stream::pyrowave::GPU_DECODE_TIMEOUT, shared: None, decode_value: 0, queue: queue::DecodeQueue::Graphics(queue::SETTING_OFF.into()), submitted: Arc::default(), #[cfg(target_os = "macos")] own: None };
             let result = create_shared(s.api.create_device, &info.create, &mut s.device);
-            s.shared = Some(Shared { images, info });
+            s.shared = Some(Shared { images, info, pci_ids });
             if result != SUCCESS {
                 return Err(format!("the SDK cannot share the renderer's Vulkan device (PyroWave error {result}, {})", result_name(result)));
             }
@@ -320,6 +340,12 @@ impl GpuDecoder {
     /// The plane sets on the renderer's device, when the decoder shares it.
     pub fn images(&self) -> Option<&Arc<SharedImages>> {
         self.shared.as_ref().map(|shared| &shared.images)
+    }
+
+    /// `(vendor_id, device_id)` of the shared Vulkan device, when known.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub fn pci_ids(&self) -> Option<(u32, u32)> {
+        self.shared.as_ref().and_then(|shared| shared.pci_ids)
     }
 
     /// How long `decode` waits for the GPU before it fails (`GPU_DECODE_TIMEOUT` unless changed).
@@ -476,8 +502,8 @@ impl GpuDecoder {
         Ok(value)
     }
 
-    /// When the submit of the last decode returned (in `decode` and `decode_into`, which also wait
-    /// for the GPU), None if it failed: the rest of the call is the wait for the GPU.
+    /// When the submit of the last decode returned (after which `decode` also waits for the GPU,
+    /// while `decode_into` only submits), None if the submit failed.
     pub fn submitted_at(&self) -> Option<Instant> {
         *self.submitted.lock().unwrap_or_else(PoisonError::into_inner)
     }
