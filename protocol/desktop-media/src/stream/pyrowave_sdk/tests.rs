@@ -249,6 +249,65 @@ fn gpu_time_is_read_from_the_pass_lines_only() {
     assert_eq!(parse_gpu_ms("nothing here"), None);
 }
 
+#[cfg(windows)]
+#[test]
+fn interop_report_formats_supported_missing_extension_and_format_errors() {
+    use super::win32::{diagnose_interop, format_interop_report, InteropReport};
+    let ok = format_interop_report(&InteropReport {
+        name: "Test GPU",
+        major: 1,
+        minor: 3,
+        ten_bit: false,
+        ext_memory_win32: true,
+        ext_semaphore_win32: true,
+        d3d11_storage_src: Ok(0x6),
+        d3d11_storage_sampled: Ok(0x6),
+        d3d11_kmt_storage_sampled: Ok(0x6),
+        d3d12_fence_default: 0x3,
+        d3d12_fence_timeline: 0x3,
+        opaque_win32_binary: 0x3,
+        opaque_win32_timeline: 0x3,
+    });
+    assert!(ok.contains("Test GPU Vulkan 1.3 R8_UNORM") && ok.contains("VK_KHR_external_memory_win32=true") && ok.contains("D3D11_TEXTURE(STORAGE|TRANSFER_SRC)=0x6") && ok.contains("D3D12_FENCE(TIMELINE)=0x3"), "{ok}");
+
+    let missing_ext = format_interop_report(&InteropReport {
+        name: "Test GPU",
+        major: 1,
+        minor: 3,
+        ten_bit: true,
+        ext_memory_win32: false,
+        ext_semaphore_win32: false,
+        d3d11_storage_src: Err(ash::vk::Result::ERROR_FORMAT_NOT_SUPPORTED),
+        d3d11_storage_sampled: Ok(0x4),
+        d3d11_kmt_storage_sampled: Err(ash::vk::Result::ERROR_FORMAT_NOT_SUPPORTED),
+        d3d12_fence_default: 0,
+        d3d12_fence_timeline: 0x2,
+        opaque_win32_binary: 0x3,
+        opaque_win32_timeline: 0,
+    });
+    assert!(missing_ext.contains("R16_UNORM") && missing_ext.contains("VK_KHR_external_memory_win32=false") && missing_ext.contains("VK_KHR_external_semaphore_win32=false") && missing_ext.contains("D3D11_TEXTURE(STORAGE|TRANSFER_SRC)=Err(ERROR_FORMAT_NOT_SUPPORTED)") && missing_ext.contains("D3D11_TEXTURE_KMT(STORAGE|SAMPLED)=Err(ERROR_FORMAT_NOT_SUPPORTED)"), "{missing_ext}");
+
+    let kmt_only_missing = format_interop_report(&InteropReport {
+        name: "Intel GPU",
+        major: 1,
+        minor: 3,
+        ten_bit: false,
+        ext_memory_win32: true,
+        ext_semaphore_win32: true,
+        d3d11_storage_src: Ok(0x6),
+        d3d11_storage_sampled: Ok(0x6),
+        d3d11_kmt_storage_sampled: Err(ash::vk::Result::ERROR_FORMAT_NOT_SUPPORTED),
+        d3d12_fence_default: 0x3,
+        d3d12_fence_timeline: 0x3,
+        opaque_win32_binary: 0x3,
+        opaque_win32_timeline: 0x3,
+    });
+    assert!(kmt_only_missing.contains("D3D11_TEXTURE(STORAGE|SAMPLED)=0x6") && kmt_only_missing.contains("D3D11_TEXTURE_KMT(STORAGE|SAMPLED)=Err(ERROR_FORMAT_NOT_SUPPORTED)"), "{kmt_only_missing}");
+
+    let missing_luid = diagnose_interop(&Luid { luid: [0xff; 8] }, false);
+    assert!(!missing_luid.is_empty());
+}
+
 #[test]
 fn the_pass_summary_sums_the_passes_and_skips_the_heap_lines() {
     let lines = ["Dequant: 0.020 ms per frame", "Memory Heap 0 (HOST): MaxSize 16346.938 MiB, BudgetSize 15578.938 MiB", "iDWT: 1.500 ms per frame"]
