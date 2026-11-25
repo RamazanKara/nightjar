@@ -1757,4 +1757,5 @@ sudo sysctl -w net.core.rmem_max={}", "수신 버퍼: 시스템이 요청한 {1}
     ("Could not start network test: {}", "네트워크 테스트를 시작할 수 없습니다: {}"),
     ("Show battery and clock in compact overlay", "간단히 오버레이에 배터리와 시계 표시"),
     ("Add this device’s battery percentage and local time to the compact performance overlay.", "이 기기의 배터리 잔량과 현재 시각을 간단한 성능 오버레이에 추가합니다."),
+    ("macOS restricts Wi-Fi network names (SSIDs) without Location Services permission, so Wi-Fi connections match Other Wi-Fi instead of Home Wi-Fi.", "macOS에서는 위치 서비스 권한이 없으면 Wi-Fi 네트워크 이름(SSID)이 제한되므로 Wi-Fi 연결이 집 Wi-Fi 대신 기타 Wi-Fi와 일치합니다."),
 ];

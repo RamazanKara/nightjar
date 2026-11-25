@@ -2,7 +2,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs, UdpSocket}
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
 
-pub use crate::network_types::{Fallback, Kind, Medium, Network, Pace, Toward};
+pub use crate::network_types::{Fallback, Kind, Medium, Network, Pace, Toward, SSID_SUPPORTED};
 
 /// The interface the system routes traffic for `host` over, not the one with the internet
 /// connection: a PC on the same Ethernet segment is wired even when Wi-Fi is the default route.

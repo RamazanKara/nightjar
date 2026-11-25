@@ -499,3 +499,34 @@ fn a_switch_and_a_list_choice_have_the_designed_size() {
     assert_eq!(switch.size(), vec2(design_tokens::SIZE_SWITCH_W, design_tokens::SIZE_SWITCH_H));
     assert_eq!(choice.height(), 40.0);
 }
+
+#[test]
+fn home_wifi_ssid_controls_reflect_platform_support_and_keep_remove() {
+    let mut f = settings_with(Settings::default());
+    f.l.open(Screen::Profiles);
+    f.l.profiles.automatic = true;
+    f.l.network = crate::network_types::Network {
+        wifi: true,
+        ssid: Some("StudioNet".into()),
+        ..Default::default()
+    };
+    let notice = "macOS restricts Wi-Fi network names (SSIDs) without Location Services permission, so Wi-Fi connections match Other Wi-Fi instead of Home Wi-Fi.";
+    f.l.ssid_supported = true;
+    f.settle();
+    assert!(shows(&f, "Add current Wi-Fi"), "{:?}", f.drawn);
+    assert!(!shows(&f, notice), "{:?}", f.drawn);
+    click_text(&mut f, "Add current Wi-Fi");
+    assert_eq!(f.l.profiles.home_wifi, vec!["StudioNet".to_owned()]);
+
+    // When SSIDs are restricted (macOS), explain Other Wi-Fi routing, hide Add current Wi-Fi,
+    // disable adding new names, and keep Remove working for existing saved entries.
+    f.l.ssid_supported = false;
+    f.l.home_wifi_name = "OtherSaved".into();
+    f.settle();
+    assert!(shows(&f, notice), "{:?}", f.drawn);
+    assert!(!shows(&f, "Add current Wi-Fi"), "{:?}", f.drawn);
+    click_text(&mut f, "Add");
+    assert_eq!(f.l.profiles.home_wifi, vec!["StudioNet".to_owned()]);
+    click_text(&mut f, "Remove");
+    assert!(f.l.profiles.home_wifi.is_empty(), "{:?}", f.l.profiles.home_wifi);
+}

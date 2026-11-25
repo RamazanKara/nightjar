@@ -504,7 +504,7 @@ A PC's, game's or profile's settings show the same rows, except the App section,
 | Active profile | The profile streams use, or **Main settings**. While a profile is active, the main settings say so at the top. |
 | New profile | Asks for a name and opens the new, empty profile's settings. |
 | Choose automatically | Picks a profile when a stream starts, by network: **Mobile or metered**, **Home Wi-Fi** and **Other Wi-Fi**. A network left at **Active profile** follows the active profile. |
-| Home Wi-Fi names | **Add** a typed name, or **Add current Wi-Fi**; **Remove** takes one off. Up to 50 names of up to 32 characters; names are case-sensitive and stay on this device. |
+| Home Wi-Fi names | **Add** a typed name, or **Add current Wi-Fi**; **Remove** takes one off. Up to 50 names of up to 32 characters; names are case-sensitive and stay on this device. **Home Wi-Fi** matching works on Android, Windows, and Linux; macOS restricts Wi-Fi SSIDs without Location Services permission, so Wi-Fi connections there match **Other Wi-Fi** (existing saved entries can still be removed). |
 | Mobile data bitrate limit | 0–500000 kbps; 0 means no limit. Caps the bitrate on mobile data and on metered Wi-Fi or Ethernet, after all profile, PC and game values. **Video → Bitrate on mobile data** sets the same limit. |
 | Saved profiles → Edit / More | Edit opens the profile's settings; More holds Rename, Duplicate and Delete. |
 

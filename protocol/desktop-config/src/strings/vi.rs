@@ -1757,4 +1757,5 @@ sudo sysctl -w net.core.rmem_max={}", "Bộ đệm nhận: hệ thống chỉ c�
     ("Could not start network test: {}", "Không thể bắt đầu kiểm tra mạng: {}"),
     ("Show battery and clock in compact overlay", "Hiển thị pin và đồng hồ trong lớp phủ thu gọn"),
     ("Add this device’s battery percentage and local time to the compact performance overlay.", "Thêm phần trăm pin và giờ địa phương của thiết bị này vào lớp phủ hiệu năng thu gọn."),
+    ("macOS restricts Wi-Fi network names (SSIDs) without Location Services permission, so Wi-Fi connections match Other Wi-Fi instead of Home Wi-Fi.", "macOS hạn chế tên mạng Wi-Fi (SSID) khi không có quyền Dịch vụ định vị, nên các kết nối Wi-Fi sẽ khớp với Wi-Fi khác thay vì Wi-Fi gia đình."),
 ];

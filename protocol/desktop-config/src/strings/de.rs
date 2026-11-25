@@ -1758,4 +1758,5 @@ sudo sysctl -w net.core.rmem_max={2}"),
     ("Could not start network test: {}", "Netzwerktest konnte nicht gestartet werden: {}"),
     ("Show battery and clock in compact overlay", "Akku und Uhr im kompakten Overlay anzeigen"),
     ("Add this device’s battery percentage and local time to the compact performance overlay.", "Fügt dem kompakten Leistungs-Overlay den Akkustand und die Ortszeit dieses Geräts hinzu."),
+    ("macOS restricts Wi-Fi network names (SSIDs) without Location Services permission, so Wi-Fi connections match Other Wi-Fi instead of Home Wi-Fi.", "macOS schränkt WLAN-Namen (SSIDs) ohne Standortdienste-Berechtigung ein, sodass WLAN-Verbindungen „Anderes WLAN“ statt „Heim-WLAN“ zugeordnet werden."),
 ];

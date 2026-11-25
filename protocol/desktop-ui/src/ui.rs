@@ -85,6 +85,7 @@ pub struct Launcher {
     pub settings: Settings,
     pub profiles: Profiles,
     pub network: crate::network_types::Network,
+    pub ssid_supported: bool,
     home_wifi_name: String,
     /// Every PC's library merged, kept while the PCs and the hidden games are what it was made from.
     pub(crate) library: console::LibraryMemo,
@@ -274,6 +275,7 @@ impl Launcher {
             settings,
             profiles,
             network: crate::network_types::Network::default(),
+            ssid_supported: crate::network_types::SSID_SUPPORTED,
             home_wifi_name: String::new(),
             library: console::LibraryMemo::default(),
             edit_settings: Settings::default(),

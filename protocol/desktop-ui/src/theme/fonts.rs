@@ -186,27 +186,43 @@ impl Drop for Loading {
 }
 
 /// `lang`'s system faces when they are loaded; else starts loading them and returns None.
+/// Returns empty defaults immediately when no OS font loader is registered (for headless UI tests).
 pub(super) fn loaded(ctx: &egui::Context, lang: Lang) -> Option<SystemFonts> {
-    if !needs_fallback(lang) {
+    loaded_with(ctx, lang, FONT_LOADER.get().copied())
+}
+
+pub(super) fn loaded_with(
+    ctx: &egui::Context,
+    lang: Lang,
+    loader: Option<(FontLoaderFn, FontValidateFn)>,
+) -> Option<SystemFonts> {
+    if !needs_fallback(lang) && loader.is_none() {
         return Some(SystemFonts::default());
     }
     if let Some((_, system)) = LOADED.lock().unwrap_or_else(PoisonError::into_inner).iter().find(|e| e.0 == lang) {
         return Some(system.clone());
     }
+    let Some((loader_fn, _)) = loader else {
+        return loaded_on_thread(ctx, lang, |_| SystemFonts::default());
+    };
+    loaded_on_thread(ctx, lang, loader_fn)
+}
+
+fn loaded_on_thread(ctx: &egui::Context, lang: Lang, loader_fn: FontLoaderFn) -> Option<SystemFonts> {
     let mut loading = LOADING.lock().unwrap_or_else(PoisonError::into_inner);
     if !loading.contains(&lang) {
         loading.push(lang);
         let ctx = ctx.clone();
         let spawned = std::thread::Builder::new().name("nightjar-fonts".into()).spawn(move || {
             let _loading = Loading(lang);
-            let system = load_system_fonts(lang);
+            let system = loader_fn(lang);
             LOADED.lock().unwrap_or_else(PoisonError::into_inner).push((lang, system));
             ctx.request_repaint();
         });
         if let Err(e) = spawned {
             eprintln!("nightjar: could not start the font loader ({e}); loading the {} fonts here", lang.name());
             loading.retain(|l| *l != lang);
-            let system = load_system_fonts(lang);
+            let system = loader_fn(lang);
             LOADED.lock().unwrap_or_else(PoisonError::into_inner).push((lang, system.clone()));
             return Some(system);
         }
@@ -224,6 +240,7 @@ pub struct SystemFonts {
     pub ahead: bool,
     pub regular: Option<FontData>,
     pub semibold: Option<FontData>,
+    pub emoji: Option<FontData>,
 }
 
 pub type FontLoaderFn = fn(Lang) -> SystemFonts;
@@ -247,13 +264,6 @@ pub fn fallback_ahead(lang: Lang) -> Option<bool> {
 
 pub fn needs_fallback(lang: Lang) -> bool {
     fallback_ahead(lang).is_some()
-}
-
-pub(super) fn load_system_fonts(lang: Lang) -> SystemFonts {
-    match FONT_LOADER.get() {
-        Some((loader, _)) => loader(lang),
-        None => SystemFonts::default(),
-    }
 }
 
 pub fn definitions(system: SystemFonts) -> FontDefinitions {
@@ -280,6 +290,12 @@ pub fn definitions_with_extras(system: SystemFonts, extras: &[SystemFonts]) -> F
         })
     };
     let (regular, semibold) = (usable(system.regular), usable(system.semibold));
+    let emoji = usable(system.emoji)
+        .or_else(|| extras.iter().find_map(|extra| usable(extra.emoji.clone())))
+        .map(|data| {
+            fonts.font_data.insert("system-emoji".into(), Arc::new(data));
+            "system-emoji".to_owned()
+        });
     let semibold = semibold.or_else(|| regular.clone());
     let regular = regular.map(|data| {
         fonts.font_data.insert("system".into(), Arc::new(data));
@@ -315,6 +331,7 @@ pub fn definitions_with_extras(system: SystemFonts, extras: &[SystemFonts]) -> F
             list.extend(system_face.cloned());
         }
         list.extend(extra_faces.iter().cloned());
+        list.extend(emoji.iter().cloned());
         list.extend(egui_fonts.iter().cloned());
         list.push("Hack".into());
         list

@@ -1757,4 +1757,5 @@ sudo sysctl -w net.core.rmem_max={}", "接收缓冲区：系统只分配了所�
     ("Could not start network test: {}", "无法启动网络测试：{}"),
     ("Show battery and clock in compact overlay", "在精简叠加层中显示电量和时钟"),
     ("Add this device’s battery percentage and local time to the compact performance overlay.", "将此设备的电池电量和本地时间添加到精简性能叠加层中。"),
+    ("macOS restricts Wi-Fi network names (SSIDs) without Location Services permission, so Wi-Fi connections match Other Wi-Fi instead of Home Wi-Fi.", "macOS 在未授予“定位服务”权限时会限制读取 Wi-Fi 网络名称（SSID），因此 Wi-Fi 连接将匹配“其他 Wi-Fi”而非“家庭 Wi-Fi”。"),
 ];

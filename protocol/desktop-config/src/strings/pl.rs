@@ -1757,4 +1757,5 @@ sudo sysctl -w net.core.rmem_max={}", "Bufor odbioru: system przydzielił {0} Ki
     ("Could not start network test: {}", "Nie można uruchomić testu sieci: {}"),
     ("Show battery and clock in compact overlay", "Pokaż baterię i zegar w kompaktowej nakładce"),
     ("Add this device’s battery percentage and local time to the compact performance overlay.", "Dodaje poziom naładowania baterii i czas lokalny tego urządzenia do kompaktowej nakładki wydajności."),
+    ("macOS restricts Wi-Fi network names (SSIDs) without Location Services permission, so Wi-Fi connections match Other Wi-Fi instead of Home Wi-Fi.", "System macOS ogranicza dostęp do nazw sieci Wi-Fi (SSID) bez uprawnień Usług lokalizacji, dlatego połączenia Wi-Fi pasują do opcji Inna sieć Wi-Fi zamiast Domowa sieć Wi-Fi."),
 ];

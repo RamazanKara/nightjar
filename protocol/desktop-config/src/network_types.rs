@@ -1,5 +1,10 @@
 //! Pure network state and pacing types shared across config, UI and network probes.
 
+/// Whether this platform reports the active Wi-Fi SSID to Nightjar without OS location-permission
+/// restrictions. macOS withholds Wi-Fi SSIDs unless Location Services permission is granted, so
+/// Wi-Fi networks there match `Kind::Wifi` ("Other Wi-Fi").
+pub const SSID_SUPPORTED: bool = !cfg!(target_os = "macos");
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Mobile,

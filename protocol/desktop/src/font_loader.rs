@@ -10,7 +10,7 @@ use nightjar_desktop_ui::theme::{self, fallback_ahead, SystemFonts};
 
 /// Registers the real OS font loader, face validator and reduced-motion reader in `theme`.
 pub fn register() {
-    theme::register_font_loader(system_fonts, is_usable_face);
+    theme::register_font_loader(system_fonts, is_usable_outline_face);
     theme::register_reduces_motion_hook(os_reduces_motion);
 }
 
@@ -66,8 +66,22 @@ pub fn os_reduces_motion() -> bool {
 }
 
 /// Validates a loaded font face with `skrifa` so egui never panics on WOFF2 or broken indices.
+#[cfg(test)]
 pub fn is_usable_face(data: &FontData) -> bool {
     skrifa::FontRef::from_index((*data.font).as_ref(), data.index).is_ok()
+}
+
+/// Validates a loaded font face with `skrifa` and requires outline glyph tables (`glyf`, `CFF `,
+/// or `CFF2`), rejecting bitmap-only faces (`sbix`/`CBDT` such as `Apple Color Emoji`) that
+/// `ab_glyph`/egui cannot draw.
+pub fn is_usable_outline_face(data: &FontData) -> bool {
+    use skrifa::raw::TableProvider;
+    let Ok(font) = skrifa::FontRef::from_index((*data.font).as_ref(), data.index) else {
+        return false;
+    };
+    font.data_for_tag(skrifa::Tag::new(b"glyf")).is_some()
+        || font.data_for_tag(skrifa::Tag::new(b"CFF ")).is_some()
+        || font.data_for_tag(skrifa::Tag::new(b"CFF2")).is_some()
 }
 
 /// Where a language's letters come from when Figtree has not got them.
@@ -93,11 +107,24 @@ fn fallback(lang: Lang) -> Option<Fallback> {
     Some(Fallback { ahead, regular, semibold, install })
 }
 
-/// The system faces for `lang`'s letters, the first found of each list. Says so in the log when
-/// a language that needs one finds none: its text then shows in boxes or in a mix of weights.
+fn load_emoji() -> Option<FontData> {
+    static EMOJI: std::sync::OnceLock<Option<FontData>> = std::sync::OnceLock::new();
+    EMOJI
+        .get_or_init(|| {
+            faces::EMOJI
+                .iter()
+                .find_map(|face| load(face).filter(is_usable_outline_face))
+        })
+        .clone()
+}
+
+/// The system faces for `lang`'s letters (and outline emoji fallback across all languages),
+/// the first found of each list. Says so in the log when a language that needs a text face
+/// finds none: its text then shows in boxes or in a mix of weights.
 pub fn system_fonts(lang: Lang) -> SystemFonts {
+    let emoji = load_emoji();
     let Some(fallback) = fallback(lang) else {
-        return SystemFonts::default();
+        return SystemFonts { emoji, ..SystemFonts::default() };
     };
     let regular = fallback.regular.iter().find_map(load);
     let semibold = fallback.semibold.iter().find_map(load);
@@ -108,7 +135,7 @@ pub fn system_fonts(lang: Lang) -> SystemFonts {
             faces::INSTALL[fallback.install]
         );
     }
-    SystemFonts { ahead: fallback.ahead, regular, semibold }
+    SystemFonts { ahead: fallback.ahead, regular, semibold, emoji }
 }
 
 /// A face in Windows' font folder: its file, and the family and style in its name table, which
@@ -145,6 +172,7 @@ mod faces {
     pub const ZH_HANS_SEMIBOLD: &[Face] = &[("msyhbd.ttc", "Microsoft YaHei UI", "Bold"), ("msyhbd.ttc", "Microsoft YaHei", "Bold")];
     pub const ZH_HANT: &[Face] = &[("msjh.ttc", "Microsoft JhengHei UI", "Regular"), ("msjh.ttc", "Microsoft JhengHei", "Regular")];
     pub const ZH_HANT_SEMIBOLD: &[Face] = &[("msjhbd.ttc", "Microsoft JhengHei UI", "Bold"), ("msjhbd.ttc", "Microsoft JhengHei", "Bold")];
+    pub const EMOJI: &[Face] = &[("seguiemj.ttf", "Segoe UI Emoji", "Regular"), ("seguisym.ttf", "Segoe UI Symbol", "Regular")];
     pub const INSTALL: [&str; 2] = [
         "Segoe UI (Windows' own font).",
         "the language's supplemental fonts (Settings > Apps > Optional features).",
@@ -167,6 +195,7 @@ mod faces {
     pub const ZH_HANS_SEMIBOLD: &[Face] = &["PingFangSC-Semibold", "STHeitiSC-Medium"];
     pub const ZH_HANT: &[Face] = &["PingFangTC-Regular", "STHeitiTC-Light"];
     pub const ZH_HANT_SEMIBOLD: &[Face] = &["PingFangTC-Semibold", "STHeitiTC-Medium"];
+    pub const EMOJI: &[Face] = &["NotoEmoji-Regular", "AppleSymbols"];
     pub const INSTALL: [&str; 2] = [
         "the system fonts in Font Book.",
         "the language's fonts in Font Book.",
@@ -204,6 +233,7 @@ mod faces {
     pub const ZH_HANS_SEMIBOLD: &[Face] = &[("Noto Sans CJK SC:style=Bold", "Noto Sans CJK SC"), ("Source Han Sans SC:style=Bold", "Source Han Sans SC")];
     pub const ZH_HANT: &[Face] = &[("Noto Sans CJK TC:style=Regular", "Noto Sans CJK TC"), ("Source Han Sans TC:style=Regular", "Source Han Sans TC")];
     pub const ZH_HANT_SEMIBOLD: &[Face] = &[("Noto Sans CJK TC:style=Bold", "Noto Sans CJK TC"), ("Source Han Sans TC:style=Bold", "Source Han Sans TC")];
+    pub const EMOJI: &[Face] = &[("Noto Emoji:style=Regular", "Noto Emoji"), ("Symbola:style=Regular", "Symbola")];
     pub const INSTALL: [&str; 2] = [
         "Noto Sans or DejaVu Sans (fonts-noto-core, fonts-dejavu-core).",
         "Noto Sans CJK (fonts-noto-cjk, noto-fonts-cjk, google-noto-sans-cjk-fonts).",
@@ -385,6 +415,7 @@ mod tests {
             ahead: true,
             regular: Some(FontData::from_owned(b"not a font".to_vec())),
             semibold: Some(bad_index),
+            emoji: None,
         };
         let ctx = egui::Context::default();
         ctx.set_fonts(definitions(system));
@@ -414,9 +445,79 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(10));
             fonts_for(&ctx, Lang::Ja);
         }
+        let started = Instant::now();
         fonts_for(&ctx, Lang::En);
+        while ctx.data(|d| d.get_temp::<Lang>(fonts_key())) != Some(Lang::En) {
+            assert!(started.elapsed().as_secs() < 30, "the English emoji fallback never loaded");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            fonts_for(&ctx, Lang::En);
+        }
         assert!(!LOADED.lock().unwrap().iter().any(|e| e.0 == Lang::Ja));
         assert!(!LOADING.lock().unwrap().contains(&Lang::Ja));
+        assert!(!LOADING.lock().unwrap().contains(&Lang::En));
+    }
+
+    fn sfnt_with_tables(tags: &[[u8; 4]]) -> FontData {
+        let mut sorted = tags.to_vec();
+        sorted.sort();
+        let header_len = 12 + sorted.len() * 16;
+        let payload_offset = header_len;
+        let mut bytes = Vec::with_capacity(payload_offset + sorted.len() * 4);
+        bytes.extend_from_slice(&0x0001_0000u32.to_be_bytes());
+        bytes.extend_from_slice(&(sorted.len() as u16).to_be_bytes());
+        bytes.extend_from_slice(&[0; 6]);
+        for (idx, tag) in sorted.iter().enumerate() {
+            let offset = (payload_offset + idx * 4) as u32;
+            bytes.extend_from_slice(tag);
+            bytes.extend_from_slice(&0u32.to_be_bytes());
+            bytes.extend_from_slice(&offset.to_be_bytes());
+            bytes.extend_from_slice(&4u32.to_be_bytes());
+        }
+        bytes.resize(payload_offset + sorted.len() * 4, 0);
+        FontData::from_owned(bytes)
+    }
+
+    #[test]
+    fn outline_face_validation_rejects_bitmap_only_faces_and_accepts_outlines() {
+        register();
+        assert!(is_usable_outline_face(&FontData::from_static(FIGTREE)));
+        for bitmap_tag in [b"sbix", b"CBDT"] {
+            let bitmap = sfnt_with_tables(&[*bitmap_tag]);
+            assert!(is_usable_face(&bitmap), "SFNT header parses cleanly");
+            assert!(!is_usable_outline_face(&bitmap), "bitmap-only table {bitmap_tag:?} must be rejected");
+            let defs = definitions(SystemFonts { emoji: Some(bitmap), ..SystemFonts::default() });
+            assert!(!defs.font_data.contains_key("system-emoji"));
+        }
+        for outline_tag in [b"glyf", b"CFF ", b"CFF2"] {
+            let outline = sfnt_with_tables(&[*outline_tag]);
+            assert!(is_usable_outline_face(&outline), "outline table {outline_tag:?} must be accepted");
+        }
+    }
+
+    #[test]
+    fn emoji_fallback_loads_for_english_and_draws_brain_emoji() {
+        register();
+        let ctx = egui::Context::default();
+        apply(&ctx);
+        let started = Instant::now();
+        fonts_for(&ctx, Lang::En);
+        while ctx.data(|d| d.get_temp::<Lang>(fonts_key())) != Some(Lang::En) {
+            assert!(started.elapsed().as_secs() < 30, "English emoji load timed out");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            fonts_for(&ctx, Lang::En);
+        }
+        // Calling again stays cached and does not reload or panic.
+        fonts_for(&ctx, Lang::En);
+        assert_eq!(ctx.data(|d| d.get_temp::<Lang>(fonts_key())), Some(Lang::En));
+        ctx.run_ui(egui::RawInput::default(), |_| {}).textures_delta.clear();
+        if let Some(emoji) = load_emoji() {
+            assert!(is_usable_outline_face(&emoji));
+            if covers((*emoji.font).as_ref(), emoji.index, '🧠') {
+                assert!(ctx.fonts_mut(|f| {
+                    f.has_glyph(&regular(text::BODY), '🧠') && f.has_glyph(&semibold(text::BODY), '🧠')
+                }));
+            }
+        }
     }
 
     #[test]

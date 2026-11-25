@@ -612,3 +612,59 @@ fn title_script_detection_picks_matching_fallback_and_skips_ascii() {
     assert_ne!(scripts_for_text("Кириллица").without_primary(Lang::En), ScriptSet::default());
     assert_eq!(scripts_for_text("Кириллица").without_primary(Lang::Ru), ScriptSet::default());
 }
+
+#[test]
+fn definitions_insert_emoji_fallback_after_figtree_and_script_faces() {
+    let defs = fonts::definitions_with_extras(
+        SystemFonts {
+            ahead: false,
+            regular: Some(egui::FontData::from_static(FIGTREE)),
+            semibold: None,
+            emoji: Some(egui::FontData::from_static(FIGTREE)),
+        },
+        &[SystemFonts {
+            ahead: false,
+            regular: Some(egui::FontData::from_static(FIGTREE)),
+            semibold: None,
+            emoji: None,
+        }],
+    );
+    assert!(defs.font_data.contains_key("system-emoji"));
+    for (family, extra_name) in [
+        (egui::FontFamily::Proportional, "system-extra-0"),
+        (egui::FontFamily::Name("semibold".into()), "system-extra-0-semibold"),
+    ] {
+        let list = defs.families.get(&family).expect("family exists");
+        let extra_pos = list.iter().position(|n| n == extra_name).unwrap();
+        let emoji_pos = list.iter().position(|n| n == "system-emoji").unwrap();
+        let hack_pos = list.iter().position(|n| n == "Hack").unwrap();
+        assert!(extra_pos < emoji_pos && emoji_pos < hack_pos, "{family:?}: {list:?}");
+    }
+}
+
+#[test]
+fn loaded_with_triggers_background_load_for_latin_languages_when_loader_registered() {
+    let _guard = LOADED.lock().unwrap_or_else(PoisonError::into_inner);
+    drop(_guard);
+    fn emoji_loader(_lang: Lang) -> SystemFonts {
+        SystemFonts {
+            emoji: Some(egui::FontData::from_static(FIGTREE)),
+            ..SystemFonts::default()
+        }
+    }
+    fn accept_all(_: &egui::FontData) -> bool { true }
+
+    LOADED.lock().unwrap_or_else(PoisonError::into_inner).retain(|e| e.0 != Lang::En);
+    let ctx = egui::Context::default();
+    let started = std::time::Instant::now();
+    let mut result = fonts::loaded_with(&ctx, Lang::En, Some((emoji_loader, accept_all)));
+    while result.is_none() {
+        assert!(started.elapsed().as_secs() < 10, "English emoji load timed out");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        result = fonts::loaded_with(&ctx, Lang::En, Some((emoji_loader, accept_all)));
+    }
+    assert!(result.expect("loaded").emoji.is_some());
+    // Cached in `LOADED`: second query returns immediately without re-spawning.
+    assert!(fonts::loaded_with(&ctx, Lang::En, Some((emoji_loader, accept_all))).is_some());
+    LOADED.lock().unwrap_or_else(PoisonError::into_inner).retain(|e| e.0 != Lang::En);
+}

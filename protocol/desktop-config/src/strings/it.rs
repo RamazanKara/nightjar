@@ -1757,4 +1757,5 @@ sudo sysctl -w net.core.rmem_max={}", "Buffer di ricezione: il sistema ha conces
     ("Could not start network test: {}", "Impossibile avviare il test di rete: {}"),
     ("Show battery and clock in compact overlay", "Mostra batteria e orologio nell’overlay compatto"),
     ("Add this device’s battery percentage and local time to the compact performance overlay.", "Aggiunge la percentuale di batteria e l’ora locale di questo dispositivo all’overlay prestazioni compatto."),
+    ("macOS restricts Wi-Fi network names (SSIDs) without Location Services permission, so Wi-Fi connections match Other Wi-Fi instead of Home Wi-Fi.", "macOS limita i nomi delle reti Wi-Fi (SSID) senza l’autorizzazione ai Servizi di localizzazione, quindi le connessioni Wi-Fi corrispondono ad Altra Wi-Fi invece che a Wi-Fi di casa."),
 ];

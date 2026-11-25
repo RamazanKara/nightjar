@@ -1757,4 +1757,5 @@ sudo sysctl -w net.core.rmem_max={}", "Alma arabelleği: sistem istenen {1} KiB'
     ("Could not start network test: {}", "Ağ testi başlatılamadı: {}"),
     ("Show battery and clock in compact overlay", "Kompakt katmanda pil ve saati göster"),
     ("Add this device’s battery percentage and local time to the compact performance overlay.", "Kompakt performans katmanına bu cihazın pil yüzdesini ve yerel saati ekler."),
+    ("macOS restricts Wi-Fi network names (SSIDs) without Location Services permission, so Wi-Fi connections match Other Wi-Fi instead of Home Wi-Fi.", "macOS, Konum Servisleri izni olmadan Wi-Fi ağ adlarını (SSID) kısıtlar; bu nedenle Wi-Fi bağlantıları Ev Wi-Fi’ı yerine Diğer Wi-Fi ile eşleşir."),
 ];
