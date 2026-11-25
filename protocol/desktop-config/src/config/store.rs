@@ -684,14 +684,14 @@ fn sanitize(name: &str) -> String {
 }
 
 /// Non-empty, filesystem-safe cache key for `host`, or `None` when `host` is empty.
-/// Keeps the existing ASCII alphanumeric/hyphen name for standard UUIDs, and hashes non-empty IDs
-/// that contain only stripped characters so they never collapse to an empty path (`art/` or `.json`).
+/// Keeps the existing ASCII alphanumeric/hyphen name for clean UUIDs, and suffixes a stable hash
+/// whenever characters are stripped so distinct IDs differing only in stripped characters cannot collide.
 fn host_key(host: &str) -> Option<String> {
     if host.is_empty() {
         return None;
     }
     let clean = sanitize(host);
-    if !clean.is_empty() {
+    if clean.len() == host.len() {
         return Some(clean);
     }
     let mut hash: u64 = 0xcbf29ce484222325;
@@ -699,7 +699,11 @@ fn host_key(host: &str) -> Option<String> {
         hash ^= u64::from(b);
         hash = hash.wrapping_mul(0x100000001b3);
     }
-    Some(format!("h-{hash:016x}"))
+    Some(if clean.is_empty() {
+        format!("h-{hash:016x}")
+    } else {
+        format!("{clean}-h-{hash:016x}")
+    })
 }
 
 fn host_path_segment(host: &str) -> String {

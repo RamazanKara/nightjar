@@ -319,10 +319,6 @@ pub(crate) const GAMEPAD_ACTIVITY_AXIS_THRESHOLD: u16 = 1024;
 /// `wait_launcher_events` when no navigation stick is held (~12%, filters stick drift, #179).
 pub(crate) const LAUNCHER_AXIS_WAKE_THRESHOLD: u16 = 4000;
 
-/// Minimum gyro angular velocity (rad/s) treated as real controller motion; passive resting
-/// gyro bias and accelerometer gravity ticks do not hold 500 Hz polling active (#179).
-pub(crate) const GAMEPAD_ACTIVITY_GYRO_THRESHOLD: f32 = 0.03;
-
 /// Pure classification for [`is_gamepad_activity`], testable without constructing raw SDL unions.
 pub(crate) fn is_gamepad_activity_parts(
     kind: SDL_EventType,
@@ -339,9 +335,7 @@ pub(crate) fn is_gamepad_activity_parts(
         SDL_EVENT_GAMEPAD_AXIS_MOTION => {
             axis_value.is_some_and(|v| v.unsigned_abs() > GAMEPAD_ACTIVITY_AXIS_THRESHOLD)
         }
-        SDL_EVENT_GAMEPAD_SENSOR_UPDATE => {
-            gyro_peak.is_some_and(|peak| peak.is_finite() && peak > GAMEPAD_ACTIVITY_GYRO_THRESHOLD)
-        }
+        SDL_EVENT_GAMEPAD_SENSOR_UPDATE => stream::direct_motion::is_gyro_peak_active(gyro_peak),
         _ => false,
     }
 }

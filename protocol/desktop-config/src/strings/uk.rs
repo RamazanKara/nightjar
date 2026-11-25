@@ -1758,4 +1758,5 @@ sudo sysctl -w net.core.rmem_max={}", "Буфер приймання: систе
     ("Show battery and clock in compact overlay", "Показувати заряд і годинник у компактному оверлеї"),
     ("Add this device’s battery percentage and local time to the compact performance overlay.", "Додає відсоток заряду батареї та місцевий час цього пристрою до компактного оверлея продуктивності."),
     ("macOS restricts Wi-Fi network names (SSIDs) without Location Services permission, so Wi-Fi connections match Other Wi-Fi instead of Home Wi-Fi.", "macOS обмежує доступ до назв мереж Wi-Fi (SSID) без дозволу служб локації, тому з’єднання Wi-Fi відповідають пункту «Інша мережа Wi-Fi» замість «Домашня мережа Wi-Fi»."),
+    ("The clipboard on this device holds no text.", "У буфері обміну цього пристрою немає тексту."),
 ];

@@ -259,15 +259,18 @@ fn a_risen_covers_ring_is_not_cut_at_the_top_of_the_grid() {
     }
 }
 
-/// With nothing installed the Installed chip holds no game and says so; an empty library has no
-/// chips at all, only the line saying why.
+/// With nothing installed the Installed chip is omitted and Not installed is offered, an active
+/// filter with zero matches says so, and an empty library has no chips at all.
 #[test]
 fn an_empty_filter_and_an_empty_library_say_so() {
     let mut f = home_with_stores(&[("Halo Infinite", "microsoft", false), ("Diablo IV", "battlenet", false)]);
     f.l.open(Screen::AllGames);
     f.settle();
-    let chip = f.placed.iter().find(|(t, r, _)| t == "Installed" && r.center().y < 200.0).map(|p| p.1).expect("an Installed chip");
-    f.click_at(chip.center(), egui::PointerButton::Primary);
+    assert!(!f.placed.iter().any(|(t, r, _)| t == "Installed" && r.center().y < 200.0), "{:?}", f.drawn);
+    assert!(f.placed.iter().any(|(t, r, _)| t == "Not installed" && r.center().y < 200.0), "{:?}", f.drawn);
+    f.l.library_filter = console::LibraryFilter::NotInstalled;
+    f.l.library_query = "nomatch".into();
+    f.settle();
     assert!(shows(&f, "No games match this filter.") && !shows(&f, "Halo Infinite"), "{:?}", f.drawn);
     let mut f = home_with_stores(&[]);
     f.l.open(Screen::AllGames);

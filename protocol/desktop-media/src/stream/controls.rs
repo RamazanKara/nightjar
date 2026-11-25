@@ -614,8 +614,6 @@ impl Streaming {
     pub fn check_render_device_lost(&mut self) -> bool { let lost = crate::render_device::event_pending() || self.device_removed(); if lost { self.note_render_device_lost(crate::render_device::lost_reason().into()); } lost }
 }
 
-const MSG_LOCAL_CLIPBOARD_NO_TEXT: &str = "The clipboard on this device holds no text.";
-
 /// Validates a local clipboard read before sending it to the PC: empty text refuses the send so
 /// an empty clipboard never wipes the PC's clipboard.
 fn non_empty_clipboard_text(read: Result<String, ()>) -> Result<String, &'static str> {

@@ -7,7 +7,7 @@
 
 use std::time::Instant;
 
-use nightjar_core::control::clipboard_sync::{ClipboardItem, ClipboardSync, Local, Received, Refused};
+use nightjar_core::control::clipboard_sync::{ClipboardItem, ClipboardSync, PendingLocal, PreparedLocal, Received, Refused};
 use nightjar_core::control::ClientMessage;
 use rubylight_protocol::clipboard_sync::Frame;
 
@@ -121,6 +121,7 @@ pub struct Step {
     pub send: Option<ClientMessage>,
     /// Said once per kind of trouble.
     pub toast: Option<&'static str>,
+    pending: Option<PendingLocal>,
 }
 
 /// One stream's clipboard sync.
@@ -167,17 +168,28 @@ impl<C: Clipboard> Sync<C> {
             Err(error) => {
                 eprintln!("nightjar: clipboard sync: could not read the clipboard: {error}");
                 let toast = self.tell(TOLD_READ, tr("Clipboard sync could not read this device’s clipboard."));
-                return Step { send: None, toast };
+                return Step { send: None, toast, pending: None };
             }
         };
-        match self.rules.local(ClipboardItem::Text(text), now) {
-            Local::Send(message) => Step { send: Some(message), toast: None },
-            Local::Skip => Step::default(),
-            Local::TooLarge(bytes) => {
+        match self.rules.prepare_local(ClipboardItem::Text(text), now) {
+            PreparedLocal::Send(pending) => Step {
+                send: Some(pending.message().clone()),
+                toast: None,
+                pending: Some(pending),
+            },
+            PreparedLocal::Skip => Step::default(),
+            PreparedLocal::TooLarge(bytes) => {
                 eprintln!("nightjar: clipboard sync: a copy of {bytes} bytes is too large to send");
                 let toast = self.tell(TOLD_LARGE, tr("This copy is too large for clipboard sync. Send it with Send clipboard to PC."));
-                Step { send: None, toast }
+                Step { send: None, toast, pending: None }
             }
+        }
+    }
+
+    /// Commits a local clipboard frame after the session sends it so failed sends remain retryable.
+    pub fn confirm_sent(&mut self, step: &mut Step) {
+        if let Some(pending) = step.pending.take() {
+            self.rules.confirm_local(&pending);
         }
     }
 
@@ -194,7 +206,7 @@ impl<C: Clipboard> Sync<C> {
                     Err(error) => {
                         eprintln!("nightjar: clipboard sync: could not put the PC's copy on the clipboard: {error}");
                         let toast = self.tell(TOLD_WRITE, tr("Clipboard sync could not put the PC’s copy on this device’s clipboard."));
-                        Step { send: None, toast }
+                        Step { send: None, toast, pending: None }
                     }
                 };
             }
@@ -209,14 +221,14 @@ impl<C: Clipboard> Sync<C> {
         } else {
             self.tell(TOLD_REFUSED, tr("Clipboard sync could not use a copy from the PC."))
         };
-        Step { send: None, toast }
+        Step { send: None, toast, pending: None }
     }
 
     /// A 0x5508 message from the PC that was not a frame.
     pub fn rejected(&mut self, bytes: usize) -> Step {
         eprintln!("nightjar: clipboard sync: dropped a {bytes}-byte message that is not a clipboard frame");
         let toast = self.tell(TOLD_REFUSED, tr("Clipboard sync could not use a copy from the PC."));
-        Step { send: None, toast }
+        Step { send: None, toast, pending: None }
     }
 }
 
@@ -251,7 +263,9 @@ mod tests {
         }
     }
 
-    fn frame(step: Step) -> Frame {
+    fn sent_frame(sync: &mut Sync<&mut Fake>, now: Instant) -> Frame {
+        let mut step = sync.changed(now);
+        sync.confirm_sent(&mut step);
         match step.send {
             Some(ClientMessage::ClipboardSync(frame)) => frame,
             other => panic!("{other:?}"),
@@ -271,8 +285,23 @@ mod tests {
         // An update that changed nothing the sync cares about sends nothing.
         assert_eq!(sync.changed(now), Step::default());
         sync.clipboard.text = "copied".into();
-        let sent = frame(sync.changed(now));
+        let sent = sent_frame(&mut sync, now);
         assert_eq!((sent.kind, sent.payload.as_slice()), (KIND_TEXT, &b"copied"[..]));
+    }
+
+    #[test]
+    fn failed_send_keeps_local_clipboard_retryable() {
+        let mut fake = Fake::default();
+        let (mut sync, _) = Sync::start(&mut fake);
+        let now = Instant::now();
+        sync.clipboard.text = "retry".into();
+        let unsent = sync.changed(now);
+        assert!(unsent.send.is_some());
+        // Until confirm_sent runs, a retry of the same copy must still produce Send.
+        let mut retried = sync.changed(now);
+        assert!(retried.send.is_some());
+        sync.confirm_sent(&mut retried);
+        assert_eq!(sync.changed(now), Step::default());
     }
 
     #[test]
@@ -286,9 +315,9 @@ mod tests {
         assert_eq!(sync.changed(now), Step::default());
         // The PC's echo of a copy made here is dropped.
         sync.clipboard.text = "mine".into();
-        let mine = frame(sync.changed(now));
+        let mine = sent_frame(&mut sync, now);
         sync.clipboard.text = "newer".into();
-        frame(sync.changed(now));
+        sent_frame(&mut sync, now);
         assert_eq!(sync.received(mine, now), Step::default());
         assert_eq!((sync.clipboard.text.as_str(), sync.clipboard.writes), ("newer", 1));
     }
@@ -305,7 +334,7 @@ mod tests {
         // Text copied here again syncs both ways.
         sync.clipboard.files = false;
         sync.clipboard.text = "words".into();
-        frame(sync.changed(now));
+        sent_frame(&mut sync, now);
         assert_eq!(sync.received(from_pc(8, "the pc's words"), now), Step::default());
         assert_eq!((sync.clipboard.text.as_str(), sync.clipboard.writes), ("the pc's words", 1));
     }

@@ -452,6 +452,9 @@ fn a_classic_app_list_is_saved_without_its_control_tiles_and_goes_with_the_libra
     assert_eq!((old.version, old.apps[0].id, old.apps[0].name.as_str()), (0, 5, ""));
     std::fs::write(store.classic_apps_path("new"), r#"{"version":2,"apps":[{"id":5,"name":"A","hdr":true}],"more":1}"#).unwrap();
     assert_eq!(store.classic_apps("new").unwrap().apps[0].name, "A");
+    // Host IDs differing only in stripped characters must map to distinct cache paths.
+    assert_ne!(store.library_path("host/a"), store.library_path("host:a"));
+    assert!(store.library_path(host).file_name().unwrap() == "pc-1.json");
     // Unpairing or removing the PC drops it with the native library.
     store.forget_library(host);
     assert!(store.classic_apps(host).is_none());

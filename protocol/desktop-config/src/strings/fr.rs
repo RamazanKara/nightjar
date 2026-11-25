@@ -1758,4 +1758,5 @@ sudo sysctl -w net.core.rmem_max={}", "Tampon de réception : le système a acco
     ("Show battery and clock in compact overlay", "Afficher la batterie et l’horloge dans la superposition compacte"),
     ("Add this device’s battery percentage and local time to the compact performance overlay.", "Ajoute le pourcentage de batterie et l’heure locale de cet appareil à la superposition des performances compacte."),
     ("macOS restricts Wi-Fi network names (SSIDs) without Location Services permission, so Wi-Fi connections match Other Wi-Fi instead of Home Wi-Fi.", "macOS restreint les noms de réseau Wi-Fi (SSID) sans l’autorisation Service de localisation ; les connexions Wi-Fi correspondent donc à Autre Wi-Fi au lieu de Wi-Fi domestique."),
+    ("The clipboard on this device holds no text.", "Le presse-papiers de cet appareil ne contient aucun texte."),
 ];

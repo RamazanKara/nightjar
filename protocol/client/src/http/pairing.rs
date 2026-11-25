@@ -682,4 +682,32 @@ R3XKEKmQeDg1ZT+T17u3nzoavwyJYV0BQTTeGPS4o7Oz8g0=\n\
             PairResult::Paired { .. }
         ));
     }
+
+    #[test]
+    fn accepts_rubylight_generated_host_certificate_pem() {
+        // Fixture produced by butterpollo_crypto::crypto::Identity::generate().certificate.
+        const RUBYLIGHT_GENERATED_HOST_CERT_PEM: &str = "\
+-----BEGIN CERTIFICATE-----
+MIIC2DCCAcCgAwIBAgIURskXZ6DZB+S7zhoSx0R/0A0+TQ8wDQYJKoZIhvcNAQEL
+BQAwEzERMA8GA1UEAwwIU3Vuc2hpbmUwIBcNNzUwMTAxMDAwMDAwWhgPNDA5NjAx
+MDEwMDAwMDBaMBMxETAPBgNVBAMMCFN1bnNoaW5lMIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA4R6ST75rtq+dPO+ZWEGlqrr0ukLp1PB60Np7V7v+d9bI
+14VEHlhL0oPSGAAQLJWZ47ZjOObXwbE/rEzSq0KzWETSN5ZevXDXopo9duOLhx/u
+ZZktg+HakiyROrwzmuhhR+jZbIZbT5U7F5Qi/V4Rn7qyssPXhWtf3mIyCuaimhUa
+9DXgtGjjaC3DkVBvA+VVqYyz2QN2qZFSYalODyKnUyN4cAsz65YJRY4eINwCkN6i
+wB9utap1Y9vJPKGGWWnwSsW5CiittZFB0B42g/mZ8rCawVsku+yh6Xe5kQ2rPFNb
+wjqtGwwicCaAv93or0nnIqQFHGK8r6vtyRM28L30XQIDAQABoyIwIDAeBgNVHREE
+FzAVgghTdW5zaGluZYIJbG9jYWxob3N0MA0GCSqGSIb3DQEBCwUAA4IBAQBHLtCh
+mNy7lgDLwuXqLN6AXVbAya6O4edBhr7EhjZfcQwbZo/uohsO1wNI9Q5etZWZQftg
+80UavvrSV1Zlo7IhOApGvKVpAgG6FRyVazKl3vG5Mbh5SGTOnvNCaGKDtLbtn8zA
+Ucb9gluV3qxyFM6S+NvHFgiSG52imFjWWLzHFHDK7VL7vgfCHa2TI0fH9I7sHTaj
+htQitUlx1UI7Zcd/aD28FbRZOffcXcqCP2t5SPeiRp+9OBLOyfaUrqIagzR4yDqK
+CLQzC0xFJ4S7pwr42xacnLzZlotgPuPrCJDHK1T7GqDkrBkbgGjCht2DaRNsyd59
+nDqm3G8+csIK/YjR
+-----END CERTIFICATE-----
+";
+        let cert_der = der::pem_decode_certificate(RUBYLIGHT_GENERATED_HOST_CERT_PEM).unwrap();
+        let parts = der::parse_certificate(&cert_der).unwrap();
+        assert!(crypto::verify_self_signature(&parts).unwrap());
+    }
 }

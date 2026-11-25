@@ -1758,4 +1758,5 @@ sudo sysctl -w net.core.rmem_max={}", "受信バッファー：システムは�
     ("Show battery and clock in compact overlay", "コンパクトオーバーレイにバッテリーと時計を表示"),
     ("Add this device’s battery percentage and local time to the compact performance overlay.", "コンパクトなパフォーマンス オーバーレイにこのデバイスのバッテリー残量と現在時刻を追加します。"),
     ("macOS restricts Wi-Fi network names (SSIDs) without Location Services permission, so Wi-Fi connections match Other Wi-Fi instead of Home Wi-Fi.", "macOS では位置情報サービスの許可がないと Wi-Fi ネットワーク名（SSID）が制限されるため、Wi-Fi 接続は「自宅の Wi-Fi」ではなく「その他の Wi-Fi」に一致します。"),
+    ("The clipboard on this device holds no text.", "このデバイスのクリップボードにテキストがありません。"),
 ];

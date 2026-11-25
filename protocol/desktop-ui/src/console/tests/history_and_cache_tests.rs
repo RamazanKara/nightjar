@@ -136,7 +136,8 @@ fn a_list_line_names_the_store_and_when_the_game_was_last_played() {
     let one = [a3];
     let merged = merge_library(&one);
     let dota3 = merged.iter().find(|e| e.title == "Dota 2").expect("Dota 2");
-    assert_eq!(last_played(dota3, &one, &recents), Some(0), "the PC says never played");
+    assert_eq!(last_played(dota3, &one, &[]), Some(0), "the PC says never played when no newer recent exists");
+    assert_eq!(last_played(dota3, &one, &recents), Some(5_000), "a newer local recent overrides a stale store timestamp");
     let store = dota.best().store_name.clone();
     let line = |played, now| list_line(dota, played, now);
     let with_store = |when: &str| match &store { Some(s) => format!("{s} · {when}"), None => when.to_owned() };
