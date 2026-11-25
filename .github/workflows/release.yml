@@ -353,7 +353,7 @@ jobs:
 
   desktop-windows:
     # The Windows desktop client: GNU toolchain, SDL3 and Opus from MSYS2, and the
-    # decode-only FFmpeg (protocol/desktop/ffmpeg-decode-only.sh), so the zip holds a few
+    # decode-only FFmpeg (protocol/desktop-media/ffmpeg-decode-only.sh), so the zip holds a few
     # DLLs instead of MSYS2's 80. package-windows.ps1 walks the import tables, fails when a
     # non-system DLL would be missing from the zip, and starts the unpacked exe once.
     # packaging/windows/build-installer.ps1 makes the installer from the zip, installs it, starts
@@ -593,12 +593,12 @@ jobs:
     timeout-minutes: 40
     # The secrets' environment (main and v* tags only) only when signing, so dry runs from
     # other branches still pass the builds through.
-    environment: ${{ vars.CERTUM_SIGNING == 'true' && 'release-signing' || '' }}
+    environment: ${{ vars.CERTUM_SIGNING == 'true' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && 'release-signing' || '' }}
     outputs:
       signed: ${{ steps.check.outputs.signed }}
     env:
       VERSION: ${{ needs.preflight.outputs.version }}
-      SIGN: ${{ vars.CERTUM_SIGNING == 'true' }}
+      SIGN: ${{ vars.CERTUM_SIGNING == 'true' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
       INNO_SETUP_VERSION: 6.7.4
       INNO_SETUP_SHA256: a549929319f9120716677c685535ca4671e4b937b5fdc87e2585f32d8eb30e8c
     defaults:

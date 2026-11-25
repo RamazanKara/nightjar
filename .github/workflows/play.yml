@@ -52,7 +52,7 @@ jobs:
   upload:
     # Release candidates (vX.Y.Z-rc.N) and prereleases never go to Google Play automatically;
     # RCs never go even by hand.
-    if: ${{ (github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_call' && !contains(inputs.tag, '-')) || !github.event.release.prerelease) && !contains(github.event.release.tag_name || inputs.tag, '-rc.') }}
+    if: ${{ ((github.event_name == 'workflow_dispatch' && github.workflow == 'Google Play') || (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name != 'release' && inputs.tag != '' && !contains(inputs.tag, '-'))) && !contains(github.event.release.tag_name || inputs.tag, '-rc.') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
