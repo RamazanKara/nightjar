@@ -133,6 +133,8 @@ public class GameTvDisplayCompatibilityTest {
         View dot = dot(game);
         game.onPause();
         assertNull(game.videoOutput.compositorHeartbeat);
+        assertEquals(View.GONE, dot.getVisibility());
+        shadowOf(Looper.getMainLooper()).idle();
         assertNull("gone on pause", dot.getParent());
         int paused = color(dot);
         idle(300);
@@ -173,6 +175,8 @@ public class GameTvDisplayCompatibilityTest {
         View dot = dot(game);
         ReflectionHelpers.callInstanceMethod(game.streamConnection, "stopConnection");
         assertNull(game.videoOutput.compositorHeartbeat);
+        assertEquals(View.GONE, dot.getVisibility());
+        shadowOf(Looper.getMainLooper()).idle();
         assertNull("gone at the stream's end", dot.getParent());
         int ended = color(dot);
         idle(300);
@@ -185,6 +189,8 @@ public class GameTvDisplayCompatibilityTest {
         View dot = dot(game);
         game.onDestroy();
         assertNull(game.videoOutput.compositorHeartbeat);
+        assertEquals(View.GONE, dot.getVisibility());
+        shadowOf(Looper.getMainLooper()).idle();
         assertNull(dot.getParent());
     }
 

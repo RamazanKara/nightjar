@@ -1,6 +1,7 @@
 package com.limelight.ui;
 
 import android.graphics.drawable.ColorDrawable;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
@@ -46,6 +47,8 @@ public final class CompositorHeartbeat {
         }
     };
 
+    private final Runnable removeDot;
+
     /** The dot for this window; nothing shows until {@link #start()}. Main thread only. */
     public CompositorHeartbeat(ViewGroup holder) {
         if (holder == null) {
@@ -61,6 +64,11 @@ public final class CompositorHeartbeat {
         dot.setClickable(false);
         dot.setLongClickable(false);
         dot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        removeDot = () -> {
+            if (!running && dot.getParent() == holder) {
+                holder.removeView(dot);
+            }
+        };
     }
 
     /** The window's view the dot sits in. */
@@ -85,17 +93,30 @@ public final class CompositorHeartbeat {
 
         running = true;
         alternatePhase = false;
-        int size = Math.max(1, Math.round(holder.getResources().getDisplayMetrics().density));
-        holder.addView(dot, new FrameLayout.LayoutParams(size, size, Gravity.TOP | Gravity.LEFT));
+        handler.removeCallbacks(removeDot);
+        dot.setVisibility(View.VISIBLE);
+        if (dot.getParent() != holder) {
+            int size = Math.max(1, Math.round(holder.getResources().getDisplayMetrics().density));
+            holder.addView(dot, new FrameLayout.LayoutParams(size, size, Gravity.TOP | Gravity.LEFT));
+        }
         heartbeat.run();
     }
 
-    /** Stops the colour change and removes the dot from its window. */
+    /** Stops the colour change and schedules removal of the dot from its window. */
     public void stop() {
         running = false;
         handler.removeCallbacks(heartbeat);
+        dot.setVisibility(View.GONE);
         if (dot.getParent() == holder) {
-            holder.removeView(dot);
+            handler.removeCallbacks(removeDot);
+            handler.post(removeDot);
+        }
+    }
+
+    /** Sets the Android 15+ requested frame rate vote on the dot view so UI refresh recovery carries the pinned rate. */
+    public void setRequestedFrameRate(float frameRate) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            dot.setRequestedFrameRate(frameRate);
         }
     }
 }

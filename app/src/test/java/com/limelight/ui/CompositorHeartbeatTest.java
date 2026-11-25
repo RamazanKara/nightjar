@@ -55,10 +55,64 @@ public class CompositorHeartbeatTest {
 
         heartbeat.stop();
         assertFalse(heartbeat.running());
+        assertEquals(View.GONE, dot.getVisibility());
+        shadowOf(Looper.getMainLooper()).idle();
         assertNull("gone when stopped", dot.getParent());
         int stopped = color(dot);
         idle(CompositorHeartbeat.INTERVAL_MS * 3);
         assertEquals("no tick after stop", stopped, color(dot));
+    }
+
+    @Test
+    public void restartingBeforeDeferredRemovalReusesTheDotWithoutDuplicateAdd() {
+        FrameLayout window = new FrameLayout(RuntimeEnvironment.getApplication());
+        CompositorHeartbeat heartbeat = new CompositorHeartbeat(window);
+        View dot = heartbeat.dot();
+
+        heartbeat.start();
+        heartbeat.stop();
+        assertEquals(View.GONE, dot.getVisibility());
+        heartbeat.start();
+        shadowOf(Looper.getMainLooper()).idle();
+
+        assertSame(window, dot.getParent());
+        assertEquals(1, window.getChildCount());
+        assertEquals(View.VISIBLE, dot.getVisibility());
+        heartbeat.stop();
+        shadowOf(Looper.getMainLooper()).idle();
+    }
+
+    @Test
+    public void stoppingDuringDispatchWindowVisibilityChangedDoesNotCrash() {
+        FrameLayout window = new FrameLayout(RuntimeEnvironment.getApplication());
+        CompositorHeartbeat heartbeat = new CompositorHeartbeat(window);
+        View dot = heartbeat.dot();
+        heartbeat.start();
+        View sibling = new View(RuntimeEnvironment.getApplication()) {
+            @Override
+            protected void onWindowVisibilityChanged(int visibility) {
+                super.onWindowVisibilityChanged(visibility);
+                if (visibility == View.GONE) {
+                    heartbeat.stop();
+                }
+            }
+        };
+        window.addView(sibling, 0);
+
+        window.dispatchWindowVisibilityChanged(View.GONE);
+        assertEquals(View.GONE, dot.getVisibility());
+        shadowOf(Looper.getMainLooper()).idle();
+        assertNull(dot.getParent());
+        assertEquals(1, window.getChildCount());
+    }
+
+    @Test
+    @Config(sdk = 35)
+    public void setRequestedFrameRateTargetsTheDotOnApi35() {
+        FrameLayout window = new FrameLayout(RuntimeEnvironment.getApplication());
+        CompositorHeartbeat heartbeat = new CompositorHeartbeat(window);
+        heartbeat.setRequestedFrameRate(144f);
+        assertEquals(144f, heartbeat.dot().getRequestedFrameRate(), 0f);
     }
 
     @Test

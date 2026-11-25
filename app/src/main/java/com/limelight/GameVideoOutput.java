@@ -316,6 +316,9 @@ final class GameVideoOutput {
             compositorHeartbeat = new com.limelight.ui.CompositorHeartbeat(holder);
             compositorHeartbeat.start();
         }
+        if (refresh.refreshHeartbeat != null && !refresh.canKeepRefreshHeartbeat()) {
+            refresh.stopRefreshHeartbeat();
+        }
     }
 
     void enterPictureInPictureNow() {

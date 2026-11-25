@@ -225,6 +225,9 @@ final class GameVideoRefresh {
         if (decor != null) {
             decor.setRequestedFrameRate(frameRate);
         }
+        if (refreshHeartbeat != null) {
+            refreshHeartbeat.setRequestedFrameRate(frameRate);
+        }
     }
 
     void syncWindowDisplayMode(float targetHz, boolean seamlessOnly) {
@@ -276,7 +279,7 @@ final class GameVideoRefresh {
         recoverPinnedRefresh(nowMs, display, voteHz, refreshSwitchMonitor.lastSettled());
     }
 
-    private boolean canKeepRefreshHeartbeat() {
+    boolean canKeepRefreshHeartbeat() {
         return game.connected && game.foreground && !game.isFinishing() && !game.isDestroyed()
                 && !game.useArr && output.compositorHeartbeat == null
                 && (game.app == null || game.app.getRole() != NvApp.Role.INPUT_ONLY)
@@ -356,6 +359,7 @@ final class GameVideoRefresh {
         }
         if (refreshHeartbeat == null) {
             refreshHeartbeat = new CompositorHeartbeat(holder);
+            refreshHeartbeat.setRequestedFrameRate(voteHz);
             refreshHeartbeat.start();
             LimeLog.info("Refresh drop recovery: starting UI compositor heartbeat to hold " + voteHz + " Hz");
         }
@@ -364,7 +368,7 @@ final class GameVideoRefresh {
         reapplyPinnedDisplayMode(voteHz);
     }
 
-    private void stopRefreshHeartbeat() {
+    void stopRefreshHeartbeat() {
         if (refreshHeartbeat == null) return;
         if (Looper.myLooper() != Looper.getMainLooper()) {
             game.runOnUiThread(this::stopRefreshHeartbeat);
