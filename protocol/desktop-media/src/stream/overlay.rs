@@ -64,17 +64,21 @@ pub fn battery_percent() -> Option<u8> {
     use std::sync::{Mutex, OnceLock};
     use std::time::{Duration, Instant};
 
-    static CACHE: OnceLock<Mutex<(Instant, Option<u8>)>> = OnceLock::new();
+    type CachedBattery = Option<(Instant, Option<u8>)>;
+
+    static CACHE: OnceLock<Mutex<CachedBattery>> = OnceLock::new();
     const REFRESH_INTERVAL: Duration = Duration::from_secs(15);
 
     let now = Instant::now();
-    let cache = CACHE.get_or_init(|| Mutex::new((now - REFRESH_INTERVAL, None)));
+    let cache = CACHE.get_or_init(|| Mutex::new(None));
     let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
-    if now.duration_since(guard.0) >= REFRESH_INTERVAL {
-        guard.1 = sample_battery_percent();
-        guard.0 = now;
+    let stale = guard.is_none_or(|(at, _)| now.duration_since(at) >= REFRESH_INTERVAL);
+    if stale {
+        let sampled = sample_battery_percent();
+        *guard = Some((now, sampled));
+        return sampled;
     }
-    guard.1
+    guard.expect("populated above").1
 }
 
 fn sample_battery_percent() -> Option<u8> {
@@ -93,7 +97,7 @@ fn sample_battery_percent() -> Option<u8> {
     }
     #[cfg(target_os = "linux")]
     {
-        return read_linux_battery_sysfs(std::path::Path::new("/sys/class/power_supply"));
+        read_linux_battery_sysfs(std::path::Path::new("/sys/class/power_supply"))
     }
     #[cfg(not(any(windows, target_os = "linux")))]
     {

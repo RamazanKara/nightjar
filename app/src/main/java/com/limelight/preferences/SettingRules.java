@@ -417,7 +417,7 @@ final class SettingRules {
      */
     static final java.util.List<String> NOTE_ROWS = java.util.Arrays.asList(
             ADAPTIVE_QUALITY_MIN_RESOLUTION, ADAPTIVE_QUALITY_MIN_FPS, PreferenceConfiguration.UPSCALING_SHARPNESS_PREF_STRING,
-            PYROWAVE_PREACQUIRE);
+            PreferenceConfiguration.COMPACT_OVERLAY_DEVICE_INFO_PREF_STRING, PYROWAVE_PREACQUIRE);
 
     /** The IGDB client ID, kept apart from the settings (GameInfo.keyPrefs). */
     private static boolean igdbClientIdSet(Context context) {
@@ -463,6 +463,7 @@ final class SettingRules {
             case BACK_AS_META:
                 return devices.keyboard();
             case OVERLAY_POSITION:
+            case PreferenceConfiguration.COMPACT_OVERLAY_DEVICE_INFO_PREF_STRING:
                 // The second screen's stream menu shows its overlay without saving it (DualScreen.saveSettings).
                 return overlayOn(prefs) || prefs.getBoolean("checkbox_dual_screen", false);
             case SCREEN2_RESOLUTION:
@@ -522,6 +523,7 @@ final class SettingRules {
             case BACK_AS_META:
                 return context.getString(R.string.tag_unused_no_keyboard);
             case OVERLAY_POSITION:
+            case PreferenceConfiguration.COMPACT_OVERLAY_DEVICE_INFO_PREF_STRING:
                 return context.getString(R.string.tag_unused_without, context.getString(R.string.title_performance_overlay));
             case SCREEN2_RESOLUTION:
                 return context.getString(R.string.tag_unused_without, context.getString(R.string.title_checkbox_dual_screen));
