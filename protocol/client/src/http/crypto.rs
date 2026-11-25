@@ -1,8 +1,8 @@
 //! Pairing cryptography: AES-128-ECB with zero padding, SHA-1/SHA-256, and RSA or ECDSA
 //! signatures with SHA-256, as moonlight-android's PairingManager uses them.
 
-use super::der::{self, CertificateParts};
 use super::Error;
+use super::der::{self, CertificateParts};
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use ring::rand::{SecureRandom, SystemRandom};
 use ring::signature;
@@ -40,11 +40,7 @@ pub(crate) enum PairingHash {
 
 impl PairingHash {
     pub fn for_generation(major: i32) -> Self {
-        if major >= 7 {
-            Self::Sha256
-        } else {
-            Self::Sha1
-        }
+        if major >= 7 { Self::Sha256 } else { Self::Sha1 }
     }
 
     pub fn len(self) -> usize {
@@ -82,30 +78,68 @@ pub(crate) fn sign(pkcs8: &[u8], data: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(out)
 }
 
+fn verification_algorithm(
+    certificate: &CertificateParts,
+    certificate_sig_alg: Option<&[u8]>,
+) -> Result<&'static dyn signature::VerificationAlgorithm, Error> {
+    if certificate.key_algorithm == der::OID_RSA_ENCRYPTION {
+        let (_, exponent) = der::rsa_public_key(&certificate.public_key)?;
+        if exponent != der::RSA_PUBLIC_EXPONENT_65537 {
+            return Err(Error::Malformed(
+                "unsupported pairing certificate RSA exponent".into(),
+            ));
+        }
+        if let Some(alg) = certificate_sig_alg
+            && alg != der::OID_SHA256_WITH_RSA
+        {
+            return Err(Error::Malformed(
+                "unsupported pairing certificate signature algorithm".into(),
+            ));
+        }
+        Ok(&signature::RSA_PKCS1_2048_8192_SHA256)
+    } else if certificate.key_algorithm == der::OID_EC_PUBLIC_KEY {
+        match (certificate.key_parameters.as_deref(), certificate_sig_alg) {
+            (Some(der::OID_P256), None | Some(der::OID_ECDSA_WITH_SHA256)) => {
+                Ok(&signature::ECDSA_P256_SHA256_ASN1)
+            }
+            (Some(der::OID_P384), None | Some(der::OID_ECDSA_WITH_SHA256)) => {
+                Ok(&signature::ECDSA_P384_SHA256_ASN1)
+            }
+            (Some(der::OID_P384), Some(der::OID_ECDSA_WITH_SHA384)) => {
+                Ok(&signature::ECDSA_P384_SHA384_ASN1)
+            }
+            (Some(der::OID_P256 | der::OID_P384), Some(_)) => Err(Error::Malformed(
+                "unsupported pairing certificate signature algorithm".into(),
+            )),
+            _ => Err(Error::Malformed(
+                "unsupported pairing certificate curve".into(),
+            )),
+        }
+    } else {
+        Err(Error::Malformed(
+            "unsupported pairing certificate key".into(),
+        ))
+    }
+}
+
+/// Verifies a certificate's X.509 self-signature over its raw `TBSCertificate` bytes and validates
+/// its public key parameters (including RSA `e == 65537`).
+pub(crate) fn verify_self_signature(certificate: &CertificateParts) -> Result<bool, Error> {
+    let algorithm = verification_algorithm(certificate, Some(&certificate.signature_algorithm))?;
+    Ok(
+        signature::UnparsedPublicKey::new(algorithm, &certificate.public_key)
+            .verify(&certificate.tbs, &certificate.signature)
+            .is_ok(),
+    )
+}
+
 /// Verifies a SHA-256 signature made by the certificate's key (RSA PKCS#1 v1.5 or ECDSA).
 pub(crate) fn verify(
     certificate: &CertificateParts,
     data: &[u8],
     sig: &[u8],
 ) -> Result<bool, Error> {
-    let algorithm: &dyn signature::VerificationAlgorithm =
-        if certificate.key_algorithm == der::OID_RSA_ENCRYPTION {
-            &signature::RSA_PKCS1_2048_8192_SHA256
-        } else if certificate.key_algorithm == der::OID_EC_PUBLIC_KEY {
-            match certificate.key_parameters.as_deref() {
-                Some(der::OID_P256) => &signature::ECDSA_P256_SHA256_ASN1,
-                Some(der::OID_P384) => &signature::ECDSA_P384_SHA256_ASN1,
-                _ => {
-                    return Err(Error::Malformed(
-                        "unsupported pairing certificate curve".into(),
-                    ))
-                }
-            }
-        } else {
-            return Err(Error::Malformed(
-                "unsupported pairing certificate key".into(),
-            ));
-        };
+    let algorithm = verification_algorithm(certificate, None)?;
     Ok(
         signature::UnparsedPublicKey::new(algorithm, &certificate.public_key)
             .verify(data, sig)

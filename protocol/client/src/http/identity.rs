@@ -2,7 +2,7 @@
 //! "NVIDIA GameStream Client", valid for 20 years, as moonlight-android's
 //! AndroidCryptoProvider makes it, plus the unique ID sent with every request.
 
-use super::{crypto, der, Error};
+use super::{Error, crypto, der};
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::pkcs8::{EncodePrivateKey, EncodePublicKey};
 
@@ -137,14 +137,8 @@ impl ClientIdentity {
 
 /// (modulus, exponent) of a DER RSAPublicKey, with leading zero bytes stripped.
 fn rsa_public_key(der_key: &[u8]) -> Result<(&[u8], &[u8]), Error> {
-    let (tag, content, _, _) = der::read(der_key)?;
-    if tag != der::TAG_SEQUENCE {
-        return Err(Error::InvalidIdentity("certificate key is not RSA".into()));
-    }
-    let (_, modulus, _, rest) = der::read(content)?;
-    let (_, exponent, _, _) = der::read(rest)?;
-    let trim = |b: &[u8]| -> usize { b.iter().take_while(|&&x| x == 0).count() };
-    Ok((&modulus[trim(modulus)..], &exponent[trim(exponent)..]))
+    der::rsa_public_key(der_key)
+        .map_err(|_| Error::InvalidIdentity("certificate key is not RSA".into()))
 }
 
 fn self_signed_certificate(pkcs8: &[u8], spki: &[u8], now: i64) -> Result<Vec<u8>, Error> {
@@ -197,9 +191,11 @@ pub(crate) mod tests {
     fn generated_certificates_are_self_signed_and_reload() {
         let identity = fixture();
         assert_eq!(identity.unique_id().len(), 16);
-        assert!(identity
-            .certificate_pem()
-            .starts_with("-----BEGIN CERTIFICATE-----\n"));
+        assert!(
+            identity
+                .certificate_pem()
+                .starts_with("-----BEGIN CERTIFICATE-----\n")
+        );
         assert!(!identity.certificate_pem().contains('\r'));
         let parts = der::parse_certificate(identity.certificate_der()).unwrap();
         assert_eq!(parts.key_algorithm, der::OID_RSA_ENCRYPTION);
@@ -224,12 +220,14 @@ pub(crate) mod tests {
     #[test]
     fn mismatched_keys_and_bad_ids_are_refused() {
         let identity = fixture();
-        assert!(ClientIdentity::from_der(
-            "bad id".into(),
-            identity.certificate_der().to_vec(),
-            identity.private_key_pkcs8().to_vec()
-        )
-        .is_err());
+        assert!(
+            ClientIdentity::from_der(
+                "bad id".into(),
+                identity.certificate_der().to_vec(),
+                identity.private_key_pkcs8().to_vec()
+            )
+            .is_err()
+        );
         let other = rsa::RsaPrivateKey::new(&mut rand_core::OsRng, 1024).unwrap();
         let other = other.to_pkcs8_der().unwrap().as_bytes().to_vec();
         assert!(

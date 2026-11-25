@@ -20,6 +20,12 @@ pub(crate) const OID_RSA_ENCRYPTION: &[u8] =
 /// 1.2.840.113549.1.1.11
 pub(crate) const OID_SHA256_WITH_RSA: &[u8] =
     &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b];
+/// 1.2.840.10045.4.3.2
+pub(crate) const OID_ECDSA_WITH_SHA256: &[u8] = &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02];
+/// 1.2.840.10045.4.3.3
+pub(crate) const OID_ECDSA_WITH_SHA384: &[u8] = &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x03];
+/// Required RSA public exponent (65537).
+pub(crate) const RSA_PUBLIC_EXPONENT_65537: &[u8] = &[0x01, 0x00, 0x01];
 /// 1.2.840.10045.2.1
 pub(crate) const OID_EC_PUBLIC_KEY: &[u8] = &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01];
 /// 1.2.840.10045.3.1.7
@@ -78,6 +84,10 @@ fn expect(input: &[u8], tag: u8) -> Result<(&[u8], &[u8]), Error> {
 /// The parts of an X.509 certificate that pairing uses.
 #[derive(Debug, Clone)]
 pub(crate) struct CertificateParts {
+    /// Raw DER-encoded `TBSCertificate` (including its `SEQUENCE` tag and length).
+    pub tbs: Vec<u8>,
+    /// Outer `Certificate.signatureAlgorithm` OID bytes.
+    pub signature_algorithm: Vec<u8>,
     /// The signature value (the BIT STRING's bytes), which Moonlight pairing hashes.
     pub signature: Vec<u8>,
     pub key_algorithm: Vec<u8>,
@@ -91,10 +101,17 @@ pub(crate) fn parse_certificate(der: &[u8]) -> Result<CertificateParts, Error> {
     if !rest.is_empty() {
         return Err(malformed());
     }
-    let (tbs, after_tbs) = expect(certificate, TAG_SEQUENCE)?;
-    let (_, after_algorithm) = expect(after_tbs, TAG_SEQUENCE)?;
-    let (signature, _) = expect(after_algorithm, TAG_BIT_STRING)?;
-    let signature = bit_string(signature)?;
+    let (tbs_tag, tbs, tbs_raw, after_tbs) = read(certificate)?;
+    if tbs_tag != TAG_SEQUENCE {
+        return Err(malformed());
+    }
+    let (sig_alg, after_algorithm) = expect(after_tbs, TAG_SEQUENCE)?;
+    let (signature_algorithm, _) = expect(sig_alg, TAG_OID)?;
+    let (signature_raw, sig_trailing) = expect(after_algorithm, TAG_BIT_STRING)?;
+    if !sig_trailing.is_empty() {
+        return Err(malformed());
+    }
+    let signature = bit_string(signature_raw)?;
 
     let mut fields = tbs;
     if fields.first() == Some(&TAG_CONTEXT_0) {
@@ -102,23 +119,52 @@ pub(crate) fn parse_certificate(der: &[u8]) -> Result<CertificateParts, Error> {
     }
     // serialNumber, signature, issuer, validity, subject
     fields = expect(fields, TAG_INTEGER)?.1;
-    for _ in 0..4 {
+    let (tbs_sig_alg, after_tbs_sig) = expect(fields, TAG_SEQUENCE)?;
+    let (tbs_sig_oid, _) = expect(tbs_sig_alg, TAG_OID)?;
+    if tbs_sig_oid != signature_algorithm {
+        return Err(malformed());
+    }
+    fields = after_tbs_sig;
+    for _ in 0..3 {
         fields = expect(fields, TAG_SEQUENCE)?.1;
     }
     let (spki, _) = expect(fields, TAG_SEQUENCE)?;
     let (algorithm, key) = expect(spki, TAG_SEQUENCE)?;
     let (key_algorithm, parameters) = expect(algorithm, TAG_OID)?;
     let key_parameters = match read(parameters) {
-        Ok((TAG_OID, oid, _, _)) => Some(oid.to_vec()),
+        Ok((TAG_OID, oid, _, rest)) if rest.is_empty() => Some(oid.to_vec()),
         _ => None,
     };
-    let (public_key, _) = expect(key, TAG_BIT_STRING)?;
+    let (public_key, key_trailing) = expect(key, TAG_BIT_STRING)?;
+    if !key_trailing.is_empty() {
+        return Err(malformed());
+    }
     Ok(CertificateParts {
+        tbs: tbs_raw.to_vec(),
+        signature_algorithm: signature_algorithm.to_vec(),
         signature: signature.to_vec(),
         key_algorithm: key_algorithm.to_vec(),
         key_parameters,
         public_key: bit_string(public_key)?.to_vec(),
     })
+}
+
+/// `(modulus, exponent)` of a DER `RSAPublicKey`, with leading zero sign bytes stripped.
+pub(crate) fn rsa_public_key(der_key: &[u8]) -> Result<(&[u8], &[u8]), Error> {
+    let (content, rest) = expect(der_key, TAG_SEQUENCE)?;
+    if !rest.is_empty() {
+        return Err(malformed());
+    }
+    let (modulus, after_modulus) = expect(content, TAG_INTEGER)?;
+    let (exponent, after_exponent) = expect(after_modulus, TAG_INTEGER)?;
+    if !after_exponent.is_empty() || modulus.is_empty() || exponent.is_empty() {
+        return Err(malformed());
+    }
+    if (modulus[0] & 0x80) != 0 || (exponent[0] & 0x80) != 0 {
+        return Err(malformed());
+    }
+    let trim = |b: &[u8]| -> usize { b.iter().take_while(|&&x| x == 0).count() };
+    Ok((&modulus[trim(modulus)..], &exponent[trim(exponent)..]))
 }
 
 fn bit_string(content: &[u8]) -> Result<&[u8], Error> {
