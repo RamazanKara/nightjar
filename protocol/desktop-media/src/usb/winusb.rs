@@ -37,9 +37,9 @@ mod platform {
         WinUsbPipeInformationEx, WinUsbSetupPacket, USBD_PIPE_TYPE_ISOCHRONOUS,
     };
     use super::iso_coord::{
-        acquire_iso_slot, drain_iso_pools, release_iso_slot, submit_pipelined, winusb_reset_port,
-        EndpointInfo, Handles, InterfaceEntry, IsoEndpointState, IsoSlot, PooledEvent,
-        ResettableState, WinUsbPortReset,
+        acquire_iso_slot, invalidate_iso_pools, release_iso_slot, submit_pipelined,
+        winusb_reset_port, EndpointInfo, Handles, InterfaceEntry, IsoEndpointState, IsoPoolState,
+        IsoSlot, PooledEvent, ResettableState, WinUsbPortReset,
     };
     use crate::usb::iso::iso_plan;
     use crate::usb::libusb::{standard, Standard};
@@ -63,7 +63,7 @@ mod platform {
         state: Mutex<State>,
         resettable: Arc<Mutex<ResettableState>>,
         iso_streams: Mutex<HashMap<u8, Arc<Mutex<IsoEndpointState>>>>,
-        iso_pools: Mutex<HashMap<u8, Vec<IsoSlot>>>,
+        iso_pools: Mutex<IsoPoolState<IsoSlot>>,
         event_pool: Arc<Mutex<Vec<OwnedEvent>>>,
     }
 
@@ -108,8 +108,8 @@ mod platform {
                 .clone()
         }
 
-        fn drain_iso_pools(&self, interface: Option<u8>) {
-            drain_iso_pools(&self.iso_pools, interface);
+        fn invalidate_iso_pools(&self, interface: Option<u8>) {
+            invalidate_iso_pools(&self.iso_pools, interface);
         }
 
         /// Finishes an overlapped WinUSB request synchronously and checks its result.
@@ -210,11 +210,12 @@ mod platform {
                     .filter_map(|(&ep, info)| (info.interface == interface).then_some(ep))
                     .collect()
             };
-            self.drain_iso_pools(Some(interface));
+            self.invalidate_iso_pools(Some(interface));
             // SAFETY: `entry.winusb` is an open WinUSB handle for `interface`.
             let ok = unsafe { (self.api.set_alt)(entry.winusb, setting) };
             if ok == 0 {
                 let err = unsafe { GetLastError().0 };
+                self.invalidate_iso_pools(Some(interface));
                 return Reply::failed(win32_error_to_errno(err));
             }
             let updated_eps = {
@@ -239,12 +240,17 @@ mod platform {
                 }
                 touched
             };
-            let streams = self.iso_streams.lock().unwrap_or_else(PoisonError::into_inner);
-            for ep in updated_eps {
-                if let Some(stream) = streams.get(&ep) {
-                    stream.lock().unwrap_or_else(PoisonError::into_inner).reset();
+            {
+                let streams = self.iso_streams.lock().unwrap_or_else(PoisonError::into_inner);
+                for ep in updated_eps {
+                    if let Some(stream) = streams.get(&ep) {
+                        stream.lock().unwrap_or_else(PoisonError::into_inner).reset();
+                    }
                 }
             }
+            // Bump and drain again after alt-setting handles/endpoints settle so any concurrent
+            // ISO acquire/release overlapping `set_alt` cannot return pre-switch slots to the pool.
+            self.invalidate_iso_pools(Some(interface));
             Reply::sent(0)
         }
 
@@ -298,8 +304,12 @@ mod platform {
                 }
             }
 
-            self.drain_iso_pools(None);
-            winusb_reset_port(&DevicePortReset(self), &self.resettable, &self.iso_streams)
+            self.invalidate_iso_pools(None);
+            let reply = winusb_reset_port(&DevicePortReset(self), &self.resettable, &self.iso_streams);
+            // Bump global pool epoch again after updating alt-0 endpoints so slots woken mid-reset
+            // by `abort_pipe` never return to the post-reset pool.
+            self.invalidate_iso_pools(None);
+            reply
         }
 
         fn control(&self, transfer: &Transfer, cancelled: &AtomicBool) -> Reply {
@@ -561,7 +571,7 @@ mod platform {
     impl Drop for WinUsbDevice {
         fn drop(&mut self) {
             self.closed.store(true, Ordering::Release);
-            self.drain_iso_pools(None);
+            self.invalidate_iso_pools(None);
             self.state().handles.close_all(self.api);
         }
     }
@@ -597,7 +607,7 @@ mod platform {
 
         fn close(&self) {
             self.closed.store(true, Ordering::Release);
-            self.drain_iso_pools(None);
+            self.invalidate_iso_pools(None);
             self.state().handles.close_all(self.api);
         }
     }
@@ -734,7 +744,7 @@ mod platform {
                 alt_endpoints,
             })),
             iso_streams: Mutex::new(HashMap::new()),
-            iso_pools: Mutex::new(HashMap::new()),
+            iso_pools: Mutex::new(IsoPoolState::default()),
             event_pool: Arc::new(Mutex::new(Vec::new())),
         };
         Ok(Arc::new(Blocking::new(device)))

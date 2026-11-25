@@ -377,11 +377,107 @@ impl Drop for PooledEvent {
     }
 }
 
+struct PoolEntry<S> {
+    interface: u8,
+    epoch: u64,
+    slot: S,
+}
+
+/// Generation-gated per-endpoint slot pool preventing pre-reset or pre-alt-switch buffers from
+/// returning to `iso_pools` after concurrent `set_interface` or `reset_port`.
+pub(in crate::usb) struct IsoPoolState<S> {
+    next_epoch: u64,
+    global_floor: u64,
+    iface_epoch: HashMap<u8, u64>,
+    pools: HashMap<u8, Vec<PoolEntry<S>>>,
+}
+
+impl<S> Default for IsoPoolState<S> {
+    fn default() -> Self {
+        Self {
+            next_epoch: 1,
+            global_floor: 0,
+            iface_epoch: HashMap::new(),
+            pools: HashMap::new(),
+        }
+    }
+}
+
+impl<S> IsoPoolState<S> {
+    pub(in crate::usb) fn current_epoch(&self, interface: u8) -> u64 {
+        self.iface_epoch
+            .get(&interface)
+            .copied()
+            .unwrap_or(self.global_floor)
+            .max(self.global_floor)
+    }
+
+    pub(in crate::usb) fn take<F>(&mut self, address: u8, interface: u8, mut matches: F) -> (u64, Option<S>)
+    where
+        F: FnMut(&S) -> bool,
+    {
+        let epoch = self.current_epoch(interface);
+        let found = self.pools.get_mut(&address).and_then(|list| {
+            list.iter()
+                .position(|entry| entry.interface == interface && entry.epoch == epoch && matches(&entry.slot))
+                .map(|idx| list.swap_remove(idx).slot)
+        });
+        (epoch, found)
+    }
+
+    /// Returns `Some(slot)` (dropped outside the pool lock) when `epoch` is stale or the pool is full.
+    pub(in crate::usb) fn release(
+        &mut self,
+        address: u8,
+        interface: u8,
+        epoch: u64,
+        slot: S,
+        cap: usize,
+    ) -> Option<S> {
+        if epoch != self.current_epoch(interface) {
+            return Some(slot);
+        }
+        let list = self.pools.entry(address).or_default();
+        if list.len() >= cap {
+            return Some(slot);
+        }
+        list.push(PoolEntry { interface, epoch, slot });
+        None
+    }
+
+    pub(in crate::usb) fn invalidate(&mut self, interface: Option<u8>) -> Vec<S> {
+        let bumped = self.next_epoch;
+        self.next_epoch = self.next_epoch.saturating_add(1);
+        let mut drained = Vec::new();
+        if let Some(target) = interface {
+            self.iface_epoch.insert(target, bumped);
+            for list in self.pools.values_mut() {
+                let mut idx = 0;
+                while idx < list.len() {
+                    if list[idx].interface == target {
+                        drained.push(list.swap_remove(idx).slot);
+                    } else {
+                        idx += 1;
+                    }
+                }
+            }
+        } else {
+            self.global_floor = bumped;
+            self.iface_epoch.clear();
+            for (_, list) in self.pools.drain() {
+                drained.extend(list.into_iter().map(|entry| entry.slot));
+            }
+        }
+        drained
+    }
+}
+
 /// Pre-registered contiguous buffer slice pinned with `WinUsb_RegisterIsochBuffer` so steady-state
 /// URBs reuse kernel MDLs instead of registering/unregistering on every transfer.
 #[cfg(windows)]
 pub(super) struct IsoSlot {
     pub(super) interface: u8,
+    pub(super) generation: u64,
     pub(super) buffer: Vec<u8>,
     pub(super) handle: IsochBufferHandle,
     pub(super) api: &'static WinUsbApi,
@@ -404,28 +500,14 @@ impl Drop for IsoSlot {
 }
 
 #[cfg(windows)]
-pub(super) fn drain_iso_pools(
-    iso_pools: &Mutex<HashMap<u8, Vec<IsoSlot>>>,
+pub(super) fn invalidate_iso_pools(
+    iso_pools: &Mutex<IsoPoolState<IsoSlot>>,
     interface: Option<u8>,
 ) {
-    let drained: Vec<IsoSlot> = {
-        let mut pools = iso_pools.lock().unwrap_or_else(PoisonError::into_inner);
-        let mut out = Vec::new();
-        for list in pools.values_mut() {
-            let mut idx = 0;
-            while idx < list.len() {
-                if interface.is_none_or(|iface| list[idx].interface == iface) {
-                    out.push(list.swap_remove(idx));
-                } else {
-                    idx += 1;
-                }
-            }
-        }
-        if interface.is_none() {
-            pools.clear();
-        }
-        out
-    };
+    let drained = iso_pools
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .invalidate(interface);
     drop(drained);
 }
 
@@ -433,24 +515,16 @@ pub(super) fn drain_iso_pools(
 pub(super) fn acquire_iso_slot(
     api: &'static WinUsbApi,
     winusb: super::ffi::WinUsbHandle,
-    iso_pools: &Mutex<HashMap<u8, Vec<IsoSlot>>>,
+    iso_pools: &Mutex<IsoPoolState<IsoSlot>>,
     interface: u8,
     address: u8,
     min_bytes: usize,
 ) -> Result<IsoSlot, i32> {
-    let recycled = {
-        let mut pools = iso_pools.lock().unwrap_or_else(PoisonError::into_inner);
-        pools.get_mut(&address).and_then(|list| {
-            list.iter()
-                .position(|s| s.interface == interface && s.buffer.len() >= min_bytes)
-                .or_else(|| (!list.is_empty()).then_some(0))
-                .map(|idx| list.swap_remove(idx))
-        })
-    };
-    if let Some(slot) = recycled
-        && slot.interface == interface
-        && slot.buffer.len() >= min_bytes
-    {
+    let (generation, recycled) = iso_pools
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take(address, interface, |slot| slot.buffer.len() >= min_bytes);
+    if let Some(slot) = recycled {
         return Ok(slot);
     }
     let capacity = min_bytes.max(4096);
@@ -470,14 +544,14 @@ pub(super) fn acquire_iso_slot(
         let err = unsafe { GetLastError().0 };
         return Err(win32_error_to_errno(err));
     }
-    Ok(IsoSlot { interface, buffer, handle: iso_handle, api })
+    Ok(IsoSlot { interface, generation, buffer, handle: iso_handle, api })
 }
 
 #[cfg(windows)]
 pub(super) fn release_iso_slot(
     closed: &std::sync::atomic::AtomicBool,
     resettable: &Mutex<ResettableState>,
-    iso_pools: &Mutex<HashMap<u8, Vec<IsoSlot>>>,
+    iso_pools: &Mutex<IsoPoolState<IsoSlot>>,
     address: u8,
     slot: IsoSlot,
 ) {
@@ -493,9 +567,9 @@ pub(super) fn release_iso_slot(
     if !still_matches {
         return;
     }
-    let mut pools = iso_pools.lock().unwrap_or_else(PoisonError::into_inner);
-    let list = pools.entry(address).or_default();
-    if list.len() < MAX_ISO_POOL {
-        list.push(slot);
-    }
+    let rejected = {
+        let mut pools = iso_pools.lock().unwrap_or_else(PoisonError::into_inner);
+        pools.release(address, slot.interface, slot.generation, slot, MAX_ISO_POOL)
+    };
+    drop(rejected);
 }

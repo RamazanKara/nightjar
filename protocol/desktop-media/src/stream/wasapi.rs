@@ -315,7 +315,7 @@ impl Device {
         // SAFETY: the client and render client are this device's; the buffer WASAPI hands out
         // holds `frames` frames of the stream's format until it is released.
         unsafe {
-            lock(wake).0 = Some(self.event.0);
+            let _wake_guard = register_wake(wake, self.event.0);
             self.client.Start()?;
             let mut switch = false;
             let played = (|| {
@@ -351,10 +351,24 @@ impl Device {
                 Ok(switch)
             })();
             let _ = self.client.Stop();
-            lock(wake).0 = None;
             played
         }
     }
+}
+
+/// Registers `handle` as the active wake event for `DefaultDeviceWatch` and guarantees clearing it
+/// on return (including early `?` failures in `IAudioClient::Start` before `Event::drop`).
+struct WakeGuard<'a>(&'a Mutex<WakeHandle>);
+
+impl Drop for WakeGuard<'_> {
+    fn drop(&mut self) {
+        lock(self.0).0 = None;
+    }
+}
+
+fn register_wake(wake: &Mutex<WakeHandle>, handle: HANDLE) -> WakeGuard<'_> {
+    lock(wake).0 = Some(handle);
+    WakeGuard(wake)
 }
 
 /// The render thread and what it plays.
@@ -567,6 +581,20 @@ mod tests {
         assert_eq!(render_frames(480, 480, 480), 0, "padding == buffer == period never calls GetBuffer(0)");
         assert_eq!(render_frames(480, 480, 500), 0, "padding > buffer never underflows");
         assert_eq!(render_frames(500, 480, 490), 0, "padding > buffer even when padding <= period");
+    }
+
+    #[test]
+    fn wake_registration_clears_handle_even_on_early_error() {
+        fn run_with_start_error(wake: &Mutex<WakeHandle>, dummy: HANDLE) -> windows::core::Result<()> {
+            let _guard = register_wake(wake, dummy);
+            assert!(lock(wake).0.is_some());
+            Err(windows::core::Error::new(E_UNEXPECTED, "simulated Start failure"))?;
+            Ok(())
+        }
+        let wake = Mutex::new(WakeHandle(None));
+        let dummy = HANDLE(std::ptr::dangling_mut());
+        assert!(run_with_start_error(&wake, dummy).is_err());
+        assert!(lock(&wake).0.is_none(), "wake handle must not outlive early error return");
     }
 
     /// Opens this PC's default output with the 7.1.4 format and plays silence for a moment.

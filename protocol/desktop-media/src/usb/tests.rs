@@ -548,3 +548,40 @@ fn winusb_port_reset_restores_alt_zero_endpoints_and_resets_streams() {
     let fail = FakePortReset { log: Mutex::new(Vec::new()), fail_alt: true };
     assert_eq!(winusb_reset_port(&fail, &resettable, &streams).status, wire::EPIPE);
 }
+
+#[test]
+fn winusb_iso_pool_rejects_stale_slots_across_set_interface_and_reset_port() {
+    use super::winusb::iso_coord::IsoPoolState;
+
+    let mut pool = IsoPoolState::<&'static str>::default();
+    let (ep0_gen, missing) = pool.take(0x81, 0, |_| true);
+    assert_eq!(missing, None);
+    let (ep1_gen, _) = pool.take(0x82, 1, |_| true);
+
+    // Concurrent `set_interface(1)` invalidates interface 1 before & after updating alt endpoints.
+    assert!(pool.release(0x81, 0, ep0_gen, "iface0-idle", 8).is_none());
+    let (inflight_gen, _) = pool.take(0x82, 1, |_| true);
+    assert!(pool.invalidate(Some(1)).is_empty());
+    assert!(pool.invalidate(Some(1)).is_empty());
+
+    // Pre-alt-switch slot returned after alt-0 repopulated `0x82` on interface 1 is rejected.
+    assert_eq!(pool.release(0x82, 1, inflight_gen, "stale-pre-set-alt", 8), Some("stale-pre-set-alt"));
+    assert_eq!(pool.release(0x82, 1, ep1_gen, "older-stale", 8), Some("older-stale"));
+    // Unaffected interface 0 kept its idle slot until `reset_port`.
+    assert_eq!(pool.take(0x81, 0, |_| true), (ep0_gen, Some("iface0-idle")));
+
+    // Re-insert `0x81` before `reset_port` bumps the global epoch across every interface.
+    let (before_reset_gen, _) = pool.take(0x81, 0, |_| true);
+    assert!(pool.release(0x81, 0, before_reset_gen, "idle-before-reset", 8).is_none());
+    let (inflight_reset_gen, taken) = pool.take(0x81, 0, |_| true);
+    assert_eq!(taken, Some("idle-before-reset"));
+    assert!(pool.invalidate(None).is_empty());
+    assert!(pool.invalidate(None).is_empty());
+    assert_eq!(pool.release(0x81, 0, inflight_reset_gen, "stale-pre-reset", 8), Some("stale-pre-reset"));
+
+    let (post_reset_gen, empty) = pool.take(0x81, 0, |_| true);
+    assert!(post_reset_gen > inflight_reset_gen);
+    assert_eq!(empty, None);
+    assert!(pool.release(0x81, 0, post_reset_gen, "fresh-post-reset", 8).is_none());
+    assert_eq!(pool.take(0x81, 0, |_| true), (post_reset_gen, Some("fresh-post-reset")));
+}
