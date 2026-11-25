@@ -219,13 +219,20 @@ public class LinkToKnownPcTest {
 
     @Test
     public void theRightCertificateStillGoesThrough() throws Exception {
-        X509Certificate pinned = certificate(1);
+        com.limelight.nvstream.http.TestHttpServer.ensureIdentities();
+        X509Certificate pinned = com.limelight.nvstream.http.TestHttpServer.hostCert();
         seedKnownPc(knownPc(pinned));
-        try (ClaimingServer server = new ClaimingServer()) {
+        final int[] httpsPort = {0};
+        try (com.limelight.nvstream.http.TestHttpServer server = new com.limelight.nvstream.http.TestHttpServer(req ->
+                com.limelight.nvstream.http.TestHttpServer.Response.xml(200,
+                        "<root status_code=\"200\"><hostname>Claimed</hostname>"
+                                + "<uniqueid>known-pc</uniqueid><state>MJ_SERVER_FREE</state>"
+                                + "<PairStatus>0</PairStatus><HttpsPort>" + httpsPort[0] + "</HttpsPort></root>"))) {
+            httpsPort[0] = server.httpsPort();
             var controller = Robolectric.buildService(Manager.class).create();
             Manager service = controller.get();
             assertEquals(ComputerManagerService.LinkAdd.ADDED,
-                    service.addComputerForLink(linkDetails(server.port), linkNaming(pinned, server.port)));
+                    service.addComputerForLink(linkDetails(server.httpPort()), linkNaming(pinned, server.httpPort())));
             controller.destroy();
         }
     }

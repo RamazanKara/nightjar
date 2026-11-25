@@ -167,11 +167,11 @@ public class NvConnectionPacketSizeTest {
         assertEquals(8192, NvConnectionHapticsFlagTest.CapturingBridge.packetSize);
         assertFalse(localPass.context.jumboFallback);
 
-        // Probe failure on LAN falls back to 1392 with jumboFallback=true.
+        // Probe failure on LAN skips the redundant 1392 control probe and falls back with jumboFallback=true.
         FakeHost.probeUdpFailure = new IOException("probe timeout");
         try {
             NvConnection failConn = startStream("192.0.2.1", StreamConfiguration.STREAM_CFG_AUTO, 1392, jumboHostXml);
-            assertEquals(List.of(8160, 1392), FakeHost.probedPacketSizes);
+            assertEquals(List.of(8160), FakeHost.probedPacketSizes);
             assertEquals(1392, NvConnectionHapticsFlagTest.CapturingBridge.packetSize);
             assertTrue(failConn.context.jumboFallback);
         } finally {
@@ -236,7 +236,7 @@ public class NvConnectionPacketSizeTest {
         int[] autoLanFail = NightjarSessionJni.resolvePacketSizePreflight(
                 0, true, false, 8192, true, 1392, true, false, failingProbe);
         assertArrayEquals(new int[] {1392, 1}, autoLanFail);
-        assertEquals(List.of(8160, 1392), probedSizes);
+        assertEquals(List.of(8160), probedSizes);
     }
 
     @Implements(value = NvHTTP.class, isInAndroidSdk = false)
