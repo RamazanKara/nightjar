@@ -261,7 +261,8 @@ pub struct SdpParams<'a> {
     /// The HDR format asked for (`x-rl-video[0].hdrFormat`, one `rubylight_protocol::hdr` bit);
     /// 0 sends nothing and streams stock HDR. Sent only on a 10-bit (HDR) stream, Dolby Vision
     /// 8.1 and 8.4 only on HEVC and 10.1 only on AV1, HLG on PyroWave only with the host's
-    /// PyroWave HLG offer flag, and only when `hdr_formats_offered` has it.
+    /// PyroWave HLG offer flag, and only when `hdr_formats_offered` has it. A Dolby Vision
+    /// stream is limited range, whatever [`StreamConfig::color_range`] says.
     pub hdr_format: u8,
     /// The host's `DescribeInfo::hdr_formats`, its offer flags included.
     pub hdr_formats_offered: u8,
@@ -313,7 +314,8 @@ pub fn announced_packet_size(requested: i32, offered: u16, encrypted: bool) -> i
 }
 
 /// The HDR format the description asks for, if the stream can carry it: a 10-bit HEVC or AV1
-/// stream, Dolby Vision 8.1 and 8.4 only on HEVC and 10.1 only on AV1; on a 10-bit PyroWave
+/// stream, Dolby Vision 8.1 and 8.4 only on HEVC and 10.1 only on AV1, neither on a 4:4:4 stream
+/// (the host would drop it and its RPUs); on a 10-bit PyroWave
 /// stream only HLG, and only when the host offers
 /// [`hdr::PYROWAVE_HLG`](rubylight_protocol::hdr::PYROWAVE_HLG).
 fn announced_hdr_format(p: &SdpParams<'_>) -> Option<u8> {
@@ -328,6 +330,7 @@ fn announced_hdr_format(p: &SdpParams<'_>) -> Option<u8> {
                 format & (VIDEO_FORMAT_MASK_H265 | VIDEO_FORMAT_MASK_AV1) != 0
                     && (bit & hdr::DOLBY_VISION_HEVC == 0 || format & VIDEO_FORMAT_MASK_H265 != 0)
                     && (bit & hdr::DOLBY_VISION_AV1 == 0 || format & VIDEO_FORMAT_MASK_AV1 != 0)
+                    && (bit & hdr::DOLBY_VISION == 0 || format & VIDEO_FORMAT_MASK_YUV444 == 0)
             }
     })
 }
@@ -345,6 +348,8 @@ pub struct Sdp {
     pub audio_packet_duration_ms: u8,
     /// The HDR format the description asks for, 0 for none (stock HDR).
     pub hdr_format: u8,
+    /// The color range the description asks for: limited with a Dolby Vision format.
+    pub color_range: i32,
 }
 
 /// The URL form of an address: IPv6 in brackets.
@@ -629,10 +634,17 @@ pub fn generate(p: &SdpParams<'_>) -> Sdp {
     } else {
         (false, 5)
     };
+    // The host's RPUs describe limited-range video. Host 6.4.1 sends a full-range stream without
+    // RPUs, which takes an NVIDIA Shield down (nightjar#193).
+    let color_range = if hdr_format.is_some_and(|bit| bit & rubylight_protocol::hdr::DOLBY_VISION != 0) {
+        COLOR_RANGE_LIMITED
+    } else {
+        c.color_range
+    };
     if quad[0] >= 7 {
         a.add(
             "x-nv-video[0].encoderCscMode",
-            (c.color_space << 1) | c.color_range,
+            (c.color_space << 1) | color_range,
         );
     }
 
@@ -650,6 +662,7 @@ pub fn generate(p: &SdpParams<'_>) -> Sdp {
         high_quality_surround_enabled: high_quality,
         audio_packet_duration_ms: duration,
         hdr_format: hdr_format.unwrap_or(0),
+        color_range,
     }
 }
 

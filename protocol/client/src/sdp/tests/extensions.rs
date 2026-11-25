@@ -234,6 +234,19 @@ fn hdr_format_and_audio_codec_are_sent_only_when_asked_for_and_offered() {
     assert_eq!(hdr(VIDEO_FORMAT_AV1_MAIN10, HLG), Some("a=x-rl-video[0].hdrFormat:2".into()));
     assert_eq!(hdr(VIDEO_FORMAT_AV1_MAIN10, DV_84), None);
     assert_eq!(hdr(VIDEO_FORMAT_AV1_MAIN10, DV_81), None);
+    // A 4:4:4 stream never asks for Dolby Vision, so it keeps its color range and its own decoder.
+    for (format, bit) in [
+        (VIDEO_FORMAT_H265_REXT10_444, DV_81),
+        (VIDEO_FORMAT_H265_REXT10_444, DV_84),
+        (VIDEO_FORMAT_AV1_HIGH10_444, DV_101),
+    ] {
+        assert_eq!(hdr(format, bit), None, "{format:#x}");
+        let full = StreamConfig { color_range: COLOR_RANGE_FULL, ..Default::default() };
+        let mut p = params(&full, SUNSHINE, "10.0.0.7", format);
+        (p.hdr_format, p.hdr_formats_offered) = (bit, ALL);
+        assert_eq!(generate(&p).color_range, COLOR_RANGE_FULL, "{format:#x}");
+    }
+    assert!(hdr(VIDEO_FORMAT_H265_REXT10_444, PQ).is_some());
     assert_eq!(hdr(VIDEO_FORMAT_AV1_MAIN10, DV_101), Some("a=x-rl-video[0].hdrFormat:16".into()));
     assert_eq!(hdr(VIDEO_FORMAT_H265_MAIN10, DV_101), None);
     assert_eq!(hdr(VIDEO_FORMAT_AV1_MAIN8, DV_101), None);

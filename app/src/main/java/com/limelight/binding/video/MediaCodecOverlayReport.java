@@ -50,7 +50,7 @@ final class MediaCodecOverlayReport {
                 " | " + (pyroWave ? "PyroWave" : r.activeDecoderName + " " + configuredMime(r)) +
                 " | " + r.initialWidth + "x" + r.initialHeight + " " + r.refreshRate + " fps" +
                 " HDR " + onOff(Boolean.TRUE.equals(r.currentHdrMode)) +
-                (r.prefs.fullRange ? " full range" : "") +
+                (r.getPreferredColorRange() == MoonBridge.COLOR_RANGE_FULL ? " full range" : "") +
                 " | engine " + StreamEngine.label() +
                 " | low latency " + onOff(lowLatency) + ", vendor " + onOff(r.prefs.vendorLowLatency) +
                 ", hints " + onOff(r.prefs.phonePerformanceHints) + ", RFI " + onOff(rfi) +

@@ -311,7 +311,11 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     public Integer getDecodedTransfer() { return codecSelector.getDecodedTransfer(); }
     @Override public int setChromaPacking(int version, int width, int height, int colorSpace, int colorRange) { return codecSelector.setChromaPacking(version, width, height, colorSpace, colorRange); }
     public int getPreferredColorSpace() { return codecSelector.getPreferredColorSpace(); }
-    public int getPreferredColorRange() { return prefs.fullRange ? MoonBridge.COLOR_RANGE_FULL : MoonBridge.COLOR_RANGE_LIMITED; }
+    // A Dolby Vision ANNOUNCE asks for limited range (nightjar-core's sdp), its base layer included.
+    public int getPreferredColorRange() {
+        return prefs.fullRange && (announcedHdrFormat & HdrFormatPolicy.DOLBY_VISION) == 0 ?
+                MoonBridge.COLOR_RANGE_FULL : MoonBridge.COLOR_RANGE_LIMITED;
+    }
     public int getActiveVideoFormat() { return this.videoFormat; }
 
     static int maxInputSize(int bitrateKbps, int fps, int width, int height) { return NightjarPolicyJni.videoMaxInputSize(bitrateKbps, fps, width, height); }
@@ -587,6 +591,11 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
         if ((videoFormat & MoonBridge.VIDEO_FORMAT_MASK_PYROWAVE) != 0) {
             return submitPyroWaveFrame(decodeUnitData, decodeUnitLength, frameNumber, frameHostProcessingLatency,
                     enqueueTimeNs, receiveTimeNs, presentationTimeUs);
+        }
+        if (dolbyVisionActive && decodeUnitType == MoonBridge.BUFFER_TYPE_PICDATA && HdrBitstream.endsAtRpu(videoFormat) &&
+                !(decodeUnitData == null ? HdrBitstream.endsInRpu(directInput, decodeUnitLength) :
+                        HdrBitstream.endsInRpu(decodeUnitData, decodeUnitLength))) {
+            return recovery.leaveDolbyVision();
         }
         int csd = decodeLoop.handleIdrCsd(decodeUnitData, decodeUnitLength, decodeUnitType, frameType);
         if (csd == 1) return MoonBridge.DR_OK;

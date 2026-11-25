@@ -411,6 +411,7 @@ impl Handshake {
         self.out.high_quality_surround_enabled = sdp.high_quality_surround_enabled;
         self.out.audio_packet_duration_ms = sdp.audio_packet_duration_ms;
         self.out.hdr_format = sdp.hdr_format;
+        self.out.config.color_range = sdp.color_range;
         self.out.sdp = sdp.text.clone();
         sdp.text
     }

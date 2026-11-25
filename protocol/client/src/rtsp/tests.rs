@@ -267,6 +267,38 @@ fn the_asked_hdr_format_reaches_the_announce_and_the_outcome() {
     }
 }
 
+/// nightjar#193: host 6.4.1 sends no RPUs on a full-range stream.
+#[test]
+fn a_dolby_vision_announce_is_limited_range_whatever_was_asked() {
+    use crate::sdp::{COLOR_RANGE_FULL, COLOR_RANGE_LIMITED};
+    use rubylight_protocol::hdr::{DV_81, DV_84, HLG, PQ};
+    for (asked, range) in [
+        (DV_81, COLOR_RANGE_LIMITED),
+        (DV_84, COLOR_RANGE_LIMITED),
+        (HLG, COLOR_RANGE_FULL),
+        (PQ, COLOR_RANGE_FULL),
+        (0, COLOR_RANGE_FULL),
+    ] {
+        let mut p = params(None);
+        p.config.hdr_format = asked;
+        p.config.color_range = COLOR_RANGE_FULL;
+        let csc = (p.config.color_space << 1) | range;
+        let mut handshake = Handshake::new(p).unwrap();
+        run(&mut handshake, |method, target| match method {
+            "DESCRIBE" => ok(2, "", &format!("{DESCRIBE}a=x-rl-video.hdrFormats:15\r\n")),
+            _ => sunshine_host(method, target),
+        });
+        let outcome = handshake.finish().unwrap();
+        assert_eq!(outcome.hdr_format, asked);
+        assert_eq!(outcome.config.color_range, range, "{asked}");
+        assert!(
+            outcome.sdp.contains(&format!("encoderCscMode:{csc} ")),
+            "{asked}: {}",
+            outcome.sdp
+        );
+    }
+}
+
 #[test]
 fn microphone_refusals_cost_only_the_microphone() {
     let mut handshake = Handshake::new(params(None)).unwrap();

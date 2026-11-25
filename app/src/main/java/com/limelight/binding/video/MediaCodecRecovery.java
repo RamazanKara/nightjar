@@ -8,6 +8,7 @@ import android.media.MediaCodec.CodecException;
 import android.os.SystemClock;
 
 import com.limelight.LimeLog;
+import com.limelight.nvstream.jni.MoonBridge;
 import com.limelight.nvstream.jni.NightjarPolicyJni;
 import com.limelight.preferences.PreferenceConfiguration;
 
@@ -142,6 +143,8 @@ final class MediaCodecRecovery {
                         }
                         boolean recovered = withoutKeys ?
                                 CodecRecoverySteps.rebuild("it took no input with its vendor low-latency keys", r.recoveryCodec) :
+                                r.dolbyVisionActive && r.dolbyVisionFailed ?
+                                        CodecRecoverySteps.rebuild("the stream lost its Dolby Vision metadata", r.recoveryCodec) :
                                 toVulkan ? CodecRecoverySteps.rebuild("full color range needs the Vulkan renderer", r.recoveryCodec) :
                                 CodecRecoverySteps.run(r.codecRecoveryType.get() == MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_RESTART,
                                         r.restartRecreates, r.restartReason, r.recoveryCodec);
@@ -241,6 +244,26 @@ final class MediaCodecRecovery {
         return true;
     }
 
+    /**
+     * A frame came without its Dolby Vision RPU (a fallback to SDR sends none): it never reaches the
+     * Dolby Vision decoder. The stream keeps its base layer's decoder until the next ANNOUNCE, also
+     * when RPUs come back: changing decoders twice more is not worth a device restart. Called on the
+     * input thread.
+     */
+    int leaveDolbyVision() {
+        synchronized (r.codecRecoveryMonitor) {
+            if (r.stopping) return MoonBridge.DR_OK;
+            r.dolbyVisionFailed = true;
+            r.codecRecoveryAttempts = 0;
+            LimeLog.warning("The PC sent a frame without Dolby Vision metadata; decoding the stream as " +
+                    r.codecSelector.dolbyVisionBaseCodec() + " with its " +
+                    HdrFormatPolicy.baseLayerName(r.announcedHdrFormat) + " base layer until the next stream");
+            r.session.requestRestart("a frame without Dolby Vision metadata");
+        }
+        doCodecRecoveryIfRequired(MediaCodecDecoderRenderer.CR_FLAG_INPUT_THREAD);
+        return r.stopping ? MoonBridge.DR_OK : MoonBridge.DR_NEED_IDR;
+    }
+
     // The recovery steps on videoDecoder, with every thread quiesced under codecRecoveryMonitor.
     CodecRecoverySteps.Codec createRecoveryCodec() {
         return new CodecRecoverySteps.Codec() {
@@ -284,7 +307,7 @@ final class MediaCodecRecovery {
                 if (codecFailed) {
                     r.videoDecoder.release();
                     // Without its vendor keys the same decoder is set up again: it is what is tried.
-                    if (r.dolbyVisionActive && !r.restartWithoutVendorKeys) {
+                    if (r.dolbyVisionActive && !r.dolbyVisionFailed && !r.restartWithoutVendorKeys) {
                         // The same stream decodes as HEVC or AV1; the Dolby Vision decoder is not tried again.
                         r.dolbyVisionFailed = true;
                         LimeLog.warning("Dolby Vision decoder failed while streaming; recreating the decoder for " +
