@@ -59,9 +59,13 @@ final class PadPressAnimator {
     private void showAlpha() {
         boolean active = state.flags != 0 || state.pressed || state.stickActive;
         float alpha = PadControlView.alpha(restingAlpha, active ? 1 : easingLevel());
-        view.setAlpha(alpha);
+        if (Float.compare(view.getAlpha(), alpha) != 0) {
+            view.setAlpha(alpha);
+        }
         View knobLayer = view.knobLayer();
-        if (knobLayer != null) knobLayer.setAlpha(alpha);
+        if (knobLayer != null && Float.compare(knobLayer.getAlpha(), alpha) != 0) {
+            knobLayer.setAlpha(alpha);
+        }
     }
 
     /** The deepest press still easing back, or 0. */

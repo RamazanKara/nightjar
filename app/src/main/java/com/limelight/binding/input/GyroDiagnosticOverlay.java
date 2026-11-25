@@ -41,6 +41,11 @@ public final class GyroDiagnosticOverlay {
     private static final List<String> rows = new ArrayList<>();
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
     private static volatile String latest;
+    private static String samplePath;
+    private static int sampleController;
+    private static byte sampleType;
+    private static float sampleX, sampleY, sampleZ;
+    private static boolean hasSample;
     private static volatile boolean recording;
     private static volatile boolean flydigiForced;
     private static volatile boolean enabled;
@@ -62,12 +67,17 @@ public final class GyroDiagnosticOverlay {
 
     static void report(String path, int controller, byte type, float x, float y, float z) {
         if (!enabled) return;
-        String label = type == MoonBridge.LI_MOTION_TYPE_GYRO ? "gyro" : "accel";
-        latest = String.format(Locale.US, "%s controller=%d %s\nX=%+.4f  Y=%+.4f  Z=%+.4f",
-                path, controller, label, x, y, z);
         Runnable capCallback = null;
         synchronized (lock) {
+            samplePath = path;
+            sampleController = controller;
+            sampleType = type;
+            sampleX = x;
+            sampleY = y;
+            sampleZ = z;
+            hasSample = true;
             if (recording) {
+                String label = type == MoonBridge.LI_MOTION_TYPE_GYRO ? "gyro" : "accel";
                 if (rows.size() < MAX_ROWS) {
                     rows.add(String.format(Locale.US, "%d,%s,%d,%s,%.6f,%.6f,%.6f",
                             SystemClock.elapsedRealtimeNanos(), path, controller, label, x, y, z));
@@ -99,6 +109,9 @@ public final class GyroDiagnosticOverlay {
         if (!enabled) return;
         flydigiForced = false;
         recording = false;
+        synchronized (lock) {
+            hasSample = false;
+        }
         latest = host.getString(R.string.gyro_diag_waiting);
         activity = host;
         FrameLayout root = host.findViewById(android.R.id.content);
@@ -119,6 +132,9 @@ public final class GyroDiagnosticOverlay {
         Button capture = button(host, R.string.gyro_diag_record);
         onRecordCap = () -> {
             capture.setText(R.string.gyro_diag_record);
+            synchronized (lock) {
+                hasSample = false;
+            }
             latest = host.getString(R.string.gyro_diag_cap_reached, MAX_ROWS);
         };
         capture.setOnClickListener(v -> {
@@ -155,11 +171,12 @@ public final class GyroDiagnosticOverlay {
                         deviceId, device.getName(), device.getVendorId(), device.getProductId(),
                         device.getDescriptor(), sources));
             }
-            latest = host.getString(R.string.gyro_diag_devices) + "\n" + TextUtils.join("\n", devices);
             synchronized (lock) {
+                hasSample = false;
                 // In the shared CSV too, as comment lines.
                 for (String device : devices) rows.add("# " + device);
             }
+            latest = host.getString(R.string.gyro_diag_devices) + "\n" + TextUtils.join("\n", devices);
         });
         buttons.addView(identify);
 
@@ -203,7 +220,30 @@ public final class GyroDiagnosticOverlay {
             TextView target = display;
             Activity host = activity;
             if (target != null && host != null) {
-                target.setText(host.getString(R.string.gyro_diag_title) + "\n" + latest
+                String reading = latest;
+                String path = null;
+                int controller = 0;
+                byte type = 0;
+                float x = 0, y = 0, z = 0;
+                boolean formatSample;
+                synchronized (lock) {
+                    formatSample = hasSample;
+                    if (formatSample) {
+                        path = samplePath;
+                        controller = sampleController;
+                        type = sampleType;
+                        x = sampleX;
+                        y = sampleY;
+                        z = sampleZ;
+                    }
+                }
+                if (formatSample) {
+                    String label = type == MoonBridge.LI_MOTION_TYPE_GYRO ? "gyro" : "accel";
+                    reading = String.format(Locale.US, "%s controller=%d %s\nX=%+.4f  Y=%+.4f  Z=%+.4f",
+                            path, controller, label, x, y, z);
+                    latest = reading;
+                }
+                target.setText(host.getString(R.string.gyro_diag_title) + "\n" + reading
                         + (recording ? "\n" + host.getString(R.string.gyro_diag_recording) : ""));
                 mainHandler.postDelayed(this, 100);
             }
@@ -219,6 +259,10 @@ public final class GyroDiagnosticOverlay {
             recording = false;
             flydigiForced = false;
             onRecordCap = null;
+            synchronized (lock) {
+                hasSample = false;
+                samplePath = null;
+            }
         }
     }
 }

@@ -131,7 +131,14 @@ public final class GameInfo {
     /** Reads of what is kept on disk, off the main thread and away from the lookups; never touches the network. */
     private final ExecutorService readers;
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final Map<String, JSONObject> records = new ConcurrentHashMap<>();
+    private static final int MAX_RECORDS_CACHE = 512;
+    private final Map<String, JSONObject> records = java.util.Collections.synchronizedMap(
+            new java.util.LinkedHashMap<String, JSONObject>(256, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, JSONObject> eldest) {
+                    return size() > MAX_RECORDS_CACHE;
+                }
+            });
     private final Set<String> imagesFailed = ConcurrentHashMap.newKeySet();
     private final Set<String> factsAsked = ConcurrentHashMap.newKeySet();
     /** Who waits for a game's cover: one lookup per game, however many views ask. */

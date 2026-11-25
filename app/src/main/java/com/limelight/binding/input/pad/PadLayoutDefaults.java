@@ -143,7 +143,7 @@ final class PadLayoutDefaults {
             }
             default: {
                 // A Steam Controller control: its place comes from the arrangement the surface has room for.
-                float[] centers = steamCenters(width, height, u, density);
+                float[] centers = steamCentersCached(width, height, u, density);
                 int i = control.ordinal() - STEAM_FIRST;
                 x = centers[2 * i];
                 y = centers[2 * i + 1];
@@ -182,16 +182,42 @@ final class PadLayoutDefaults {
      * </ol>
      * Where none fits (the smallest phones), the first stands; every control can be moved, resized or hidden.
      */
-    static float[] steamCenters(float width, float height, float u, float density) {
+    private static float lastSteamW, lastSteamH, lastSteamU, lastSteamDensity;
+    private static float[] lastSteamCenters;
+
+    private static synchronized float[] steamCentersCached(float width, float height, float u, float density) {
+        if (lastSteamCenters != null
+                && Float.compare(width, lastSteamW) == 0
+                && Float.compare(height, lastSteamH) == 0
+                && Float.compare(u, lastSteamU) == 0
+                && Float.compare(density, lastSteamDensity) == 0) {
+            return lastSteamCenters;
+        }
         float[] centers = new float[STEAM_COUNT * 2];
+        boolean matched = false;
         for (boolean belowButtons : new boolean[] {true, false}) {
             for (int arrangement = 0; arrangement < 3; arrangement++) {
                 steamArrangement(arrangement, belowButtons, width, u, density, centers);
-                if (steamClear(centers, width, height, u, density)) return centers;
+                if (steamClear(centers, width, height, u, density)) {
+                    matched = true;
+                    break;
+                }
             }
+            if (matched) break;
         }
-        steamArrangement(0, false, width, u, density, centers);
+        if (!matched) {
+            steamArrangement(0, false, width, u, density, centers);
+        }
+        lastSteamW = width;
+        lastSteamH = height;
+        lastSteamU = u;
+        lastSteamDensity = density;
+        lastSteamCenters = centers;
         return centers;
+    }
+
+    static float[] steamCenters(float width, float height, float u, float density) {
+        return steamCentersCached(width, height, u, density).clone();
     }
 
     private static void steamArrangement(int arrangement, boolean belowButtons, float width, float u, float density,

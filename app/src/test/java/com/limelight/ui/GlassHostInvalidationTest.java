@@ -23,7 +23,7 @@ import org.robolectric.util.ReflectionHelpers;
 import static org.junit.Assert.*;
 
 /**
- * Item 25 & Item 24: verifies {@link GlassHost} skips sibling {@link GlassSurface} invalidations for unrelated
+ * Verifies {@link GlassHost} skips sibling {@link GlassSurface} invalidations for unrelated
  * non-intersecting children, coalesces repeated intersecting invalidations until draw resets them, and
  * {@link PcKeyboardView} releases active touches on cancel and detach.
  */

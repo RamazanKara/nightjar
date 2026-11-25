@@ -549,7 +549,7 @@ public class HomeViewScreenTest {
         assertTrue(played.isChecked());
         assertEquals(home.getString(R.string.home_view_sort_last_played) + ", " + home.getString(R.string.home_view_order_descending),
                 played.getContentDescription().toString());
-        // AI-L58 persists choices immediately while deferring activity rebuild until the sheet closes.
+        // Home view sheet persists choices immediately while deferring activity rebuild until the sheet closes.
         assertEquals("rows", prefs.getString(HomeView.KEY_LAYOUT, null));
         sheet.dismiss();
         shadowOf(Looper.getMainLooper()).idle();

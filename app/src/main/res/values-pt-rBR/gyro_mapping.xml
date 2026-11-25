@@ -50,5 +50,5 @@
     <string name="gyro_diag_share_title">Compartilhar leituras de movimento</string>
     <string name="gyro_diag_hide">Ocultar</string>
     <string name="gyro_diag_show">Mostrar</string>
-    <string name="gyro_diag_cap_reached">Gravação interrompida em %1\ linhas.</string>
+    <string name="gyro_diag_cap_reached">Gravação interrompida em %1$d linhas.</string>
 </resources>

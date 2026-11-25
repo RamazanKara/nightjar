@@ -142,11 +142,16 @@ final class PreferenceReader {
         }
 
         readResolutionAndFps(context, prefs, config);
+        SharedPreferences.Editor missingDefaults = null;
         if (!prefs.contains(SMALL_ICONS_PREF_STRING)) {
-            prefs.edit().putBoolean(SMALL_ICONS_PREF_STRING, PreferenceResolution.getDefaultSmallMode(context)).apply();
+            missingDefaults = prefs.edit().putBoolean(SMALL_ICONS_PREF_STRING, PreferenceResolution.getDefaultSmallMode(context));
         }
         if (!prefs.contains(GAMEPAD_MOTION_SENSORS_PREF_STRING) && Build.VERSION.SDK_INT == Build.VERSION_CODES.S) {
-            prefs.edit().putBoolean(GAMEPAD_MOTION_SENSORS_PREF_STRING, false).apply();
+            if (missingDefaults == null) missingDefaults = prefs.edit();
+            missingDefaults.putBoolean(GAMEPAD_MOTION_SENSORS_PREF_STRING, false);
+        }
+        if (missingDefaults != null) {
+            missingDefaults.apply();
         }
 
         config.videoFormat = PreferenceResolution.getVideoFormatValue(context);

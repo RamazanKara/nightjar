@@ -393,7 +393,7 @@ public class FileTransferControllerTest {
 
         assertEquals(FileRow.State.FAILED, screen.row(id).state);
         assertEquals(1, opens.get());
-        assertEquals("Item 71: failed upload must keep opener alive for retry", 0, closes.get());
+        assertEquals("failed upload must keep opener alive for retry", 0, closes.get());
 
         controller.retry(id);
         settle();

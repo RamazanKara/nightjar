@@ -168,7 +168,7 @@ public class UsbControllerLifecycleTest {
         try {
             com.limelight.preferences.PreferenceConfiguration config = new com.limelight.preferences.PreferenceConfiguration();
             config.usbDualSense = true;
-            // Item 14: stored "auto" list alone outside an active stream forwarding that device must not block claiming.
+            // Stored "auto" list alone outside an active stream forwarding that device must not block claiming.
             assertTrue(UsbDriverService.shouldClaimDevice(app, pad, config));
             bind(pad).start();
             UsbPads.await(() -> listener.has("added"));
@@ -216,7 +216,7 @@ public class UsbControllerLifecycleTest {
         shadowOf(Looper.getMainLooper()).idleFor(1500, java.util.concurrent.TimeUnit.MILLISECONDS);
         assertEquals("Released device must not be reclaimed while forwarding holds it", 1, UsbPads.Connection.claims.get());
 
-        // R1-AI1: once forwarding fails or ends, UsbDriverService rechecks and reclaims without needing replug.
+        // Once forwarding fails or ends, UsbDriverService rechecks and reclaims without needing replug.
         UsbDriverService.onForwardingEnded(pad);
         shadowOf(Looper.getMainLooper()).idle();
         UsbPads.await(() -> UsbPads.Connection.claims.get() == 2);

@@ -49,6 +49,7 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     private java.util.function.Consumer<NvApp> artListener;
     private Set<Integer> hiddenAppIds = new HashSet<>();
     private ArrayList<AppView.AppObject> allApps = new ArrayList<>();
+    private final java.util.Map<String, String> normalizedTitles = new java.util.HashMap<>();
 
     public AppGridAdapter(Context context, PreferenceConfiguration prefs, ComputerDetails computer, String uniqueId, boolean showHiddenApps) {
         super(context, getLayoutIdForPreferences(prefs));
@@ -71,13 +72,16 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     }
 
     public void setSearchQuery(String query) {
-        searchQuery = normalizeSearch(query);
-        notifyDataSetChanged();
+        String normalized = normalizeSearch(query);
+        if (normalized.equals(searchQuery)) return;
+        searchQuery = normalized;
+        rebuildVisibleItems();
     }
 
     public void setShowHiddenApps(boolean show) {
+        if (showHiddenApps == show) return;
         showHiddenApps = show;
-        notifyDataSetChanged();
+        rebuildVisibleItems();
     }
 
     public int getLibraryCount() {
@@ -93,9 +97,18 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
                 .replaceAll("\\p{M}+", "").toLowerCase(Locale.ROOT).trim();
     }
 
+    private String normalizedTitle(String name) {
+        String cached = normalizedTitles.get(name);
+        if (cached == null) {
+            cached = normalizeSearch(name);
+            normalizedTitles.put(name, cached);
+        }
+        return cached;
+    }
+
     private boolean isVisible(AppView.AppObject app) {
         return (showHiddenApps || !app.isHidden) &&
-                (searchQuery.isEmpty() || normalizeSearch(app.app.getAppName()).contains(searchQuery));
+                (searchQuery.isEmpty() || normalizedTitle(app.app.getAppName()).contains(searchQuery));
     }
 
     private static int getLayoutIdForPreferences(PreferenceConfiguration prefs) {
@@ -224,6 +237,10 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     @Override
     public void notifyDataSetChanged() {
         sortList(allApps);
+        rebuildVisibleItems();
+    }
+
+    private void rebuildVisibleItems() {
         itemList.clear();
         for (AppView.AppObject app : allApps) {
             if (isVisible(app)) itemList.add(app);
@@ -235,6 +252,7 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     public void clear() {
         super.clear();
         allApps.clear();
+        normalizedTitles.clear();
     }
 
     @Override

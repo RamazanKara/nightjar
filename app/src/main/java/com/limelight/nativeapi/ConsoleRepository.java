@@ -505,7 +505,7 @@ public final class ConsoleRepository {
                 .put("app_id", appId)
                 .put("title", title == null ? "" : title);
         try {
-            // TODO(integrator-642): check boolean return once AS-L20 lands on NightjarConsoleJni.
+            // TODO(integrator-642): check boolean return once repoSetFavourite returns boolean on NightjarConsoleJni.
             NightjarConsoleJni.repoSetFavourite(handle, entry.toString(), starred);
         } catch (RuntimeException | UnsatisfiedLinkError e) {
             LimeLog.warning("Console setFavourite failed: " + e.getMessage());

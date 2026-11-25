@@ -50,5 +50,5 @@
     <string name="gyro_diag_share_title">Bewegungswerte teilen</string>
     <string name="gyro_diag_hide">Ausblenden</string>
     <string name="gyro_diag_show">Einblenden</string>
-    <string name="gyro_diag_cap_reached">Aufzeichnung bei %1\ Zeilen gestoppt.</string>
+    <string name="gyro_diag_cap_reached">Aufzeichnung bei %1$d Zeilen gestoppt.</string>
 </resources>

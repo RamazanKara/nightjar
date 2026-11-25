@@ -1,6 +1,8 @@
 package com.limelight.utils;
 
+import android.annotation.TargetApi;
 import android.app.ApplicationExitInfo;
+import android.os.Build;
 
 import com.limelight.BuildConfig;
 
@@ -159,18 +161,32 @@ final class CrashRecord {
                 output.write(text.getBytes(StandardCharsets.UTF_8));
                 output.getFD().sync();
             }
-            try {
-                java.nio.file.Files.move(temp.toPath(), file.toPath(),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-            } catch (IOException atomicUnsupported) {
-                java.nio.file.Files.move(temp.toPath(), file.toPath(),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                moveReplacing(temp, file);
+            } else if (!temp.renameTo(file)) {
+                if (file.exists() && !file.delete()) {
+                    throw new IOException("Failed to replace " + file);
+                }
+                if (!temp.renameTo(file)) {
+                    throw new IOException("Failed to rename " + temp + " to " + file);
+                }
             }
         } finally {
             if (temp.exists() && !temp.delete()) {
                 temp.deleteOnExit();
             }
+        }
+    }
+
+    @TargetApi(Build.VERSION_CODES.O)
+    private static void moveReplacing(File source, File target) throws IOException {
+        try {
+            java.nio.file.Files.move(source.toPath(), target.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException atomicUnsupported) {
+            java.nio.file.Files.move(source.toPath(), target.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }
     }
 }

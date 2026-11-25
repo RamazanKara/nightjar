@@ -97,4 +97,13 @@ public class ReleaseInfoTest {
         assertTrue(ReleaseInfo.parse(release("v3.0.0", "null", false, false)).isUpdateFor("3.0.0-rc.1"));
         assertTrue(ReleaseInfo.parse(release("v3.0.0", "null", false, false)).isUpdateFor("0.8.0"));
     }
+
+    @Test
+    public void to_json_returns_consistent_cached_payload() throws Exception {
+        ReleaseInfo info = v070();
+        String first = info.toJson();
+        String second = info.toJson();
+        assertEquals(first, second);
+        assertEquals("v0.7.0", new org.json.JSONObject(first).getString("tag"));
+    }
 }
