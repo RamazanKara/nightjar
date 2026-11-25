@@ -5,11 +5,11 @@ use jni::objects::{JBooleanArray, JClass, JFloatArray, JIntArray, JShortArray, J
 use jni::sys::{JNI_FALSE, jboolean, jdouble, jfloat, jint, jintArray, jlong, jshort};
 use nightjar_policy::controller::deadzone::{fixed_step_delta, fixed_step_next};
 use nightjar_policy::controller::state_machine::{
-    CAPTURED_BUTTONS, DEFAULT_MOUSE_SENSITIVITY_PERCENT, GuideOp, MouseTickPlan, ScrollStick,
-    UsbInputStates, guide_hold_step, hold_quit_combo, mouse_packet_step, mouse_silenced,
-    mouse_tick_step, pick_menu_mouse_target, quit_button_flag, quit_combo_mask,
-    release_quit_combo, should_arm_menu_combo, should_open_menu_on_release,
-    start_long_press_toggles_mouse, tap_hold_remaining_ms, usb_guide_hold_step,
+    CAPTURED_BUTTONS, GuideOp, MouseTickPlan, ScrollStick, UsbInputStates, guide_hold_step,
+    hold_quit_combo, mouse_packet_step, mouse_silenced, mouse_tick_step, pick_menu_mouse_target,
+    quit_button_flag, quit_combo_mask, release_quit_combo, should_arm_menu_combo,
+    should_open_menu_on_release, start_long_press_toggles_mouse, tap_hold_remaining_ms,
+    usb_guide_hold_step,
 };
 
 use super::{USB_STATE_SLAB, jbool, write_floats, write_ints};
@@ -412,42 +412,6 @@ fn mouse_tick_flags(plan: MouseTickPlan) -> i32 {
     i32::from(plan.has_move1)
         | (i32::from(plan.has_move2) << 1)
         | (i32::from(plan.has_scroll) << 2)
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_mouseTickStep(
-    mut env: JNIEnv,
-    _: JClass,
-    lx: jshort,
-    ly: jshort,
-    rx: jshort,
-    ry: jshort,
-    scroll_stick_mode: jint,
-    fixed_step: jint,
-    out: JIntArray,
-) {
-    let plan = mouse_tick_step(
-        lx,
-        ly,
-        rx,
-        ry,
-        ScrollStick::from_i32(scroll_stick_mode),
-        fixed_step,
-        DEFAULT_MOUSE_SENSITIVITY_PERCENT,
-    );
-    write_ints(
-        &mut env,
-        &out,
-        &[
-            mouse_tick_flags(plan),
-            plan.move1_x.round() as i32,
-            plan.move1_y.round() as i32,
-            plan.move2_x.round() as i32,
-            plan.move2_y.round() as i32,
-            plan.scroll_v.round() as i32,
-            plan.scroll_h.round() as i32,
-        ],
-    );
 }
 
 #[unsafe(no_mangle)]

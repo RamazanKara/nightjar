@@ -55,6 +55,12 @@ public interface HiddenStore {
 
     Set<Integer> changed(String hostUuid, Set<Integer> shown, Set<Integer> hidden);
 
+    static void setApp(long handle, String hostUuid, int appId, String stableId, boolean hidden) {
+        if (!NightjarConsoleJni.repoHiddenSetApp(handle, hostUuid, appId, stableId == null ? "" : stableId, hidden)) {
+            LimeLog.warning("Hidden games: failed to store hidden state for app " + appId);
+        }
+    }
+
     /** Rust-backed persistent store in {@code context.getFilesDir()/console/hidden_apps.json}. */
     final class Preferences implements HiddenStore {
         private static final String IDS_SUFFIX = "#ids";
@@ -112,7 +118,7 @@ public interface HiddenStore {
 
         @Override
         public void set(String hostUuid, int appId, String stableId, boolean hidden) {
-            NightjarConsoleJni.repoHiddenSetApp(handle(), hostUuid, appId, stableId == null ? "" : stableId, hidden);
+            HiddenStore.setApp(handle(), hostUuid, appId, stableId, hidden);
         }
 
         @Override
@@ -237,7 +243,7 @@ public interface HiddenStore {
 
         @Override
         public void set(String hostUuid, int appId, String stableId, boolean hidden) {
-            NightjarConsoleJni.repoHiddenSetApp(handle(), hostUuid, appId, stableId == null ? "" : stableId, hidden);
+            HiddenStore.setApp(handle(), hostUuid, appId, stableId, hidden);
         }
 
         @Override

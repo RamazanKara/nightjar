@@ -505,8 +505,9 @@ public final class ConsoleRepository {
                 .put("app_id", appId)
                 .put("title", title == null ? "" : title);
         try {
-            // TODO(integrator-642): check boolean return once repoSetFavourite returns boolean on NightjarConsoleJni.
-            NightjarConsoleJni.repoSetFavourite(handle, entry.toString(), starred);
+            if (!NightjarConsoleJni.repoSetFavourite(handle, entry.toString(), starred)) {
+                LimeLog.warning("Console setFavourite rejected write");
+            }
         } catch (RuntimeException | UnsatisfiedLinkError e) {
             LimeLog.warning("Console setFavourite failed: " + e.getMessage());
         }

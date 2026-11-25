@@ -43,12 +43,6 @@ final class ControllerButtonRouter {
         if (context.modeIsSelect) quirks |= NightjarInputJni.QUIRK_MODE_IS_SELECT;
         if (context.searchIsMode) quirks |= NightjarInputJni.QUIRK_SEARCH_IS_MODE;
 
-        // TODO(integrator-642): policy commit in wip/v642-fix-client-core removes the legacy 0x2dc8
-        // scanCode==306 -> BUTTON_MODE quirk; keep unforced here so standalone tests also pass (NJ#184).
-        if (context.vendorId == 0x2dc8 && event.getScanCode() == 306) {
-            return event.getKeyCode();
-        }
-
         int mapped = NightjarInputJni.remapKeyEvent(
                 handler.prefConfig.backAsGuide, event.getKeyCode(), event.getScanCode(),
                 event.getFlags(), event.hasNoModifiers(), context.vendorId, context.productId,

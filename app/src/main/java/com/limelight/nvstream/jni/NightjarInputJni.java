@@ -277,10 +277,6 @@ public final class NightjarInputJni {
             int inputMap, int lastInputMap, boolean fixedStepEnabled,
             int currentStep, int[] out);
 
-    public static native void mouseTickStep(
-            short lx, short ly, short rx, short ry,
-            int scrollStickMode, int fixedStep, int[] out);
-
     /**
      * Computes 100 Hz mouse movement and scroll deltas for one tick.
      *
