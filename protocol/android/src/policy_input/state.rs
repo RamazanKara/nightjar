@@ -3,11 +3,12 @@
 use jni::JNIEnv;
 use jni::objects::{JBooleanArray, JClass, JFloatArray, JIntArray, JShortArray, JString};
 use jni::sys::{JNI_FALSE, jboolean, jdouble, jfloat, jint, jintArray, jlong, jshort};
-use nightjar_policy::controller::deadzone::{fixed_step_delta, fixed_step_next, mouse_stick_curve};
+use nightjar_policy::controller::deadzone::{fixed_step_delta, fixed_step_next};
 use nightjar_policy::controller::state_machine::{
-    CAPTURED_BUTTONS, GuideOp, ScrollStick, UsbInputStates, guide_hold_step, hold_quit_combo,
-    mouse_packet_step, mouse_silenced, mouse_tick_step, pick_menu_mouse_target, quit_button_flag,
-    quit_combo_mask, release_quit_combo, should_arm_menu_combo, should_open_menu_on_release,
+    CAPTURED_BUTTONS, DEFAULT_MOUSE_SENSITIVITY_PERCENT, GuideOp, MouseTickPlan, ScrollStick,
+    UsbInputStates, guide_hold_step, hold_quit_combo, mouse_packet_step, mouse_silenced,
+    mouse_tick_step, pick_menu_mouse_target, quit_button_flag, quit_combo_mask,
+    release_quit_combo, should_arm_menu_combo, should_open_menu_on_release,
     start_long_press_toggles_mouse, tap_hold_remaining_ms, usb_guide_hold_step,
 };
 
@@ -407,6 +408,12 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_mousePac
     );
 }
 
+fn mouse_tick_flags(plan: MouseTickPlan) -> i32 {
+    i32::from(plan.has_move1)
+        | (i32::from(plan.has_move2) << 1)
+        | (i32::from(plan.has_scroll) << 2)
+}
+
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_mouseTickStep(
     mut env: JNIEnv,
@@ -426,141 +433,21 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_mouseTic
         ry,
         ScrollStick::from_i32(scroll_stick_mode),
         fixed_step,
+        DEFAULT_MOUSE_SENSITIVITY_PERCENT,
     );
-    let flags = i32::from(plan.has_move1)
-        | (i32::from(plan.has_move2) << 1)
-        | (i32::from(plan.has_scroll) << 2);
     write_ints(
         &mut env,
         &out,
         &[
-            flags,
-            i32::from(plan.move1_x),
-            i32::from(plan.move1_y),
-            i32::from(plan.move2_x),
-            i32::from(plan.move2_y),
-            i32::from(plan.scroll_v),
-            i32::from(plan.scroll_h),
+            mouse_tick_flags(plan),
+            plan.move1_x.round() as i32,
+            plan.move1_y.round() as i32,
+            plan.move2_x.round() as i32,
+            plan.move2_y.round() as i32,
+            plan.scroll_v.round() as i32,
+            plan.scroll_h.round() as i32,
         ],
     );
-}
-
-const MOUSE_EMULATION_TIME_COMPENSATION: f32 = 0.2;
-const MOUSE_SENSITIVITY_MIN_PERCENT: i32 = 25;
-const MOUSE_SENSITIVITY_MAX_PERCENT: i32 = 200;
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-struct MouseTickFloatPlan {
-    has_move1: bool,
-    move1_x: f32,
-    move1_y: f32,
-    has_move2: bool,
-    move2_x: f32,
-    move2_y: f32,
-    has_scroll: bool,
-    scroll_v: f32,
-    scroll_h: f32,
-}
-
-impl MouseTickFloatPlan {
-    fn flags(self) -> i32 {
-        i32::from(self.has_move1)
-            | (i32::from(self.has_move2) << 1)
-            | (i32::from(self.has_scroll) << 2)
-    }
-}
-
-fn clamp_mouse_sensitivity_percent(percent: i32) -> i32 {
-    percent.clamp(MOUSE_SENSITIVITY_MIN_PERCENT, MOUSE_SENSITIVITY_MAX_PERCENT)
-}
-
-// TODO(integrator-642): delegate directly to `nightjar_policy::controller::state_machine::mouse_tick_step`
-// once `wip/v642-fix-client-core` updates `mouse_tick_step` to return floats with sensitivity scaling.
-fn mouse_tick_step_float(
-    lx: i16,
-    ly: i16,
-    rx: i16,
-    ry: i16,
-    scroll_stick: ScrollStick,
-    fixed_step: i32,
-    sensitivity_percent: i32,
-) -> MouseTickFloatPlan {
-    let move_scale = f64::from(MOUSE_EMULATION_TIME_COMPENSATION)
-        * (f64::from(clamp_mouse_sensitivity_percent(sensitivity_percent)) / 100.0);
-
-    let stick_move = |x: i16, y: i16| -> (bool, f32, f32) {
-        let (vx, vy) = mouse_stick_curve(x, y);
-        if vx == 0.0 && vy == 0.0 {
-            return (false, 0.0, 0.0);
-        }
-        let (dx, dy) = if fixed_step > 0 {
-            (
-                (f64::from(fixed_step_delta(f64::from(vx), fixed_step)) * move_scale) as f32,
-                (f64::from(fixed_step_delta(f64::from(-vy), fixed_step)) * move_scale) as f32,
-            )
-        } else {
-            (
-                (f64::from(vx) * move_scale) as f32,
-                (f64::from(-vy) * move_scale) as f32,
-            )
-        };
-        (dx != 0.0 || dy != 0.0, dx, dy)
-    };
-
-    let stick_scroll = |x: i16, y: i16| -> (bool, f32, f32) {
-        let (vx, vy) = mouse_stick_curve(x, y);
-        let mag = (vx * vx + vy * vy).sqrt();
-        if mag < 1.0 {
-            return (false, 0.0, 0.0);
-        }
-        (
-            true,
-            (f64::from(vy) * 0.2) as f32,
-            (f64::from(vx) * 0.2) as f32,
-        )
-    };
-
-    match scroll_stick {
-        ScrollStick::None => {
-            let (has_move1, move1_x, move1_y) = stick_move(lx, ly);
-            let (has_move2, move2_x, move2_y) = stick_move(rx, ry);
-            MouseTickFloatPlan {
-                has_move1,
-                move1_x,
-                move1_y,
-                has_move2,
-                move2_x,
-                move2_y,
-                ..Default::default()
-            }
-        }
-        ScrollStick::Right => {
-            let (has_move1, move1_x, move1_y) = stick_move(lx, ly);
-            let (has_scroll, scroll_v, scroll_h) = stick_scroll(rx, ry);
-            MouseTickFloatPlan {
-                has_move1,
-                move1_x,
-                move1_y,
-                has_scroll,
-                scroll_v,
-                scroll_h,
-                ..Default::default()
-            }
-        }
-        ScrollStick::Left => {
-            let (has_move1, move1_x, move1_y) = stick_move(rx, ry);
-            let (has_scroll, scroll_v, scroll_h) = stick_scroll(lx, ly);
-            MouseTickFloatPlan {
-                has_move1,
-                move1_x,
-                move1_y,
-                has_scroll,
-                scroll_v,
-                scroll_h,
-                ..Default::default()
-            }
-        }
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -576,7 +463,7 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_mouseTic
     sensitivity_percent: jint,
     out: JFloatArray,
 ) -> jint {
-    let plan = mouse_tick_step_float(
+    let plan = mouse_tick_step(
         lx,
         ly,
         rx,
@@ -597,7 +484,7 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_mouseTic
             plan.scroll_h,
         ],
     );
-    plan.flags()
+    mouse_tick_flags(plan)
 }
 
 #[cfg(test)]
@@ -607,30 +494,30 @@ mod tests {
     #[test]
     fn mouse_tick_step_float_handles_subpixel_moves_sensitivity_and_scroll() {
         // Sub-pixel deflection returns non-zero fractional delta instead of zeroing out.
-        let slow = mouse_tick_step_float(2000, 0, 0, 0, ScrollStick::None, 0, 100);
+        let slow = mouse_tick_step(2000, 0, 0, 0, ScrollStick::None, 0, 100);
         assert!(slow.has_move1);
         assert!(slow.move1_x > 0.0 && slow.move1_x < 1.0);
         assert_eq!(slow.move1_y, 0.0);
-        assert_eq!(slow.flags(), 1);
+        assert_eq!(mouse_tick_flags(slow), 1);
 
         // Clamped sensitivity scales movement without affecting scroll.
-        let clamped_low = mouse_tick_step_float(0x7FFE, 0, 0, 0x7FFE, ScrollStick::Right, 0, 1);
-        let at_25 = mouse_tick_step_float(0x7FFE, 0, 0, 0x7FFE, ScrollStick::Right, 0, 25);
+        let clamped_low = mouse_tick_step(0x7FFE, 0, 0, 0x7FFE, ScrollStick::Right, 0, 1);
+        let at_25 = mouse_tick_step(0x7FFE, 0, 0, 0x7FFE, ScrollStick::Right, 0, 25);
         assert_eq!(clamped_low, at_25);
-        let at_200 = mouse_tick_step_float(0x7FFE, 0, 0, 0x7FFE, ScrollStick::Right, 0, 500);
+        let at_200 = mouse_tick_step(0x7FFE, 0, 0, 0x7FFE, ScrollStick::Right, 0, 500);
         assert!((at_200.move1_x - at_25.move1_x * 8.0).abs() < 1e-4);
         assert!(at_200.has_scroll && at_25.has_scroll);
         assert_eq!(at_200.scroll_v, at_25.scroll_v);
-        assert_eq!(at_200.flags(), 1 | 4);
+        assert_eq!(mouse_tick_flags(at_200), 1 | 4);
 
         // Scroll keeps mag < 1.0 gate even when movement is sub-pixel active.
-        let gated_scroll = mouse_tick_step_float(0, 0, 2000, 0, ScrollStick::Right, 0, 100);
+        let gated_scroll = mouse_tick_step(0, 0, 2000, 0, ScrollStick::Right, 0, 100);
         assert!(!gated_scroll.has_scroll);
         assert_eq!(gated_scroll.scroll_v, 0.0);
         assert_eq!(gated_scroll.scroll_h, 0.0);
 
         // Fixed step scales by 0.2 * sensitivity and tracks negative Y sign.
-        let fixed = mouse_tick_step_float(0x7FFE, -0x7FFE, 0, 0, ScrollStick::None, 20, 150);
+        let fixed = mouse_tick_step(0x7FFE, -0x7FFE, 0, 0, ScrollStick::None, 20, 150);
         assert!(fixed.has_move1);
         assert!((fixed.move1_x - 6.0).abs() < 1e-4);
         assert!((fixed.move1_y - 6.0).abs() < 1e-4);
