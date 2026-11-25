@@ -215,4 +215,60 @@ public class JmDNSDiscoveryLifecycleTest {
             JmmDNS.Factory.setClassDelegate(originalFactory);
         }
     }
+
+    @Test
+    public void pendingResolutionGivesUpAfterMaxRetriesAndClearsOnServiceRemoved() throws Exception {
+        AtomicInteger retries = new AtomicInteger();
+        CountDownLatch pollCycleCompleted = new CountDownLatch(JmDNSDiscoveryAgent.MAX_PENDING_RETRIES + 2);
+        JmmDNS resolver = (JmmDNS) Proxy.newProxyInstance(JmmDNS.class.getClassLoader(),
+                new Class<?>[] {JmmDNS.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("requestServiceInfo")) {
+                        pollCycleCompleted.countDown();
+                    }
+                    if (method.getName().equals("getServiceInfos")) {
+                        retries.incrementAndGet();
+                        return new ServiceInfo[0];
+                    }
+                    return null;
+                });
+        JmmDNS.Factory.ClassDelegate originalFactory = JmmDNS.Factory.classDelegate();
+        JmmDNS.Factory.setClassDelegate(() -> resolver);
+        JmDNSDiscoveryAgent agent = new JmDNSDiscoveryAgent(RuntimeEnvironment.getApplication(),
+                new MdnsDiscoveryListener() {
+                    @Override public boolean notifyComputerAdded(MdnsComputer computer) { return true; }
+                    @Override public void notifyDiscoveryFailure(Exception e) { throw new AssertionError(e); }
+                });
+        Thread worker = null;
+        try {
+            agent.startDiscovery(1);
+            worker = ReflectionHelpers.getField(agent, "discoveryThread");
+            ServiceListener session = ReflectionHelpers.getField(agent, "discoverySession");
+            HashSet<String> pending = ReflectionHelpers.getField(session, "pendingResolution");
+            synchronized (pending) {
+                pending.add("Ghost");
+            }
+            assertTrue(pollCycleCompleted.await(HANG_GUARD_S, TimeUnit.SECONDS));
+            assertEquals("Vanished host must stop blocking resolver retries after MAX_PENDING_RETRIES",
+                    JmDNSDiscoveryAgent.MAX_PENDING_RETRIES, retries.get());
+
+            synchronized (pending) {
+                pending.add("Gone");
+            }
+            ServiceInfo goneInfo = ServiceInfo.create("_nvstream._tcp.local.", "Gone", 47989, "");
+            session.serviceRemoved(new ServiceEvent(agent) {
+                @Override public JmDNS getDNS() { return null; }
+                @Override public String getType() { return goneInfo.getType(); }
+                @Override public String getName() { return goneInfo.getName(); }
+                @Override public ServiceInfo getInfo() { return goneInfo; }
+            });
+            synchronized (pending) {
+                assertFalse("serviceRemoved must drop pending resolution immediately", pending.contains("Gone"));
+            }
+        } finally {
+            agent.stopDiscovery();
+            if (worker != null) worker.join(HANG_GUARD_MS);
+            JmmDNS.Factory.close();
+            JmmDNS.Factory.setClassDelegate(originalFactory);
+        }
+    }
 }

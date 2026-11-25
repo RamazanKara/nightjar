@@ -348,4 +348,27 @@ public class MediaCodecHdrMetadataTest {
             }
         }
     }
+
+    @Test
+    public void duplicateHdrReportsSkipRedundantVulkanUpdates() throws IOException {
+        try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
+            MediaCodecDecoderRenderer renderer = streaming(activity.get());
+            AtomicInteger vulkanCalls = new AtomicInteger();
+            ReflectionHelpers.setField(renderer, "vulkanRenderer", new VulkanRendererBridge(0L) {
+                @Override public void setHdrMode(boolean enabled, byte[] hdrMetadata) {
+                    vulkanCalls.incrementAndGet();
+                }
+            });
+
+            renderer.setHdrMode(true, METADATA);
+            assertEquals(1, vulkanCalls.get());
+            renderer.setHdrMode(true, METADATA.clone());
+            assertEquals(1, vulkanCalls.get());
+
+            renderer.setHdrMode(false, null);
+            assertEquals(2, vulkanCalls.get());
+            renderer.setHdrMode(false, null);
+            assertEquals(2, vulkanCalls.get());
+        }
+    }
 }

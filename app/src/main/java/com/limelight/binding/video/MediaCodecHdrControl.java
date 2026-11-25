@@ -81,11 +81,15 @@ final class MediaCodecHdrControl {
                 return;
             }
             byte[] metadata = enabled && hdrMetadata != null && hdrMetadata.length >= 24 ? hdrMetadata : null;
-            boolean previousMode = r.currentHdrMode != null ? r.currentHdrMode : r.codecSelector.assumesHdr();
+            boolean firstReport = r.currentHdrMode == null;
+            boolean previousMode = !firstReport ? r.currentHdrMode : r.codecSelector.assumesHdr();
+            boolean vulkanUnchanged = !firstReport
+                    && previousMode == enabled
+                    && java.util.Arrays.equals(r.currentHdrMetadata, metadata);
             r.currentHdrMode = enabled;
             // The Vulkan renderer switches its output between SDR and HDR10 itself
             VulkanRendererBridge vulkan = r.vulkanRenderer;
-            if (vulkan != null) vulkan.setHdrMode(enabled, metadata);
+            if (vulkan != null && !vulkanUnchanged) vulkan.setHdrMode(enabled, metadata);
             if (enabled && r.upscaler != null) r.upscalingPolicy.fail(UpscalingPolicy.Reason.HDR);
             MediaCodecDecoderRenderer.HdrChange change = MediaCodecDecoderRenderer.hdrChange(
                     previousMode, enabled, r.currentHdrMetadata, metadata, Build.VERSION.SDK_INT);

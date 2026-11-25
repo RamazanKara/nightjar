@@ -44,6 +44,12 @@ public final class RefreshSwitchMonitor {
             return null;
         }
         RefreshSwitchDiagnosis.PanelMode active = activeMode(display);
+        if (RefreshSwitchDiagnosis.holds(voteHz, active.hz)) {
+            watcher.observe(nowMs, null);
+            lastSettled = null;
+            logged = null;
+            return null;
+        }
         RefreshSwitchDiagnosis.Result result = RefreshSwitchDiagnosis.diagnose(Build.VERSION.SDK_INT, voteHz,
                 seamlessOnly, active, modes(display), conditions(context));
         RefreshSwitchDiagnosis.Result settled = watcher.observe(nowMs, result);

@@ -17,13 +17,14 @@ use serde_json::{Map, Value, json};
 use crate::native_api;
 
 fn family_name(family: Family) -> &'static str {
+    use Family::*;
     match family {
-        Family::GameStream => "GAMESTREAM",
-        Family::Sunshine => "SUNSHINE",
-        Family::Apollo => "APOLLO",
-        Family::Vibepollo => "VIBEPOLLO",
-        Family::Rubylight => "RUBYLIGHT",
-        Family::Unknown => "UNKNOWN",
+        GameStream => "GAMESTREAM",
+        Sunshine => "SUNSHINE",
+        Apollo => "APOLLO",
+        Vibepollo => "VIBEPOLLO",
+        Rubylight => "RUBYLIGHT",
+        Unknown => "UNKNOWN",
     }
 }
 
