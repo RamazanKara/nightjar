@@ -97,7 +97,7 @@ final class MediaCodecFramePresenter {
 
     /** Feeds the residency governor with the output at index and logs the queue it saw. */
     void noteResidency(int index) {
-        long excessNs = r.residency.onOutput(r.frameLatencyStats.getInputToOutputNs(index), System.nanoTime());
+        long excessNs = r.residency.onOutput(r.frameLatencyStats.getInputToOutputNs(index), r.nowNs());
         r.residency.track(excessNs, r.vsyncPacer.contentIntervalNs());
         r.frameLatencyStats.onQueueState(index, DecoderQueuePolicy.depth(r.numFramesIn, r.numFramesOut, r.decoderDepthBase), excessNs);
     }
@@ -112,7 +112,7 @@ final class MediaCodecFramePresenter {
             excessNs = r.debt.onOutput(debtTimes.inputToOutputNs, debtTimes.submitToOutputNs,
                     debtTimes.outputNs, r.vsyncPacer.contentIntervalNs(), depth);
         } else {
-            excessNs = r.debt.onOutput(r.frameLatencyStats.getInputToOutputNs(index), System.nanoTime(),
+            excessNs = r.debt.onOutput(r.frameLatencyStats.getInputToOutputNs(index), r.nowNs(),
                     r.vsyncPacer.contentIntervalNs());
         }
         r.frameLatencyStats.onQueueState(index, depth, excessNs);
@@ -129,7 +129,7 @@ final class MediaCodecFramePresenter {
         int effectiveMode = r.hostFrameTimes ? PreferenceConfiguration.FRAME_PACING_MAX_SMOOTHNESS : r.prefs.framePacing;
         if (FramePacingPolicy.dropQueuedFrames(effectiveMode)) {
             if (effectiveMode == PreferenceConfiguration.FRAME_PACING_BALANCED &&
-                    r.vsyncPacer.keepsBurstForRefreshSlot(System.nanoTime())) {
+                    r.vsyncPacer.keepsBurstForRefreshSlot(r.nowNs())) {
                 return false;
             }
             catchUpReason = "catch_up";
@@ -137,7 +137,7 @@ final class MediaCodecFramePresenter {
         }
         int reason = NightjarPolicyJni.decoderWantsCatchUp(r.residency.handle(),
                 effectiveMode,
-                r.frameLatencyStats.getEnqueueTimeNsForOutput(index), System.nanoTime(),
+                r.frameLatencyStats.getEnqueueTimeNsForOutput(index), r.nowNs(),
                 r.streamFrameRateMilliHz, drained, FramePacingPolicy.MAX_OUTPUT_DRAIN,
                 scheduled, r.numFramesIn, r.numFramesOut, r.decoderDepthBase);
         if (reason == 0) return false;
@@ -160,12 +160,12 @@ final class MediaCodecFramePresenter {
         else if (smooth) noteDebt(lastIndex);
         while (!r.stopping && r.codecRecoveryType.get() == MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_NONE &&
                 FramePacingPolicy.hasOutputDrainTimeRemaining(
-                        SystemClock.elapsedRealtimeNanos() - outputDrainStartNs,
+                        r.elapsedNs() - outputDrainStartNs,
                         r.streamFrameRateMilliHz) &&
                 wantsCatchUp(lastIndex, drained, scheduled) &&
                 (outIndex = r.videoDecoder.dequeueOutputBuffer(info, 0)) >= 0) {
-            noteDecoderOutput(outIndex, info.presentationTimeUs, System.nanoTime());
-            r.frameLatencyStats.onOutputDropped(lastIndex, catchUpReason, System.nanoTime(), reportsRenderTimes());
+            noteDecoderOutput(outIndex, info.presentationTimeUs, r.nowNs());
+            r.frameLatencyStats.onOutputDropped(lastIndex, catchUpReason, r.nowNs(), reportsRenderTimes());
             r.videoDecoder.releaseOutputBuffer(lastIndex, false);
             if (scheduled && "governor".equals(catchUpReason)) {
                 r.residency.onDropped();
@@ -184,7 +184,7 @@ final class MediaCodecFramePresenter {
         if (smooth && drained == 0 && outIndex != MediaCodec.INFO_OUTPUT_FORMAT_CHANGED && !r.stopping &&
                 r.codecRecoveryType.get() == MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_NONE && r.debt.shouldDrop() &&
                 DecoderQueuePolicy.depth(r.numFramesIn, r.numFramesOut, r.decoderDepthBase) == 0) {
-            r.frameLatencyStats.onOutputDropped(lastIndex, "debt", System.nanoTime(), reportsRenderTimes());
+            r.frameLatencyStats.onOutputDropped(lastIndex, "debt", r.nowNs(), reportsRenderTimes());
             r.videoDecoder.releaseOutputBuffer(lastIndex, false);
             r.debt.onDropped();
             return outIndex;
@@ -194,7 +194,7 @@ final class MediaCodecFramePresenter {
                 DecoderQueuePolicy.depth(r.numFramesIn, r.numFramesOut, r.decoderDepthBase) >= 1) {
             int newer = r.videoDecoder.dequeueOutputBuffer(info, DecoderQueuePolicy.Debt.WAIT_US);
             if (newer >= 0) {
-                long nowNs = System.nanoTime();
+                long nowNs = r.nowNs();
                 noteDecoderOutput(newer, info.presentationTimeUs, nowNs);
                 r.frameLatencyStats.onOutputDropped(lastIndex, "debt", nowNs, reportsRenderTimes());
                 r.videoDecoder.releaseOutputBuffer(lastIndex, false);
@@ -215,7 +215,7 @@ final class MediaCodecFramePresenter {
         if (scheduled) {
             lastPtsUs = r.vsyncPacer.releaseScheduled(lastIndex, lastPtsUs, drained > 0);
         } else {
-            long releaseNs = System.nanoTime();
+            long releaseNs = r.nowNs();
             boolean displayQueueDrop = displayQueueDropDue(releaseNs);
             long displayAtNs;
             long handoffAtNs;
@@ -246,7 +246,7 @@ final class MediaCodecFramePresenter {
         r.frameLatencyStats.onArtemisDecodeCounted(lastPtsUs);
         // A scheduled frame is only stamped with its due time, never waited for (ScheduledRelease):
         // now is when it was ready in either mode, not when it is shown.
-        r.vsyncPacer.reportPhaseSlack(System.nanoTime());
+        r.vsyncPacer.reportPhaseSlack(r.nowNs());
 
         if (shown) r.activeWindowVideoStats.totalFramesRendered++;
         return outIndex;
@@ -286,7 +286,7 @@ final class MediaCodecFramePresenter {
                 stale = r.outputBufferQueue.poll();
             }
             if (stale == IntRing.EMPTY) return;
-            r.frameLatencyStats.onOutputDropped(stale, "pace_switch", System.nanoTime(), reportsRenderTimes());
+            r.frameLatencyStats.onOutputDropped(stale, "pace_switch", r.nowNs(), reportsRenderTimes());
             r.videoDecoder.releaseOutputBuffer(stale, false);
         }
     }
@@ -302,7 +302,7 @@ final class MediaCodecFramePresenter {
         }
         // Publish replacement before releasing old output so the display callback finds it immediately.
         if (droppedIndex != IntRing.EMPTY) {
-            r.frameLatencyStats.onOutputDropped(droppedIndex, "replaced", System.nanoTime(), reportsRenderTimes());
+            r.frameLatencyStats.onOutputDropped(droppedIndex, "replaced", r.nowNs(), reportsRenderTimes());
             r.videoDecoder.releaseOutputBuffer(droppedIndex, false);
         } else {
             // Artemis counts a queued frame unless queuing it dropped an older one.

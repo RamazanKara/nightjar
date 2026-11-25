@@ -73,6 +73,10 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     long hangResetTimeoutMs = MediaCodecRecovery.HANG_RESET_TIMEOUT_MS, streamStartMs = -1, streamStartUptimeMs, latencyCsvBytes, vsyncTimeNs, vsyncIntervalNs, vsyncPresentationDeadlineNs, appVsyncOffsetNs, balancedOnOutput, balancedOnVsync, vulkanOutputs, phaseReports;
     volatile boolean hangResetPending, restartWithoutVendorKeys, recoveryAfterFailure, heatHoldsBitrate, heatEasesLoad, hostFrameTimes, hostPhaseLock, submitHints;
     volatile long inputWaitSinceMs = -1, lastVideoFrameTimeMs;
+    // A test pins the output path's clocks here (MediaCodecBalancedQueueTest); 0 reads the system clocks.
+    long testClockNs;
+    long nowNs() { long t = testClockNs; return t != 0 ? t : System.nanoTime(); }
+    long elapsedNs() { long t = testClockNs; return t != 0 ? t : SystemClock.elapsedRealtimeNanos(); }
     volatile SubmitHandoff<MediaCodecDecodeLoop.HandedUnit> submitHandoff;
     final Map<String, HungKeys> hungKeys = new ConcurrentHashMap<>();
     DecoderRecoveryBackoff recoveryBackoff = new DecoderRecoveryBackoff();
@@ -468,9 +472,9 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                         try {
                             int outIndex = videoDecoder.dequeueOutputBuffer(info, 50000);
                             if (outIndex >= 0) {
-                                workStartNs = System.nanoTime();
+                                workStartNs = nowNs();
                                 if (cpuTime) workCpuStartNs = Debug.threadCpuTimeNanos();
-                                long outputDrainStartNs = SystemClock.elapsedRealtimeNanos();
+                                long outputDrainStartNs = elapsedNs();
                                 outIndex = framePresenter.handleDecodedOutput(outIndex, workStartNs, info, outputDrainStartNs);
                             }
                             if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) onOutputFormatChanged();

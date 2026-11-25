@@ -185,6 +185,7 @@ public class MediaCodecBalancedQueueTest {
             fixture.dropLateFrames();
             fixture.state.outputs = new int[] {20, 21};
             fixture.state.anchorVsyncOnFirstOutput = true;
+            fixture.renderer.testClockNs = fixture.firstVsync;
             fixture.state.allowDiscard.countDown();
 
             fixture.start();
@@ -217,6 +218,7 @@ public class MediaCodecBalancedQueueTest {
             fixture.dropLateFrames();
             fixture.state.outputs = new int[] {20, 21, 22};
             fixture.state.anchorVsyncOnFirstOutput = true;
+            fixture.renderer.testClockNs = fixture.firstVsync;
             fixture.state.allowDiscard.countDown();
 
             fixture.start();
@@ -264,6 +266,7 @@ public class MediaCodecBalancedQueueTest {
             ReflectionHelpers.setField(fixture.renderer, "outputHasArrSupport", true);
             fixture.state.outputs = new int[] {20, 21};
             fixture.state.anchorVsyncOnFirstOutput = true;
+            fixture.renderer.testClockNs = fixture.firstVsync;
             fixture.state.allowDiscard.countDown();
 
             fixture.start();
@@ -399,7 +402,7 @@ public class MediaCodecBalancedQueueTest {
                 return MediaCodec.INFO_TRY_AGAIN_LATER;
             }
             int id = state.outputs[state.nextOutput++];
-            long now = System.nanoTime();
+            long now = state.renderer.nowNs();
             if (state.anchorVsyncOnFirstOutput && state.nextOutput == 1) {
                 synchronized (state.renderer.vsyncMonitor) {
                     // A latch just passed: the burst has almost a whole refresh before the next one.
