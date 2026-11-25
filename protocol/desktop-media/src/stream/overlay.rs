@@ -39,6 +39,87 @@ pub struct Compact {
     pub text: String,
 }
 
+impl Compact {
+    /// Returns a copy with device battery percentage and local clock appended when `text` is non-empty.
+    #[must_use]
+    pub fn with_device_info(&self, battery_percent: Option<u8>, clock: Option<&str>) -> Self {
+        if self.text.is_empty() {
+            return self.clone();
+        }
+        let mut text = self.text.clone();
+        if let Some(pct) = battery_percent {
+            use std::fmt::Write;
+            let _ = write!(text, " \u{00b7} {}%", pct.min(100));
+        }
+        if let Some(clock) = clock.filter(|c| !c.is_empty()) {
+            text.push_str(" \u{00b7} ");
+            text.push_str(clock);
+        }
+        Self { health: self.health, text }
+    }
+}
+
+/// Device battery percentage sampled at most once every 15 seconds for the compact overlay.
+pub fn battery_percent() -> Option<u8> {
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
+
+    static CACHE: OnceLock<Mutex<(Instant, Option<u8>)>> = OnceLock::new();
+    const REFRESH_INTERVAL: Duration = Duration::from_secs(15);
+
+    let now = Instant::now();
+    let cache = CACHE.get_or_init(|| Mutex::new((now - REFRESH_INTERVAL, None)));
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    if now.duration_since(guard.0) >= REFRESH_INTERVAL {
+        guard.1 = sample_battery_percent();
+        guard.0 = now;
+    }
+    guard.1
+}
+
+fn sample_battery_percent() -> Option<u8> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+        let mut status = SYSTEM_POWER_STATUS::default();
+        if unsafe { GetSystemPowerStatus(&mut status) }.is_ok()
+            && (status.BatteryFlag & 128) == 0
+            && status.BatteryFlag != 255
+            && status.BatteryLifePercent <= 100
+        {
+            return Some(status.BatteryLifePercent);
+        }
+        None
+    }
+    #[cfg(target_os = "linux")]
+    {
+        return read_linux_battery_sysfs(std::path::Path::new("/sys/class/power_supply"));
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        None
+    }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn read_linux_battery_sysfs(root: &std::path::Path) -> Option<u8> {
+    let entries = std::fs::read_dir(root).ok()?;
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        let Ok(kind) = std::fs::read_to_string(dir.join("type")) else { continue };
+        if kind.trim() != "Battery" {
+            continue;
+        }
+        let Ok(capacity) = std::fs::read_to_string(dir.join("capacity")) else { continue };
+        if let Ok(pct) = capacity.trim().parse::<u8>()
+            && pct <= 100
+        {
+            return Some(pct);
+        }
+    }
+    None
+}
+
 impl Default for Compact {
     fn default() -> Self {
         Self { health: Health::Unknown, text: String::new() }
@@ -160,6 +241,25 @@ pub fn hardware(metrics: &HardwareMetrics, debug: bool) -> Vec<(String, String)>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compact_with_device_info_appends_battery_and_clock_unless_empty() {
+        let base = Compact { health: Health::Good, text: "119.9 FPS \u{00b7} 8 ms".to_owned() };
+        assert_eq!(base.with_device_info(Some(84), Some("20:15")).text, "119.9 FPS \u{00b7} 8 ms \u{00b7} 84% \u{00b7} 20:15");
+        assert_eq!(base.with_device_info(None, Some("20:15")).text, "119.9 FPS \u{00b7} 8 ms \u{00b7} 20:15");
+        assert_eq!(base.with_device_info(Some(120), None).text, "119.9 FPS \u{00b7} 8 ms \u{00b7} 100%");
+
+        let waiting = Compact { health: Health::Good, text: String::new() };
+        assert_eq!(waiting.with_device_info(Some(84), Some("20:15")).text, "");
+
+        let dir = std::env::temp_dir().join(format!("nightjar_bat_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("BAT0")).unwrap();
+        std::fs::write(dir.join("BAT0/type"), "Battery\n").unwrap();
+        std::fs::write(dir.join("BAT0/capacity"), "73\n").unwrap();
+        assert_eq!(read_linux_battery_sysfs(&dir), Some(73));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn measured() -> Measures {
         Measures {

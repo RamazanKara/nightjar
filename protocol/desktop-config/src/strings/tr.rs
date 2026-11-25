@@ -1755,4 +1755,6 @@ sudo sysctl -w net.core.rmem_max={}", "Alma arabelleği: sistem istenen {1} KiB'
     ("Testing {} Mbps frame pace", "{} Mbps kare temposu test ediliyor"),
     ("No usable pace was measured. The PC will keep its default.", "Kullanılabilir bir tempo ölçülemedi. PC varsayılan değerini koruyacak."),
     ("Could not start network test: {}", "Ağ testi başlatılamadı: {}"),
+    ("Show battery and clock in compact overlay", "Kompakt katmanda pil ve saati göster"),
+    ("Add this device’s battery percentage and local time to the compact performance overlay.", "Kompakt performans katmanına bu cihazın pil yüzdesini ve yerel saati ekler."),
 ];

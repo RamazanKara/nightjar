@@ -253,7 +253,7 @@ pub(in crate::ui) const ANDROID_KEYS: &[(&str, &str)] = &[
     ("auto_reconnect", "checkbox_auto_reconnect"), ("connection_test", "network_tests"), ("client_roaming", "checkbox_client_roaming"),
     ("network_grace_ms", "list_network_grace"),
     ("receive_coalescing", "checkbox_receive_coalescing"), ("jumbo_frames", "jumbo_frames"), ("internet_play", "checkbox_internet_play"),
-    ("hide_connection_warnings", "checkbox_disable_warnings"), ("dual_screen", "checkbox_dual_screen"),
+    ("hide_connection_warnings", "checkbox_disable_warnings"), ("compact_overlay_device_info", "checkbox_compact_overlay_device_info"), ("dual_screen", "checkbox_dual_screen"),
     ("second_screen_width", "list_resolution_screen2"), ("input_only_any_host", "checkbox_input_only_any_host"),
     // App
     ("theme", "theme"), ("language", "list_languages"), ("open_on_start", "list_open_on_start"),

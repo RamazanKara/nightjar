@@ -609,3 +609,28 @@ pub(crate) fn configure_display_tearing(
         eprintln!("nightjar: the renderer draws and D3D11VA decodes on {gpu}");
     }
 }
+
+/// Local wall-clock time as `HH:MM` for the compact performance overlay.
+pub(crate) fn local_clock_hh_mm() -> String {
+    #[cfg(windows)]
+    {
+        let st = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+        format!("{:02}:{:02}", st.wHour, st.wMinute)
+    }
+    // POSIX `localtime_r` resolves the device's local timezone on Unix desktop targets.
+    #[cfg(unix)]
+    {
+        let now = unsafe { libc::time(std::ptr::null_mut()) };
+        let mut tm = unsafe { std::mem::zeroed::<libc::tm>() };
+        if !unsafe { libc::localtime_r(&now, &mut tm) }.is_null() {
+            format!("{:02}:{:02}", tm.tm_hour, tm.tm_min)
+        } else {
+            String::new()
+        }
+    }
+    // Other non-Windows, non-Unix targets omit the local clock field.
+    #[cfg(not(any(windows, unix)))]
+    {
+        String::new()
+    }
+}

@@ -247,6 +247,7 @@ public class SettingsCatalogGen {
     static final String CODEC_LOW_LATENCY_CORRUPTION_OFF_PREF_STRING = "codec_low_latency_corruption_off";
     static final String OVERLAY_MODE_PREF_STRING = "performance_overlay_mode";
     static final String OVERLAY_POSITION_PREF_STRING = "performance_overlay_position";
+    static final String COMPACT_OVERLAY_DEVICE_INFO_PREF_STRING = "checkbox_compact_overlay_device_info";
     static final String OVERLAY_COMPACT_DEFAULT_PREF_STRING = "performance_overlay_compact_default";
 
     static final String[] REMOVED_AUTO_BITRATE_LIMIT_PREFS = {"list_auto_bitrate_min_kbps", "list_auto_bitrate_max_kbps"};

@@ -49,4 +49,6 @@
     <string name="settings_category_pyrowave" translatable="false">PyroWave</string>
     <!-- Said at a stream's start when controllers are connected but Controllers is Off. -->
     <string name="stream_controllers_off">Controllers is Off in Settings, so no controller reaches the PC.</string>
+    <string name="title_compact_overlay_device_info">Show battery and clock in compact overlay</string>
+    <string name="summary_compact_overlay_device_info">Add this device’s battery percentage and local time to the compact performance overlay.</string>
 </resources>

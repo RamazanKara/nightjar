@@ -357,6 +357,7 @@ public class SettingsKeysTest {
         reads.put("list_resolution_screen2", new Read("native", "1920x1080", c -> c.secondScreenResolution));
         reads.put("checkbox_enable_perf_overlay", new Read(false, true, c -> c.enablePerfOverlay));
         reads.put("performance_overlay_position", new Read("top_left", "bottom_right", c -> c.overlayPosition));
+        reads.put("checkbox_compact_overlay_device_info", new Read(false, true, c -> c.compactOverlayDeviceInfo));
         reads.put("checkbox_enable_pip", new Read(false, true, c -> c.enablePip));
         reads.put("checkbox_auto_reconnect", new Read(false, true, c -> c.autoReconnect));
         reads.put("list_network_grace", new Read("0", "30", c -> c.networkGraceSeconds));

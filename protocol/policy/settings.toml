@@ -1617,6 +1617,12 @@ type = "String"
 value = "performance_overlay_position"
 
 [[android_const]]
+name = "COMPACT_OVERLAY_DEVICE_INFO_PREF_STRING"
+vis = "package"
+type = "String"
+value = "checkbox_compact_overlay_device_info"
+
+[[android_const]]
 name = "OVERLAY_COMPACT_DEFAULT_PREF_STRING"
 vis = "package"
 type = "String"
@@ -2951,6 +2957,16 @@ desktop_key = "input_only_any_host"
 advice = "Enable to add Input-only to a game's menu on PCs whose host has no Input-only mode of its own (Sunshine, GameStream, Apollo with its input-only mode off). The PC still streams video and audio at 640x360, 30 FPS and 500 kbps, about 0.7 Mbit/s with overhead; Nightjar discards both. Hosts with their own mode keep using their Input-only tile. See [Input-only on any PC](controls.md#input-only-on-any-pc)."
 
 [[android_setting]]
+key = "checkbox_compact_overlay_device_info"
+category = "category_streaming"
+tier = "more"
+kind = "bool"
+xml_default = "false"
+scope = "global"
+desktop_key = "compact_overlay_device_info"
+advice = "Off by default, under Streaming's More rows. Adds this device's battery percentage and local clock time to the compact performance overlay."
+
+[[android_setting]]
 key = "theme"
 category = "category_app_main"
 tier = "main"
@@ -3727,6 +3743,14 @@ default_expr = "OverlayCorner::TopLeft"
 scope = "layer"
 override_allowed = true
 android_key = "performance_overlay_position"
+
+[[desktop_setting]]
+key = "compact_overlay_device_info"
+rust_type = "bool"
+default_expr = "false"
+scope = "layer"
+override_allowed = true
+android_key = "checkbox_compact_overlay_device_info"
 
 [[desktop_setting]]
 key = "mouse_mode"

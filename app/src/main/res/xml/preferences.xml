@@ -856,6 +856,11 @@
     </PreferenceCategory>
     <PreferenceCategory android:key="category_streaming">
         <com.limelight.preferences.MaterialSwitchPreference
+            android:key="checkbox_compact_overlay_device_info"
+            android:title="@string/title_compact_overlay_device_info"
+            android:dialogMessage="@string/summary_compact_overlay_device_info"
+            android:defaultValue="false" />
+        <com.limelight.preferences.MaterialSwitchPreference
             android:key="checkbox_dual_screen"
             android:title="@string/title_checkbox_dual_screen"
             android:dialogMessage="@string/summary_checkbox_dual_screen"

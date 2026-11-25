@@ -1755,4 +1755,6 @@ sudo sysctl -w net.core.rmem_max={}", "수신 버퍼: 시스템이 요청한 {1}
     ("Testing {} Mbps frame pace", "{} Mbps 프레임 페이스 테스트 중"),
     ("No usable pace was measured. The PC will keep its default.", "사용 가능한 페이스를 측정하지 못했습니다. PC가 기본값을 유지합니다."),
     ("Could not start network test: {}", "네트워크 테스트를 시작할 수 없습니다: {}"),
+    ("Show battery and clock in compact overlay", "간단히 오버레이에 배터리와 시계 표시"),
+    ("Add this device’s battery percentage and local time to the compact performance overlay.", "이 기기의 배터리 잔량과 현재 시각을 간단한 성능 오버레이에 추가합니다."),
 ];

@@ -170,7 +170,10 @@ final class GameOverlays {
 
     void updatePerformanceOverlay() {
         boolean compact = PerformanceOverlay.MODE_COMPACT.equals(game.overlayMode);
-        CharSequence text = compact ? compactPerformanceText : hardwarePerformanceText(isDebugOverlay());
+        CharSequence compactLine = compact && game.prefConfig != null && game.prefConfig.compactOverlayDeviceInfo
+                ? PerformanceOverlay.withCompactDeviceInfo(compactPerformanceText, compactBatteryText(), compactClockText())
+                : compactPerformanceText;
+        CharSequence text = compact ? compactLine : hardwarePerformanceText(isDebugOverlay());
         if (PerformanceOverlay.MODE_STATISTICS.equals(game.overlayMode) && text.length() != 0) {
             text = PerformanceOverlay.withStatusLine(text, game.messages.notes());
         }
@@ -180,7 +183,39 @@ final class GameOverlays {
         text = PerformanceOverlay.withLinkNotice(game, text, game.linkNotice);
         showOverlayText(text, compact ? 13 : isDebugOverlay() ? 11 : 12, !compact);
         game.performanceOverlayView.setContentDescription(compact ?
-                PerformanceOverlay.describeCompact(game, compactPerformanceText, game.linkNotice) : null);
+                PerformanceOverlay.describeCompact(game, compactLine, game.linkNotice) : null);
+    }
+
+    private String compactBatteryText() {
+        android.content.Intent battery = game.registerReceiver(null,
+                new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+        if (battery != null && battery.hasExtra(android.os.BatteryManager.EXTRA_PRESENT)
+                && !battery.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, true)) {
+            return null;
+        }
+        android.os.BatteryManager bm = (android.os.BatteryManager) game.getSystemService(android.content.Context.BATTERY_SERVICE);
+        if (bm != null) {
+            int cap = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
+            if (cap > 0 && cap <= 100) {
+                return cap + "%";
+            }
+            if (cap == 0 && battery != null && battery.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, false)) {
+                return "0%";
+            }
+        }
+        if (battery != null && battery.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, false)) {
+            int level = battery.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
+            int scale = battery.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
+            if (level >= 0 && scale > 0) {
+                int pct = Math.max(0, Math.min(100, (level * 100) / scale));
+                return pct + "%";
+            }
+        }
+        return null;
+    }
+
+    private String compactClockText() {
+        return android.text.format.DateFormat.getTimeFormat(game).format(new java.util.Date());
     }
 
     private TextView secondOverlayColumn() {

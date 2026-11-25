@@ -350,6 +350,12 @@ pub(super) fn draw_controls_sections(
         toggle(ui, &mut s.hide_connection_warnings)
     });
     rows.group("");
+    // Never left out: a PC's, game's or profile's settings can show the overlay for theirs.
+    rows.unused(s.overlay, || trf("Not used without {}", &[&tr("Performance overlay")]));
+    setting_row(ui, s, rows, &["compact_overlay_device_info"], "Show battery and clock in compact overlay", "Add this device’s battery percentage and local time to the compact performance overlay.", |ui, s| {
+        toggle(ui, &mut s.compact_overlay_device_info)
+    });
+    rows.always();
     setting_row(ui, s, rows, &["dual_screen"], "Dual screen mode", "Streams the same game to a second screen too, in a stream of its own; sound and controllers stay with the first. Needs a second screen and PC support.", |ui, s| {
         toggle(ui, &mut s.dual_screen)
     });

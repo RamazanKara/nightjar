@@ -1755,4 +1755,6 @@ sudo sysctl -w net.core.rmem_max={}", "Bộ đệm nhận: hệ thống chỉ c�
     ("Testing {} Mbps frame pace", "Đang thử nhịp khung hình {} Mbps"),
     ("No usable pace was measured. The PC will keep its default.", "Không đo được nhịp khả dụng nào. PC sẽ giữ giá trị mặc định."),
     ("Could not start network test: {}", "Không thể bắt đầu kiểm tra mạng: {}"),
+    ("Show battery and clock in compact overlay", "Hiển thị pin và đồng hồ trong lớp phủ thu gọn"),
+    ("Add this device’s battery percentage and local time to the compact performance overlay.", "Thêm phần trăm pin và giờ địa phương của thiết bị này vào lớp phủ hiệu năng thu gọn."),
 ];

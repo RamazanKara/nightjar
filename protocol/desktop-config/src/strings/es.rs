@@ -1755,4 +1755,6 @@ sudo sysctl -w net.core.rmem_max={}", "Búfer de recepción: el sistema concedi�
     ("Testing {} Mbps frame pace", "Probando ritmo de fotogramas de {} Mbps"),
     ("No usable pace was measured. The PC will keep its default.", "No se midió ningún ritmo utilizable. El PC mantendrá su valor predeterminado."),
     ("Could not start network test: {}", "No se pudo iniciar la prueba de red: {}"),
+    ("Show battery and clock in compact overlay", "Mostrar batería y reloj en la superposición compacta"),
+    ("Add this device’s battery percentage and local time to the compact performance overlay.", "Añade el porcentaje de batería y la hora local de este dispositivo a la superposición de rendimiento compacta."),
 ];

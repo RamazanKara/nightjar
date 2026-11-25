@@ -1755,4 +1755,6 @@ sudo sysctl -w net.core.rmem_max={}", "Bufor odbioru: system przydzielił {0} Ki
     ("Testing {} Mbps frame pace", "Testowanie rytmu klatek przy {} Mb/s"),
     ("No usable pace was measured. The PC will keep its default.", "Nie udało się zmierzyć użytecznego rytmu. Komputer zachowa wartość domyślną."),
     ("Could not start network test: {}", "Nie można uruchomić testu sieci: {}"),
+    ("Show battery and clock in compact overlay", "Pokaż baterię i zegar w kompaktowej nakładce"),
+    ("Add this device’s battery percentage and local time to the compact performance overlay.", "Dodaje poziom naładowania baterii i czas lokalny tego urządzenia do kompaktowej nakładki wydajności."),
 ];

@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">パフォーマンス オーバーレイを表示する画面の隅です。</string>
     <string name="summary_reset_all">すべての設定を既定値に戻します。PC、ゲーム、プロファイル、言語はそのままです。</string>
     <string name="stream_controllers_off">設定で「コントローラ」がオフのため、コントローラーは PC に届きません。</string>
+    <string name="title_compact_overlay_device_info">コンパクトオーバーレイにバッテリーと時計を表示</string>
+    <string name="summary_compact_overlay_device_info">コンパクトなパフォーマンス オーバーレイにこのデバイスのバッテリー残量と現在時刻を追加します。</string>
 </resources>

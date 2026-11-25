@@ -310,6 +310,26 @@ public class PerformanceOverlayTest {
     }
 
     @Test
+    public void compactDeviceInfoAppendsBatteryAndClockWithoutDroppingHealthSpan() {
+        Context context = context(Locale.US);
+        CharSequence compact = PerformanceOverlay.compactText(context, 119.94f, 120, 8, 0.14f, 4.6f);
+        CharSequence withBoth = PerformanceOverlay.withCompactDeviceInfo(compact, "84%", "20:15");
+        assertEquals("● 119.9 FPS · 8 ms RTT · 0.1% loss · 84% · 20:15", withBoth.toString());
+        assertEquals(0xff5fd38d, dotColor(withBoth));
+        assertEquals("Stream good: 119.9 FPS · 8 ms RTT · 0.1% loss · 84% · 20:15",
+                PerformanceOverlay.describeCompact(context, withBoth, null));
+
+        // Desktop / Android TV devices with no battery still show the clock cleanly.
+        CharSequence clockOnly = PerformanceOverlay.withCompactDeviceInfo(compact, null, "20:15");
+        assertEquals("● 119.9 FPS · 8 ms RTT · 0.1% loss · 20:15", clockOnly.toString());
+        assertEquals(0xff5fd38d, dotColor(clockOnly));
+
+        // Waiting-for-video empty base text stays empty so callers show the localized waiting text instead.
+        assertEquals("", PerformanceOverlay.withCompactDeviceInfo("", "84%", "20:15").toString());
+        assertNull(PerformanceOverlay.withCompactDeviceInfo(null, "84%", "20:15"));
+    }
+
+    @Test
     public void theNoticeSaysMbpsInTheUsersLocaleAndTheCompactDescriptionCarriesIt() {
         LinkNoticeStatus floor = LinkNoticeStatus.parse(LinkNoticeStatus.STATE_FLOOR, 150_000, 4_500);
         assertEquals("PC lowered the bitrate to 4.5 Mbps: network",

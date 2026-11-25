@@ -262,9 +262,11 @@ fn the_overlay_keeps_androids_values_and_defaults() {
     let corner = |value: &str| serde_json::from_value::<OverlayCorner>(serde_json::json!(value)).unwrap();
     assert_eq!(["top_left", "top_right", "bottom_left", "bottom_right"].map(corner), OverlayCorner::ALL);
     assert_eq!(corner("middle"), OverlayCorner::TopLeft);
-    let set = Settings { overlay_mode: OverlayMode::Debug, overlay_position: OverlayCorner::BottomRight, ..Default::default() };
+    let set = Settings { overlay_mode: OverlayMode::Debug, overlay_position: OverlayCorner::BottomRight, compact_overlay_device_info: true, ..Default::default() };
     let json = serde_json::to_value(&set).unwrap();
-    assert_eq!((&json["overlay_mode"], &json["overlay_position"]), (&serde_json::json!("debug"), &serde_json::json!("bottom_right")));
+    assert_eq!((&json["overlay_mode"], &json["overlay_position"], &json["compact_overlay_device_info"]), (&serde_json::json!("debug"), &serde_json::json!("bottom_right"), &serde_json::json!(true)));
+    assert!(!defaults.compact_overlay_device_info);
+    assert!(!old.compact_overlay_device_info);
 }
 
 #[test]

@@ -1755,4 +1755,6 @@ sudo sysctl -w net.core.rmem_max={}", "受信バッファー：システムは�
     ("Testing {} Mbps frame pace", "{} Mbps のフレームペースをテスト中"),
     ("No usable pace was measured. The PC will keep its default.", "使用可能なペースを測定できませんでした。PC は既定値のままにします。"),
     ("Could not start network test: {}", "ネットワークテストを開始できませんでした: {}"),
+    ("Show battery and clock in compact overlay", "コンパクトオーバーレイにバッテリーと時計を表示"),
+    ("Add this device’s battery percentage and local time to the compact performance overlay.", "コンパクトなパフォーマンス オーバーレイにこのデバイスのバッテリー残量と現在時刻を追加します。"),
 ];

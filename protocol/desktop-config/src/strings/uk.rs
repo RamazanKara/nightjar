@@ -1755,4 +1755,6 @@ sudo sysctl -w net.core.rmem_max={}", "Буфер приймання: систе
     ("Testing {} Mbps frame pace", "Перевірка темпу кадрів {} Мбіт/с"),
     ("No usable pace was measured. The PC will keep its default.", "Не вдалося виміряти придатний темп. ПК збереже типове значення."),
     ("Could not start network test: {}", "Не вдалося запустити перевірку мережі: {}"),
+    ("Show battery and clock in compact overlay", "Показувати заряд і годинник у компактному оверлеї"),
+    ("Add this device’s battery percentage and local time to the compact performance overlay.", "Додає відсоток заряду батареї та місцевий час цього пристрою до компактного оверлея продуктивності."),
 ];

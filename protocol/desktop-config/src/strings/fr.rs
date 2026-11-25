@@ -1755,4 +1755,6 @@ sudo sysctl -w net.core.rmem_max={}", "Tampon de réception : le système a acco
     ("Testing {} Mbps frame pace", "Test du rythme d’images à {} Mbit/s"),
     ("No usable pace was measured. The PC will keep its default.", "Aucun rythme utilisable n’a été mesuré. Le PC conservera sa valeur par défaut."),
     ("Could not start network test: {}", "Impossible de démarrer le test réseau : {}"),
+    ("Show battery and clock in compact overlay", "Afficher la batterie et l’horloge dans la superposition compacte"),
+    ("Add this device’s battery percentage and local time to the compact performance overlay.", "Ajoute le pourcentage de batterie et l’heure locale de cet appareil à la superposition des performances compacte."),
 ];

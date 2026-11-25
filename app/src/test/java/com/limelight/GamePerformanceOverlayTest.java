@@ -240,4 +240,40 @@ public class GamePerformanceOverlayTest {
         ReflectionHelpers.callInstanceMethod(game.overlays, "hidePerformanceOverlay");
         assertFalse(prefs.enablePerfOverlay);
     }
+
+    @Test
+    public void compactOverlayIncludesBatteryAndClockOnlyWhenEnabled() {
+        Game game = game();
+        android.content.Intent stickyBattery = new android.content.Intent(android.content.Intent.ACTION_BATTERY_CHANGED)
+                .putExtra(android.os.BatteryManager.EXTRA_PRESENT, true)
+                .putExtra(android.os.BatteryManager.EXTRA_LEVEL, 84)
+                .putExtra(android.os.BatteryManager.EXTRA_SCALE, 100);
+        game.sendStickyBroadcast(stickyBattery);
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+
+        ReflectionHelpers.setField(game.overlays, "compactPerformanceText", com.limelight.binding.video.PerformanceOverlay
+                .compactText(game, 119.94f, 120, 8, 0.14f, 4.6f));
+        PreferenceConfiguration prefs = new PreferenceConfiguration();
+        prefs.compactOverlayDeviceInfo = false;
+        ReflectionHelpers.setField(game, "prefConfig", prefs);
+        ReflectionHelpers.callInstanceMethod(game.overlays, "updatePerformanceOverlay");
+
+        TextView overlay = game.findViewById(R.id.performanceOverlay);
+        assertEquals("● 119.9 FPS · 8 ms RTT · 0.1% loss", overlay.getText().toString());
+
+        prefs.compactOverlayDeviceInfo = true;
+        ReflectionHelpers.callInstanceMethod(game.overlays, "updatePerformanceOverlay");
+        String shown = overlay.getText().toString();
+        assertTrue(shown, shown.startsWith("● 119.9 FPS · 8 ms RTT · 0.1% loss · 84% · "));
+        assertTrue(overlay.getContentDescription().toString().contains("· 84% · "));
+
+        // Mains-powered TV with no battery omits the percentage but still shows the clock.
+        game.sendStickyBroadcast(new android.content.Intent(android.content.Intent.ACTION_BATTERY_CHANGED)
+                .putExtra(android.os.BatteryManager.EXTRA_PRESENT, false));
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        ReflectionHelpers.callInstanceMethod(game.overlays, "updatePerformanceOverlay");
+        String clockOnly = overlay.getText().toString();
+        assertFalse(clockOnly, clockOnly.contains("84%"));
+        assertTrue(clockOnly, clockOnly.startsWith("● 119.9 FPS · 8 ms RTT · 0.1% loss · "));
+    }
 }

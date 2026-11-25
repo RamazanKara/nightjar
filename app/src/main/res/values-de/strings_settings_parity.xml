@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">Die Ecke, in der die Leistungsanzeige erscheint.</string>
     <string name="summary_reset_all">Setzt jede Einstellung auf den Standard zurück; PCs, Spiele, Profile und Sprache bleiben.</string>
     <string name="stream_controllers_off">„Controller“ ist in den Einstellungen auf Aus gestellt, daher erreicht kein Controller den PC.</string>
+    <string name="title_compact_overlay_device_info">Akku und Uhr im kompakten Overlay anzeigen</string>
+    <string name="summary_compact_overlay_device_info">Fügt dem kompakten Leistungs-Overlay den Akkustand und die Ortszeit dieses Geräts hinzu.</string>
 </resources>

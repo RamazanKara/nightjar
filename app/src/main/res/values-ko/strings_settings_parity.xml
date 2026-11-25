@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">성능 오버레이가 놓이는 모서리입니다.</string>
     <string name="summary_reset_all">모든 설정을 기본값으로 되돌립니다. PC, 게임, 프로필, 언어는 그대로 유지됩니다.</string>
     <string name="stream_controllers_off">설정에서 \'컨트롤러\'가 사용 안함이므로 PC에 컨트롤러가 전달되지 않습니다.</string>
+    <string name="title_compact_overlay_device_info">간단히 오버레이에 배터리와 시계 표시</string>
+    <string name="summary_compact_overlay_device_info">이 기기의 배터리 잔량과 현재 시각을 간단한 성능 오버레이에 추가합니다.</string>
 </resources>

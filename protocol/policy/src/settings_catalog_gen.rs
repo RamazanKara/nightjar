@@ -4,9 +4,9 @@
 use std::ops::RangeInclusive;
 
 /// Total Android settings rows documented in `settings.toml`.
-pub const ANDROID_SETTING_COUNT: usize = 191;
+pub const ANDROID_SETTING_COUNT: usize = 192;
 /// Total Desktop `Settings` fields declared in `settings.toml`.
-pub const DESKTOP_SETTING_COUNT: usize = 146;
+pub const DESKTOP_SETTING_COUNT: usize = 147;
 
 /// Default Hold Guide to open the stream menu duration in milliseconds.
 pub const DEFAULT_GUIDE_MENU_HOLD_MS: u32 = 1000;
@@ -517,6 +517,12 @@ pub const SHARED_SETTINGS: &[SharedSetting] = &[
     SharedSetting {
         android_key: "checkbox_input_only_any_host",
         desktop_key: "input_only_any_host",
+        tier: "more",
+        scope: "global",
+    },
+    SharedSetting {
+        android_key: "checkbox_compact_overlay_device_info",
+        desktop_key: "compact_overlay_device_info",
         tier: "more",
         scope: "global",
     },

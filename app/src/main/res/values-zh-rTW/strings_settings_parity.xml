@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">效能覆蓋層所在的角落。</string>
     <string name="summary_reset_all">將所有設定恢復為預設值；電腦、遊戲、設定檔和語言會保留。</string>
     <string name="stream_controllers_off">「控制器」在設定中已關閉，因此沒有控制器能連到 PC。</string>
+    <string name="title_compact_overlay_device_info">在精簡覆蓋層中顯示電量和時鐘</string>
+    <string name="summary_compact_overlay_device_info">將此裝置的電池電量和本地時間加入精簡效能覆蓋層中。</string>
 </resources>

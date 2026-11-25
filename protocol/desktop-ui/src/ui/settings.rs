@@ -69,7 +69,7 @@ pub(super) const SECTION_KEYS: [&[&[&str]]; 9] = [
         &["mute_audio"], &["audio_passthrough"]],
     &[&["overlay", "overlay_mode"], &["overlay_position"], &["auto_reconnect"],
         &["client_roaming", "roaming_metered"], &["network_grace_ms"], &["receive_coalescing"], &["jumbo_frames"], &["internet_play"], &["hide_connection_warnings"],
-        &["dual_screen"], &["second_screen_width", "second_screen_height"], &["input_only_any_host"]],
+        &["compact_overlay_device_info"], &["dual_screen"], &["second_screen_width", "second_screen_height"], &["input_only_any_host"]],
     &[&["theme"], &["language"], &["open_on_start", "console_home"], &["quick_resume"], &["check_updates"], &["windowed_launcher"], &["home_card_size"],
         &["show_debug_settings"], &["ui_zoom"], &["high_contrast"], &["reduce_motion"]],
     &[&["graphics_card"], &["renderer"], &["display_output"], &["video_planes"], &["high_performance_gpu_power"], &["sops"], &["decode_queue_frames"]],

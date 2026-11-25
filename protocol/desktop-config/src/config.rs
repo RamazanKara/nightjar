@@ -134,6 +134,8 @@ pub struct Settings {
     pub overlay: bool,
     pub overlay_mode: OverlayMode,
     pub overlay_position: OverlayCorner,
+    /// Append this device's battery percentage and local clock time to the compact performance overlay.
+    pub compact_overlay_device_info: bool,
     pub mouse_mode: MouseMode,
     pub mouse_speed: u32,
     pub mouse_nav_buttons: bool,

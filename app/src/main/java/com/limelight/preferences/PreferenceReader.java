@@ -294,6 +294,7 @@ final class PreferenceReader {
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
         config.overlayPosition = com.limelight.ui.OverlayPlacement.Corner.parse(
                 prefs.getString(OVERLAY_POSITION_PREF_STRING, null)).key;
+        config.compactOverlayDeviceInfo = prefs.getBoolean(COMPACT_OVERLAY_DEVICE_INFO_PREF_STRING, false);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);
         config.mouseEmulation = prefs.getBoolean(MOUSE_EMULATION_STRING, DEFAULT_MOUSE_EMULATION);
         config.mouseEmulationFixedStep = prefs.getBoolean(MOUSE_EMULATION_FIXED_STEP_STRING, false);

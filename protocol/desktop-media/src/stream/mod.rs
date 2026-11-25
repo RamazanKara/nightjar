@@ -500,6 +500,11 @@ pub struct Streaming {
 }
 
 impl Streaming {
+    /// Whether the compact overlay appends device battery percentage and local clock time.
+    pub fn compact_overlay_device_info(&self) -> bool {
+        self.settings.compact_overlay_device_info
+    }
+
     /// Whether the pictures are on a display plane now, so the overlay draws into its own plane.
     pub fn kms_engaged(&self) -> bool {
         #[cfg(target_os = "linux")]

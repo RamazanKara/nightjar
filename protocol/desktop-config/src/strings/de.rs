@@ -1756,4 +1756,6 @@ sudo sysctl -w net.core.rmem_max={2}"),
     ("Testing {} Mbps frame pace", "Bildtakt bei {} Mbit/s wird getestet"),
     ("No usable pace was measured. The PC will keep its default.", "Es wurde kein brauchbarer Takt gemessen. Der PC behält seinen Standard bei."),
     ("Could not start network test: {}", "Netzwerktest konnte nicht gestartet werden: {}"),
+    ("Show battery and clock in compact overlay", "Akku und Uhr im kompakten Overlay anzeigen"),
+    ("Add this device’s battery percentage and local time to the compact performance overlay.", "Fügt dem kompakten Leistungs-Overlay den Akkustand und die Ortszeit dieses Geräts hinzu."),
 ];

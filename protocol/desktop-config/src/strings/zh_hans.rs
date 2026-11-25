@@ -1755,4 +1755,6 @@ sudo sysctl -w net.core.rmem_max={}", "接收缓冲区：系统只分配了所�
     ("Testing {} Mbps frame pace", "正在测试 {} Mbps 帧步频"),
     ("No usable pace was measured. The PC will keep its default.", "未测得可用步频。电脑将保留默认设置。"),
     ("Could not start network test: {}", "无法启动网络测试：{}"),
+    ("Show battery and clock in compact overlay", "在精简叠加层中显示电量和时钟"),
+    ("Add this device’s battery percentage and local time to the compact performance overlay.", "将此设备的电池电量和本地时间添加到精简性能叠加层中。"),
 ];

@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">O canto em que fica a sobreposição de desempenho.</string>
     <string name="summary_reset_all">Volta todas as configurações ao padrão; PCs, jogos, perfis e idioma são mantidos.</string>
     <string name="stream_controllers_off">Controles está desativado nas Configurações, então nenhum controle chega ao PC.</string>
+    <string name="title_compact_overlay_device_info">Mostrar bateria e relógio na sobreposição compacta</string>
+    <string name="summary_compact_overlay_device_info">Adiciona a porcentagem da bateria e a hora local deste dispositivo à sobreposição de desempenho compacta.</string>
 </resources>

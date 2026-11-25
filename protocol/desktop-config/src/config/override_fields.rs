@@ -103,6 +103,7 @@ settings_fields!(
     plain overlay,
     plain overlay_mode,
     plain overlay_position,
+    plain compact_overlay_device_info,
     plain mouse_mode,
     plain mouse_speed,
     plain mouse_nav_buttons,
