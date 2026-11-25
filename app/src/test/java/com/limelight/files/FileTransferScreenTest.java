@@ -228,4 +228,39 @@ public class FileTransferScreenTest {
             preExisting.delete();
         }
     }
+
+    @Test
+    public void heldTransferGrantsSurviveReleaseStaleGrants() {
+        Uri heldUri = Uri.parse("content://com.android.externalstorage.documents/document/primary%3Aactive.bin");
+        Uri staleUri = Uri.parse("content://com.android.externalstorage.documents/document/primary%3Astale.bin");
+        android.content.ContentResolver resolver = context.getContentResolver();
+        assertTrue(FileShareIntents.takePersistable(context, resolver, staleUri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION));
+
+        FileTransferActivity.TransferWork work = new FileTransferActivity.TransferWork(
+                (android.app.Application) context.getApplicationContext());
+        assertTrue(work.persistPermission(heldUri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION));
+        RunningTransfers.hold(work);
+        try {
+            FileShareIntents.releaseStaleGrants(context, RunningTransfers.activeGrantUris());
+
+            java.util.List<android.content.UriPermission> kept = resolver.getPersistedUriPermissions();
+            boolean sawHeld = false;
+            boolean sawStale = false;
+            for (android.content.UriPermission perm : kept) {
+                if (heldUri.equals(perm.getUri())) sawHeld = true;
+                if (staleUri.equals(perm.getUri())) sawStale = true;
+            }
+            assertTrue("active RunningTransfers SAF grant must survive stale cleanup", sawHeld);
+            assertFalse("unheld stale SAF grant must be released", sawStale);
+            assertTrue(work.hasPersistedPermission(heldUri));
+            android.content.SharedPreferences grants =
+                    context.getSharedPreferences("file_transfer_grants", Context.MODE_PRIVATE);
+            assertTrue(grants.contains(heldUri.toString()));
+            assertFalse(grants.contains(staleUri.toString()));
+        } finally {
+            work.end();
+        }
+        assertTrue(context.getSharedPreferences("file_transfer_grants", Context.MODE_PRIVATE).getAll().isEmpty());
+    }
 }

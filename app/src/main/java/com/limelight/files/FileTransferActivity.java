@@ -156,7 +156,7 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
                 held.end();
             }
             if (keeper.work == null) {
-                FileShareIntents.releaseStaleGrants(this, null);
+                FileShareIntents.releaseStaleGrants(this, RunningTransfers.activeGrantUris());
                 keeper.work = new TransferWork(getApplication());
             }
         }
