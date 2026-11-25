@@ -12,7 +12,8 @@
 //! 60 Hz), and a stick's moves reached the PC bunched once per refresh. While the loop waits in
 //! the present it changes nothing, so for that time it lends the filter what it decides with
 //! (whether keys and clicks are the PC's, the settings that map them, its controllers) and a
-//! thread reads the controllers every millisecond, as SDL does while the loop waits for events.
+//! thread reads the controllers, every millisecond while they are in use, as SDL does while the
+//! loop waits for events.
 //! A key from the system keys hook's thread (it takes the keyboard while "Send system keys"
 //! grabs it, system_keys.rs), a click from SDL's raw input thread and a controller event from
 //! that thread then leave at once; the loop still gets the keys and
@@ -49,15 +50,18 @@ const SENT: u32 = 0x4E4A_534E;
 /// place in [`ACTIONS`]; it holds later events back like [`QUEUED`].
 const ACTED: u32 = 0x4E4A_4100;
 const ACTIONS: [Action; 4] = [Action::Quit, Action::Menu, Action::Mouse(false), Action::Mouse(true)];
-/// How often controllers are read while the main loop waits in the present: 2 ms (500 Hz) while
-/// the controller is actively producing input, relaxing to 8 ms (125 Hz) once idle for a second.
-const POLL_ACTIVE_NS: u64 = 2_000_000;
-const POLL_IDLE_NS: u64 = 8_000_000;
+/// How often controllers are read while the main loop waits in the present: 1 ms (1000 Hz) while
+/// the controller is actively producing input, relaxing to 4 ms (250 Hz) once idle for a second.
+const POLL_ACTIVE_NS: u64 = 1_000_000;
+const POLL_IDLE_NS: u64 = 4_000_000;
 const POLL_ACTIVE_HOLD_US: u64 = 1_000_000;
 /// Minimum analog stick/trigger change treated as intentional controller activity (~3%).
 pub const PAD_AXIS_ACTIVITY_THRESHOLD: i32 = 1024;
-/// Minimum gyro angular velocity (rad/s, ~1.7 deg/s) above resting noise treated as activity.
-pub const GYRO_ACTIVITY_THRESHOLD: f32 = 0.03;
+/// A gyro sample whose largest axis exceeds this (rad/s, ~1.15 deg/s) is activity. A slow aiming
+/// turn of 2 deg/s (0.035 rad/s) puts at least 0.035/sqrt(3) = 0.0202 on one axis however the pad
+/// is held. A resting pad should stay below: noise of a few mrad/s, and SDL subtracts the pad's
+/// calibrated bias (estimated, not measured on a pad).
+pub const GYRO_ACTIVITY_THRESHOLD: f32 = 0.02;
 const AXIS_JITTER_THRESHOLD: i32 = PAD_AXIS_ACTIVITY_THRESHOLD;
 
 /// Returns whether a peak gyro sample (rad/s) exceeds [`GYRO_ACTIVITY_THRESHOLD`].

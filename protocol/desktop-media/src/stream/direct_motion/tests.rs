@@ -216,10 +216,12 @@ fn focus_lost_barrier_blocks_direct_input_until_dispatched() {
 
 #[test]
 fn controller_poller_relaxes_when_idle_and_speeds_up_on_input() {
+    assert_eq!(POLL_ACTIVE_NS, 1_000_000, "1000 Hz in use, as SDL polls");
+    const { assert!(POLL_IDLE_NS <= 4_000_000, "the first input after a pause waits at most 4 ms") };
     assert_eq!(poller_sleep_ns(500_000, 0), POLL_IDLE_NS, "no controller input seen yet");
-    assert_eq!(poller_sleep_ns(1_000_000, 900_000), POLL_ACTIVE_NS, "recent input stays on 500 Hz");
+    assert_eq!(poller_sleep_ns(1_000_000, 900_000), POLL_ACTIVE_NS, "recent input stays on 1000 Hz");
     assert_eq!(poller_sleep_ns(2_000_000, 1_000_001), POLL_ACTIVE_NS, "just inside the 1 s hold");
-    assert_eq!(poller_sleep_ns(2_000_000, 1_000_000), POLL_IDLE_NS, "idle after 1 s relaxes to 125 Hz");
+    assert_eq!(poller_sleep_ns(2_000_000, 1_000_000), POLL_IDLE_NS, "idle after 1 s relaxes to 250 Hz");
 }
 
 mod pad_jitter_tests {
@@ -252,7 +254,10 @@ mod pad_jitter_tests {
         }
         assert!(!act.is_active(&ev(SDL_EVENT_GAMEPAD_SENSOR_UPDATE)));
         assert!(!act.is_active(&sensor_ev(SDL_SENSOR_ACCEL, [0.0, 9.81, 0.0])));
-        assert!(!act.is_active(&sensor_ev(SDL_SENSOR_GYRO, [0.02, -0.03, 0.01])));
+        assert!(!act.is_active(&sensor_ev(SDL_SENSOR_GYRO, [0.008, -0.012, 0.005])), "resting noise and bias");
+        // 2 deg/s, split evenly over the three axes: the smallest peak such a turn can show.
+        let slow = 2.0_f32.to_radians() / 3.0_f32.sqrt();
+        assert!(act.is_active(&sensor_ev(SDL_SENSOR_GYRO, [slow, -slow, slow])), "slow aiming");
         assert!(!act.is_active(&sensor_ev(SDL_SENSOR_GYRO, [f32::NAN, 0.5, 0.0])));
         assert!(!act.is_active(&sensor_ev(SDL_SENSOR_GYRO, [f32::INFINITY, 0.0, 0.0])));
         assert!(act.is_active(&sensor_ev(SDL_SENSOR_GYRO, [0.0, -0.05, 0.0])));

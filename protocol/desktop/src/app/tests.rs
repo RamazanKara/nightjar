@@ -46,9 +46,11 @@ fn pad_poll_relaxes_idle_controllers_and_keeps_active_gameplay_fast() {
     assert_eq!(poll.next_in(start, true, false, false, false), PadPoll::LAUNCHER_HIDDEN_INTERVAL);
     // Stream with controllers disabled -> 2 s hotplug interval.
     assert_eq!(poll.next_in(start, true, true, false, true), PadPoll::ENUM_INTERVAL);
-    // Stream with idle controller -> 16 ms.
+    // Stream with idle controller -> at most 4 ms.
+    assert_eq!(PadPoll::STREAM_ACTIVE_INTERVAL, Duration::from_millis(1), "1000 Hz in use");
+    const { assert!(PadPoll::STREAM_IDLE_INTERVAL.as_millis() <= 4) };
     assert_eq!(poll.next_in(start, true, true, true, true), PadPoll::STREAM_IDLE_INTERVAL);
-    // Controller input switches immediately to 2 ms active cadence for 1 s.
+    // Controller input switches immediately to 1 ms active cadence for 1 s.
     poll.note_activity(start);
     assert_eq!(poll.next_in(start, true, true, true, true), PadPoll::STREAM_ACTIVE_INTERVAL);
     // DirectMotion filter activity also refreshes active cadence once per new timestamp.
@@ -96,7 +98,10 @@ fn gamepad_activity_ignores_stick_jitter_and_passive_sensors() {
     assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_AXIS_MOTION, Some(1025), None));
     assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_AXIS_MOTION, Some(-12000), None));
     assert!(!is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, None), "accel ignored");
-    assert!(!is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, Some(0.02)), "resting gyro ignored");
+    assert!(!is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, Some(0.012)), "resting gyro ignored");
+    assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, Some(0.035)), "2 deg/s aiming counts");
+    let tilted = Some(2.0_f32.to_radians() / 3.0_f32.sqrt());
+    assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, tilted), "2 deg/s over three axes");
     assert!(!is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, Some(f32::NAN)));
     assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, Some(0.5)), "active gyro wakes");
 

@@ -434,11 +434,11 @@ impl PadPoll {
     pub(crate) const LAUNCHER_INTERVAL: Duration = Duration::from_millis(16);
     /// Launcher cadence while minimized or hidden.
     pub(crate) const LAUNCHER_HIDDEN_INTERVAL: Duration = Duration::from_millis(250);
-    /// Stream cadence while a controller was used recently (500 Hz; 2x fewer wakeups than SDL's
-    /// 1000 Hz poll with <= 1 ms average poll delay).
-    pub(crate) const STREAM_ACTIVE_INTERVAL: Duration = Duration::from_millis(2);
-    /// Stream cadence while open controllers have been idle (mouse/keyboard play, cutscenes).
-    pub(crate) const STREAM_IDLE_INTERVAL: Duration = Duration::from_millis(16);
+    /// Stream cadence while a controller was used recently: 1000 Hz, as SDL's own poll.
+    pub(crate) const STREAM_ACTIVE_INTERVAL: Duration = Duration::from_millis(1);
+    /// Stream cadence while open controllers have been idle (mouse/keyboard play, cutscenes): the
+    /// first input after a pause waits at most this long.
+    pub(crate) const STREAM_IDLE_INTERVAL: Duration = Duration::from_millis(4);
     /// How long after the last controller input the stream stays on `STREAM_ACTIVE_INTERVAL`.
     pub(crate) const ACTIVE_HOLD: Duration = Duration::from_secs(1);
 
