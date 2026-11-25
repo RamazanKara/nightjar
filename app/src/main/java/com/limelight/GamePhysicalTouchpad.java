@@ -33,6 +33,8 @@ final class GamePhysicalTouchpad {
     private float[] nativeTouchpadYs = new float[16];
     private float[] nativeTouchpadPressures = new float[16];
 
+    private boolean activeFallbackTouchpad;
+
     GamePhysicalTouchpad(Game game) {
         this.game = game;
     }
@@ -46,13 +48,16 @@ final class GamePhysicalTouchpad {
             touchpadContextMap[i] = touchpad;
         }
         touchpadResolutionDevice = -2;
+        activeFallbackTouchpad = false;
     }
 
     boolean handleFingerEvent(MotionEvent event) {
         // Like the mouse case, ignore the touchpad while we aren't capturing it; returning
         // true keeps Android from turning the touches into d-pad events.
         if (!game.inputCaptureProvider.isCapturingActive()) {
-            cancelTouchpad();
+            if (nativeTouchpadHeld || activeFallbackTouchpad) {
+                cancelTouchpad();
+            }
             return true;
         }
         if (nativeTouchpad()) {
@@ -114,6 +119,7 @@ final class GamePhysicalTouchpad {
     /** Cancels both native touchpad frames and fallback touchpad mouse gestures (capture or focus lost). */
     void cancelTouchpad() {
         cancelNativeTouchpad();
+        activeFallbackTouchpad = false;
         for (TrackpadContext context : touchpadContextMap) {
             if (context != null) {
                 context.cancelTouch();
@@ -168,29 +174,38 @@ final class GamePhysicalTouchpad {
         updateTouchpadResolution(event);
         int actionIndex = event.getActionIndex();
         int pointerCount = event.getPointerCount();
-        TouchContext context = actionIndex < touchpadContextMap.length ? touchpadContextMap[actionIndex] : null;
-        if (context == null) {
-            return false;
-        }
+        TrackpadContext context = actionIndex < touchpadContextMap.length ? touchpadContextMap[actionIndex] : null;
 
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_POINTER_DOWN:
             case MotionEvent.ACTION_DOWN:
+                activeFallbackTouchpad = true;
                 for (TouchContext touchContext : touchpadContextMap) {
                     touchContext.setPointerCount(pointerCount);
+                }
+                if (context == null) {
+                    return false;
                 }
                 context.touchDownEvent((int) event.getX(actionIndex), (int) event.getY(actionIndex), event.getEventTime(), true);
                 break;
             case MotionEvent.ACTION_POINTER_UP:
             case MotionEvent.ACTION_UP:
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && (event.getFlags() & MotionEvent.FLAG_CANCELED) != 0) {
-                    context.cancelTouch();
-                }
-                else {
-                    context.touchUpEvent((int) event.getX(actionIndex), (int) event.getY(actionIndex), event.getEventTime());
+                if (context != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && (event.getFlags() & MotionEvent.FLAG_CANCELED) != 0) {
+                        context.cancelTouch();
+                    }
+                    else {
+                        context.touchUpEvent((int) event.getX(actionIndex), (int) event.getY(actionIndex), event.getEventTime());
+                    }
                 }
                 for (TouchContext touchContext : touchpadContextMap) {
                     touchContext.setPointerCount(pointerCount - 1);
+                }
+                if (pointerCount <= 1) {
+                    activeFallbackTouchpad = false;
+                }
+                if (context == null) {
+                    return false;
                 }
                 if (actionIndex == 0 && pointerCount > 1 && !context.isCancelled()) {
                     // The original secondary touch now becomes primary
@@ -198,6 +213,9 @@ final class GamePhysicalTouchpad {
                 }
                 break;
             case MotionEvent.ACTION_MOVE:
+                if (context == null) {
+                    return false;
+                }
                 // ACTION_MOVE always has actionIndex 0, so call the move handler of every finger
                 for (int i = 0; i < event.getHistorySize(); i++) {
                     for (TouchContext touchContext : touchpadContextMap) {
@@ -215,6 +233,7 @@ final class GamePhysicalTouchpad {
                 }
                 break;
             case MotionEvent.ACTION_CANCEL:
+                activeFallbackTouchpad = false;
                 for (TouchContext touchContext : touchpadContextMap) {
                     touchContext.cancelTouch();
                     touchContext.setPointerCount(0);

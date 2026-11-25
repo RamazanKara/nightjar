@@ -125,8 +125,9 @@ public final class GameInfo {
     private final GameInfoModel.Transport transport;
     private GameInfoModel.Sleeper sleeper;
     private final Supplier<GameInfoModel.Keys> keys;
-    /** Every lookup, one at a time. */
+    /** Interactive lookups run ahead of background library prefetches. */
     private final ExecutorService executor;
+    private final ExecutorService prefetchExecutor;
     /** Reads of what is kept on disk, off the main thread and away from the lookups; never touches the network. */
     private final ExecutorService readers;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -138,6 +139,7 @@ public final class GameInfo {
     /** The key set the per-key memory (facts asked, images failed) belongs to. */
     private String keysSeen;
     /** In memory only: the token and the pace of the services, for the key set in {@link #sessionKeys}. */
+    private final Object sessionLock = new Object();
     private JSONObject session;
     private String sessionKeys;
     private final AtomicInteger downloads = new AtomicInteger();
@@ -149,6 +151,7 @@ public final class GameInfo {
         this.transport = transport != null ? transport : this::send;
         this.sleeper = Thread::sleep;
         this.executor = background ? Executors.newSingleThreadExecutor(r -> daemon(r, "game-info")) : null;
+        this.prefetchExecutor = background ? Executors.newSingleThreadExecutor(r -> daemon(r, "game-info-prefetch")) : null;
         this.readers = background ? new ThreadPoolExecutor(1, 2, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<>(256),
                 r -> daemon(r, "game-info-read")) : null;
     }
@@ -270,17 +273,28 @@ public final class GameInfo {
 
     /**
      * Looks the facts of these games up in the background, asking {@code changed} on the main thread after each one
-     * that found some. A game asked once is not asked again until the keys change.
+     * that found some. Failed lookups remain eligible on the next pass, and stale records refresh once expired.
      */
     public void prefetchFacts(List<Game> games, Runnable changed) {
         GameInfoModel.Keys k = keys.get();
-        if (executor == null || !k.info()) return;
+        if (prefetchExecutor == null || !k.info()) return;
         noteKeys(k);
         for (Game game : games) {
-            if (!factsAsked.add(game.id())) continue;
-            executor.execute(() -> {
+            prefetchExecutor.execute(() -> {
+                JSONObject cached = cachedRecord(game);
+                try {
+                    if (cached != null && GameInfoModel.fresh(cached, wallSecs(), k, false, true)
+                            && factsAsked.contains(game.id())) {
+                        return;
+                    }
+                } catch (JSONException | RuntimeException e) {
+                    // Corrupt record on disk: attempt a fresh lookup below.
+                }
                 Entry entry = resolve(game, false, true);
-                if (entry != null && entry.facts() != null) main.post(changed);
+                if (entry != null) {
+                    factsAsked.add(game.id());
+                    if (entry.facts() != null) main.post(changed);
+                }
             });
         }
     }
@@ -318,7 +332,7 @@ public final class GameInfo {
      * is wanted. Null when no service wanted here has a key. Failures keep what was known before.
      */
     @VisibleForTesting
-    synchronized Entry resolve(Game game, boolean wantCover, boolean wantFacts) {
+    Entry resolve(Game game, boolean wantCover, boolean wantFacts) {
         GameInfoModel.Keys k = keys.get();
         boolean art = wantCover && k.art();
         boolean info = wantFacts && k.info();
@@ -326,9 +340,13 @@ public final class GameInfo {
         try {
             // A token and a pace belong to one set of keys.
             String signature = k.json(true, true).toString();
-            if (!signature.equals(sessionKeys)) {
-                session = null;
-                sessionKeys = signature;
+            JSONObject currentSession;
+            synchronized (sessionLock) {
+                if (!signature.equals(sessionKeys)) {
+                    session = null;
+                    sessionKeys = signature;
+                }
+                currentSession = session;
             }
             GameInfoModel.Cleaned c = GameInfoModel.clean(game.name, game.gameId, game.storeSource, game.storeId);
             File file = new File(dir, GameInfoModel.files(c.key, null)[0]);
@@ -336,14 +354,19 @@ public final class GameInfo {
             if (record == null || !GameInfoModel.fresh(record, wallSecs(), k, art, info)) {
                 JSONObject lookedUp = new JSONObject().put("name", c.clean).put("steam", c.steam == null ? JSONObject.NULL : c.steam);
                 GameInfoModel.Finished finished = GameInfoModel.lookup(transport, sleeper, GameInfo::wallSecs,
-                        SystemClock::elapsedRealtime, lookedUp, k, art, info, session);
-                if (finished != null) {
-                    session = finished.session;
-                    for (String line : finished.log) LimeLog.warning("Game info: " + line);
-                    record = GameInfoModel.merge(finished.record, record);
-                    write(file, record);
-                    records.put(c.key, record);
+                        SystemClock::elapsedRealtime, lookedUp, k, art, info, currentSession);
+                if (finished == null) {
+                    return null;
                 }
+                synchronized (sessionLock) {
+                    if (signature.equals(sessionKeys)) {
+                        session = finished.session;
+                    }
+                }
+                for (String line : finished.log) LimeLog.warning("Game info: " + line);
+                record = GameInfoModel.merge(finished.record, record);
+                write(file, record);
+                records.put(c.key, record);
             }
             if (record == null) return null;
             return new Entry(record, art ? imageFile(c.key, record, true) : null);

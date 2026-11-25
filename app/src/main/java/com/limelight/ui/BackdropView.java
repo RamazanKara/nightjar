@@ -133,7 +133,14 @@ public class BackdropView extends FrameLayout {
 
     /** The screen's own colour: a game with no art gets it, and the blur fades into it. */
     public void setCanvasColor(int color) {
-        canvas = color | 0xFF000000;
+        int opaque = color | 0xFF000000;
+        if (canvas == opaque) return;
+        canvas = opaque;
+        cache.evictAll();
+        if (shownKey != null) {
+            shownKey = null;
+            applyWanted();
+        }
     }
 
     /** Which bake this screen wants: day or night, and portrait for a tall window. */
@@ -154,15 +161,25 @@ public class BackdropView extends FrameLayout {
      * It reaches the foot of the window, where lists and glass sit on it.
      */
     public void setFade(int color, float[] stops, float[] alphas) {
-        fadeColors = new int[stops.length];
+        int[] nextColors = new int[stops.length];
         for (int i = 0; i < stops.length; i++) {
-            fadeColors[i] = (Math.round(alphas[i] * 255f) << 24) | (color & 0xFFFFFF);
+            nextColors[i] = (Math.round(alphas[i] * 255f) << 24) | (color & 0xFFFFFF);
         }
+        boolean changed = !java.util.Arrays.equals(fadeColors, nextColors)
+                || !java.util.Arrays.equals(fadeStops, stops);
+        fadeColors = nextColors;
         fadeStops = stops;
         if (fadePaint == null) fadePaint = new android.graphics.Paint();
         fadePaint.setShader(null);
         setWillNotDraw(false);
         invalidate();
+        if (changed) {
+            cache.evictAll();
+            if (shownKey != null) {
+                shownKey = null;
+                applyWanted();
+            }
+        }
     }
 
     @Override
@@ -214,7 +231,15 @@ public class BackdropView extends FrameLayout {
                 0xFF000000 | (Math.round(brightness * 255) * 0x010101), 0);
         back.setColorFilter(filter);
         front.setColorFilter(filter);
-        dimmed = filter != null;
+        boolean nextDim = filter != null;
+        if (dimmed != nextDim) {
+            dimmed = nextDim;
+            cache.evictAll();
+            if (shownKey != null) {
+                shownKey = null;
+                applyWanted();
+            }
+        }
     }
 
     /** Called once, when the backdrop first covers the whole window, so the window's own background can go. */
@@ -271,8 +296,10 @@ public class BackdropView extends FrameLayout {
         if (key == null || last == null || bitmap == null || !last.startsWith(key + "@")) return false;
         handler.removeCallbacks(apply);
         endTransition();
-        Baked baked = bakeFor(bitmap, getWidth(), getHeight(), fadeColors, fadeStops, dimmed);
-        cache.put(last, baked);
+        int w = getWidth();
+        int h = getHeight();
+        Baked baked = bakeFor(bitmap, w, h, fadeColors, fadeStops, dimmed);
+        if (w > 0 && h > 0) cache.put(last, baked);
         shownKey = last;
         back.setImageBitmap(baked.show);
         shown = baked;
@@ -293,13 +320,13 @@ public class BackdropView extends FrameLayout {
             request++;
             return;
         }
+        int w = getWidth();
+        int h = getHeight();
         String key = cacheKey(wantedKey, wantedCover);
         // Every call invalidates what is in flight, also when the wanted game is the one already shown.
         int id = ++request;
         if (key.equals(shownKey)) return;
         Baked cached = cache.get(key);
-        int w = getWidth();
-        int h = getHeight();
         if (cached != null && cached.forWidth == w && cached.forHeight == h) {
             display(key, cached);
             return;
@@ -314,7 +341,10 @@ public class BackdropView extends FrameLayout {
             Bitmap raw = cached != null ? cached.raw : BackdropBlur.make(cover, canvas, bakeDay, bakePortrait);
             Baked made = bakeFor(raw, w, h, colors, stops, dim);
             handler.post(() -> {
-                cache.put(key, made);
+                if (made.forWidth > 0 && made.forHeight > 0
+                        && made.forWidth == getWidth() && made.forHeight == getHeight()) {
+                    cache.put(key, made);
+                }
                 // A newer request, even one still waiting out its settle time, has the say.
                 if (id == request) display(key, made);
             });
@@ -407,11 +437,7 @@ public class BackdropView extends FrameLayout {
         getViewTreeObserver().removeOnGlobalLayoutListener(aligner);
         handler.removeCallbacks(apply);
         request++;
-        if (transition != null) {
-            AnimatorSet running = transition;
-            transition = null;
-            running.cancel();
-        }
+        endTransition();
     }
 
     @Override

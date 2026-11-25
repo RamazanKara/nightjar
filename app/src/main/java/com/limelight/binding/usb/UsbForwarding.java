@@ -182,7 +182,8 @@ public final class UsbForwarding {
     public UsbForwarding(Context context, PreferenceConfiguration prefConfig, NvConnection conn, Messages messages) {
         this(context, (UsbManager) context.getSystemService(Context.USB_SERVICE), prefConfig, new Bridge() {
             @Override public int attach(int fd, String path, String name) {
-                return MoonBridge.usbAttach(fd, path, name, conn.hostEndpoint());
+                return conn == null ? MoonBridge.USB_NO_STREAM
+                        : MoonBridge.usbAttach(fd, path, name, conn.hostEndpoint());
             }
             @Override public boolean detach(int requestId) {
                 return MoonBridge.usbDetach(requestId);
@@ -425,16 +426,18 @@ public final class UsbForwarding {
 
     /**
      * Detaches on the attach thread: the engine waits there for the device's outstanding transfers, up to seconds,
-     * which the main thread must not. {@code notAttached} runs on the main thread when it was not attached any more.
-     * Once stopped, the thread takes no more work and the detach runs here, as before.
+     * which the main thread must not. Once stopped, run on a daemon thread so main never blocks.
      */
     private void detach(int requestId, Runnable notAttached) {
+        Runnable task = () -> {
+            if (!bridge.detach(requestId) && notAttached != null) main.post(notAttached);
+        };
         try {
-            worker.execute(() -> {
-                if (!bridge.detach(requestId) && notAttached != null) main.post(notAttached);
-            });
+            worker.execute(task);
         } catch (RejectedExecutionException e) {
-            if (!bridge.detach(requestId) && notAttached != null) notAttached.run();
+            Thread fallback = new Thread(task, "USB detach");
+            fallback.setDaemon(true);
+            fallback.start();
         }
     }
 
@@ -476,20 +479,26 @@ public final class UsbForwarding {
             // Wait off the main thread for any in-process USB input driver to finish closing its interfaces.
             if (!UsbDriverService.awaitDeviceRelease(device, 4000)) {
                 LimeLog.warning("USB: timed out waiting for driver release on " + path);
-                main.post(() -> attached(path, entry, MoonBridge.USB_BUSY));
+                main.post(() -> attached(path, entry, MoonBridge.USB_BUSY, false));
                 return;
             }
             // Connects to the host's native API the first time, so not on the main thread.
             int result = bridge.attach(fd, path, name);
-            main.post(() -> attached(path, entry, result));
+            boolean alreadyDetached = false;
+            if (result >= 0 && forwarded.get(path) != entry) {
+                bridge.detach(result);
+                alreadyDetached = true;
+            }
+            boolean detachedOnWorker = alreadyDetached;
+            main.post(() -> attached(path, entry, result, detachedOnWorker));
         });
     }
 
-    private void attached(String path, Forwarded entry, int result) {
+    private void attached(String path, Forwarded entry, int result, boolean alreadyDetached) {
         entry.attaching = false;
         if (forwarded.get(path) != entry) {
             // Unplugged or stopped while it was being attached.
-            if (result >= 0) detach(result, null);
+            if (result >= 0 && !alreadyDetached) detach(result, null);
             entry.connection.close();
             return;
         }

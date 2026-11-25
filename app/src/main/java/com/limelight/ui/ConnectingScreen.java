@@ -275,10 +275,16 @@ public final class ConnectingScreen {
             working.setVisibility(View.VISIBLE);
             result.setVisibility(View.GONE);
             new Thread(() -> {
-                CharSequence words = actions.testNetwork();
+                CharSequence words;
+                try {
+                    words = actions.testNetwork();
+                } catch (RuntimeException e) {
+                    words = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                }
+                CharSequence shown = words;
                 activity.runOnUiThread(() -> {
                     working.setVisibility(View.GONE);
-                    result.setText(words);
+                    result.setText(shown);
                     result.setVisibility(View.VISIBLE);
                 });
             }, "Network test").start();

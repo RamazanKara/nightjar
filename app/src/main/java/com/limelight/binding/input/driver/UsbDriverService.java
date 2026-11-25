@@ -44,6 +44,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
     private final UsbDriverBinder binder = new UsbDriverBinder();
 
     private final CopyOnWriteArrayList<AbstractController> controllers = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArraySet<AbstractController> readyControllers = new CopyOnWriteArraySet<>();
     private final Set<String> forwardedDevices = Collections.synchronizedSet(new HashSet<>());
 
     private volatile UsbDriverListener listener;
@@ -108,6 +109,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
     public void deviceRemoved(AbstractController controller) {
         // Remove the the controller from our list (if not removed already)
         controllers.remove(controller);
+        readyControllers.remove(controller);
 
         // Call through to the client's listener
         LimeLog.info("USB controller detached");
@@ -125,8 +127,11 @@ public class UsbDriverService extends Service implements UsbDriverListener {
         LimeLog.info("USB controller attached");
         handler.post(() -> {
             UsbDriverListener current = listener;
-            if (started && controllers.contains(controller) && current != null) {
-                current.deviceAdded(controller);
+            if (started && controllers.contains(controller)) {
+                readyControllers.add(controller);
+                if (current != null) {
+                    current.deviceAdded(controller);
+                }
             }
         });
     }
@@ -167,6 +172,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
                     if (isControllerForDevice(controller, device)) {
                         // Input stops now; the pad's USB worker finishes releasing it.
                         controllers.remove(controller);
+                        readyControllers.remove(controller);
                         controller.stop();
                     }
                 }
@@ -202,9 +208,9 @@ public class UsbDriverService extends Service implements UsbDriverListener {
         public void setListener(UsbDriverListener listener) {
             UsbDriverService.this.listener = listener;
 
-            // Report all controllerMap that already exist
+            // Report only controllers that finished starting and called deviceAdded().
             if (listener != null) {
-                for (AbstractController controller : controllers) {
+                for (AbstractController controller : readyControllers) {
                     listener.deviceAdded(controller);
                 }
             }
@@ -282,6 +288,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
         for (AbstractController controller : controllers) {
             if (isControllerForDevice(controller, device)) {
                 controllers.remove(controller);
+                readyControllers.remove(controller);
                 controller.stop();
             }
         }
@@ -414,6 +421,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
             int usbDeviceId = device.getDeviceId();
             controller.startOnUsbWorker(() -> {
                 controllers.remove(controller);
+                readyControllers.remove(controller);
                 reportStartFailed(usbDeviceId);
             });
         }
@@ -560,6 +568,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
             controller.stop();
         }
         controllers.clear();
+        readyControllers.clear();
     }
 
     @Override

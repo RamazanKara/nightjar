@@ -128,6 +128,8 @@ public final class FolderBrowserActivity extends NightjarActivity {
     }
 
     private void refresh() {
+        android.view.View focused = getCurrentFocus();
+        Object focusTag = focused != null && isDescendant(content, focused) ? focused.getTag() : null;
         content.removeAllViews();
         String pc = getIntent().getStringExtra(EXTRA_PC_NAME);
         // A transfer keeps its own folder and file, so the page stays usable while one runs or waits.
@@ -146,7 +148,7 @@ public final class FolderBrowserActivity extends NightjarActivity {
             if (!work.waiting.isEmpty()) {
                 text(R.style.TextAppearance_Nightjar_Supporting, getString(R.string.folders_waiting, work.waiting.size()));
             }
-            button(R.attr.nightjarButtonTonalStyle, getString(android.R.string.cancel), true, 0, work::cancelTransfer);
+            button(R.attr.nightjarButtonTonalStyle, getString(android.R.string.cancel), true, 0, "cancel", work::cancelTransfer);
         } else if (work.loading) {
             text(R.style.TextAppearance_Nightjar_Supporting, getString(R.string.folders_loading));
             LinearProgressIndicator bar = new LinearProgressIndicator(this);
@@ -157,7 +159,7 @@ public final class FolderBrowserActivity extends NightjarActivity {
             TextView error = text(R.style.TextAppearance_Nightjar_Body, work.error);
             error.setTextColor(MaterialColors.getColor(error, androidx.appcompat.R.attr.colorError));
             if (work.canRetry && !busy) {
-                button(R.attr.nightjarButtonTonalStyle, getString(R.string.folders_retry), true, 0, work::reload);
+                button(R.attr.nightjarButtonTonalStyle, getString(R.string.folders_retry), true, 0, "retry", work::reload);
             }
         }
         if (work.message != null) {
@@ -171,15 +173,15 @@ public final class FolderBrowserActivity extends NightjarActivity {
                 for (SharedFolders.Folder folder : work.folders) {
                     button(R.attr.nightjarButtonTextStyle, folder.name + "\n" + getString(folder.writable
                                     ? R.string.folders_read_write : R.string.folders_read_only), !busy,
-                            R.drawable.ic_folder, () -> work.open(folder, ""));
+                            R.drawable.ic_folder, "folder:" + folder.id, () -> work.open(folder, ""));
                 }
             }
         } else {
             button(R.attr.nightjarButtonTonalStyle, getString(work.path.isEmpty() ? R.string.folders_all
-                    : R.string.folders_up), !busy, 0, work::up);
+                    : R.string.folders_up), !busy, 0, "up", work::up);
             if (work.folder.writable && work.listing != null) {
                 button(com.google.android.material.R.attr.materialButtonStyle, getString(R.string.folders_upload), !busy,
-                        R.drawable.ic_upload, () -> choose(new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                        R.drawable.ic_upload, "upload", () -> choose(new Intent(Intent.ACTION_OPEN_DOCUMENT)
                                 .addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"), UPLOAD));
             }
             if (work.listing != null && work.listing.entries.isEmpty()) {
@@ -191,7 +193,18 @@ public final class FolderBrowserActivity extends NightjarActivity {
                 }
             }
         }
+        android.view.View restore = focusTag != null ? content.findViewWithTag(focusTag) : null;
+        if (restore != null && restore.isEnabled() && restore.requestFocus()) {
+            return;
+        }
         com.limelight.ui.SubPageFocus.apply(this, findViewById(R.id.page_content));
+    }
+
+    private static boolean isDescendant(android.view.View parent, android.view.View view) {
+        for (android.view.ViewParent p = view.getParent(); p != null; p = p.getParent()) {
+            if (p == parent) return true;
+        }
+        return false;
     }
 
     private void showProgress(Transfer run) {
@@ -209,17 +222,17 @@ public final class FolderBrowserActivity extends NightjarActivity {
         switch (entry.kind) {
             case DIR:
                 button(R.attr.nightjarButtonTextStyle, entry.name + (modified.isEmpty() ? "" : "\n" + modified), !busy,
-                        R.drawable.ic_folder, () -> work.open(work.folder, SharedFolders.childPath(work.path, entry.name)));
+                        R.drawable.ic_folder, "dir:" + entry.name, () -> work.open(work.folder, SharedFolders.childPath(work.path, entry.name)));
                 break;
             case FILE:
                 String size = Formatter.formatShortFileSize(this, entry.size);
                 button(R.attr.nightjarButtonTextStyle, entry.name + "\n" + (modified.isEmpty() ? size : size + " · " + modified),
                         !busy && !work.queued(work.folder.id, SharedFolders.childPath(work.path, entry.name)),
-                        R.drawable.ic_download, () -> download(entry));
+                        R.drawable.ic_download, "file:" + entry.name, () -> download(entry));
                 break;
             default:
                 button(R.attr.nightjarButtonTextStyle, entry.name + "\n" + getString(R.string.folders_unsupported_entry),
-                        false, R.drawable.ic_file, () -> { });
+                        false, R.drawable.ic_file, "other:" + entry.name, () -> { });
                 break;
         }
     }
@@ -246,11 +259,12 @@ public final class FolderBrowserActivity extends NightjarActivity {
         return view;
     }
 
-    private MaterialButton button(int styleAttr, String text, boolean enabled, int icon, Runnable action) {
+    private MaterialButton button(int styleAttr, String text, boolean enabled, int icon, Object tag, Runnable action) {
         MaterialButton button = new MaterialButton(this, null, styleAttr);
         button.setText(text);
         button.setAllCaps(false);
         button.setEnabled(enabled);
+        button.setTag(tag);
         if (icon != 0) {
             button.setIconResource(icon);
         }
@@ -367,9 +381,11 @@ public final class FolderBrowserActivity extends NightjarActivity {
         public FolderWork(Application application) { super(application); }
 
         void start(ComputerDetails computer, String uniqueId) {
-            if (this.computer != null) return;
             this.computer = computer;
             this.uniqueId = uniqueId;
+            if (folders != null || folder != null || loading) {
+                return;
+            }
             reload();
             if (deferredTarget != null) {
                 Uri target = deferredTarget;

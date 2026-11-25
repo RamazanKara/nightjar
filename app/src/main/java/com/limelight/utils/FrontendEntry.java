@@ -206,7 +206,13 @@ public final class FrontendEntry {
     }
 
     private static String mergeBlock(String existing, String root, String tag, String name, String block) {
-        if (existing == null || existing.trim().isEmpty()) {
+        if (existing == null) {
+            return "<?xml version=\"1.0\"?>\n<" + root + ">\n" + block + "</" + root + ">\n";
+        }
+        if (existing.startsWith("\uFEFF")) {
+            existing = existing.substring(1);
+        }
+        if (existing.trim().isEmpty()) {
             return "<?xml version=\"1.0\"?>\n<" + root + ">\n" + block + "</" + root + ">\n";
         }
         // ES-DE files need no DTD, and must never resolve entities from files or the network.

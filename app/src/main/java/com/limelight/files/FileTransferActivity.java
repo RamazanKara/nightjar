@@ -164,14 +164,17 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         // Recreated after a configuration change, the screen goes on with what it had: a share is taken once.
         if (!work.opened) {
             work.opened = true;
+            work.shareConsumed = state != null && state.getBoolean("files_share_consumed", false);
             work.uuid = chosenPc(getIntent());
             int refused = 0;
             Uri report = forReport(getIntent()) ? ProblemReport.reportUri() : null;
-            for (Uri uri : sharedUris(getIntent())) {
-                if (sendable(uri, getPackageName(), FileShareIntents.providerPackage(this, uri), report)) {
-                    work.waiting.add(uri);
-                } else {
-                    refused++;
+            if (!work.shareConsumed) {
+                for (Uri uri : sharedUris(getIntent())) {
+                    if (sendable(uri, getPackageName(), FileShareIntents.providerPackage(this, uri), report)) {
+                        work.waiting.add(uri);
+                    } else {
+                        refused++;
+                    }
                 }
             }
             if (refused > 0) {
@@ -235,16 +238,21 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         if (isFinishing() || isDestroyed() || details.uuid == null) return;
         work.computers.put(details.uuid, details);
         if (work.uuid != null && work.uuid.equalsIgnoreCase(details.uuid)) {
-            boolean first = work.computer == null;
+            ComputerDetails previous = work.computer;
+            boolean first = previous == null;
             work.computer = details;
-            // The first time the PC is reachable: its endpoint and what this device may do there.
-            if (work.controller == null && details.state == ComputerDetails.State.ONLINE) {
+            // The first time the PC is reachable (or its endpoint changes while idle): refresh its controller.
+            if (details.state == ComputerDetails.State.ONLINE) {
                 HostEndpoint endpoint = manager == null ? null : HostEndpoint.of(details, manager.getUniqueId(),
                         PlatformBinding.getCryptoProvider(getApplicationContext()));
-                if (endpoint != null) {
+                if (endpoint != null && (work.controller == null
+                        || (!work.running() && !work.controller.host().sameAddress(endpoint)))) {
+                    if (work.controller != null) work.controller.close();
                     work.controller = new FileTransferController(work.engine, endpoint, work.workers,
                             work.handler::post, work);
                     loadAccess();
+                } else if (first) {
+                    render();
                 }
             } else if (first) {
                 render();
@@ -317,7 +325,10 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         if (uploadAccess != FileProblems.Access.READY || work.controller == null) return;
         List<Uri> now = new ArrayList<>(work.waiting);
         work.waiting.clear();
-        if (!now.isEmpty()) queueUploads(now);
+        if (!now.isEmpty()) {
+            work.shareConsumed = true;
+            queueUploads(now);
+        }
         render();
     }
 
@@ -364,6 +375,9 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
                     for (Uri uri : uris) {
                         SharedFile info = describe(resolver, uri);
                         queued.add(info);
+                        if (!owner.hasPersistedPermission(uri)) {
+                            owner.persistPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        }
                         // Non-persistable URIs (e.g. external shares) lose Activity-scoped grants on finish();
                         // capture a descriptor while the Activity is still alive so background uploads succeed.
                         preopened.add(info.size >= 0 && !owner.hasPersistedPermission(uri)
@@ -614,6 +628,7 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         super.onPause();
     }
 
+    @Override protected void onSaveInstanceState(Bundle outState) { super.onSaveInstanceState(outState); outState.putBoolean("files_share_consumed", work != null && work.shareConsumed); }
     @Override
     protected void onDestroy() {
         generation++;
@@ -648,6 +663,7 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         int pendingDescribes;
         /** The intent was read: its share is in {@link #waiting} or sent. */
         boolean opened;
+        boolean shareConsumed;
         String uuid;
         ComputerDetails computer;
         FileTransferEngine engine;

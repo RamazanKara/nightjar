@@ -120,7 +120,10 @@ public final class RedactedLog {
         secrets.sort(Comparator.comparingInt(String::length).reversed());
         // A placeholder no PC name holds, so a PC named "PC" does not mark the marks again.
         for (String secret : secrets) {
-            text = text.replace(secret, PC_PLACEHOLDER);
+            text = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(secret),
+                            java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE)
+                    .matcher(text)
+                    .replaceAll(java.util.regex.Matcher.quoteReplacement(PC_PLACEHOLDER));
         }
         text = text.replace(PC_PLACEHOLDER, "[PC]");
         String[] marks = {"[url]", "[email]", "[address]", "[address]", "[address]", "[id]", "[hex]", "[data]", "[path]"};

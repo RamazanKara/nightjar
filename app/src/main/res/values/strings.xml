@@ -14,6 +14,7 @@
     <string name="frame_warp_reason_full_chroma">Full chroma is on</string>
     <string name="frame_warp_reason_renderer">the GPU path did not start</string>
     <string name="frame_warp_replaces_upscaling">Frame Warp draws the picture without upscaling.</string>
+    <string name="summary_hdr_shield_firmware_update">Update the firmware on your NVIDIA SHIELD Android TV to enable HDR</string>
     <!-- Shortcut strings -->
     <string name="scut_deleted_pc">PC deleted</string>
     <string name="scut_not_paired">PC not paired</string>
@@ -29,6 +30,7 @@
     <!-- Help strings -->
     <string name="help_loading_title">Help</string>
     <string name="help_loading_msg">Loading help page…</string>
+    <string name="help_loading_error">Cannot open help without WebView or a browser.</string>
 
     <!-- PC view menu entries -->
     <string name="pcview_menu_header_online">Online</string>

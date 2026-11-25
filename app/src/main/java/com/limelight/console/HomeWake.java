@@ -23,21 +23,29 @@ final class HomeWake {
     private final Activity activity;
     private final Function<String, ComputerDetails> hosts;
     private final Runnable onWoke;
+    private final Runnable onSettled;
     private final HostWaker waker;
     private String uuid;
     private String name;
     /** The wait on screen, null when none shows. */
     private AlertDialog progress;
 
+    HomeWake(Activity activity, Handler handler, Function<String, ComputerDetails> hosts, HostWaker.Sender sender,
+             Runnable onWoke) {
+        this(activity, handler, hosts, sender, onWoke, null);
+    }
+
     /**
      * @param hosts  the PC for a UUID, as the feed knows it now
      * @param onWoke called when the PC answers, so Home refreshes it
+     * @param onSettled called when a wake wait ends (cancelled, timed out, or failed) so form changes can proceed
      */
     HomeWake(Activity activity, Handler handler, Function<String, ComputerDetails> hosts, HostWaker.Sender sender,
-             Runnable onWoke) {
+             Runnable onWoke, Runnable onSettled) {
         this.activity = activity;
         this.hosts = hosts;
         this.onWoke = onWoke;
+        this.onSettled = onSettled;
         this.waker = new HostWaker(handler, r -> new Thread(r, "console-wake").start(), sender,
                 () -> hosts.apply(uuid), SystemClock::elapsedRealtime, new HostWaker.Listener() {
             @Override
@@ -50,15 +58,21 @@ final class HomeWake {
             @Override
             public void onTimedOut() {
                 hideProgress();
-                WakeFeedback.timedOut(activity, name, () -> wake(uuid));
+                notifySettledAfter(WakeFeedback.timedOut(activity, name, () -> wake(uuid)));
             }
 
             @Override
             public void onSendFailed(IOException error) {
                 hideProgress();
-                WakeFeedback.failed(activity, name, R.string.wol_fail, () -> wake(uuid));
+                notifySettledAfter(WakeFeedback.failed(activity, name, R.string.wol_fail, () -> wake(uuid)));
             }
         });
+    }
+
+    private void notifySettledAfter(AlertDialog dialog) {
+        if (onSettled == null) return;
+        if (dialog == null) onSettled.run();
+        else dialog.setOnDismissListener(ignored -> onSettled.run());
     }
 
     /**
@@ -94,8 +108,12 @@ final class HomeWake {
     }
 
     void cancel() {
+        boolean wasWaiting = waker.isWaiting();
         waker.cancel();
         hideProgress();
+        if (wasWaiting && onSettled != null) {
+            onSettled.run();
+        }
     }
 
     private void showProgress() {

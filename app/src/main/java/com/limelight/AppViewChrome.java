@@ -447,6 +447,10 @@ final class AppViewChrome {
     }
 
     void navigateBack() {
+        View grid = view.findViewById(R.id.fragmentView);
+        if (grid instanceof com.limelight.ui.AdaptiveGridView && ((com.limelight.ui.AdaptiveGridView) grid).clearMarkedAction()) {
+            return;
+        }
         if (librarySearch != null && librarySearch.getVisibility() == View.VISIBLE) {
             librarySearch.setQuery("", false);
             librarySearch.clearFocus();

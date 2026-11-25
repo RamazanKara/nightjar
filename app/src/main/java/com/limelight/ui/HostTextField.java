@@ -198,6 +198,27 @@ public final class HostTextField {
         return composing.isEmpty() ? -1 : dropped + committed.length();
     }
 
+    public int capsMode(int reqModes) {
+        if ((flags & FLAG_NO_AUTOCAPITALIZE) != 0) return 0;
+        if (type == TYPE_PASSWORD || type == TYPE_EMAIL || type == TYPE_URL
+                || type == TYPE_NUMBER || type == TYPE_DECIMAL || type == TYPE_PHONE) {
+            return 0;
+        }
+        String text = committed + composing;
+        return android.text.TextUtils.getCapsMode(text, text.length(), reqModes);
+    }
+
+    /** Removes one trailing code point from the mirror when the IME deletes via KEYCODE_DEL. */
+    public void mirrorBackspace() {
+        if (!composing.isEmpty()) {
+            int prev = Character.offsetByCodePoints(composing, composing.length(), -1);
+            composing = composing.substring(0, prev);
+        } else if (committed.length() > 0) {
+            int prev = Character.offsetByCodePoints(committed, committed.length(), -1);
+            committed.setLength(prev);
+        }
+    }
+
     public int composingEnd() {
         return composing.isEmpty() ? -1 : cursor();
     }

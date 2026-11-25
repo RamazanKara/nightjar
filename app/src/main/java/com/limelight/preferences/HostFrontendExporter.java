@@ -33,6 +33,21 @@ final class HostFrontendExporter {
     static final int PICK_ROMS_REQUEST = 1;
     static final int PICK_ESDE_REQUEST = 2;
 
+    private static final class PendingResult {
+        final FrontendLauncher launcher;
+        final String result;
+        final boolean success;
+
+        PendingResult(FrontendLauncher launcher, String result, boolean success) {
+            this.launcher = launcher;
+            this.result = result;
+            this.success = success;
+        }
+    }
+
+    private static final java.util.Map<String, PendingResult> PENDING_RESULTS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     private final HostStreamSettings activity;
     private final Runnable refreshActions;
     private Uri exportRomsTree;
@@ -51,6 +66,17 @@ final class HostFrontendExporter {
         if (launcher != null) exportLauncher = FrontendLauncher.valueOf(launcher);
         String romsTree = state.getString("export_roms_tree");
         exportRomsTree = romsTree != null ? Uri.parse(romsTree) : null;
+        if (activity.computer != null && activity.computer.uuid != null) {
+            PendingResult pending = PENDING_RESULTS.remove(activity.computer.uuid);
+            if (pending != null) {
+                exportLauncher = pending.launcher;
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    if (!activity.isFinishing() && !activity.isDestroyed()) {
+                        deliverResult(pending.launcher, pending.result, pending.success);
+                    }
+                });
+            }
+        }
     }
 
     void saveState(Bundle state) {
@@ -219,17 +245,27 @@ final class HostFrontendExporter {
             }
             final String result = message;
             final boolean success = succeeded;
+            final FrontendLauncher usedLauncher = launcher;
+            final String hostUuid = target.uuid;
             activity.runOnUiThread(() -> {
                 exportRunning = false;
+                if (!activity.isFinishing() && activity.isDestroyed() && hostUuid != null) {
+                    PENDING_RESULTS.put(hostUuid, new PendingResult(usedLauncher, result, success));
+                    return;
+                }
                 if (activity.isFinishing() || activity.isDestroyed()) return;
-                refreshActions.run();
-                exportLauncher = launcher;
-                if (success) showFrontendSetup(result);
-                else new NavigationDialogBuilder(activity).setTitle(launcher.label).setMessage(result)
-                        .setPositiveButton(R.string.frontend_export_pick, (dialog, which) -> chooseFrontendFolder())
-                        .setNegativeButton(android.R.string.cancel, null).show();
+                deliverResult(usedLauncher, result, success);
             });
         }, "Frontend export").start();
+    }
+
+    private void deliverResult(FrontendLauncher launcher, String result, boolean success) {
+        refreshActions.run();
+        exportLauncher = launcher;
+        if (success) showFrontendSetup(result);
+        else new NavigationDialogBuilder(activity).setTitle(launcher.label).setMessage(result)
+                .setPositiveButton(R.string.frontend_export_pick, (dialog, which) -> chooseFrontendFolder())
+                .setNegativeButton(android.R.string.cancel, null).show();
     }
 
     private void showFrontendSetup(String result) {

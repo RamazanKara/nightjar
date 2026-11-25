@@ -40,7 +40,19 @@ public class HelpActivity extends NightjarActivity {
         }
 
         FrameLayout page = TopAppBar.setUpPage(this, R.string.help, this::onBackPressed);
-        webView = new WebView(this);
+        try {
+            webView = new WebView(this);
+        } catch (android.util.AndroidRuntimeException | UnsatisfiedLinkError e) {
+            android.net.Uri target = getIntent().getData();
+            if (target != null) {
+                try {
+                    startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, target));
+                } catch (android.content.ActivityNotFoundException ignored) { }
+            }
+            android.widget.Toast.makeText(this, R.string.help_loading_error, android.widget.Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
         page.addView(webView);
         UiHelper.notifyNewRootView(this);
 

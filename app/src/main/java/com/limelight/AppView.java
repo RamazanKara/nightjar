@@ -252,10 +252,7 @@ public class AppView extends NightjarActivity implements AdapterFragmentCallback
                 // Refresh our live computer snapshot (address, ports, state, caps, running game) before
                 // handling state transitions so launches, cover art, and applist polling never stay stale.
                 ComputerDetails previous = computer;
-                boolean endpointChanged = previous == null
-                        || !java.util.Objects.equals(previous.activeAddress, details.activeAddress)
-                        || previous.httpsPort != details.httpsPort
-                        || !java.util.Objects.equals(previous.serverCert, details.serverCert);
+                boolean endpointChanged = com.limelight.nativeapi.HostEndpoint.endpointChanged(previous, details);
                 boolean becameOnline = previous != null && previous.state != ComputerDetails.State.ONLINE
                         && details.state == ComputerDetails.State.ONLINE;
                 ComputerDetails updated = new ComputerDetails(details);

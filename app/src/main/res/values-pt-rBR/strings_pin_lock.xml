@@ -49,4 +49,6 @@
     <string name="pin_key_delete">Apagar</string>
     <string name="pin_key_confirm">Confirmar</string>
     <string name="pin_dots_description">%1$d de %2$d dígitos digitados</string>
+    <string name="pin_pcs_none_off">Nenhum PC selecionado; bloqueio desativado.</string>
+    <string name="pin_save_failed">Não foi possível salvar o PIN. Tente novamente.</string>
 </resources>

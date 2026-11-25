@@ -317,6 +317,44 @@ public class TrackpadContextTest {
         assertTrue(Math.abs(touchscreenScrollTotal(6, 20, 50, 30f) - atDefault) <= 6);
     }
 
+    @Test
+    public void twoFingerHoldAndThreeFingerHoldDoNotMiscountRightOrMiddleClicks() {
+        Recorder connection = new Recorder();
+        TrackpadContext first = new TrackpadContext(connection, 0, false, 100, 100, 100, null);
+        // Two-finger stationary hold (> TAP_TIME_THRESHOLD) lifting primary first must not click right.
+        first.setPointerCount(1);
+        first.touchDownEvent(500, 500, 1000, true);
+        first.setPointerCount(2);
+        first.touchUpEvent(500, 500, 1400);
+        first.setPointerCount(1);
+        first.touchDownEvent(530, 500, 1400, false);
+        assertTrue(connection.buttons.isEmpty());
+
+        // Three-finger quick tap lifting primary first clicks middle once, then lifting second must not click right.
+        connection.buttons.clear();
+        first.setPointerCount(1);
+        first.touchDownEvent(500, 500, 2000, true);
+        first.setPointerCount(3);
+        first.touchUpEvent(500, 500, 2060);
+        first.setPointerCount(2);
+        first.touchDownEvent(530, 500, 2060, false);
+        first.touchUpEvent(530, 500, 2090);
+        first.setPointerCount(1);
+        first.touchDownEvent(560, 500, 2090, false);
+        assertEquals(Arrays.asList("down 2", "up 2"), connection.buttons);
+
+        // Two-finger quick tap lifting primary first fires one right click without duplicates.
+        connection.buttons.clear();
+        first.setPointerCount(1);
+        first.touchDownEvent(500, 500, 3000, true);
+        first.setPointerCount(2);
+        first.touchUpEvent(500, 500, 3060);
+        first.setPointerCount(1);
+        first.touchDownEvent(530, 500, 3060, false);
+        first.touchUpEvent(530, 500, 3100);
+        assertEquals(Arrays.asList("down 3", "up 3"), connection.buttons);
+    }
+
     /** Drags one finger 40 units right and returns what the host received, summed. */
     private static int[] drag(boolean swap, int sensitivityX, int sensitivityY, int speed) {
         Recorder connection = new Recorder();

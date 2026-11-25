@@ -49,4 +49,6 @@
     <string name="pin_key_delete">Sil</string>
     <string name="pin_key_confirm">Onayla</string>
     <string name="pin_dots_description">%2$d rakamdan %1$d tanesi girildi</string>
+    <string name="pin_pcs_none_off">Seçili PC yok; kilit kapatıldı.</string>
+    <string name="pin_save_failed">PIN kaydedilemedi. Tekrar deneyin.</string>
 </resources>

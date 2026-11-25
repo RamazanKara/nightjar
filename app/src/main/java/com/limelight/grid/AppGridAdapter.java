@@ -136,10 +136,7 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     public void updateComputer(ComputerDetails updated) {
         if (updated == null) return;
         ComputerDetails previous = this.computer;
-        boolean endpointChanged = previous == null
-                || !java.util.Objects.equals(previous.activeAddress, updated.activeAddress)
-                || previous.httpsPort != updated.httpsPort
-                || !java.util.Objects.equals(previous.serverCert, updated.serverCert);
+        boolean endpointChanged = com.limelight.nativeapi.HostEndpoint.endpointChanged(previous, updated);
         this.computer = updated;
         if (endpointChanged && loader != null) {
             rebuildLoader();

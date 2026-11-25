@@ -26,6 +26,7 @@ final class PadPointerHandler {
     private final float[] pointerLastX = new float[2], pointerLastY = new float[2];
     private final long[] pointerDownAt = new long[2];
     private boolean pointerScrolled, pointerSecondDown, pointerTap;
+    private Runnable pendingTapUp;
     private final Runnable cameraTick = new Runnable() {
         @Override
         public void run() {
@@ -169,6 +170,7 @@ final class PadPointerHandler {
     }
 
     void release() {
+        flushPendingTapUp();
         // A pointer touchpad stops at once when input is taken away; nothing can carry on.
         view.removeCallbacks(cameraTick);
         if (pointerCamera) view.gamepad().setStick(view.slot(), TouchLayout.RIGHT, 0, 0);
@@ -180,11 +182,30 @@ final class PadPointerHandler {
     }
 
     private void click(int button) {
-        if (pointerSink != null) {
-            pointerSink.button(button, true);
-            pointerSink.button(button, false);
+        flushPendingTapUp();
+        ModernController.PointerSink sink = pointerSink;
+        if (sink != null) {
+            sink.button(button, true);
+            Runnable release = new Runnable() {
+                @Override
+                public void run() {
+                    if (pendingTapUp != this) return;
+                    pendingTapUp = null;
+                    sink.button(button, false);
+                }
+            };
+            pendingTapUp = release;
+            view.postDelayed(release, com.limelight.binding.input.ControllerHandler.MINIMUM_BUTTON_DOWN_TIME_MS);
         }
         view.clickHaptic();
+    }
+
+    private void flushPendingTapUp() {
+        Runnable pending = pendingTapUp;
+        if (pending != null) {
+            view.removeCallbacks(pending);
+            pending.run();
+        }
     }
 
     /** Two fingers on the pointer touchpad scroll: down moves the wheel down, right moves it right, in whole notches. */

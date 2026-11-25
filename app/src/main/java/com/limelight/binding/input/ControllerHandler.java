@@ -45,7 +45,7 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
  */
 public class ControllerHandler implements InputManager.InputDeviceListener, UsbDriverListener {
 
-    static final int MINIMUM_BUTTON_DOWN_TIME_MS = 25;
+    public static final int MINIMUM_BUTTON_DOWN_TIME_MS = 25;
     static final int EMULATING_SPECIAL = 0x1;
     static final int EMULATING_SELECT = 0x2;
     static final int EMULATING_TOUCHPAD = 0x4;
@@ -576,6 +576,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         public AbstractController device;
         public ControllerButtonMap buttonMap = new ControllerButtonMap();
         GyroAxisTransformer gyroMapping = GyroAxisTransformer.identity();
+        final Object usbSendLock = new Object();
         final float[] mappedMotion = new float[3];
         boolean arrivalPending, menuComboPending, guideDown;
         long arrivalRetryAt;

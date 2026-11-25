@@ -50,4 +50,5 @@
     <string name="gyro_diag_share_title">Поділитися показаннями руху</string>
     <string name="gyro_diag_hide">Сховати</string>
     <string name="gyro_diag_show">Показати</string>
+    <string name="gyro_diag_cap_reached">Запис зупинено на %1\ рядках.</string>
 </resources>

@@ -82,13 +82,19 @@ public interface HiddenStore {
         }
 
         static void migrateLegacy(Context app, long handle) {
+            if (handle == 0L) return;
             SharedPreferences prefs = app.getSharedPreferences(AppView.HIDDEN_APPS_PREF_FILENAME, Context.MODE_PRIVATE);
             synchronized (WRITES) {
                 Map<String, ?> all = prefs.getAll();
                 if (all.isEmpty()) return;
                 Json.Arr entries = collectLegacyEntries(prefs, all);
                 if (entries.length() > 0) {
-                    NightjarConsoleJni.repoImportLegacy(handle, "", "", entries.toString());
+                    try {
+                        NightjarConsoleJni.repoImportLegacy(handle, "", "", entries.toString());
+                    } catch (RuntimeException | UnsatisfiedLinkError e) {
+                        com.limelight.LimeLog.warning("Legacy hidden apps import failed: " + e.getMessage());
+                        return;
+                    }
                 }
                 prefs.edit().clear().commit();
             }

@@ -152,9 +152,25 @@ final class CrashRecord {
     }
 
     private static void write(File file, String text) throws IOException {
-        try (FileOutputStream output = new FileOutputStream(file)) {
-            output.write(text.getBytes(StandardCharsets.UTF_8));
-            output.getFD().sync();
+        File parent = file.getParentFile();
+        File temp = new File(parent, file.getName() + ".tmp");
+        try {
+            try (FileOutputStream output = new FileOutputStream(temp)) {
+                output.write(text.getBytes(StandardCharsets.UTF_8));
+                output.getFD().sync();
+            }
+            try {
+                java.nio.file.Files.move(temp.toPath(), file.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException atomicUnsupported) {
+                java.nio.file.Files.move(temp.toPath(), file.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            if (temp.exists() && !temp.delete()) {
+                temp.deleteOnExit();
+            }
         }
     }
 }

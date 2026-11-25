@@ -50,4 +50,5 @@
     <string name="gyro_diag_share_title">Поделиться показаниями движения</string>
     <string name="gyro_diag_hide">Скрыть</string>
     <string name="gyro_diag_show">Показать</string>
+    <string name="gyro_diag_cap_reached">Запись остановлена на %1\ строках.</string>
 </resources>

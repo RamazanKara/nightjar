@@ -218,4 +218,18 @@ final class HomeRows {
         }
         return source.running ? HomeModel.Badge.RUNNING : HomeModel.Badge.NONE;
     }
+
+    static HomeModel.Badge badgeOf(ConsoleSnapshot snapshot, List<ConsoleSnapshot.Source> copies) {
+        HomeModel.Badge best = HomeModel.Badge.NONE;
+        for (ConsoleSnapshot.Source copy : copies) {
+            HomeModel.Badge badge = badgeOf(snapshot, copy);
+            if (badge == HomeModel.Badge.RUNNING) {
+                return badge;
+            }
+            if (badge == HomeModel.Badge.SUSPENDED) {
+                best = badge;
+            }
+        }
+        return best;
+    }
 }

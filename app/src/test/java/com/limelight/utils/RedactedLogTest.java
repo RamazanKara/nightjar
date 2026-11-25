@@ -130,4 +130,11 @@ public class RedactedLogTest {
         assertTrue(log.snapshot().endsWith("INFO Stream disconnected"));
         assertFalse(log.snapshot().contains("1234"));
     }
+
+    @Test
+    public void secretPatternsAreRedactedCaseInsensitively() {
+        assertEquals("PASSWORD=[omitted] Token=[omitted] Secret=[omitted]",
+                RedactedLog.redact("PASSWORD=hunter2 Token=abcdef12 Secret=xyz999"));
+        assertFalse(RedactedLog.redact("PassPhrase secretvalue").contains("secretvalue"));
+    }
 }

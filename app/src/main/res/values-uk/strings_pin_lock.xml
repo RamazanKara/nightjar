@@ -51,4 +51,6 @@
     <string name="pin_key_delete">Видалити</string>
     <string name="pin_key_confirm">Підтвердити</string>
     <string name="pin_dots_description">Введено цифр: %1$d з %2$d</string>
+    <string name="pin_pcs_none_off">ПК не вибрано; блокування вимкнено.</string>
+    <string name="pin_save_failed">Не вдалося зберегти PIN-код. Спробуйте ще раз.</string>
 </resources>

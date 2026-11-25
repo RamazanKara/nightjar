@@ -217,30 +217,9 @@ final class ControllerRumbleRouter {
                 deviceContext.highFreqMotor = highFreqMotor;
                 if (!active) continue;
 
-                // Prefer the documented Android 12 rumble API which can handle dual vibrators on PS/Xbox controllers
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && deviceContext.vibratorManager != null) {
-                    vibrated = true;
-                    if (deviceContext.quadVibrators) {
-                        rumbleQuadVibrators(deviceContext.vibratorManager,
-                                deviceContext.lowFreqMotor, deviceContext.highFreqMotor,
-                                deviceContext.leftTriggerMotor, deviceContext.rightTriggerMotor);
-                    }
-                    else {
-                        rumbleDualVibrators(deviceContext.vibratorManager,
-                                deviceContext.lowFreqMotor, deviceContext.highFreqMotor);
-                    }
-                }
-                // On Shield devices, we can use their special API to rumble Shield controllers
-                else if (handler.sceManager.rumble(deviceContext.inputDevice, feel(deviceContext.lowFreqMotor), feel(deviceContext.highFreqMotor))) {
+                if (applyInputDeviceRumble(deviceContext)) {
                     vibrated = true;
                 }
-                // If all else fails, we have to try the old Vibrator API
-                else if (deviceContext.vibrator != null) {
-                    vibrated = true;
-                    rumbleSingleVibrator(deviceContext.vibrator, deviceContext.lowFreqMotor, deviceContext.highFreqMotor);
-                }
-                // stop() does not wait for these calls, and one it ran across would keep a motor on for a minute.
-                if (handler.stopped) deviceContext.cancelMotors();
             }
         }
         if (!active) return;
@@ -275,6 +254,44 @@ final class ControllerRumbleRouter {
             handler.deviceVibratorForPlayerOne = true;
             vibrateSinglePlan(handler.deviceVibrator, (int) rumbleSingleOut[0], rumbleSingleOut[1], rumbleSingleOut[2]);
             if (handler.stopped) handler.deviceVibrator.cancel();
+        }
+    }
+
+    private boolean applyInputDeviceRumble(ControllerHandler.InputDeviceContext deviceContext) {
+        boolean applied = false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && deviceContext.vibratorManager != null) {
+            if (deviceContext.quadVibrators) {
+                rumbleQuadVibrators(deviceContext.vibratorManager,
+                        deviceContext.lowFreqMotor, deviceContext.highFreqMotor,
+                        deviceContext.leftTriggerMotor, deviceContext.rightTriggerMotor);
+            }
+            else {
+                rumbleDualVibrators(deviceContext.vibratorManager,
+                        deviceContext.lowFreqMotor, deviceContext.highFreqMotor);
+            }
+            applied = true;
+        }
+        else if (handler.sceManager.rumble(deviceContext.inputDevice,
+                feel(deviceContext.lowFreqMotor), feel(deviceContext.highFreqMotor))) {
+            applied = true;
+        }
+        else if (deviceContext.vibrator != null) {
+            rumbleSingleVibrator(deviceContext.vibrator,
+                    deviceContext.lowFreqMotor, deviceContext.highFreqMotor);
+            applied = true;
+        }
+        if (handler.stopped) deviceContext.cancelMotors();
+        return applied;
+    }
+
+    void reapplyMotors(ControllerHandler.InputDeviceContext deviceContext) {
+        if (deviceContext == null) return;
+        synchronized (handler.rumbleLock) {
+            if (rumblePaused || handler.stopped) return;
+            if (deviceContext.lowFreqMotor != 0 || deviceContext.highFreqMotor != 0
+                    || (deviceContext.quadVibrators && (deviceContext.leftTriggerMotor != 0 || deviceContext.rightTriggerMotor != 0))) {
+                applyInputDeviceRumble(deviceContext);
+            }
         }
     }
 

@@ -46,6 +46,7 @@ public final class GyroDiagnosticOverlay {
     private static volatile boolean enabled;
     private static volatile TextView display;
     private static volatile Activity activity;
+    private static volatile Runnable onRecordCap;
 
     private GyroDiagnosticOverlay() {}
 
@@ -64,11 +65,22 @@ public final class GyroDiagnosticOverlay {
         String label = type == MoonBridge.LI_MOTION_TYPE_GYRO ? "gyro" : "accel";
         latest = String.format(Locale.US, "%s controller=%d %s\nX=%+.4f  Y=%+.4f  Z=%+.4f",
                 path, controller, label, x, y, z);
+        Runnable capCallback = null;
         synchronized (lock) {
-            if (recording && rows.size() < MAX_ROWS) {
-                rows.add(String.format(Locale.US, "%d,%s,%d,%s,%.6f,%.6f,%.6f",
-                        SystemClock.elapsedRealtimeNanos(), path, controller, label, x, y, z));
+            if (recording) {
+                if (rows.size() < MAX_ROWS) {
+                    rows.add(String.format(Locale.US, "%d,%s,%d,%s,%.6f,%.6f,%.6f",
+                            SystemClock.elapsedRealtimeNanos(), path, controller, label, x, y, z));
+                }
+                if (rows.size() >= MAX_ROWS) {
+                    recording = false;
+                    rows.add("# Recording stopped at limit (" + MAX_ROWS + " rows)");
+                    capCallback = onRecordCap;
+                }
             }
+        }
+        if (capCallback != null) {
+            mainHandler.post(capCallback);
         }
     }
 
@@ -105,6 +117,10 @@ public final class GyroDiagnosticOverlay {
 
         LinearLayout buttons = new LinearLayout(host);
         Button capture = button(host, R.string.gyro_diag_record);
+        onRecordCap = () -> {
+            capture.setText(R.string.gyro_diag_record);
+            latest = host.getString(R.string.gyro_diag_cap_reached, MAX_ROWS);
+        };
         capture.setOnClickListener(v -> {
             synchronized (lock) {
                 if (!recording) {
@@ -202,6 +218,7 @@ public final class GyroDiagnosticOverlay {
             activity = null;
             recording = false;
             flydigiForced = false;
+            onRecordCap = null;
         }
     }
 }

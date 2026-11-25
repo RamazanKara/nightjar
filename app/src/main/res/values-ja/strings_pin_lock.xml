@@ -48,4 +48,6 @@
     <string name="pin_key_delete">削除</string>
     <string name="pin_key_confirm">確定</string>
     <string name="pin_dots_description">%2$d 桁中 %1$d 桁入力済み</string>
+    <string name="pin_pcs_none_off">PC が選択されていないため、ロックをオフにしました。</string>
+    <string name="pin_save_failed">PIN を保存できませんでした。もう一度お試しください。</string>
 </resources>

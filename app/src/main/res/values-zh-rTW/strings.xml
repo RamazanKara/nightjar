@@ -567,4 +567,6 @@
     <string name="home_setup_title">已為此裝置和 %1$s 設定完成</string>
     <string name="home_setup_codec_auto">編解碼器在串流開始時選擇</string>
     <string name="home_setup_dismiss">關閉</string>
+    <string name="help_loading_error">沒有 WebView 或瀏覽器，無法開啟說明。</string>
+    <string name="summary_hdr_shield_firmware_update">更新 NVIDIA SHIELD Android TV 上的韌體以啟用 HDR</string>
 </resources>

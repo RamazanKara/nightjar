@@ -50,4 +50,5 @@
     <string name="gyro_diag_share_title">分享體感讀數</string>
     <string name="gyro_diag_hide">隱藏</string>
     <string name="gyro_diag_show">顯示</string>
+    <string name="gyro_diag_cap_reached">已在 %1\ 列處停止記錄。</string>
 </resources>

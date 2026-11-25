@@ -184,21 +184,31 @@ public final class OpenPlay {
         return settle;
     }
 
-    /** Whether this game is the chosen one, for its menu's wording. */
-    private static boolean isChosen(Context context, String hostUuid, int appId) {
+    /** Whether this game is the chosen one, matching its stable id when present before falling back to numeric app id. */
+    private static boolean isChosen(Context context, String hostUuid, int appId, String stableId) {
         Game game = chosen(context);
-        return game != null && game.hostUuid.equals(hostUuid) && game.appId == appId;
+        if (game == null || !game.hostUuid.equals(hostUuid)) return false;
+        if (!game.stableId.isEmpty() && stableId != null && !stableId.isEmpty()) {
+            return game.stableId.equalsIgnoreCase(stableId);
+        }
+        return game.appId == appId;
     }
 
     /** The game menu's row. */
     public static String menuLabel(Context context, String hostUuid, int appId) {
-        return context.getString(isChosen(context, hostUuid, appId) ? R.string.open_play_menu_stop : R.string.open_play_menu);
+        return menuLabel(context, hostUuid, appId, "");
+    }
+
+    /** The game menu's row, matched by {@code stableId} before numeric {@code appId}. */
+    public static String menuLabel(Context context, String hostUuid, int appId, String stableId) {
+        return context.getString(isChosen(context, hostUuid, appId, stableId)
+                ? R.string.open_play_menu_stop : R.string.open_play_menu);
     }
 
     /** The game menu's choice, or taking it back: the setting follows, so the choice does what it says. */
     public static void toggle(Context context, String hostUuid, String hostName, int appId, String stableId, String title) {
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);
-        if (isChosen(context, hostUuid, appId)) {
+        if (isChosen(context, hostUuid, appId, stableId)) {
             state(context).edit().remove(GAME).apply();
             if ("chosen".equals(settings.getString(SETTING, DEFAULT))) settings.edit().putString(SETTING, DEFAULT).apply();
             return;

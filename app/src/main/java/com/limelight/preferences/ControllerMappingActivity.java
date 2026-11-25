@@ -39,10 +39,24 @@ public class ControllerMappingActivity extends NightjarActivity {
     private ControllerAxisMap axisMap;
     private MaterialButton axisButton;
     private boolean capturing;
+    private final androidx.activity.OnBackPressedCallback captureBack =
+            new androidx.activity.OnBackPressedCallback(false) {
+                @Override
+                public void handleOnBackPressed() {
+                    setCapturing(false);
+                    refresh();
+                }
+            };
+
+    private void setCapturing(boolean active) {
+        capturing = active;
+        captureBack.setEnabled(active);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getOnBackPressedDispatcher().addCallback(this, captureBack);
         UiHelper.setLocale(this);
         android.widget.FrameLayout page = TopAppBar.setUpPage(this, R.string.controller_mapping_title, this::finish);
 
@@ -67,7 +81,7 @@ public class ControllerMappingActivity extends NightjarActivity {
         capture.setId(R.id.controller_mapping_capture);
         capture.setText(R.string.controller_mapping_capture);
         capture.setOnClickListener(v -> {
-            capturing = true;
+            setCapturing(true);
             deviceView.setText(R.string.controller_mapping_press);
         });
         root.addView(capture);
@@ -299,7 +313,7 @@ public class ControllerMappingActivity extends NightjarActivity {
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (capturing && (event.getKeyCode() == KeyEvent.KEYCODE_BACK || event.getKeyCode() == KeyEvent.KEYCODE_ESCAPE)) {
             if (event.getAction() == KeyEvent.ACTION_UP) {
-                capturing = false;
+                setCapturing(false);
                 refresh();
             }
             return true;
@@ -310,7 +324,7 @@ public class ControllerMappingActivity extends NightjarActivity {
         }
         // Act on release so the press cannot leak into the dialog that opens next
         if (event.getAction() == KeyEvent.ACTION_UP) {
-            capturing = false;
+            setCapturing(false);
             InputDevice device = event.getDevice();
             if (device != null) {
                 select(device.getVendorId(), device.getProductId(), device.getName());

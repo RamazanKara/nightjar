@@ -45,16 +45,25 @@ public final class ConsoleSeed {
         }
         ComputerDetails snapshot = new ComputerDetails(computer);
         Thread thread = new Thread(() -> {
+            boolean done = false;
             try {
                 // The library file can be large; it is read here, never on the caller's (UI) thread.
                 if (ConsoleRepository.hasLibrary(app, computer.uuid)) {
+                    done = true;
                     if (onSeeded != null) onSeeded.run();
                     return;
                 }
                 ConsoleRepository.create(app, uniqueId).refresh(Collections.singletonList(snapshot));
+                done = ConsoleRepository.hasLibrary(app, snapshot.uuid);
                 if (onSeeded != null && ConsoleRepository.hasAnyLibrary(app)) onSeeded.run();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+            } finally {
+                if (!done) {
+                    synchronized (TRIED) {
+                        TRIED.remove(snapshot.uuid);
+                    }
+                }
             }
         }, "console-seed");
         thread.setDaemon(true);

@@ -416,6 +416,19 @@ final class ControllerContextLifecycle {
             target.mouseScrollVAccum.copyFrom(oldScrollV);
             target.mouseScrollHAccum.copyFrom(oldScrollH);
         }
+        int oldGuideBits = oldContext.guideHold.stateBits();
+        android.view.KeyEvent oldGuideHeldDown = oldContext.guideHeldDown;
+        boolean oldGuideTapping = oldContext.guideTapping;
+        boolean oldQuitComboPending = oldContext.quitComboPending;
+        int oldQuitButtons = oldContext.quitButtons;
+        boolean oldGuideTapPending = oldContext.guideTapEnd != null;
+        oldContext.guideHeldDown = null;
+
+        target.lowFreqMotor = oldContext.lowFreqMotor;
+        target.highFreqMotor = oldContext.highFreqMotor;
+        target.leftTriggerMotor = oldContext.leftTriggerMotor;
+        target.rightTriggerMotor = oldContext.rightTriggerMotor;
+
         synchronized (oldContext) {
             // Take ownership of the sensor and light sessions
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -436,6 +449,33 @@ final class ControllerContextLifecycle {
         target.assignedControllerNumber = oldContext.assignedControllerNumber;
         target.reservedControllerNumber = oldContext.reservedControllerNumber;
         target.controllerNumber = oldContext.controllerNumber;
+
+        target.guideHold.setStateBits(oldGuideBits);
+        target.guideHeldDown = oldGuideHeldDown;
+        target.guideTapping = oldGuideTapping;
+        target.quitComboPending = oldQuitComboPending;
+        target.quitButtons = oldQuitButtons;
+        if (oldGuideBits == 1 && handler.prefConfig.guideMenuHoldMs > 0 && !handler.stopped) {
+            long elapsed = oldGuideHeldDown != null
+                    ? Math.max(0L, android.os.SystemClock.uptimeMillis() - oldGuideHeldDown.getEventTime()) : 0L;
+            long remaining = Math.max(0L, handler.prefConfig.guideMenuHoldMs - elapsed);
+            handler.mainThreadHandler.postDelayed(target.guideHoldRunnable, remaining);
+        }
+        if (oldGuideTapPending && !handler.stopped) {
+            Runnable end = new Runnable() {
+                @Override public void run() {
+                    if (target.guideTapEnd != this) return;
+                    target.guideTapEnd = null;
+                    target.guideTapping = false;
+                    if (!handler.stopped) {
+                        target.inputMap &= ~com.limelight.nvstream.input.ControllerPacket.SPECIAL_BUTTON_FLAG;
+                        handler.sendControllerInputPacket(target);
+                    }
+                }
+            };
+            target.guideTapEnd = end;
+            handler.mainThreadHandler.postDelayed(end, ControllerHandler.MINIMUM_BUTTON_DOWN_TIME_MS);
+        }
 
         if (target.mouseEmulationActive) {
             handler.mainThreadHandler.postDelayed(target.mouseEmulationRunnable, target.mouseEmulationReportPeriod);
@@ -459,6 +499,8 @@ final class ControllerContextLifecycle {
         if (target.lightsSession != null || target.ledArgbValue != 0) {
             handler.backgroundThreadHandler.post(target.setLedStateRunnable);
         }
+
+        handler.rumble.reapplyMotors(target);
 
         // Refresh battery state and start the battery state polling again
         handler.backgroundThreadHandler.post(target.batteryStateUpdateRunnable);

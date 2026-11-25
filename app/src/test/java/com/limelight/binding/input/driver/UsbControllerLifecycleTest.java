@@ -184,10 +184,17 @@ public class UsbControllerLifecycleTest {
             assertFalse(UsbDriverService.shouldClaimDevice(app, pad, config));
             assertTrue(forwarding.isForwarded(pad));
         } finally {
+            if (service != null) {
+                service.destroy();
+                service = null;
+            }
             if (forwarding != null) {
                 forwarding.stop();
+                forwarding.awaitDetaches(2000);
                 shadowOf(Looper.getMainLooper()).idle();
             }
+            UsbDriverService.awaitDeviceRelease(pad, 2000);
+            shadowOf(Looper.getMainLooper()).idle();
             app.getSharedPreferences("usb_forwarding", Context.MODE_PRIVATE).edit().clear().commit();
         }
     }

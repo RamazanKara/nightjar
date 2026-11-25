@@ -282,7 +282,7 @@ final class StreamMenuCatalog {
             list.removeIf(entry -> entry.item == Item.TOUCH_MODE || entry.item == Item.ONSCREEN_CONTROLS ||
                     entry.item == Item.CONTROLS_LAYOUT || entry.item == Item.MIC_BUTTON || entry.item == Item.MENU_BUTTON ||
                     entry.item == Item.GAME_CONTROLS ||
-                    entry.item == Item.ZOOM);
+                    entry.item == Item.ZOOM || entry.item == Item.ZOOM_RESET);
         }
         return list;
     }

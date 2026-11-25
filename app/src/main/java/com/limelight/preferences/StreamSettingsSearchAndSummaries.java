@@ -14,6 +14,7 @@ import android.preference.SwitchPreference;
 import android.text.TextUtils;
 import android.widget.TextView;
 
+import com.limelight.LimeLog;
 import com.limelight.R;
 import com.limelight.binding.input.touch.TouchMode;
 import com.limelight.binding.video.DecoderBenchmark;
@@ -310,7 +311,13 @@ final class StreamSettingsSearchAndSummaries {
             Activity activity = fragment.getActivity();
             setCodecSummary(fragment, codec, fragment.getString(R.string.pyrowave_checking));
             new Thread(() -> {
-                int summary = PyroWaveDecoderRenderer.getReadinessSummary(activity.getApplicationContext(), hdr);
+                int summary;
+                try {
+                    summary = PyroWaveDecoderRenderer.getReadinessSummary(activity.getApplicationContext(), hdr);
+                } catch (RuntimeException e) {
+                    LimeLog.warning("GPU capability check failed: " + e.getMessage());
+                    return;
+                }
                 activity.runOnUiThread(() -> {
                     if (fragment.isAdded() && fragment.getActivity() == activity && !activity.isFinishing() &&
                             generation == fragment.codecSummaryGeneration) {

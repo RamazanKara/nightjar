@@ -53,10 +53,15 @@ public final class HostUpdateChecker {
     static synchronized void refresh(Context context, HostCapabilities caps) {
         if (!isDue(context, caps)) return;
         SharedPreferences prefs = state(context);
-        prefs.edit().putLong("last_check", System.currentTimeMillis()).apply();
         try {
             ReleaseInfo release = UpdateChecker.fetchLatestHost();
-            prefs.edit().putString("latest_version", release.isUpdateFor("0.0.0") ? release.version() : "").apply();
+            prefs.edit()
+                    .putLong("last_check", System.currentTimeMillis())
+                    .putString("latest_version", release.isUpdateFor("0.0.0") ? release.version() : "")
+                    .apply();
+        } catch (UpdateException.RateLimited e) {
+            prefs.edit().putLong("last_check", System.currentTimeMillis()).apply();
+            LimeLog.info("Host update check rate limited");
         } catch (Exception e) {
             LimeLog.info("Host update check failed: " + e);
         }

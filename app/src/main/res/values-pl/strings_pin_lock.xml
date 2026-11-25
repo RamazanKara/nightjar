@@ -51,4 +51,6 @@
     <string name="pin_key_delete">Usuń</string>
     <string name="pin_key_confirm">Potwierdź</string>
     <string name="pin_dots_description">Wpisano cyfr: %1$d z %2$d</string>
+    <string name="pin_pcs_none_off">Nie wybrano żadnych komputerów; blokada została wyłączona.</string>
+    <string name="pin_save_failed">Nie udało się zapisać kodu PIN. Spróbuj ponownie.</string>
 </resources>

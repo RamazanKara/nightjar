@@ -354,4 +354,27 @@ public class HostStreamProfileTest {
         }
         assertTrue(copy.isEmpty());
     }
+
+    @Test
+    public void lenientDeserializeKeepsValidFieldsAndSkipsUnknownOrCorruptTokens() {
+        HostStreamProfile profile = HostStreamProfile.deserializeLenient(
+                "v2;bitrate=30000;res=99999x1;hdr=maybe;fps=bad;unknown_key=value;yuv444=true");
+        assertEquals(Integer.valueOf(30000), profile.bitrate);
+        assertEquals(Boolean.TRUE, profile.yuv444);
+        assertNull(profile.hdr);
+        assertNull(profile.width);
+    }
+
+    @Test
+    public void clearVideoCrashFieldsClearsHdrChromaAndScaleWhileKeepingAudioOrBitrate() {
+        HostStreamProfile profile = HostStreamProfile.deserialize(
+                "v2;bitrate=40000;hdr=true;yuv444=true;full_range=true;codec=FORCE_AV1;scale=125;vrr=true");
+        assertTrue(profile.clearVideoCrashFields());
+        assertNull(profile.hdr);
+        assertNull(profile.yuv444);
+        assertNull(profile.fullRange);
+        assertNull(profile.codec);
+        assertEquals(Integer.valueOf(40000), profile.bitrate);
+        assertFalse(profile.clearVideoCrashFields());
+    }
 }

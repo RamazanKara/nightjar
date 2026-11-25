@@ -567,4 +567,6 @@
     <string name="home_setup_title">Настроено для этого устройства и %1$s</string>
     <string name="home_setup_codec_auto">кодек выбирается при запуске стрима</string>
     <string name="home_setup_dismiss">Скрыть</string>
+    <string name="help_loading_error">Невозможно открыть справку без WebView или браузера.</string>
+    <string name="summary_hdr_shield_firmware_update">Обновите прошивку NVIDIA SHIELD Android TV, чтобы включить HDR</string>
 </resources>

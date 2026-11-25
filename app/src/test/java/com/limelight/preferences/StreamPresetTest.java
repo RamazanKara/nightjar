@@ -221,6 +221,15 @@ public class StreamPresetTest {
     }
 
     @Test
+    public void matchesFollowsScreenTreatsStaleStoredResolutionAsNative() {
+        Map<String, Object> values = new HashMap<>();
+        SharedPreferences preferences = preferences(values, new int[1]);
+        StreamPreset.NATIVE.apply(preferences, PHONE, 120);
+        values.put("list_resolution", "1280x720");
+        assertTrue(StreamPreset.NATIVE.matches(preferences, PHONE, 120, true));
+    }
+
+    @Test
     public void migrationWaitsWhenTheScreenIsUnknown() {
         Map<String, Object> values = new HashMap<>();
         values.put("list_resolution", "1280x720");

@@ -61,6 +61,10 @@ final class ConsoleHomeAdapter extends RecyclerView.Adapter<ConsoleHomeAdapter.S
         /** What Go on the hero's Play or Favourite says while it has focus; null when neither has it any more. */
         default void onHeroFocus(CharSequence go) {
         }
+
+        /** Called when a card's three-dots action becomes marked or unmarked; {@code clear} unmarks it. */
+        default void onHostMoreMark(Object owner, Runnable clear) {
+        }
     }
 
     /** The shelf's view: a row of cards, the phone's carousel or the handheld's hero. */

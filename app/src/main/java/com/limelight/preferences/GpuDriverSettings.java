@@ -217,13 +217,14 @@ public class GpuDriverSettings extends NightjarActivity {
         final MutableLiveData<Boolean> busy = new MutableLiveData<>(false);
         final MutableLiveData<String> message = new MutableLiveData<>();
         private final ExecutorService executor = Executors.newSingleThreadExecutor();
+        private final java.util.concurrent.atomic.AtomicInteger pending = new java.util.concurrent.atomic.AtomicInteger();
 
         public DriverWork(Application application) {
             super(application);
         }
 
         void run(Callable<String> operation) {
-            if (Boolean.TRUE.equals(busy.getValue())) return;
+            pending.incrementAndGet();
             busy.setValue(true);
             executor.execute(() -> {
                 try {
@@ -231,7 +232,9 @@ public class GpuDriverSettings extends NightjarActivity {
                 } catch (Exception e) {
                     message.postValue(getApplication().getString(R.string.gpu_driver_error, e.getMessage()));
                 } finally {
-                    busy.postValue(false);
+                    if (pending.decrementAndGet() == 0) {
+                        busy.postValue(false);
+                    }
                 }
             });
         }

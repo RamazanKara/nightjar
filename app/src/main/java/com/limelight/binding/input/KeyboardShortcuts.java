@@ -67,7 +67,22 @@ public final class KeyboardShortcuts {
         return false;
     }
 
+    /** True when the stored shortcuts payload exists and cannot be parsed by this app version. */
+    static boolean hasUnreadableStored(Context context) {
+        String raw = PreferenceManager.getDefaultSharedPreferences(context).getString(PREF, null);
+        if (raw == null || raw.isEmpty()) return false;
+        try {
+            parse(raw);
+            return false;
+        } catch (IllegalArgumentException e) {
+            return true;
+        }
+    }
+
     public static void save(Context context, List<Shortcut> entries) {
+        if ((entries == null || entries.isEmpty()) && hasUnreadableStored(context)) {
+            return;
+        }
         PreferenceManager.getDefaultSharedPreferences(context).edit().putString(PREF, encode(entries)).apply();
     }
 
@@ -76,6 +91,7 @@ public final class KeyboardShortcuts {
      * will show them. A shortcut that is gone leaves the list as it was.
      */
     public static void move(Context context, String id, int index) {
+        if (hasUnreadableStored(context)) return;
         List<Shortcut> entries = load(context);
         for (int i = 0; i < entries.size(); i++) {
             if (!entries.get(i).id.equals(id)) continue;

@@ -116,20 +116,21 @@ final class GameHostActions {
         try {
             nativeMenuThread().execute(() -> {
                 com.limelight.nativeapi.NativeAudio answer = null;
-                IOException failure = null;
+                Throwable failure = null;
                 try {
                     answer = connection.writeHostAudio(id, on);
-                } catch (IOException e) {
+                } catch (IOException | RuntimeException e) {
                     failure = e;
                 }
                 com.limelight.nativeapi.NativeAudio changed = answer;
-                IOException refused = failure;
+                Throwable refused = failure;
                 game.runOnUiThread(() -> {
                     hostAudioBusy = false;
-                    if (refused != null) {
-                        LimeLog.warning("Host audio not changed: " + refused.getMessage());
+                    if (refused != null || changed == null) {
+                        LimeLog.warning("Host audio not changed: " + (refused != null ? refused.getMessage() : "no reply"));
                         if (game.foreground && generation == game.foregroundGeneration && game.connected && !game.isFinishing()) {
-                            game.messages.alert(game.getString(R.string.stream_audio_failed, refused.getMessage()), Toast.LENGTH_LONG);
+                            String msg = refused != null && refused.getMessage() != null ? refused.getMessage() : "";
+                            game.messages.alert(game.getString(R.string.stream_audio_failed, msg), Toast.LENGTH_LONG);
                         }
                         // Show what the host has instead of the switch's old state.
                         refreshHostAudio();
@@ -344,7 +345,7 @@ final class GameHostActions {
             return;
         }
         final int generation = game.foregroundGeneration;
-        game.hostActionInProgress = true;
+        final Object actionToken = GameAdaptation.beginHostAction(game);
         new Thread(() -> {
             try {
                 ComputerDetails details = game.conn.refreshHostDetails();
@@ -354,10 +355,10 @@ final class GameHostActions {
                     }
                     showHostStatus(details);
                 });
-            } catch (IOException | XmlPullParserException e) {
+            } catch (IOException | XmlPullParserException | RuntimeException e) {
                 game.adaptation.showHostActionError(e, generation);
             } finally {
-                game.runOnUiThread(() -> game.hostActionInProgress = false);
+                GameAdaptation.endHostAction(game, actionToken);
             }
         }, "Host status").start();
     }
@@ -439,7 +440,7 @@ final class GameHostActions {
         }
         final String outgoing = text;
         final int generation = game.foregroundGeneration;
-        game.hostActionInProgress = true;
+        final Object actionToken = GameAdaptation.beginHostAction(game);
         new Thread(() -> {
             try {
                 if (send) {
@@ -468,10 +469,10 @@ final class GameHostActions {
                     }
                     game.messages.alert(send ? R.string.stream_clipboard_sent : R.string.stream_clipboard_received, Toast.LENGTH_SHORT);
                 });
-            } catch (IOException | XmlPullParserException e) {
+            } catch (IOException | XmlPullParserException | RuntimeException e) {
                 game.adaptation.showHostActionError(e, generation);
             } finally {
-                game.runOnUiThread(() -> game.hostActionInProgress = false);
+                GameAdaptation.endHostAction(game, actionToken);
             }
         }, "Clipboard transfer").start();
     }
@@ -500,7 +501,7 @@ final class GameHostActions {
         }
         final ClipData outgoing = current;
         final int generation = game.foregroundGeneration;
-        game.hostActionInProgress = true;
+        final Object actionToken = GameAdaptation.beginHostAction(game);
         new Thread(() -> {
             java.io.File staged = null;
             try {
@@ -541,7 +542,7 @@ final class GameHostActions {
                 if (staged != null) {
                     ClipboardImages.discard(staged);
                 }
-                game.runOnUiThread(() -> game.hostActionInProgress = false);
+                GameAdaptation.endHostAction(game, actionToken);
             }
         }, "Clipboard image transfer").start();
     }

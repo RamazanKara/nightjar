@@ -1,6 +1,7 @@
 package com.limelight.binding.input.pad;
 
 import android.app.Application;
+import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -9,8 +10,11 @@ import com.limelight.nvstream.input.MouseButtonPacket;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.util.ReflectionHelpers;
+
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.*;
 
@@ -43,6 +47,9 @@ public class ModernControllerPointerPadTest extends ModernControllerHarness {
 
         pad.down(0, x, y, 2000);
         pad.up(0, 2080);
+        assertEquals("Tap down is sent immediately while release waits briefly", 1, pointerButtons.size());
+        assertEquals(Integer.valueOf(MouseButtonPacket.BUTTON_LEFT), pointerButtons.get(0));
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(100, TimeUnit.MILLISECONDS);
         assertEquals(2, pointerButtons.size());
         assertEquals(Integer.valueOf(MouseButtonPacket.BUTTON_LEFT), pointerButtons.get(0));
         assertEquals(Integer.valueOf(-MouseButtonPacket.BUTTON_LEFT), pointerButtons.get(1));
@@ -58,8 +65,11 @@ public class ModernControllerPointerPadTest extends ModernControllerHarness {
         pad.down(1, x + 30, y, 1050);
         pad.up(1, 1100);
         pad.up(0, 1150);
+        assertEquals(1, pointerButtons.size());
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(100, TimeUnit.MILLISECONDS);
         assertEquals("Two fingers tap the right button", 2, pointerButtons.size());
         assertEquals(Integer.valueOf(MouseButtonPacket.BUTTON_RIGHT), pointerButtons.get(0));
+        assertEquals(Integer.valueOf(-MouseButtonPacket.BUTTON_RIGHT), pointerButtons.get(1));
 
         pointerButtons.clear();
         pad.down(0, x, y, 2000);

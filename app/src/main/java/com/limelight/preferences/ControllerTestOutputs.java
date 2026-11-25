@@ -63,7 +63,7 @@ final class ControllerTestOutputs {
     private final List<Light> rgbLights = new ArrayList<>();
     private SensorManager sensorManager;
     private Sensor gyroSensor, accelSensor;
-    private boolean hasTouchpad, hasMotion;
+    private boolean hasTouchpad, hasMotion, usbLightActive;
 
     ControllerTestOutputs(Context context, Handler handler, SensorEventListener sensorListener,
                           Supplier<InputDevice> deviceSupplier, Supplier<AbstractController> usbSupplier,
@@ -123,6 +123,10 @@ final class ControllerTestOutputs {
         }
         AbstractController usbController = usbSupplier.get();
         if (usbController != null) {
+            if (usbLightActive && (usbController.getCapabilities() & MoonBridge.LI_CCAP_RGB_LED) != 0) {
+                usbController.setLed((byte) 0, (byte) 0, (byte) 0);
+                usbLightActive = false;
+            }
             usbController.setMotionEventState(MoonBridge.LI_MOTION_TYPE_ACCEL, (short) 0);
             usbController.setMotionEventState(MoonBridge.LI_MOTION_TYPE_GYRO, (short) 0);
         }
@@ -248,9 +252,15 @@ final class ControllerTestOutputs {
             if ((caps & MoonBridge.LI_CCAP_RGB_LED) != 0) {
                 for (int i = 0; i < LIGHT_COLORS.length; i++) {
                     int color = LIGHT_COLORS[i];
-                    addAction(lightActions, LIGHT_NAMES[i], v -> usbController.setLed((byte) (color >> 16), (byte) (color >> 8), (byte) color));
+                    addAction(lightActions, LIGHT_NAMES[i], v -> {
+                        usbLightActive = true;
+                        usbController.setLed((byte) (color >> 16), (byte) (color >> 8), (byte) color);
+                    });
                 }
-                addAction(lightActions, R.string.controller_test_light_off, v -> usbController.setLed((byte) 0, (byte) 0, (byte) 0));
+                addAction(lightActions, R.string.controller_test_light_off, v -> {
+                    usbLightActive = false;
+                    usbController.setLed((byte) 0, (byte) 0, (byte) 0);
+                });
             }
         }
         else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && vibratorManager != null) {

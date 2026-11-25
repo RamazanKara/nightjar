@@ -192,6 +192,12 @@ final class ShelfAdapter extends RecyclerView.Adapter<ShelfAdapter.CardHolder> {
         else holder.bindHost(shelf, item);
     }
 
+    @Override
+    public void onViewRecycled(@NonNull CardHolder holder) {
+        holder.clearMark();
+        super.onViewRecycled(holder);
+    }
+
     /** A poster in grey: a game the host lists but has not installed. One filter for every such card, set at bind. */
     static final ColorMatrixColorFilter NOT_INSTALLED;
 
@@ -523,9 +529,18 @@ final class ShelfAdapter extends RecyclerView.Adapter<ShelfAdapter.CardHolder> {
             });
         }
 
+        void clearMark() {
+            markMore(false);
+        }
+
         private void markMore(boolean marked) {
+            if (moreMarked == marked) {
+                if (more != null) more.setHovered(marked);
+                return;
+            }
             moreMarked = marked;
-            more.setHovered(marked);
+            if (more != null) more.setHovered(marked);
+            if (env.listener != null) env.listener.onHostMoreMark(this, marked ? () -> markMore(false) : null);
         }
 
         /**

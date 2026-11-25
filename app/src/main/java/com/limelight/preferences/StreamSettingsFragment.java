@@ -61,6 +61,7 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
     int displayedResultCount;
     int codecSummaryGeneration;
     Thread decoderProbe;
+    boolean dualSenseConsentShowing;
     private com.limelight.binding.audio.MicProcessing.Availability micEffects;
 
     /** Attaching or removing a mouse, keyboard or touchpad shows or hides their rows at once. */
@@ -429,6 +430,8 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        dualSenseConsentShowing = savedInstanceState != null
+                && savedInstanceState.getBoolean("dualsense_consent_showing", false);
 
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(getActivity());
         // Before the lists read their values, so an older Close game choice shows as Quit game.
@@ -471,5 +474,11 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
         refreshState();
         screen.removeAll();
         filterPreferences();
+    }
+
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putBoolean("dualsense_consent_showing", dualSenseConsentShowing);
     }
 }

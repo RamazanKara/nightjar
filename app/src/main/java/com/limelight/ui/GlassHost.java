@@ -198,8 +198,15 @@ public class GlassHost extends FrameLayout {
     }
 
     private void invalidateIntersectingSurfaces(View target) {
+        if (getWidth() <= 0 || getHeight() <= 0) {
+            for (GlassSurface surface : surfaces) {
+                if (surface.getVisibility() == View.VISIBLE) {
+                    surface.invalidate();
+                }
+            }
+            return;
+        }
         if (target == null || target.getWidth() <= 0 || target.getHeight() <= 0) {
-            if (getWidth() <= 0 || getHeight() <= 0) return;
             dirtyTargetRect.set(0, 0, getWidth(), getHeight());
         } else {
             dirtyTargetRect.set(0, 0, target.getWidth(), target.getHeight());

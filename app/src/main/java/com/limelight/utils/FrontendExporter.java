@@ -186,11 +186,16 @@ public final class FrontendExporter {
             if (entry == null) {
                 entry = createText(systemDir, ENTRY_MIME, fileName, contents);
                 existing.put(fileName, entry);
-            } else if (!values.equals(entries.get(fileName))) {
-                writeText(entry, contents);
+                entries.put(fileName, values);
+                exported.add(fileName);
+                written++;
+            } else if (exported.contains(fileName)) {
+                if (!values.equals(entries.get(fileName))) {
+                    writeText(entry, contents);
+                }
+                entries.put(fileName, values);
+                written++;
             }
-            entries.put(fileName, values);
-            written++;
 
             if (coversDir != null) {
                 String name = base + ".png";
@@ -390,9 +395,19 @@ public final class FrontendExporter {
         String contents = merge.merge(existing);
         if (file == null) {
             createText(dir, "text/xml", name, contents);
-        } else {
+        } else if (existing == null || !contents.equals(existing.replace("\r\n", "\n"))) {
             writeText(file, contents);
         }
+    }
+
+    /** True when every game with an app id has a cached cover or placeholder on disk. */
+    boolean hasAllCachedCovers(List<NvApp> apps) {
+        for (NvApp app : apps) {
+            if (app.getAppId() > 0 && !cachedCover(app).isFile()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Writes the cover into {@code existing} when given (one of ours whose art changed), else a new file. */

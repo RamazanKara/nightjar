@@ -37,6 +37,7 @@ final class ControllerGamepadRouter {
         }
         for (ControllerHandler.InputDeviceContext context : handler.inputDeviceContexts.values()) {
             releaseInput(context);
+            cancelInputTouchpad(context);
             if (context.assignedControllerNumber && context.gyroListener != null) {
                 // Motion stops with the rest of the input; a held angular velocity keeps turning the camera.
                 handler.motion.sendGyroAtRest(context.controllerNumber);
@@ -51,7 +52,21 @@ final class ControllerGamepadRouter {
         handler.layoutLeftTrigger = handler.layoutRightTrigger = 0;
         handler.layoutLeftStickX = handler.layoutLeftStickY = handler.layoutRightStickX = handler.layoutRightStickY = 0;
         releaseInput(handler.defaultContext);
-        if (handler.handheldContext != handler.defaultContext) releaseInput(handler.handheldContext);
+        cancelInputTouchpad(handler.defaultContext);
+        if (handler.handheldContext != handler.defaultContext) {
+            releaseInput(handler.handheldContext);
+            cancelInputTouchpad(handler.handheldContext);
+        }
+    }
+
+    private void cancelInputTouchpad(ControllerHandler.InputDeviceContext context) {
+        if (!handler.prefConfig.sendControllers || !context.assignedControllerNumber) {
+            return;
+        }
+        if ((context.reportedCapabilities & MoonBridge.LI_CCAP_TOUCHPAD) != 0 || context.isDualShockStandaloneTouchpad) {
+            handler.conn.sendControllerTouchEvent((byte) context.controllerNumber, MoonBridge.LI_TOUCH_EVENT_CANCEL_ALL,
+                    0, 0, 0, 0);
+        }
     }
 
     void releaseUsbInput(ControllerHandler.UsbDeviceContext context) {

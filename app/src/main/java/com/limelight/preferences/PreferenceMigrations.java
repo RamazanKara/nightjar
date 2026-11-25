@@ -24,6 +24,8 @@ final class PreferenceMigrations {
         if (crashHostUuid != null) {
             HostStreamProfile.reset(context, crashHostUuid);
         }
+        StreamProfiles.clearVideoOverrides(context);
+        AppStreamSettings.clearVideoOverrides(context, crashHostUuid);
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         prefs.edit()
                 .remove(BITRATE_PREF_STRING)

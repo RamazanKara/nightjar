@@ -91,6 +91,10 @@ public abstract class AbstractController {
     }
 
     private static synchronized ThreadPoolExecutor usbWorkerFor(String usbDeviceName) {
+        usbWorkers.entrySet().removeIf(entry ->
+                !entry.getKey().equals(usbDeviceName)
+                        && entry.getValue().getActiveCount() == 0
+                        && entry.getValue().getQueue().isEmpty());
         return usbWorkers.computeIfAbsent(usbDeviceName, name -> newUsbWorker());
     }
 
@@ -124,7 +128,9 @@ public abstract class AbstractController {
         runOnUsbWorker(() -> {
             if (!start()) {
                 stop();
-                onFailure.run();
+                // Queue onFailure behind any stop/release work queued by stop() so interface
+                // release and connection close finish before reporting failure or unplug.
+                runOnUsbWorker(onFailure);
             }
         });
     }

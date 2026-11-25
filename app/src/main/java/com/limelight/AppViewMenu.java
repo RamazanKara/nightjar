@@ -119,7 +119,8 @@ final class AppViewMenu {
                     R.drawable.ic_add, view.getString(R.string.applist_menu_scut));
         }
         addAppAction(sheet, selectedApp, selectedView, OPEN_ON_START_ID, R.drawable.ic_play,
-                com.limelight.console.OpenPlay.menuLabel(view, view.computer.uuid, selectedApp.app.getAppId()));
+                com.limelight.console.OpenPlay.menuLabel(view, view.computer.uuid, selectedApp.app.getAppId(),
+                        selectedApp.app.getAppUuid()));
         addAppAction(sheet, selectedApp, selectedView, VIEW_DETAILS_ID,
                 R.drawable.ic_info, view.getString(R.string.applist_menu_details));
         sheet.setOnDismissListener(dialog -> {

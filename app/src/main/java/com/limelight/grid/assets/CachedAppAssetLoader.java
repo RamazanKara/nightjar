@@ -27,15 +27,13 @@ public class CachedAppAssetLoader {
     private static final int MAX_CONCURRENT_NETWORK_LOADS = 3;
     private static final int MAX_CONCURRENT_CACHE_LOADS = 1;
 
-    private static final int MAX_PENDING_CACHE_LOADS = 100;
     private static final int MAX_PENDING_NETWORK_LOADS = 40;
     private static final int MAX_PENDING_DISK_LOADS = 40;
 
     private final ThreadPoolExecutor cacheExecutor = new ThreadPoolExecutor(
             MAX_CONCURRENT_CACHE_LOADS, MAX_CONCURRENT_CACHE_LOADS,
             30, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<Runnable>(MAX_PENDING_CACHE_LOADS),
-            new ThreadPoolExecutor.DiscardOldestPolicy());
+            new LinkedBlockingQueue<Runnable>());
 
     private final ThreadPoolExecutor foregroundExecutor = new ThreadPoolExecutor(
             MAX_CONCURRENT_DISK_LOADS, MAX_CONCURRENT_DISK_LOADS,
@@ -150,6 +148,10 @@ public class CachedAppAssetLoader {
                     // Otherwise it's a background load and we return nothing
                     return null;
                 }
+            }
+            if (tuple.hostHasNoCover) {
+                // HTTP 404 is definitive for this game cover; skip retry sleeps.
+                return null;
             }
 
             // Wait 1 second with a bit of fuzz
@@ -311,13 +313,9 @@ public class CachedAppAssetLoader {
 
     /** Games whose SteamGridDB cover is being looked up through this loader now. */
     private final java.util.Set<Integer> coverFallbackAsked = java.util.concurrent.ConcurrentHashMap.newKeySet();
-    /** The tuple most recently bound to each ImageView, so stale async fallbacks never paint over recycled views. */
-    private static final java.util.Map<ImageView, LoaderTuple> boundViews =
-            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
-
     /** Clears any cover binding tracked for {@code imageView} when a caller binds non-loader art or clears the view. */
     public static void clearBoundView(ImageView imageView) {
-        if (imageView != null) boundViews.remove(imageView);
+        if (imageView != null) imageView.setTag(R.id.cover_bound_tuple, null);
     }
 
     /**
@@ -343,7 +341,7 @@ public class CachedAppAssetLoader {
                 ImageView view = imageRef.get();
                 TextView text = textRef.get();
                 LoaderTask current = getLoaderTask(view);
-                LoaderTuple bound = view == null ? null : boundViews.get(view);
+                LoaderTuple bound = view == null ? null : (LoaderTuple) view.getTag(R.id.cover_bound_tuple);
                 // A view bound to another game since (or cleared) stays with its newer binding.
                 if (view != null && text != null && tuple.equals(bound)
                         && (current == null || current.tuple == null || current.tuple.equals(tuple))) {
@@ -455,7 +453,7 @@ public class CachedAppAssetLoader {
 
     public boolean populateImageView(NvApp app, ImageView imgView, TextView textView) {
         LoaderTuple tuple = new LoaderTuple(computer, app);
-        boundViews.put(imgView, tuple);
+        imgView.setTag(R.id.cover_bound_tuple, tuple);
 
         // Names can change while the same artwork is still loading. Bind the label even
         // when reusing that request, otherwise a renamed game keeps its previous title.

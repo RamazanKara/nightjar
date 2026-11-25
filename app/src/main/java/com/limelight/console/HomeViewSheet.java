@@ -59,6 +59,10 @@ final class HomeViewSheet {
             return;
         }
         final HomeView before = current.get();
+        final Consumer<HomeView> persist = updated -> {
+            setView.accept(updated);
+            updated.save(PreferenceManager.getDefaultSharedPreferences(activity));
+        };
         // Off a phone View sits in the top row: its panel hangs under it, as the PC sheet hangs under the capsule.
         ActionSheet sheet = GlassForm.of(activity) == GlassForm.PHONE
                 ? new ActionSheet(activity, activity.getString(R.string.home_view))
@@ -77,7 +81,7 @@ final class HomeViewSheet {
                 new int[] {R.string.home_view_layout_grid, R.string.home_view_layout_list, R.string.home_view_layout_rows},
                 current.get().layout.ordinal(), at -> {
                     HomeView next = current.get().with(HomeView.Layout.values()[at]);
-                    setView.accept(next);
+                    persist.accept(next);
                     for (View part : sizeSection) {
                         part.setVisibility(next.layout == HomeView.Layout.LIST ? View.GONE : View.VISIBLE);
                     }
@@ -92,14 +96,14 @@ final class HomeViewSheet {
         }
         // Collection chosen while no PC names any shows by store, and says so.
         addChoices(sheet, left, groupIcons, groupLabels, Math.max(0, Arrays.asList(groups).indexOf(current.get().group)),
-                at -> setView.accept(current.get().with(groups[at])));
+                at -> persist.accept(current.get().with(groups[at])));
         addSection(sheet, right, R.string.home_view_sort);
-        addSortChoices(sheet, right, current, setView, model);
+        addSortChoices(sheet, right, current, persist, model);
         sizeSection[0] = addSection(sheet, right, R.string.home_view_size);
         sizeSection[1] = addChoices(sheet, right,
                 new int[] {R.drawable.ic_view_size_small, R.drawable.ic_view_size_medium, R.drawable.ic_view_size_large},
                 new int[] {R.string.home_view_size_small, R.string.home_view_size_medium, R.string.home_view_size_large},
-                current.get().size.ordinal(), at -> setView.accept(current.get().with(HomeView.Size.values()[at])));
+                current.get().size.ordinal(), at -> persist.accept(current.get().with(HomeView.Size.values()[at])));
         for (View part : sizeSection) {
             part.setVisibility(current.get().layout == HomeView.Layout.LIST ? View.GONE : View.VISIBLE);
         }

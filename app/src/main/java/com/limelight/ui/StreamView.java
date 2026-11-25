@@ -196,6 +196,7 @@ public class StreamView extends FrameLayout {
             outAttrs.inputType = field.inputType();
             outAttrs.imeOptions = field.imeOptions();
             outAttrs.initialSelStart = outAttrs.initialSelEnd = field.cursor();
+            outAttrs.initialCapsMode = field.capsMode(outAttrs.inputType);
             return new HostFieldConnection(field);
         }
         outAttrs.inputType = InputType.TYPE_NULL;
@@ -249,6 +250,22 @@ public class StreamView extends FrameLayout {
         HostFieldConnection(HostTextField field) {
             super(StreamView.this, false);
             this.field = field;
+        }
+
+        @Override
+        public int getCursorCapsMode(int reqModes) {
+            return field.capsMode(reqModes);
+        }
+
+        @Override
+        public boolean sendKeyEvent(KeyEvent event) {
+            if (event != null && event.getAction() == KeyEvent.ACTION_DOWN
+                    && event.getKeyCode() == KeyEvent.KEYCODE_DEL
+                    && (event.getMetaState() & KeyEvent.getModifierMetaStateMask()) == 0) {
+                field.mirrorBackspace();
+                updated(true);
+            }
+            return super.sendKeyEvent(event);
         }
 
         @Override

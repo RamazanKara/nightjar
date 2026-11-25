@@ -22,6 +22,7 @@
         <item quantity="other">%d PCs</item>
     </plurals>
     <string name="pin_pcs_empty">No PCs added yet.</string>
+    <string name="pin_pcs_none_off">No PCs selected; lock turned off.</string>
     <string name="pin_grace_title">Ask again after</string>
     <string name="pin_grace_always">Every time Nightjar is left</string>
     <string name="pin_grace_minutes">%d minutes</string>
@@ -30,6 +31,7 @@
     <string name="pin_remove_message">Nightjar will stop asking for a PIN.</string>
     <string name="pin_footer">If you forget the PIN, the only way to reset it is to clear Nightjar’s app data in Android’s settings. That also removes your paired PCs, so you have to pair them again.</string>
     <string name="pin_saved">PIN saved</string>
+    <string name="pin_save_failed">Could not save the PIN. Try again.</string>
     <string name="pin_removed">PIN removed</string>
 
     <!-- The PIN screen -->

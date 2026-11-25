@@ -120,13 +120,25 @@ public final class NavigationDialogBuilder extends MaterialAlertDialogBuilder {
         if (android.os.Build.VERSION.SDK_INT >= 26 && dialog.getListView() == null) (cancelFirst ? negative : positive).setFocusedByDefault(true);
         // Labels too long to share a row stack: as full-width capsules, not a staircase along the right edge. A row the
         // dialog's button scroller cannot scroll sideways is stacked too, so its last capsule is not cut at the panel.
+        final int[] stackedAtWidth = {0};
+        final java.util.Map<View, int[]> originalParams = new java.util.WeakHashMap<>();
         bar.addOnLayoutChangeListener((view, l, t, r, b, ol, ot, or, ob) -> {
             if (!(bar instanceof android.widget.LinearLayout)) return;
-            if (((android.widget.LinearLayout) bar).getOrientation() == android.widget.LinearLayout.VERTICAL) {
-                bar.post(() -> stretchStacked(bar));
+            android.widget.LinearLayout linear = (android.widget.LinearLayout) bar;
+            int width = r - l;
+            if (linear.getOrientation() == android.widget.LinearLayout.VERTICAL) {
+                if (stackedAtWidth[0] > 0 && width > stackedAtWidth[0]) {
+                    bar.post(() -> {
+                        restoreHorizontalBar(linear, originalParams);
+                        stackedAtWidth[0] = 0;
+                    });
+                } else {
+                    bar.post(() -> stretchStacked(linear, originalParams));
+                }
             } else if (rowWiderThanBar(bar)) {
-                ((android.widget.LinearLayout) bar).setOrientation(android.widget.LinearLayout.VERTICAL);
-                bar.post(() -> stretchStacked(bar));
+                stackedAtWidth[0] = width;
+                linear.setOrientation(android.widget.LinearLayout.VERTICAL);
+                bar.post(() -> stretchStacked(linear, originalParams));
             }
         });
     }
@@ -155,19 +167,36 @@ public final class NavigationDialogBuilder extends MaterialAlertDialogBuilder {
         return needed >= available;
     }
 
-    private void stretchStacked(ViewGroup bar) {
+    private void stretchStacked(ViewGroup bar, java.util.Map<View, int[]> originalParams) {
         int gap = getContext().getResources().getDimensionPixelSize(R.dimen.space_s);
         boolean first = true;
         for (int i = 0; i < bar.getChildCount(); i++) {
             View child = bar.getChildAt(i);
             if (!(child instanceof Button) || child.getVisibility() != View.VISIBLE) continue;
             ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) child.getLayoutParams();
+            if (!originalParams.containsKey(child)) {
+                originalParams.put(child, new int[] {params.width, params.getMarginStart(), params.topMargin});
+            }
             int top = first ? 0 : gap;
             first = false;
             if (params.width == ViewGroup.LayoutParams.MATCH_PARENT && params.topMargin == top && params.getMarginStart() == 0) continue;
             params.width = ViewGroup.LayoutParams.MATCH_PARENT;
             params.topMargin = top;
             params.setMarginStart(0);
+            child.setLayoutParams(params);
+        }
+    }
+
+    private static void restoreHorizontalBar(android.widget.LinearLayout bar, java.util.Map<View, int[]> originalParams) {
+        bar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        for (int i = 0; i < bar.getChildCount(); i++) {
+            View child = bar.getChildAt(i);
+            int[] orig = originalParams.get(child);
+            if (orig == null || !(child.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) continue;
+            ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) child.getLayoutParams();
+            params.width = orig[0];
+            params.setMarginStart(orig[1]);
+            params.topMargin = orig[2];
             child.setLayoutParams(params);
         }
     }

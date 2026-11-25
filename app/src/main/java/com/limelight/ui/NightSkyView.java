@@ -255,7 +255,9 @@ public class NightSkyView extends View {
 
     /** First run has its own moon in the middle of the page: the sky keeps only its stars. */
     public void setMoonShown(boolean shown) {
+        if (moonShown == shown) return;
         moonShown = shown;
+        invalidate();
     }
 
     public boolean isMoonShown() {

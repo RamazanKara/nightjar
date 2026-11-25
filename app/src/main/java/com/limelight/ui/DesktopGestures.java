@@ -65,7 +65,7 @@ public final class DesktopGestures {
                 viewport.pan(x - lastX, y - lastY); apply();
                 lastX = x; lastY = y;
             }
-            else if (action != MotionEvent.ACTION_MOVE) {
+            else {
                 lastX = x; lastY = y;
             }
         }

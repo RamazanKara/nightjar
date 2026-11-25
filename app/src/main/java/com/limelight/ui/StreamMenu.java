@@ -267,9 +267,9 @@ public final class StreamMenu {
         sheet.setOnClosed(this::stopRadeon);
         sheet.setKeyHandler(this::hotkey);
         shortcutsPage = new StreamMenuShortcutsPage(activity, sheet, shortcuts, this::back,
-                () -> render(Page.SHORTCUTS, options.get(), null),
-                () -> render(Page.EDITOR, options.get(), null));
-        render(Page.MAIN, current, null);
+                () -> render(Page.SHORTCUTS, options.get(), null, false),
+                () -> render(Page.EDITOR, options.get(), null, false));
+        render(Page.MAIN, current, null, false);
     }
 
     // The panel polls the host only while its page is on screen.
@@ -317,15 +317,15 @@ public final class StreamMenu {
     public void back() {
         switch (page) {
             case MAIN: sheet.dismiss(); return;
-            case EDITOR: render(Page.SHORTCUTS, options.get(), null); return;
-            case NATIVE: render(Page.MAIN, options.get(), Item.NATIVE_PAGE); return;
-            case OVERLAY: render(Page.MAIN, options.get(), Item.OVERLAY_PAGE); return;
-            case SHORTCUTS: render(Page.MAIN, options.get(), Item.SHORTCUTS); return;
-            default: render(Page.MAIN, options.get(), Item.MORE);
+            case EDITOR: render(Page.SHORTCUTS, options.get(), null, false); return;
+            case NATIVE: render(Page.MAIN, options.get(), Item.NATIVE_PAGE, false); return;
+            case OVERLAY: render(Page.MAIN, options.get(), Item.OVERLAY_PAGE, false); return;
+            case SHORTCUTS: render(Page.MAIN, options.get(), Item.SHORTCUTS, false); return;
+            default: render(Page.MAIN, options.get(), Item.MORE, false);
         }
     }
 
-    private void render(Page target, Options o, Item focus) {
+    private void render(Page target, Options o, Item focus, boolean focusSlider) {
         page = target;
         stopRadeon();
         sheet.clearActions();
@@ -357,8 +357,12 @@ public final class StreamMenu {
         else renderList(target == Page.NATIVE ? nativePage(o) : overlayPage(o));
         if (target == Page.NATIVE) addNativeFacts(o);
         sheet.focusFirstAction();
-        MaterialButton focused = focus == null ? null : rows.get(focus);
-        if (focused != null && !focused.isInTouchMode()) focused.requestFocus();
+        if (focusSlider && bitrateSlider != null && !bitrateSlider.isInTouchMode()) {
+            bitrateSlider.requestFocus();
+        } else {
+            MaterialButton focused = focus == null ? null : rows.get(focus);
+            if (focused != null && !focused.isInTouchMode()) focused.requestFocus();
+        }
     }
 
     // What the first page offers: the entries this stream can use, and the shortcuts where they can be sent.
@@ -430,7 +434,7 @@ public final class StreamMenu {
                     if (StreamMenuModel.MORE.equals(cell.id)) {
                         tile = grid.addTile(R.drawable.ic_more_horiz, StreamMenuCatalog.label(activity, labels, StreamMenuModel.MORE), null, null, null);
                         rows.put(Item.MORE, tile);
-                        tile.setOnClickListener(view -> render(Page.MORE, options.get(), null));
+                        tile.setOnClickListener(view -> render(Page.MORE, options.get(), null, false));
                         break;
                     }
                     Entry entry = StreamMenuCatalog.find(offered, cell.id);
@@ -666,11 +670,28 @@ public final class StreamMenu {
         List<Item> now = StreamMenuCatalog.items(page == Page.MAIN ? offered(o) : StreamMenuCatalog.moreEntries(offered(o)));
         boolean noted = page == Page.MAIN && o.role == NvApp.Role.STREAM && o.hostAudioUnread;
         if (now.equals(offeredItems) && noted == (audioNote != null)) {
-            refreshToggles();
+            if (bitrateSlider == null || (!bitrateSlider.isTouching() && !bitrateSlider.isPressed())) {
+                refreshToggles();
+            }
             if (page == Page.MAIN) showHeader(o);
         } else {
-            render(page, o, null);
+            if (bitrateSlider != null && (bitrateSlider.isTouching() || bitrateSlider.isPressed())) {
+                return;
+            }
+            boolean focusSlider = bitrateSlider != null && bitrateSlider.hasFocus();
+            Item focusedItem = focusSlider ? null : currentFocusedItem();
+            render(page, o, focusedItem, focusSlider);
         }
+    }
+
+    private Item currentFocusedItem() {
+        for (Map.Entry<Item, MaterialButton> entry : rows.entrySet()) {
+            MaterialButton view = entry.getValue();
+            if (view != null && view.hasFocus()) {
+                return entry.getKey();
+            }
+        }
+        return null;
     }
 
     // The first page's title and mode line as render sets them; the title is set again only when it changed.
@@ -702,7 +723,7 @@ public final class StreamMenu {
     private void choose(Entry entry) {
         if (entry.opensPage()) {
             render(entry.item == Item.NATIVE_PAGE ? Page.NATIVE : entry.item == Item.SHORTCUTS ? Page.SHORTCUTS : Page.OVERLAY,
-                    options.get(), null);
+                    options.get(), null, false);
             return;
         }
         listener.onStreamMenuItem(entry.item);

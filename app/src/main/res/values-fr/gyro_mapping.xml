@@ -50,4 +50,5 @@
     <string name="gyro_diag_share_title">Partager les relevés de mouvement</string>
     <string name="gyro_diag_hide">Masquer</string>
     <string name="gyro_diag_show">Afficher</string>
+    <string name="gyro_diag_cap_reached">Enregistrement arrêté à %1\ lignes.</string>
 </resources>

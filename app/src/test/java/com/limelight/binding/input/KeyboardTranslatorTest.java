@@ -146,4 +146,21 @@ public class KeyboardTranslatorTest {
         assertTrue(KeyboardTranslator.altHeld(KeyEvent.META_ALT_ON, true));
         assertFalse(KeyboardTranslator.altHeld(KeyEvent.META_SHIFT_ON, false));
     }
+
+    @Test
+    public void iso102ndScanCodeMediaAndJapaneseKeysMapToWindowsVirtualKeys() {
+        KeyboardTranslator translator = new KeyboardTranslator();
+        assertEquals((short) 0x80E2, translator.translate(KeyEvent.KEYCODE_BACKSLASH, 86, -1));
+        assertNotEquals((short) 0x80E2, translator.translate(KeyEvent.KEYCODE_BACKSLASH, 43, -1));
+        assertEquals((short) 0x80B0, KeyboardTranslator.translateKeyCode(KeyEvent.KEYCODE_MEDIA_NEXT));
+        assertEquals((short) 0x80B1, KeyboardTranslator.translateKeyCode(KeyEvent.KEYCODE_MEDIA_PREVIOUS));
+        assertEquals((short) 0x80B2, KeyboardTranslator.translateKeyCode(KeyEvent.KEYCODE_MEDIA_STOP));
+        assertEquals((short) 0x80B3, KeyboardTranslator.translateKeyCode(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE));
+        assertEquals((short) 0x8015, KeyboardTranslator.translateKeyCode(KeyEvent.KEYCODE_KANA));
+        assertEquals((short) 0x801C, KeyboardTranslator.translateKeyCode(KeyEvent.KEYCODE_HENKAN));
+        assertEquals((short) 0x801D, KeyboardTranslator.translateKeyCode(KeyEvent.KEYCODE_MUHENKAN));
+        assertEquals((short) 0x80F0, KeyboardTranslator.translateKeyCode(KeyEvent.KEYCODE_EISU));
+        assertEquals((short) 0x80F2, KeyboardTranslator.translateKeyCode(KeyEvent.KEYCODE_KATAKANA_HIRAGANA));
+        assertEquals((short) 0x80F3, KeyboardTranslator.translateKeyCode(KeyEvent.KEYCODE_ZENKAKU_HANKAKU));
+    }
 }

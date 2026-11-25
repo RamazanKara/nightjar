@@ -205,10 +205,7 @@ public class HostStreamSettings extends NightjarActivity {
         overrides = loadOwn(profiles);
         savedProfile = overrides.serialize();
         if (state != null && state.getString("draft") != null) {
-            try {
-                overrides = HostStreamProfile.deserialize(state.getString("draft"));
-            } catch (IllegalArgumentException ignored) {
-            }
+            overrides = HostStreamProfile.deserializeLenient(state.getString("draft"));
             restoredEditorKey = state.getString("editor_key");
             restoredEditor = state.getBundle("editor_state");
             frontendExporter.restoreState(state);
@@ -255,21 +252,12 @@ public class HostStreamSettings extends NightjarActivity {
     private HostStreamProfile loadOwn(StreamProfiles.Snapshot profiles) {
         String raw = mode == Mode.PROFILE ? profiles.rawValues(profileId) : mode == Mode.GAME ?
                 AppStreamSettings.raw(this, hostUuid, appUuid, appId) : HostStreamProfile.raw(this, hostUuid);
-        if (raw == null) return new HostStreamProfile();
-        try {
-            return HostStreamProfile.deserialize(raw);
-        } catch (IllegalArgumentException e) {
-            Toast.makeText(this, mode == Mode.PROFILE ?
-                    getString(R.string.layers_problem_profile_invalid, profiles.name(profileId)) :
-                    getString(mode == Mode.GAME ? R.string.layers_problem_game_invalid : R.string.layers_problem_pc_invalid),
-                    Toast.LENGTH_LONG).show();
-            return new HostStreamProfile();
-        }
+        return raw == null ? new HostStreamProfile() : HostStreamProfile.deserializeLenient(raw);
     }
 
     void saveVirtualDisplay(Boolean value) {
         overrides.virtualDisplay = value;
-        HostStreamProfile saved = HostStreamProfile.deserialize(savedProfile);
+        HostStreamProfile saved = HostStreamProfile.deserializeLenient(savedProfile);
         saved.virtualDisplay = value;
         saved.save(this, hostUuid);
         savedProfile = saved.serialize();
@@ -292,14 +280,8 @@ public class HostStreamSettings extends NightjarActivity {
 
     int qualityBitrate() {
         PreferenceConfiguration main = PreferenceConfiguration.readPreferences(this);
-        HostStreamProfile pc = null;
         String raw = HostStreamProfile.raw(this, hostUuid);
-        if (raw != null) {
-            try {
-                pc = HostStreamProfile.deserialize(raw);
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
+        HostStreamProfile pc = raw == null ? null : HostStreamProfile.deserializeLenient(raw);
         return GameProfilePreset.qualityBitrate(GameProfilePreset.baseBitrate(main.bitrate, pc));
     }
 

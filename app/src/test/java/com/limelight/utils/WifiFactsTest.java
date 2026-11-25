@@ -110,4 +110,9 @@ public class WifiFactsTest {
         assertEquals(UNKNOWN, WifiFacts.widthFromElement(255, 35, bytes(1, 2, 3, 4, 5, 6)));
         assertEquals(UNKNOWN, WifiFacts.widthFromElement(61, 0, null));
     }
+
+    @Test public void fiveGhzIncludesPublicSafety49GhzChannels() {
+        assertEquals(WifiFacts.Band.GHZ_5, wifi(-50, 4915).band());
+        assertEquals(183, wifi(-50, 4915).channel());
+    }
 }

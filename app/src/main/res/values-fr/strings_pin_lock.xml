@@ -49,4 +49,6 @@
     <string name="pin_key_delete">Effacer</string>
     <string name="pin_key_confirm">Confirmer</string>
     <string name="pin_dots_description">%1$d chiffre(s) sur %2$d saisi(s)</string>
+    <string name="pin_pcs_none_off">Aucun PC sélectionné ; verrouillage désactivé.</string>
+    <string name="pin_save_failed">Impossible d’enregistrer le code PIN. Réessayez.</string>
 </resources>

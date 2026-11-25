@@ -43,7 +43,12 @@ final class GameMenuActions {
     // request has only failed once the stream is still connected after that.
     private static final long HOST_EXIT_CONFIRM_MS = 15000;
     private final Runnable hostExitFailed = () -> {
-        if (GameMenuActions.this.game.connected && !GameMenuActions.this.game.hostActionInProgress) GameMenuActions.this.game.hostExitRequested = false;
+        if (!GameMenuActions.this.game.connected) return;
+        if (GameMenuActions.this.game.hostActionInProgress) {
+            confirmHostExitFailedLater();
+            return;
+        }
+        GameMenuActions.this.game.hostExitRequested = false;
     };
 
     boolean isTerminalDialog() {
@@ -428,17 +433,17 @@ final class GameMenuActions {
     private void runHostExit(String threadName, HostExit exit) {
         if (game.hostActionInProgress || !game.foreground || !game.connected) return;
         int generation = game.foregroundGeneration;
-        game.hostActionInProgress = true;
+        final Object actionToken = GameAdaptation.beginHostAction(game);
         game.hostExitRequested = true;
         new Thread(() -> {
             try {
                 exit.run();
                 game.runOnUiThread(game::finish);
-            } catch (IOException | XmlPullParserException e) {
+            } catch (IOException | XmlPullParserException | RuntimeException e) {
                 game.runOnUiThread(this::confirmHostExitFailedLater);
                 game.adaptation.showHostActionError(e, generation);
             } finally {
-                game.runOnUiThread(() -> game.hostActionInProgress = false);
+                GameAdaptation.endHostAction(game, actionToken);
             }
         }, threadName).start();
     }
@@ -466,19 +471,19 @@ final class GameMenuActions {
         }
         String name = game.appName != null ? game.appName : game.app.getAppName();
         Context context = game.getApplicationContext();
-        game.hostActionInProgress = true;
+        final Object actionToken = GameAdaptation.beginHostAction(game);
         game.hostExitRequested = true;
         Toast.makeText(context, game.getString(R.string.stream_quit_on_leave_progress, name), Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             Exception failure = null;
             try {
                 game.conn.closeGame();
-            } catch (IOException | XmlPullParserException e) {
+            } catch (IOException | XmlPullParserException | RuntimeException e) {
                 failure = e;
             }
             Exception error = failure;
             game.runOnUiThread(() -> {
-                game.hostActionInProgress = false;
+                GameAdaptation.endHostActionOnUi(game, actionToken);
                 // A host that ends the stream while it quits cancels the reply, so a failure counts
                 // only while the stream is still up.
                 if (error != null && game.connected) {
@@ -496,17 +501,17 @@ final class GameMenuActions {
             return;
         }
         final int generation = game.foregroundGeneration;
-        game.hostActionInProgress = true;
+        final Object actionToken = GameAdaptation.beginHostAction(game);
         game.hostExitRequested = true;
         new Thread(() -> {
             try {
                 game.conn.disconnectRemoteSession();
                 game.runOnUiThread(game::finish);
-            } catch (IOException | XmlPullParserException e) {
+            } catch (IOException | XmlPullParserException | RuntimeException e) {
                 game.runOnUiThread(this::confirmHostExitFailedLater);
                 game.adaptation.showHostActionError(e, generation);
             } finally {
-                game.runOnUiThread(() -> game.hostActionInProgress = false);
+                GameAdaptation.endHostAction(game, actionToken);
             }
         }, "End remote session").start();
     }
@@ -528,7 +533,7 @@ final class GameMenuActions {
                                 if (!game.foreground || !game.connected || game.hostActionInProgress) {
                                     return;
                                 }
-                                game.hostActionInProgress = true;
+                                final Object actionToken = GameAdaptation.beginHostAction(game);
                                 final int generation = game.foregroundGeneration;
                                 new Thread(() -> {
                                     try {
@@ -538,10 +543,10 @@ final class GameMenuActions {
                                                 game.messages.alert(sent ? R.string.stream_command_sent : R.string.stream_command_failed, Toast.LENGTH_LONG);
                                             }
                                         });
-                                    } catch (IOException | XmlPullParserException e) {
+                                    } catch (IOException | XmlPullParserException | RuntimeException e) {
                                         game.adaptation.showHostActionError(e, generation);
                                     } finally {
-                                        game.runOnUiThread(() -> game.hostActionInProgress = false);
+                                        GameAdaptation.endHostAction(game, actionToken);
                                     }
                                 }, "Server command").start();
                             }).create());

@@ -50,4 +50,5 @@
     <string name="gyro_diag_share_title">Chia sẻ giá trị chuyển động</string>
     <string name="gyro_diag_hide">Ẩn</string>
     <string name="gyro_diag_show">Hiện</string>
+    <string name="gyro_diag_cap_reached">Đã dừng ghi ở %1\ hàng.</string>
 </resources>

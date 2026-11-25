@@ -77,6 +77,7 @@ public class ControllerTestActivity extends NightjarActivity implements UsbDrive
     private float[] gyro, accel;
     private String touch;
     private boolean resumed;
+    private final List<AbstractController> usbControllers = new ArrayList<>();
 
     private InputManager inputManager;
     private boolean usbBound;
@@ -95,10 +96,38 @@ public class ControllerTestActivity extends NightjarActivity implements UsbDrive
         }
     };
 
+    private long backHoldStartMs;
+    private final androidx.activity.OnBackPressedCallback holdBackCallback =
+            new androidx.activity.OnBackPressedCallback(true) {
+                @Override
+                public void handleOnBackStarted(androidx.activity.BackEventCompat backEvent) {
+                    backHoldStartMs = android.os.SystemClock.uptimeMillis();
+                    handler.removeCallbacks(leave);
+                    handler.postDelayed(leave, HOLD_TO_LEAVE_MS);
+                }
+
+                @Override
+                public void handleOnBackCancelled() {
+                    backHoldStartMs = 0L;
+                    handler.removeCallbacks(leave);
+                }
+
+                @Override
+                public void handleOnBackPressed() {
+                    long heldMs = backHoldStartMs == 0L ? 0L : android.os.SystemClock.uptimeMillis() - backHoldStartMs;
+                    backHoldStartMs = 0L;
+                    handler.removeCallbacks(leave);
+                    if (heldMs >= HOLD_TO_LEAVE_MS) {
+                        finish();
+                    }
+                }
+            };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         UiHelper.setLocale(this);
         super.onCreate(savedInstanceState);
+        getOnBackPressedDispatcher().addCallback(this, holdBackCallback);
         FrameLayout page = TopAppBar.setUpPage(this, R.string.controller_test_title, this::finish);
         View body = getLayoutInflater().inflate(R.layout.controller_test, page, false);
         TopAppBar.addScrollingBody(page, body);
@@ -152,6 +181,7 @@ public class ControllerTestActivity extends NightjarActivity implements UsbDrive
     @Override
     protected void onPause() {
         resumed = false;
+        backHoldStartMs = 0L;
         handler.removeCallbacks(leave);
         outputs.release();
         super.onPause();
@@ -388,10 +418,37 @@ public class ControllerTestActivity extends NightjarActivity implements UsbDrive
     public void onInputDeviceChanged(int deviceId) {}
 
     // Nightjar's USB driver: Android sees no input from a pad the driver owns, so it reports here.
+    private AbstractController findUsbController(int controllerId) {
+        for (AbstractController c : usbControllers) {
+            if (c.getControllerId() == controllerId) return c;
+        }
+        return null;
+    }
+
+    private void activateUsbController(AbstractController controller) {
+        outputs.release();
+        resetReadings();
+        device = null;
+        usbController = controller;
+        outputs.selectUsbController(controller);
+        if (resumed) {
+            outputs.registerSensors();
+        }
+        outputs.buildActions();
+        render();
+    }
+
     @Override
     public void reportControllerState(int controllerId, int buttonFlags, float leftStickX, float leftStickY,
                                       float rightStickX, float rightStickY, float leftTrigger, float rightTrigger) {
-        if (usbController == null || usbController.getControllerId() != controllerId) return;
+        if (usbController == null || usbController.getControllerId() != controllerId) {
+            boolean activeInput = buttonFlags != 0 || leftTrigger > 0.25f || rightTrigger > 0.25f
+                    || Math.abs(leftStickX) > 0.25f || Math.abs(leftStickY) > 0.25f
+                    || Math.abs(rightStickX) > 0.25f || Math.abs(rightStickY) > 0.25f;
+            AbstractController other = activeInput ? findUsbController(controllerId) : null;
+            if (other == null) return;
+            activateUsbController(other);
+        }
         usbButtons = buttonFlags;
         leftX = leftStickX;
         leftY = leftStickY;
@@ -428,24 +485,25 @@ public class ControllerTestActivity extends NightjarActivity implements UsbDrive
 
     @Override
     public void deviceAdded(AbstractController controller) {
-        outputs.release();
-        resetReadings();
-        device = null;
-        usbController = controller;
-        outputs.selectUsbController(controller);
-        if (resumed) {
-            outputs.registerSensors();
+        if (!usbControllers.contains(controller)) {
+            usbControllers.add(controller);
         }
-        outputs.buildActions();
-        render();
+        if (usbController == null) {
+            activateUsbController(controller);
+        }
     }
 
     @Override
     public void deviceRemoved(AbstractController controller) {
+        usbControllers.remove(controller);
         if (usbController != controller) return;
         outputs.cancelRumbleTimeout();
         resetReadings();
         usbController = null;
+        if (!usbControllers.isEmpty()) {
+            activateUsbController(usbControllers.get(0));
+            return;
+        }
         outputs.buildActions();
         render();
         selectSingleConnectedController();

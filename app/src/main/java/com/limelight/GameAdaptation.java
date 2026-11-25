@@ -39,6 +39,36 @@ final class GameAdaptation {
 
     // Claims of the host's encoder bitrate that failed in a row. Some hosts report 0 for good.
     private static final int MAX_BITRATE_CLAIM_FAILURES = 6;
+    private static final java.util.Map<Game, java.util.Set<Object>> activeHostActions = new java.util.WeakHashMap<>();
+
+    static Object beginHostAction(Game game) {
+        Object token = new Object();
+        synchronized (activeHostActions) {
+            activeHostActions.computeIfAbsent(game, ignored -> new java.util.HashSet<>()).add(token);
+            game.hostActionInProgress = true;
+        }
+        return token;
+    }
+
+    static void endHostAction(Game game, Object token) {
+        game.runOnUiThread(() -> endHostActionOnUi(game, token));
+    }
+
+    static void endHostActionOnUi(Game game, Object token) {
+        synchronized (activeHostActions) {
+            java.util.Set<Object> tokens = activeHostActions.get(game);
+            boolean remaining = false;
+            if (tokens != null) {
+                tokens.remove(token);
+                remaining = !tokens.isEmpty();
+                if (!remaining) {
+                    activeHostActions.remove(game);
+                }
+            }
+            game.hostActionInProgress = remaining;
+        }
+    }
+
     private int adaptiveBitrateClaimFailures;
     // A Foundation Sunshine PC's own bitrate controller, on in place of this device's.
     private com.limelight.nvstream.http.FoundationAbr foundationAbr;
@@ -184,7 +214,7 @@ final class GameAdaptation {
         final int expectedTrial = game.healthTrialBitrate;
         final int generation = game.foregroundGeneration;
         final NvConnection connection = game.conn;
-        game.hostActionInProgress = true;
+        final Object actionToken = beginHostAction(game);
         new Thread(() -> {
             try {
                 // The saved preference/current display value may be a transport budget including
@@ -214,10 +244,10 @@ final class GameAdaptation {
                         game.messages.alert(game.getString(R.string.stream_bitrate_applied, applied / 1000.0), Toast.LENGTH_LONG);
                     }
                 });
-            } catch (IOException | XmlPullParserException e) {
+            } catch (IOException | XmlPullParserException | RuntimeException e) {
                 showHostActionError(e, generation);
             } finally {
-                game.runOnUiThread(() -> game.hostActionInProgress = false);
+                endHostAction(game, actionToken);
             }
         }, "Stream doctor bitrate trial").start();
     }
@@ -288,27 +318,40 @@ final class GameAdaptation {
 
     private void sendManualBitrate(int kbps) {
         // A manual bitrate stops automatic bitrate for this session only; the saved choice stays.
+        final boolean restoreAuto = isAdaptiveBitrateEnabled();
+        final boolean prevQualityAuto = game.qualityAutoBitrate;
+        final NvConnection connection = game.conn;
         setAdaptiveBitrateEnabled(false, false);
         game.qualityAutoBitrate = false;
-        game.hostActionInProgress = true;
+        final Object actionToken = beginHostAction(game);
         final int generation = game.foregroundGeneration;
         new Thread(() -> {
             try {
-                int applied = game.conn.setBitrate(kbps);
+                int applied = connection.setBitrate(kbps);
                 game.runOnUiThread(() -> {
+                    if (!game.connected || game.conn != connection || game.isFinishing()) {
+                        return;
+                    }
                     game.currentBitrate = applied;
                     game.sessionManualBitrate = applied;
                     game.healthOriginalBitrate = game.healthTrialBitrate = 0;
                     // The open menu's slider shows the rate it asked for; one the host changed is news.
                     boolean onSlider = applied == kbps && game.menuActions.streamMenuOpen();
-                    if (game.foreground && generation == game.foregroundGeneration && game.connected && !game.isFinishing() && !onSlider) {
+                    if (game.foreground && generation == game.foregroundGeneration && !onSlider) {
                         game.messages.alert(game.getString(R.string.stream_bitrate_applied, applied / 1000.0), Toast.LENGTH_LONG);
                     }
                 });
-            } catch (IOException | XmlPullParserException e) {
+            } catch (IOException | XmlPullParserException | RuntimeException e) {
+                game.runOnUiThread(() -> {
+                    if (game.connected && game.conn == connection && !game.isFinishing()
+                            && restoreAuto && !isAdaptiveBitrateEnabled() && game.sessionManualBitrate == 0) {
+                        game.qualityAutoBitrate = prevQualityAuto;
+                        setAdaptiveBitrateEnabled(true, false);
+                    }
+                });
                 showHostActionError(e, generation);
             } finally {
-                game.runOnUiThread(() -> game.hostActionInProgress = false);
+                endHostAction(game, actionToken);
             }
         }, "Stream bitrate").start();
     }
@@ -442,10 +485,11 @@ final class GameAdaptation {
         // After an automatic reconnect, the first claim starts from the rate automatic bitrate had cut to,
         // and the stream's start bitrate stays the ceiling it may climb back to.
         final int resumeKbps = target == 0 ? game.streamRecovery.takeAutomaticBitrateStart() : 0;
-        game.hostActionInProgress = true;
+        final NvConnection connection = game.conn;
+        final Object actionToken = beginHostAction(game);
         new Thread(() -> {
             try {
-                ComputerDetails details = target == 0 ? game.conn.refreshHostDetails() : null;
+                ComputerDetails details = target == 0 ? connection.refreshHostDetails() : null;
                 if (details != null && (details.encoderBitrateKbps <= 0 || details.initialEncoderBitrateKbps <= 0)) {
                     // A host without the bitrate fields will not start sending them on a retry.
                     throw details.encoderBitrateSupported ?
@@ -453,9 +497,9 @@ final class GameAdaptation {
                             new EncoderBitrateUnsupported();
                 }
                 // Claim bitrate ownership on hosts with their own controller, without probing a new rate.
-                int applied = game.conn.setBitrate(details == null ? target : com.limelight.nvstream.jni.NightjarPolicyJni.recoveryAutomaticBitrateStart(details.encoderBitrateKbps, resumeKbps));
+                int applied = connection.setBitrate(details == null ? target : com.limelight.nvstream.jni.NightjarPolicyJni.recoveryAutomaticBitrateStart(details.encoderBitrateKbps, resumeKbps));
                 game.runOnUiThread(() -> {
-                    if (game.connected && !game.isFinishing()) {
+                    if (game.connected && game.conn == connection && !game.isFinishing()) {
                         if (game.adaptiveBitrate == controller && game.pyroWaveBitrate == pyroController) {
                             game.currentBitrate = applied;
                             game.adaptiveBitrateRetryAt = 0;
@@ -475,10 +519,10 @@ final class GameAdaptation {
                         }
                     }
                 });
-            } catch (IOException | XmlPullParserException e) {
+            } catch (IOException | XmlPullParserException | RuntimeException e) {
                 LimeLog.warning("Automatic bitrate update failed: " + e);
                 game.runOnUiThread(() -> {
-                    if (game.isFinishing() || game.isDestroyed()) return;
+                    if (game.conn != connection || game.isFinishing() || game.isDestroyed()) return;
                     if (game.adaptiveBitrate == controller && game.pyroWaveBitrate == pyroController) {
                         if (target == 0 && (e instanceof EncoderBitrateUnsupported ||
                                 ++adaptiveBitrateClaimFailures >= MAX_BITRATE_CLAIM_FAILURES)) {
@@ -503,7 +547,7 @@ final class GameAdaptation {
                     }
                 });
             } finally {
-                game.runOnUiThread(() -> game.hostActionInProgress = false);
+                endHostAction(game, actionToken);
             }
         }, "Automatic bitrate").start();
     }

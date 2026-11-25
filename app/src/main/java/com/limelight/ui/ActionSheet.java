@@ -41,6 +41,8 @@ public final class ActionSheet extends BottomSheetDialog {
     private android.widget.ImageView cover;
     private GlassPanelDrawable menuGlass;
     private MenuBlurWindow blur;
+    private final android.view.View.OnLayoutChangeListener blurLayoutListener =
+            (view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> placeBlur();
     // The page blurred behind a sheet, or behind a panel that stands on a page; never over a stream.
     private PageBlur pageBlur;
     private boolean pageBlurAsked;
@@ -257,7 +259,8 @@ public final class ActionSheet extends BottomSheetDialog {
             blur = MenuBlurWindow.openIfAllowed(owner, radius, on -> menuGlass.setOverBlur(on));
             menuGlass.setOverBlur(blur != null);
             if (blur != null) {
-                body.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> placeBlur());
+                body.removeOnLayoutChangeListener(blurLayoutListener);
+                body.addOnLayoutChangeListener(blurLayoutListener);
             }
         }
         try {

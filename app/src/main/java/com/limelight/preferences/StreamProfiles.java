@@ -112,15 +112,10 @@ public final class StreamProfiles {
             return values.get(id);
         }
 
-        /** The profile's values, or an empty set when they can't be read. */
+        /** The profile's values, skipping only individual unreadable entries. */
         public HostStreamProfile valuesOrEmpty(String id) {
             String raw = values.get(id);
-            if (raw == null) return new HostStreamProfile();
-            try {
-                return HostStreamProfile.deserialize(raw);
-            } catch (IllegalArgumentException e) {
-                return new HostStreamProfile();
-            }
+            return raw == null ? new HostStreamProfile() : HostStreamProfile.deserializeLenient(raw);
         }
 
         /** The profile ID chosen for a network, or null when that network uses the profile in use. */
@@ -247,5 +242,16 @@ public final class StreamProfiles {
         if (names.isEmpty()) editor.remove(HOME_WIFI);
         else editor.putStringSet(HOME_WIFI, new HashSet<>(names));
         editor.apply();
+    }
+
+    /** Removes decoder-crash video overrides from every saved named profile. */
+    static void clearVideoOverrides(Context context) {
+        Snapshot snapshot = load(context);
+        for (String id : snapshot.names.keySet()) {
+            HostStreamProfile profile = snapshot.valuesOrEmpty(id);
+            if (profile.clearVideoCrashFields()) {
+                saveValues(context, id, profile);
+            }
+        }
     }
 }

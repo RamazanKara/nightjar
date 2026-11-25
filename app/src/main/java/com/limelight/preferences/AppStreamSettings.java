@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * One game's own stream values, per PC: the layer above the PC's values. Stored like
@@ -38,15 +39,29 @@ public final class AppStreamSettings {
         return key == null ? null : prefs(context).getString(key, null);
     }
 
-    /** The game's values; empty when it has none or they can't be read. */
+    /** The game's values; skips only corrupt fields so one bad entry does not wipe the rest. */
     public static HostStreamProfile load(Context context, String pcUuid, String appUuid, int appId) {
         String raw = raw(context, pcUuid, appUuid, appId);
-        if (raw == null) return new HostStreamProfile();
-        try {
-            return HostStreamProfile.deserialize(raw);
-        } catch (IllegalArgumentException e) {
-            return new HostStreamProfile();
+        return raw == null ? new HostStreamProfile() : HostStreamProfile.deserializeLenient(raw);
+    }
+
+    static void clearVideoOverrides(Context context, String pcUuid) {
+        SharedPreferences prefs = prefs(context);
+        SharedPreferences.Editor editor = prefs.edit();
+        String prefix = pcUuid == null ? null : pcUuid + "/";
+        boolean touched = false;
+        for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
+            String key = entry.getKey();
+            Object val = entry.getValue();
+            if (!(val instanceof String)) continue;
+            if (prefix != null && !key.startsWith(prefix)) continue;
+            HostStreamProfile profile = HostStreamProfile.deserializeLenient((String) val);
+            if (!profile.clearVideoCrashFields()) continue;
+            if (profile.isEmpty()) editor.remove(key);
+            else editor.putString(key, profile.serialize());
+            touched = true;
         }
+        if (touched) editor.apply();
     }
 
     public static void save(Context context, String pcUuid, String appUuid, int appId, HostStreamProfile values) {
