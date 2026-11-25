@@ -56,4 +56,6 @@
     <string name="title_usb_switch_pro">Sterownik Switch Pro USB</string>
     <string name="summary_usb_switch_pro">Nightjar sam odczytuje przewodowy Switch Pro Controller, więc działają żyroskop, wibracje oraz przyciski Home i Capture. Android prosi o dostęp do USB podczas strumienia; Bluetooth i Joy-Con zostają przy obsłudze Androida.</string>
     <string name="usb_switch_pro_denied">Brak dostępu do USB; Switch Pro Controller nadal używa wejścia Androida.\nPodłącz kabel ponownie, aby spróbować jeszcze raz.</string>
+    <string name="title_seekbar_mouse_emulation_sensitivity">Czułość myszy kontrolera</string>
+    <string name="summary_seekbar_mouse_emulation_sensitivity">Dostosowuje szybkość poruszania kursorem przez drążki w trybie myszy kontrolera. Niższa wartość ułatwia precyzyjne celowanie.</string>
 </resources>

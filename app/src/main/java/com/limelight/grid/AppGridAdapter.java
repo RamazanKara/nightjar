@@ -2,6 +2,8 @@ package com.limelight.grid;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
@@ -35,6 +37,7 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     private static final float HIDDEN_ALPHA = 0.45f;
     /** The covers that step back while one has the selection. */
     private final com.limelight.ui.CoverCard.Group coverGroup = new com.limelight.ui.CoverCard.Group();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private ComputerDetails computer;
     private final String uniqueId;
@@ -140,6 +143,11 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
         this.computer = updated;
         if (endpointChanged && loader != null) {
             rebuildLoader();
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            notifyDataSetChanged();
+        } else {
+            mainHandler.post(this::notifyDataSetChanged);
         }
     }
 

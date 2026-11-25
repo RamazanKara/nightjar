@@ -24,4 +24,5 @@
     <string name="controller_connect_as_automatic">Automatico</string>
     <string name="controller_connect_as_xbox_summary">Xbox (senza sensori di movimento né touchpad)</string>
     <string name="pc_tap_to_pair">%1$s\nTocca per accoppiare</string>
+    <string name="controller_button_scan">Pulsante extra %1$s</string>
 </resources>

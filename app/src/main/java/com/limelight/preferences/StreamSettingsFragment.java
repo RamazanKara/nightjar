@@ -158,6 +158,7 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
         boolean controllerMouse = SettingRules.controllerMouseApplies(prefs);
         setShown("analog_scrolling", controllerMouse);
         setShown("checkbox_mouse_emulation_fixed_step", controllerMouse);
+        setShown(PreferenceConfiguration.MOUSE_EMULATION_SENSITIVITY_PREF_STRING, controllerMouse);
         setShown("checkbox_usb_bind_all", prefs.getBoolean("checkbox_usb_driver", true));
         setShown("checkbox_usb_dualsense_haptics", prefs.getBoolean("checkbox_usb_dualsense", false));
         boolean onScreen = SettingRules.onScreenControlsOn(prefs);

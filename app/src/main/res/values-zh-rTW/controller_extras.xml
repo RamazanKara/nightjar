@@ -56,4 +56,6 @@
     <string name="title_usb_switch_pro">USB Switch Pro 驅動程式</string>
     <string name="summary_usb_switch_pro">Nightjar 自行讀取有線連接的 Switch Pro Controller，讓陀螺儀、震動、Home 和 Capture 都能使用。串流時 Android 會要求 USB 存取權；藍牙連線和 Joy-Con 仍使用 Android 的輸入。</string>
     <string name="usb_switch_pro_denied">沒有 USB 存取權；Switch Pro Controller 繼續使用 Android 輸入。\n請重新連接傳輸線以重試。</string>
+    <string name="title_seekbar_mouse_emulation_sensitivity">控制器滑鼠靈敏度</string>
+    <string name="summary_seekbar_mouse_emulation_sensitivity">調整控制器滑鼠模式下搖桿移動指標的速度。較低的值更容易精細瞄準。</string>
 </resources>

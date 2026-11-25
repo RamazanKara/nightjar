@@ -62,9 +62,10 @@ public class SeekBarPreferenceSliderTest {
         // Issue #61's list: track and cursor speed, mouse speed, vibration, deadzones, opacity, keyboard
         // size and opacity, microphone gain, bitrate, sharpness and PC render resolution.
         for (String key : new String[] {"seekbar_trackpad_speed", "seekbar_local_cursor_speed", "seekbar_mouse_speed",
-                "seekbar_vibrate_fallback_strength", "seekbar_deadzone", "seekbar_osc_stick_deadzone",
-                "seekbar_osc_opacity", "seekbar_pc_keyboard_size", "seekbar_pc_keyboard_opacity", "seekbar_mic_gain",
-                "seekbar_bitrate_kbps", "upscaling_sharpness", "seekbar_virtual_display_scale"}) {
+                "seekbar_mouse_emulation_sensitivity", "seekbar_vibrate_fallback_strength", "seekbar_deadzone",
+                "seekbar_osc_stick_deadzone", "seekbar_osc_opacity", "seekbar_pc_keyboard_size",
+                "seekbar_pc_keyboard_opacity", "seekbar_mic_gain", "seekbar_bitrate_kbps", "upscaling_sharpness",
+                "seekbar_virtual_display_scale"}) {
             assertTrue(key + " in " + keys, keys.contains(key));
         }
     }

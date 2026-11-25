@@ -252,6 +252,9 @@ public class ConsoleHomeActivity extends NightjarActivity implements HostFeed.Li
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        if (state == null) {
+            com.limelight.files.FileShareIntents.releaseStaleGrants(this, null);
+        }
         // Once per phone and app version; a task brought back with Home in front never creates the PC list, which asks too.
         DecoderBenchmark.runIfNeeded(this);
         setContentView(R.layout.activity_console_home);

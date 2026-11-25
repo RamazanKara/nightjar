@@ -54,4 +54,6 @@
     <string name="title_usb_switch_pro">Switch Pro per USB</string>
     <string name="summary_usb_switch_pro">Nightjar liest einen per Kabel verbundenen Switch Pro Controller selbst aus, damit Gyroskop, Vibration, Home und Capture funktionieren. Android fragt im Stream nach dem USB-Zugriff; Bluetooth und Joy-Con bleiben bei der Eingabe von Android.</string>
     <string name="usb_switch_pro_denied">Kein USB-Zugriff; der Switch Pro Controller nutzt weiter Androids Eingabe.\nVerbinde das Kabel erneut.</string>
+    <string name="title_seekbar_mouse_emulation_sensitivity">Empfindlichkeit der Controller-Maus</string>
+    <string name="summary_seekbar_mouse_emulation_sensitivity">Passt an, wie schnell die Sticks den Zeiger im Controller-Mausmodus bewegen. Niedrigere Werte erleichtern genaues Zielen.</string>
 </resources>

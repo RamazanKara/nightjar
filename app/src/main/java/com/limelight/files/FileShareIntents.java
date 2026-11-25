@@ -4,6 +4,7 @@ import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ProviderInfo;
 import android.database.Cursor;
 import android.net.Uri;
@@ -16,15 +17,21 @@ import com.limelight.LimeLog;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Share-intent parsing, URI validation and {@link ContentResolver} file inspection helpers for
- * {@link FileTransferActivity}. Enforces that external shares only send another app's content URIs
- * (except Nightjar's own problem report via {@link FileTransferActivity#REPORT_ALIAS}).
+ * Share-intent parsing, URI validation, persisted SAF grant ownership, and {@link ContentResolver} file
+ * inspection helpers for {@link FileTransferActivity}. Enforces that external shares only send another app's
+ * content URIs (except Nightjar's own problem report via {@link FileTransferActivity#REPORT_ALIAS}).
  */
-final class FileShareIntents {
+public final class FileShareIntents {
+    private static final String GRANTS_PREFS = "file_transfer_grants";
+
     private FileShareIntents() {}
 
     /**
@@ -119,9 +126,18 @@ final class FileShareIntents {
 
     /** Attempts to persist a SAF URI grant so background transfers survive Activity finish; returns true on success. */
     static boolean takePersistable(ContentResolver resolver, Uri uri, int flags) {
+        return takePersistable(null, resolver, uri, flags);
+    }
+
+    static boolean takePersistable(Context context, ContentResolver resolver, Uri uri, int flags) {
         if (resolver == null || uri == null) return false;
         try {
             resolver.takePersistableUriPermission(uri, flags);
+            if (context != null) {
+                SharedPreferences ledger = grantPrefs(context);
+                int combined = ledger.getInt(uri.toString(), 0) | flags;
+                ledger.edit().putInt(uri.toString(), combined).apply();
+            }
             return true;
         } catch (SecurityException | UnsupportedOperationException | IllegalArgumentException e) {
             return false;
@@ -129,11 +145,69 @@ final class FileShareIntents {
     }
 
     static void releasePersistable(ContentResolver resolver, Uri uri, int flags) {
+        releasePersistable(null, resolver, uri, flags);
+    }
+
+    static void releasePersistable(Context context, ContentResolver resolver, Uri uri, int flags) {
         if (resolver == null || uri == null) return;
         try {
             resolver.releasePersistableUriPermission(uri, flags);
         } catch (SecurityException | UnsupportedOperationException | IllegalArgumentException ignored) {
+        } finally {
+            if (context != null) {
+                grantPrefs(context).edit().remove(uri.toString()).apply();
+            }
         }
+    }
+
+    /** Releases all file-transfer SAF grants recorded across process kills except URIs currently held. */
+    public static void releaseStaleGrants(Context context, Collection<Uri> activeUris) {
+        if (context == null) return;
+        SharedPreferences ledger = grantPrefs(context);
+        Map<String, ?> entries = ledger.getAll();
+        if (entries.isEmpty()) return;
+        Set<String> keep = new HashSet<>();
+        if (activeUris != null) {
+            for (Uri uri : activeUris) {
+                if (uri != null) keep.add(uri.toString());
+            }
+        }
+        ContentResolver resolver = context.getContentResolver();
+        SharedPreferences.Editor editor = ledger.edit();
+        for (Map.Entry<String, ?> entry : entries.entrySet()) {
+            String key = entry.getKey();
+            if (keep.contains(key)) continue;
+            int flags = entry.getValue() instanceof Integer ? (Integer) entry.getValue()
+                    : (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            if (resolver != null && flags != 0) {
+                try {
+                    resolver.releasePersistableUriPermission(Uri.parse(key), flags);
+                } catch (SecurityException | UnsupportedOperationException | IllegalArgumentException ignored) {
+                }
+            }
+            editor.remove(key);
+        }
+        editor.apply();
+    }
+
+    /** Whether {@code uri} already holds content before opening {@code "rwt"} for download. */
+    static boolean documentHasExistingContent(ContentResolver resolver, Uri uri) {
+        if (resolver == null || uri == null) return false;
+        try (Cursor cursor = resolver.query(uri, new String[] {OpenableColumns.SIZE}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst() && !cursor.isNull(0)) {
+                return cursor.getLong(0) > 0;
+            }
+        } catch (RuntimeException ignored) {
+        }
+        try (ParcelFileDescriptor pfd = resolver.openFileDescriptor(uri, "r")) {
+            return pfd != null && pfd.getStatSize() > 0;
+        } catch (IOException | RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private static SharedPreferences grantPrefs(Context context) {
+        return context.getApplicationContext().getSharedPreferences(GRANTS_PREFS, Context.MODE_PRIVATE);
     }
 
     /**

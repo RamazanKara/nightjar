@@ -56,4 +56,6 @@
     <string name="title_usb_switch_pro">Драйвер USB Switch Pro</string>
     <string name="summary_usb_switch_pro">Nightjar сам считывает проводной Switch Pro Controller, чтобы работали гироскоп, вибрация, Home и Capture. Android запрашивает доступ к USB во время трансляции; Bluetooth и Joy-Con остаются на вводе Android.</string>
     <string name="usb_switch_pro_denied">Нет доступа к USB; Switch Pro Controller работает через ввод Android.\nПереподключите кабель, чтобы повторить.</string>
+    <string name="title_seekbar_mouse_emulation_sensitivity">Чувствительность мыши контроллера</string>
+    <string name="summary_seekbar_mouse_emulation_sensitivity">Регулирует скорость перемещения указателя стиками в режиме мыши контроллера. Меньшее значение упрощает точное наведение.</string>
 </resources>

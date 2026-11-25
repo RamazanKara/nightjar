@@ -24,4 +24,5 @@
     <string name="controller_connect_as_automatic">自動</string>
     <string name="controller_connect_as_xbox_summary">Xbox（無體感與觸控板）</string>
     <string name="pc_tap_to_pair">%1$s\n輕觸即可配對</string>
+    <string name="controller_button_scan">額外按鍵 %1$s</string>
 </resources>

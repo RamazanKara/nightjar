@@ -206,6 +206,11 @@ public class PcView extends NightjarActivity implements AdapterFragmentCallbacks
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        if (savedInstanceState == null) {
+            // Reclaim any orphaned SAF grants from prior crashed/killed file transfers while keeping unrelated grants.
+            com.limelight.files.FileShareIntents.releaseStaleGrants(this, null);
+        }
+
         // Once per phone and app version: lets Automatic skip codecs that decode slower here. Before Home takes over the
         // start, which would otherwise leave it unmeasured until the PC list is opened.
         DecoderBenchmark.runIfNeeded(this);

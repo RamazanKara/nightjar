@@ -571,7 +571,52 @@ public class HostStreamSettings extends NightjarActivity {
 
         void rebuildForCapabilities() {
             if (activity == null) return;
+            View root = getView();
+            ListView list = root != null && root.findViewById(android.R.id.list) instanceof ListView
+                    ? (ListView) root.findViewById(android.R.id.list) : null;
+            int firstVisible = list == null ? -1 : list.getFirstVisiblePosition();
+            int topOffset = firstVisible >= 0 && list.getChildCount() > 0
+                    ? list.getChildAt(0).getTop() - list.getPaddingTop() : 0;
+            String topKey = preferenceKeyAt(list, firstVisible);
+            int selectedPos = list == null ? ListView.INVALID_POSITION : list.getSelectedItemPosition();
+            String focusedKey = preferenceKeyAt(list, selectedPos);
+            boolean hadFocus = list != null && list.hasFocus();
+
             buildPreferenceScreen();
+
+            View rebuiltRoot = getView();
+            ListView rebuiltList = rebuiltRoot != null && rebuiltRoot.findViewById(android.R.id.list) instanceof ListView
+                    ? (ListView) rebuiltRoot.findViewById(android.R.id.list) : null;
+            if (rebuiltList != null) {
+                rebuiltList.post(() -> restoreListState(rebuiltList, topKey, firstVisible, topOffset, focusedKey, hadFocus));
+            }
+        }
+
+        private static String preferenceKeyAt(ListView list, int position) {
+            if (list == null || list.getAdapter() == null || position < 0 || position >= list.getAdapter().getCount()) {
+                return null;
+            }
+            Object item = list.getAdapter().getItem(position);
+            return item instanceof Preference ? ((Preference) item).getKey() : null;
+        }
+
+        private static void restoreListState(ListView list, String topKey, int fallbackPos, int topOffset,
+                                             String focusedKey, boolean hadFocus) {
+            if (list.getAdapter() == null || list.getAdapter().getCount() == 0) return;
+            int anchor = topKey != null ? StreamSettings.RootFragment.positionOf(list, topKey) : -1;
+            if (anchor < 0 && fallbackPos >= 0) {
+                anchor = Math.min(fallbackPos, list.getAdapter().getCount() - 1);
+            }
+            if (anchor >= 0) {
+                list.setSelectionFromTop(anchor, topOffset);
+            }
+            int focusPos = focusedKey != null ? StreamSettings.RootFragment.positionOf(list, focusedKey) : -1;
+            if (focusPos >= 0 && !list.isInTouchMode()) {
+                list.setSelection(focusPos);
+            }
+            if (hadFocus && !list.isInTouchMode() && !list.hasFocus()) {
+                list.requestFocus();
+            }
         }
 
         private void buildPreferenceScreen() {

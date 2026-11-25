@@ -26,4 +26,5 @@
     <string name="controller_connect_as_playstation" translatable="false">PlayStation</string>
     <string name="controller_connect_as_nintendo" translatable="false">Nintendo</string>
     <string name="pc_tap_to_pair">%1$s\nTap to pair</string>
+    <string name="controller_button_scan">Extra button %1$s</string>
 </resources>

@@ -155,7 +155,10 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
             } else if (held != null) {
                 held.end();
             }
-            if (keeper.work == null) keeper.work = new TransferWork(getApplication());
+            if (keeper.work == null) {
+                FileShareIntents.releaseStaleGrants(this, null);
+                keeper.work = new TransferWork(getApplication());
+            }
         }
         work = keeper.work;
         // Recreated after a configuration change, the screen goes on with what it had: a share is taken once.
@@ -437,22 +440,23 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         work.pendingDownload = null;
         work.pendingRetry = -1;
         if (uri == null) return;
-        if (!work.persistPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION)) {
-            work.persistPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        }
         String name = FileShareIntents.displayName(getContentResolver(), uri,
                 entry != null ? entry.name : String.valueOf(uri.getLastPathSegment()));
-        Runnable discard = work.discard(uri, name);
+        ContentResolver resolver = getApplicationContext().getContentResolver();
+        boolean existedBefore = FileShareIntents.documentHasExistingContent(resolver, uri);
+        Runnable discard = work.discard(uri, name, !existedBefore);
         FileTransferController current = work.controller;
         if (current == null || (entry == null && retry < 0)) {
             // Android closed Nightjar while the save dialog was open: the download it was for is gone, and the
-            // document the dialog made would stay behind empty.
+            // document the dialog made would stay behind empty unless it held pre-existing content.
             Toast.makeText(this, R.string.files_save_lost, Toast.LENGTH_LONG).show();
             work.workers.execute(discard);
             return;
         }
-        ContentResolver resolver = getApplicationContext().getContentResolver();
-        FileTransferController.Opener opener = () -> FileShareIntents.detach(resolver.openFileDescriptor(uri, "w"));
+        if (!work.persistPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION)) {
+            work.persistPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        }
+        FileTransferController.Opener opener = () -> FileShareIntents.detach(resolver.openFileDescriptor(uri, "rwt"));
         if (retry >= 0) {
             current.retryDownload(retry, opener, discard);
         } else {
@@ -691,7 +695,7 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         }
 
         boolean persistPermission(Uri uri, int flags) {
-            if (FileShareIntents.takePersistable(application.getContentResolver(), uri, flags)) {
+            if (FileShareIntents.takePersistable(application, application.getContentResolver(), uri, flags)) {
                 persistedPermissions.put(uri, flags);
                 return true;
             }
@@ -727,7 +731,7 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
             synchronized (persistedPermissions) {
                 ContentResolver resolver = application.getContentResolver();
                 for (Map.Entry<Uri, Integer> entry : persistedPermissions.entrySet()) {
-                    FileShareIntents.releasePersistable(resolver, entry.getKey(), entry.getValue());
+                    FileShareIntents.releasePersistable(application, resolver, entry.getKey(), entry.getValue());
                 }
                 persistedPermissions.clear();
             }
@@ -738,16 +742,22 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
             if (screen != null) screen.onUploaded();
         }
 
-        /** Deletes a download's document on a worker; one that stays is named on the screen. */
-        Runnable discard(Uri uri, String name) {
+        /** Deletes a newly created download's document on a worker unless it overwrote a pre-existing document. */
+        Runnable discard(Uri uri, String name, boolean deleteOnFailure) {
             ContentResolver resolver = getApplication().getContentResolver();
             return () -> {
+                if (!deleteOnFailure) return;
                 if (deleteDocument(resolver, uri)) return;
                 handler.post(() -> {
                     leftovers.add(name);
                     if (screen != null) screen.onLeftoversChanged();
                 });
             };
+        }
+
+        /** Deletes a download's document on a worker; one that stays is named on the screen. */
+        Runnable discard(Uri uri, String name) {
+            return discard(uri, name, true);
         }
 
         static boolean deleteDocument(ContentResolver resolver, Uri uri) {

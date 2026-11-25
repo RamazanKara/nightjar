@@ -9,4 +9,12 @@ public final class MouseDeltaAccumulator {
         remainder = scaled - whole;
         return whole;
     }
+
+    public void reset() {
+        remainder = 0f;
+    }
+
+    public void copyFrom(MouseDeltaAccumulator other) {
+        this.remainder = other == null ? 0f : other.remainder;
+    }
 }

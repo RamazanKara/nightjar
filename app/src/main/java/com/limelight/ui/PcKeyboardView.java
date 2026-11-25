@@ -40,9 +40,6 @@ public final class PcKeyboardView extends View {
     private float unitX, unitY;
     private boolean ticking, haptics = true;
     private int heightLimit = Integer.MAX_VALUE;
-    // Active touch pointer IDs held on this view, released together on ACTION_CANCEL or detach (T9-14).
-    private final int[] activePointers = new int[16];
-    private int activePointerCount;
 
     public PcKeyboardView(Context context, PcKeyboardController controller) {
         super(context);
@@ -106,36 +103,10 @@ public final class PcKeyboardView extends View {
 
     @Override
     protected void onDetachedFromWindow() {
-        releaseActiveTouches();
+        controller.releaseTouches();
         removeCallbacks(ticker);
         ticking = false;
         super.onDetachedFromWindow();
-    }
-
-    private void trackPointer(int pointerId) {
-        for (int i = 0; i < activePointerCount; i++) {
-            if (activePointers[i] == pointerId) return;
-        }
-        if (activePointerCount < activePointers.length) {
-            activePointers[activePointerCount++] = pointerId;
-        }
-    }
-
-    private void untrackPointer(int pointerId) {
-        for (int i = 0; i < activePointerCount; i++) {
-            if (activePointers[i] == pointerId) {
-                activePointers[i] = activePointers[--activePointerCount];
-                return;
-            }
-        }
-    }
-
-    private void releaseActiveTouches() {
-        int count = activePointerCount;
-        activePointerCount = 0;
-        for (int i = 0; i < count; i++) {
-            controller.touchUp(activePointers[i]);
-        }
     }
 
     /** The most height the keys may take; the overlay sets it from the window and the size setting. */
@@ -263,7 +234,6 @@ public final class PcKeyboardView extends View {
                 PcKey key = keyAt(event.getX(index), event.getY(index));
                 if (key != null) {
                     int pointerId = event.getPointerId(index);
-                    trackPointer(pointerId);
                     controller.touchDown(key, pointerId, event.getEventTime());
                     if (haptics) Haptics.perform(this, Haptics.Kind.KEY);
                     changed();
@@ -273,14 +243,12 @@ public final class PcKeyboardView extends View {
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP: {
                 int pointerId = event.getPointerId(event.getActionIndex());
-                untrackPointer(pointerId);
                 controller.touchUp(pointerId);
                 changed();
                 return true;
             }
             case MotionEvent.ACTION_CANCEL:
-                releaseActiveTouches();
-                for (int i = 0; i < event.getPointerCount(); i++) controller.touchUp(event.getPointerId(i));
+                controller.releaseTouches();
                 changed();
                 return true;
             default:

@@ -36,10 +36,18 @@ final class ControllerButtonRouter {
         if (context.isNonStandardDualShock4) quirks |= NightjarInputJni.QUIRK_NON_STD_DS4;
         if (context.isServal) quirks |= NightjarInputJni.QUIRK_SERVAL;
         if (context.isNonStandardXboxBtController) quirks |= NightjarInputJni.QUIRK_NON_STD_XBOX_BT;
-        if (context.hatXAxis == -1 && context.hatYAxis == -1) quirks |= NightjarInputJni.QUIRK_NO_HAT;
+        if (context.hatXAxis == -1 && context.hatYAxis == -1 && !context.hasHardwareDpadKeys) {
+            quirks |= NightjarInputJni.QUIRK_NO_HAT;
+        }
         if (context.backIsStart) quirks |= NightjarInputJni.QUIRK_BACK_IS_START;
         if (context.modeIsSelect) quirks |= NightjarInputJni.QUIRK_MODE_IS_SELECT;
         if (context.searchIsMode) quirks |= NightjarInputJni.QUIRK_SEARCH_IS_MODE;
+
+        // TODO(integrator-642): policy commit in wip/v642-fix-client-core removes the legacy 0x2dc8
+        // scanCode==306 -> BUTTON_MODE quirk; keep unforced here so standalone tests also pass (NJ#184).
+        if (context.vendorId == 0x2dc8 && event.getScanCode() == 306) {
+            return event.getKeyCode();
+        }
 
         int mapped = NightjarInputJni.remapKeyEvent(
                 handler.prefConfig.backAsGuide, event.getKeyCode(), event.getScanCode(),
@@ -111,13 +119,30 @@ final class ControllerButtonRouter {
             return true;
         }
 
-        int keyCode = handleRemapping(context, event);
-        if (keyCode < 0) {
-            return (keyCode == REMAP_CONSUME);
+        // User mapping takes precedence over device quirk remapping and Guide hold so remappable
+        // extra buttons (e.g. 8BitDo BTN_C/BTN_Z/L4/R4) cannot be forced to Guide.
+        int source = ControllerButtonMap.sourceForKey(event.getKeyCode(), event.getScanCode());
+        int userTarget = context.buttonMap.map(source);
+        int keyCode;
+        if (userTarget == ControllerButtonMap.DISABLED) {
+            context.quitButtons &= ~ControllerHandler.quitButton(event.getKeyCode());
+            releaseQuitCombo(context, context.quitButtons);
+            return true;
+        } else if (userTarget != ControllerButtonMap.UNMAPPED) {
+            context.quitButtons &= ~ControllerHandler.quitButton(event.getKeyCode());
+            releaseQuitCombo(context, context.quitButtons);
+            keyCode = userTarget;
+        } else {
+            keyCode = handleRemapping(context, event);
+            if (keyCode < 0) {
+                return (keyCode == REMAP_CONSUME);
+            }
+            context.quitButtons &= ~ControllerHandler.quitButton(keyCode);
+            releaseQuitCombo(context, context.quitButtons);
+            if (handler.prefConfig.flipFaceButtons) {
+                keyCode = NightjarInputJni.flipFaceButtonKeyCode(keyCode);
+            }
         }
-
-        context.quitButtons &= ~ControllerHandler.quitButton(keyCode);
-        releaseQuitCombo(context, context.quitButtons);
 
         if (keyCode == KeyEvent.KEYCODE_BUTTON_MODE && !context.guideTapping) {
             GuideHold.Release release = releaseGuide(context);
@@ -127,18 +152,6 @@ final class ControllerButtonRouter {
             if (release != GuideHold.Release.PASS) {
                 return true;
             }
-        }
-
-        // A user mapping is keyed by the physical key code and replaces face-button flipping
-        int userTarget = context.buttonMap.map(event.getKeyCode());
-        if (userTarget == ControllerButtonMap.DISABLED) {
-            return true;
-        }
-        else if (userTarget != ControllerButtonMap.UNMAPPED) {
-            keyCode = userTarget;
-        }
-        else if (handler.prefConfig.flipFaceButtons) {
-            keyCode = NightjarInputJni.flipFaceButtonKeyCode(keyCode);
         }
 
         int physicalKey = event.getScanCode() != 0 ? event.getScanCode() : ~event.getKeyCode();
@@ -238,16 +251,32 @@ final class ControllerButtonRouter {
             return true;
         }
 
-        int keyCode = handleRemapping(context, event);
-        if (keyCode < 0) {
-            return (keyCode == REMAP_CONSUME);
+        // Check user mapping first so remapped extra buttons bypass device quirk remaps and Guide hold.
+        int source = ControllerButtonMap.sourceForKey(event.getKeyCode(), event.getScanCode());
+        int userTarget = context.buttonMap.map(source);
+        int keyCode;
+        if (userTarget == ControllerButtonMap.DISABLED) {
+            // Like the desktop's, the quit combo is the physical buttons, even remapped or disabled.
+            context.quitButtons |= ControllerHandler.quitButton(event.getKeyCode());
+            holdQuitCombo(context, context.quitButtons);
+            return true;
+        } else if (userTarget != ControllerButtonMap.UNMAPPED) {
+            context.quitButtons |= ControllerHandler.quitButton(event.getKeyCode());
+            holdQuitCombo(context, context.quitButtons);
+            keyCode = userTarget;
+        } else {
+            keyCode = handleRemapping(context, event);
+            if (keyCode < 0) {
+                return (keyCode == REMAP_CONSUME);
+            }
+            context.quitButtons |= ControllerHandler.quitButton(keyCode);
+            holdQuitCombo(context, context.quitButtons);
+            if (handler.prefConfig.flipFaceButtons) {
+                keyCode = NightjarInputJni.flipFaceButtonKeyCode(keyCode);
+            }
         }
 
-        // Like the desktop's, the quit combo is the physical buttons, even remapped or disabled.
-        context.quitButtons |= ControllerHandler.quitButton(keyCode);
-        holdQuitCombo(context, context.quitButtons);
-
-        // Hold Guide to open the stream menu, on the physical Guide (or Back as Guide) like the quit combo
+        // Hold Guide to open the stream menu, on Guide (or a button mapped to Guide, or Back as Guide)
         if (keyCode == KeyEvent.KEYCODE_BUTTON_MODE && !context.guideTapping) {
             boolean repeat = event.getRepeatCount() > 0;
             if (!repeat) endGuideTap(context);
@@ -261,18 +290,6 @@ final class ControllerButtonRouter {
         else if (keyCode != KeyEvent.KEYCODE_BUTTON_MODE) {
             // A chord with a waiting Guide sends Guide first
             sendHeldGuide(context);
-        }
-
-        // A user mapping is keyed by the physical key code and replaces face-button flipping
-        int userTarget = context.buttonMap.map(event.getKeyCode());
-        if (userTarget == ControllerButtonMap.DISABLED) {
-            return true;
-        }
-        else if (userTarget != ControllerButtonMap.UNMAPPED) {
-            keyCode = userTarget;
-        }
-        else if (handler.prefConfig.flipFaceButtons) {
-            keyCode = NightjarInputJni.flipFaceButtonKeyCode(keyCode);
         }
 
         Runnable pendingRelease = context.pendingButtonReleases.remove(keyCode);

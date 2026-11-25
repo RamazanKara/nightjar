@@ -64,6 +64,7 @@ Tier: Main rows show when a section opens; More rows fold behind the section's l
 | Controller mouse mode<br>`checkbox_mouse_emulation` | More | On | On; Off | Leave on to toggle controller mouse mode by holding Start. |
 | Stick for scrolling<br>`analog_scrolling` | More | Right analog stick | Both sticks move the mouse; Right analog stick; Left analog stick | Choose which stick scrolls in controller mouse mode. The other moves the pointer; with None, both move it. Shown while Controller mouse mode is On. |
 | Precise controller mouse<br>`checkbox_mouse_emulation_fixed_step` | More | Off | On; Off | Enable for precise pointing in controller mouse mode: hold X while moving the stick to move a fixed step; Y doubles the step from 1 to 128 pixels, then wraps to 1. Shown while Controller mouse mode is On. |
+| Controller mouse sensitivity<br>`seekbar_mouse_emulation_sensitivity` | More | 100% | 25%–200%; step 5%; buttons 5% | Adjust how fast the sticks move the pointer in controller mouse mode; 100% is default sensitivity. Shown while Controller mouse mode is On. |
 | Controller touchpad as mouse<br>`checkbox_gamepad_touchpad_as_mouse` | More | Off | On; Off | Enable to always move the host pointer with the controller touchpad instead of forwarding native touchpad input. |
 
 #### Stream menu

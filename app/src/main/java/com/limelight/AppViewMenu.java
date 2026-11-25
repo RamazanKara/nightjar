@@ -125,7 +125,7 @@ final class AppViewMenu {
         sheet.setOnDismissListener(dialog -> {
             appMenu = null;
             view.suspendGridUpdates = false;
-            if (view.poller != null && view.inForeground) view.poller.pollNow();
+            if (view.inForeground) view.pollLibraryNow();
         });
         sheet.show();
     }
@@ -256,7 +256,7 @@ final class AppViewMenu {
         view.suspendGridUpdates = true;
         picker.setOnDismissListener(dialog -> {
             view.suspendGridUpdates = false;
-            if (view.poller != null && view.inForeground) view.poller.pollNow();
+            if (view.inForeground) view.pollLibraryNow();
         });
         picker.show();
     }
@@ -295,9 +295,7 @@ final class AppViewMenu {
                     ServerHelper.doQuit(view, view.computer, app.app, view.managerBinder, () -> {
                         // Trigger a poll immediately
                         view.suspendGridUpdates = false;
-                        if (view.poller != null) {
-                            view.poller.pollNow();
-                        }
+                        view.pollLibraryIfReady();
                     });
                 }, null);
                 return true;

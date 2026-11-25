@@ -188,7 +188,6 @@ public final class FileTransferController {
         for (FileRow row : rows) {
             Job job = jobs.get(row.id);
             if (job != null && !job.started && row.isFinished() && row.state != FileRow.State.DONE) {
-                job.opener.close();
                 if (!job.upload && !job.discarded) {
                     job.discarded = true;
                     worker.execute(job.discard);

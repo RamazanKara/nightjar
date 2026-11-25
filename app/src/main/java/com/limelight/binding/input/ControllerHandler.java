@@ -273,7 +273,8 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
     public synchronized int userMappedKey(KeyEvent event) {
         InputDeviceContext context = inputDeviceContexts.get(event.getDeviceId());
-        return context == null ? ControllerButtonMap.UNMAPPED : context.buttonMap.map(event.getKeyCode());
+        return context == null ? ControllerButtonMap.UNMAPPED :
+                context.buttonMap.mapEvent(event.getKeyCode(), event.getScanCode());
     }
 
     public boolean tryHandleTouchpadEvent(MotionEvent event) { return gamepad.tryHandleTouchpadEvent(event); }
@@ -468,10 +469,25 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         public int mouseEmulationLastInputMap;
         public boolean mouseEmulationFixedStepHeld;
         public int mouseEmulationStep = FixedStepMouse.MIN_STEP;
-        public final int mouseEmulationReportPeriod = 50;
-        final int[] mouseTickOut = new int[7];
+        public final int mouseEmulationReportPeriod = ControllerMouseTick.REPORT_PERIOD_MS;
+        final float[] mouseTickFloatOut = new float[6];
+        final MouseDeltaAccumulator mouseMoveAccumX = new MouseDeltaAccumulator();
+        final MouseDeltaAccumulator mouseMoveAccumY = new MouseDeltaAccumulator();
+        final MouseDeltaAccumulator mouseScrollVAccum = new MouseDeltaAccumulator();
+        final MouseDeltaAccumulator mouseScrollHAccum = new MouseDeltaAccumulator();
+        long mouseEmulationLastTickNs;
         final int[] mousePacketOut = new int[5];
         final Object mousePacketLock = new Object();
+
+        void resetMouseEmulationState() {
+            synchronized (mousePacketLock) {
+                mouseMoveAccumX.reset();
+                mouseMoveAccumY.reset();
+                mouseScrollVAccum.reset();
+                mouseScrollHAccum.reset();
+                mouseEmulationLastTickNs = 0L;
+            }
+        }
 
         public final Runnable mouseEmulationRunnable = new Runnable() {
             @Override public void run() { gamepad.runMouseEmulationTick(GenericControllerContext.this, this); }
@@ -481,6 +497,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
         public void destroy() {
             mouseEmulationActive = false;
+            resetMouseEmulationState();
             gamepad.releaseMouseButtons(this);
             mainThreadHandler.removeCallbacks(mouseEmulationRunnable);
             mainThreadHandler.removeCallbacks(guideHoldRunnable);
@@ -520,7 +537,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         public boolean isNonStandardDualShock4, usesLinuxGamepadStandardFaceButtons, isNonStandardXboxBtController;
         public boolean isServal, backIsStart, modeIsSelect, searchIsMode, ignoreBack, hasJoystickAxes, pendingExit, isDualShockStandaloneTouchpad;
         public int emulatingButtonFlags = 0;
-        public boolean hasSelect, hasMode, hasPaddles, hasShare, needsClickpadEmulation;
+        public boolean hasSelect, hasMode, hasPaddles, hasShare, needsClickpadEmulation, hasHardwareDpadKeys;
         public long lastLbUpTime = 0, lastRbUpTime = 0, startDownTime = 0;
         boolean destroyed;
 

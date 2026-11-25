@@ -257,6 +257,38 @@ public class SettingsBatchTest {
     }
 
     @Test
+    public void frameRatePickerShowsHelpButtonAndOpensHelpDialog() {
+        try (ActivityController<StreamSettings> controller = Robolectric.buildActivity(StreamSettings.class).setup()) {
+            FpsPreference fps = (FpsPreference) section(controller, "video").findPreference("list_fps");
+            if (fps.getDialogMessage() == null) {
+                fps.setDialogMessage(RuntimeEnvironment.getApplication().getString(com.limelight.R.string.summary_fps_list));
+            }
+            fps.showDialog(null);
+            org.robolectric.shadows.ShadowLooper.idleMainLooper();
+            androidx.appcompat.app.AlertDialog picker =
+                    (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+            android.widget.Button positive = picker.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE);
+            android.view.ViewGroup bar = (android.view.ViewGroup) positive.getParent();
+            android.widget.Button helpButton = null;
+            String helpText = RuntimeEnvironment.getApplication().getString(com.limelight.R.string.help);
+            for (int i = 0; i < bar.getChildCount(); i++) {
+                android.view.View child = bar.getChildAt(i);
+                if (child instanceof android.widget.Button && helpText.contentEquals(((android.widget.Button) child).getText())) {
+                    helpButton = (android.widget.Button) child;
+                    break;
+                }
+            }
+            assertNotNull("FpsPreference dialog button bar must expose Help button", helpButton);
+            assertTrue(helpButton.performClick());
+            org.robolectric.shadows.ShadowLooper.idleMainLooper();
+            androidx.appcompat.app.AlertDialog helpDialog =
+                    (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+            assertNotSame(picker, helpDialog);
+            assertTrue(helpDialog.isShowing());
+        }
+    }
+
+    @Test
     public void customFrameRateDialogValidatesPersistsAndRestoresEntryOnReopen() {
         try (ActivityController<StreamSettings> controller = Robolectric.buildActivity(StreamSettings.class).setup()) {
             FpsPreference fps = (FpsPreference) section(controller, "video").findPreference("list_fps");

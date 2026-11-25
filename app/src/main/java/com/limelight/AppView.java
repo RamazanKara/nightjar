@@ -35,7 +35,9 @@ import android.content.ServiceConnection;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.view.View;
 import android.widget.AbsListView;
 import android.widget.Toast;
@@ -53,6 +55,21 @@ public class AppView extends NightjarActivity implements AdapterFragmentCallback
 
     ComputerDetails computer;
     ComputerManagerService.ApplistPoller poller;
+    private final Object pollerLock = new Object();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private static final long REFRESH_TIMEOUT_MS = 15_000L;
+    private final Runnable refreshTimeout = this::onRefreshTimeout;
+
+    private void onRefreshTimeout() {
+        if (loadingApps && inForeground && !isFinishing() && !isDestroyed()) {
+            showAppListStatus(computer != null && computer.state == ComputerDetails.State.OFFLINE
+                    ? R.string.library_offline : R.string.applist_load_failed);
+        }
+    }
+
+    void pollLibraryNow() {
+        pollLibraryIfReady();
+    }
     String searchQuery = "";
     boolean loadingApps = true;
     int libraryStatus;
@@ -153,8 +170,7 @@ public class AppView extends NightjarActivity implements AdapterFragmentCallback
         public void onServiceDisconnected(ComponentName className) {
             managerBinder = null;
             runningPolling = false;
-            if (poller != null) poller.stop();
-            poller = null;
+            stopAndClearPoller();
             showAppListStatus(R.string.applist_load_failed);
         }
     };
@@ -177,6 +193,25 @@ public class AppView extends NightjarActivity implements AdapterFragmentCallback
             appGridAdapter.updateLayoutWithPreferences(this, PreferenceConfiguration.readPreferences(this));
 
             UiHelper.notifyNewRootView(this);
+        }
+    }
+
+    private void stopAndClearPoller() {
+        ComputerManagerService.ApplistPoller oldPoller;
+        synchronized (pollerLock) {
+            oldPoller = poller;
+            poller = null;
+        }
+        if (oldPoller != null) oldPoller.stop();
+    }
+
+    void pollLibraryIfReady() {
+        ComputerManagerService.ApplistPoller current;
+        synchronized (pollerLock) {
+            current = poller;
+        }
+        if (current != null && !current.needsRestart()) {
+            current.pollNow();
         }
     }
 
@@ -231,11 +266,17 @@ public class AppView extends NightjarActivity implements AdapterFragmentCallback
                 if (appGridAdapter != null) {
                     appGridAdapter.updateComputer(updated);
                 }
-                if (runningPolling && managerBinder != null && details.state == ComputerDetails.State.ONLINE
-                        && (poller == null || endpointChanged || becameOnline || poller.needsRestart())) {
-                    if (poller != null) poller.stop();
-                    poller = managerBinder.createAppListPoller(updated);
-                    poller.start();
+                ComputerManagerService.ComputerManagerBinder binder = managerBinder;
+                if (runningPolling && binder != null && details.state == ComputerDetails.State.ONLINE) {
+                    ComputerManagerService.ApplistPoller oldPoller = null;
+                    synchronized (pollerLock) {
+                        if (runningPolling && (poller == null || endpointChanged || becameOnline || poller.needsRestart())) {
+                            oldPoller = poller;
+                            poller = binder.createAppListPoller(updated);
+                            poller.start();
+                        }
+                    }
+                    if (oldPoller != null) oldPoller.stop();
                 }
 
                 if (details.state == ComputerDetails.State.OFFLINE) {
@@ -277,6 +318,11 @@ public class AppView extends NightjarActivity implements AdapterFragmentCallback
                     // UUID changes and hidden/search-filtered apps also need their running state updated.
                     hostRunningGame = details.hasRunningGame();
                     updateUiWithServerinfo(details);
+                    if (loadingApps && rawAppList != null) {
+                        showAppListStatus(!details.hasPermission(ComputerDetails.PERMISSION_LIST)
+                                ? R.string.applist_permission_required
+                                : lastAppListEmpty ? R.string.library_no_apps : 0);
+                    }
 
                     return;
                 }
@@ -295,16 +341,26 @@ public class AppView extends NightjarActivity implements AdapterFragmentCallback
             }
         });
 
-        if (poller == null) {
-            poller = managerBinder.createAppListPoller(computer);
+        ComputerManagerService.ApplistPoller created;
+        synchronized (pollerLock) {
+            if (!runningPolling || managerBinder == null) return;
+            if (poller == null) {
+                poller = managerBinder.createAppListPoller(computer);
+            }
+            created = poller;
         }
-        poller.start();
+        if (created != null) created.start();
     }
 
     private void stopComputerUpdates() {
         runningPolling = false;
-        if (poller != null) {
-            poller.stop();
+        mainHandler.removeCallbacks(refreshTimeout);
+        ComputerManagerService.ApplistPoller current;
+        synchronized (pollerLock) {
+            current = poller;
+        }
+        if (current != null) {
+            current.stop();
         }
 
         if (managerBinder != null) {
@@ -405,6 +461,7 @@ public class AppView extends NightjarActivity implements AdapterFragmentCallback
     }
 
     void showAppListStatus(int message) {
+        mainHandler.removeCallbacks(refreshTimeout);
         runOnUiThread(() -> {
             if (!inForeground || isFinishing() || isDestroyed()) return;
             loadingApps = false;
@@ -459,12 +516,32 @@ public class AppView extends NightjarActivity implements AdapterFragmentCallback
     }
 
     void refreshLibrary() {
-        if (poller == null) {
+        if (computer == null || computer.state == ComputerDetails.State.OFFLINE) {
+            showAppListStatus(R.string.library_offline);
+            return;
+        }
+        if (!computer.hasPermission(ComputerDetails.PERMISSION_LIST)) {
+            showAppListStatus(R.string.applist_permission_required);
+            return;
+        }
+        ComputerManagerService.ApplistPoller current;
+        synchronized (pollerLock) {
+            ComputerManagerService.ComputerManagerBinder binder = managerBinder;
+            if (binder != null && runningPolling && (poller == null || poller.needsRestart())) {
+                if (poller != null) poller.stop();
+                poller = binder.createAppListPoller(computer);
+                poller.start();
+            }
+            current = poller;
+        }
+        if (current == null || current.needsRestart()) {
             showAppListStatus(R.string.applist_load_failed);
             return;
         }
         loadAppsBlocking();
-        poller.pollNow();
+        mainHandler.removeCallbacks(refreshTimeout);
+        mainHandler.postDelayed(refreshTimeout, REFRESH_TIMEOUT_MS);
+        current.pollNow();
     }
 
     void setShowHiddenApps(boolean show) {
@@ -486,6 +563,8 @@ public class AppView extends NightjarActivity implements AdapterFragmentCallback
     protected void onDestroy() {
         super.onDestroy();
 
+        mainHandler.removeCallbacks(refreshTimeout);
+        stopAndClearPoller();
         Dialog.closeDialogs(AppView.this);
         viewChrome.onDestroy();
 

@@ -603,6 +603,12 @@ type = "String"
 value = "checkbox_mouse_emulation_fixed_step"
 
 [[android_const]]
+name = "MOUSE_EMULATION_SENSITIVITY_PREF_STRING"
+vis = "package"
+type = "String"
+value = "seekbar_mouse_emulation_sensitivity"
+
+[[android_const]]
 name = "BACK_AS_META_PREF_STRING"
 vis = "package"
 type = "String"
@@ -1363,6 +1369,12 @@ name = "DEFAULT_MOUSE_EMULATION"
 vis = "package"
 type = "boolean"
 value = true
+
+[[android_const]]
+name = "DEFAULT_MOUSE_EMULATION_SENSITIVITY"
+vis = "package"
+type = "int"
+value = 100
 
 [[android_const]]
 name = "DEFAULT_ANALOG_STICK_FOR_SCROLLING"
@@ -2176,6 +2188,16 @@ scope = "global"
 desktop_key = "mouse_fixed_step"
 shown_while = { parent = "checkbox_mouse_emulation", on = true }
 advice = "Enable for precise pointing in controller mouse mode: hold X while moving the stick to move a fixed step; Y doubles the step from 1 to 128 pixels, then wraps to 1."
+
+[[android_setting]]
+key = "seekbar_mouse_emulation_sensitivity"
+category = "category_gamepad_settings"
+tier = "more"
+kind = "int"
+xml_default = "100"
+scope = "global"
+shown_while = { parent = "checkbox_mouse_emulation", on = true }
+advice = "Adjust how fast the sticks move the pointer in controller mouse mode; 100% is default sensitivity."
 
 [[android_setting]]
 key = "checkbox_gamepad_touchpad_as_mouse"

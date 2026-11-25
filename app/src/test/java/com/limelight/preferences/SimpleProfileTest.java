@@ -477,6 +477,28 @@ public class SimpleProfileTest {
         }
     }
 
+    @Test
+    public void clickingRecommendedScreenRowOpensVideoSectionNotDisplay() {
+        prefs.edit().putInt(PreferenceConfiguration.PREFS_VERSION_PREF_STRING,
+                PreferenceConfiguration.FOLLOW_SCREEN_VERSION).commit();
+        settingsController = org.robolectric.Robolectric.buildActivity(StreamSettings.class).setup();
+        StreamSettings screen = settingsController.get();
+        StreamSettings.SettingsFragment simple = SettingsStructureTest.open(screen, "simple");
+        android.preference.Preference screenRow = simple.findPreference("simple_screen");
+        assertNotNull(screenRow);
+        assertTrue(screenRow.getOnPreferenceClickListener().onPreferenceClick(screenRow));
+        settleConsole(screen);
+
+        StreamSettings.SettingsFragment active = (StreamSettings.SettingsFragment)
+                screen.getFragmentManager().findFragmentById(com.limelight.R.id.stream_settings);
+        assertNotNull("NJ#147: active section fragment switched after clicking simple_screen", active);
+        assertEquals("video", active.getArguments().getString(StreamSettingsFragment.ARG_SECTION));
+        android.preference.PreferenceScreen shown = active.getPreferenceScreen();
+        assertNotNull("NJ#147: video section contains list_resolution", shown.findPreference("list_resolution"));
+        assertNotNull("NJ#147: video section contains list_fps", shown.findPreference("list_fps"));
+        assertNull("NJ#147: must not land in display section", shown.findPreference("checkbox_vrr"));
+    }
+
     private static void settleConsole(StreamSettings screen) {
         org.robolectric.shadows.ShadowLooper.idleMainLooper();
         screen.getFragmentManager().executePendingTransactions();

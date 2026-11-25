@@ -78,6 +78,7 @@ public class SettingsCatalogGen {
     static final String BIND_ALL_USB_STRING = "checkbox_usb_bind_all";
     static final String MOUSE_EMULATION_STRING = "checkbox_mouse_emulation";
     static final String MOUSE_EMULATION_FIXED_STEP_STRING = "checkbox_mouse_emulation_fixed_step";
+    static final String MOUSE_EMULATION_SENSITIVITY_PREF_STRING = "seekbar_mouse_emulation_sensitivity";
     static final String BACK_AS_META_PREF_STRING = "checkbox_back_as_meta";
     static final String BACK_OPENS_MENU_PREF_STRING = "checkbox_back_opens_menu";
     static final String GAMEPAD_QUIT_COMBO_PREF_STRING = "list_gamepad_quit_combo";
@@ -205,6 +206,7 @@ public class SettingsCatalogGen {
     static final boolean DEFAULT_ENABLE_PERF_OVERLAY = false;
     static final boolean DEFAULT_BIND_ALL_USB = false;
     static final boolean DEFAULT_MOUSE_EMULATION = true;
+    static final int DEFAULT_MOUSE_EMULATION_SENSITIVITY = 100;
     static final String DEFAULT_ANALOG_STICK_FOR_SCROLLING = "right";
     static final boolean DEFAULT_MOUSE_NAV_BUTTONS = false;
     static final boolean DEFAULT_INPUT_ONLY_ANY_HOST = false;

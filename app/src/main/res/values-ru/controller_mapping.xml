@@ -24,4 +24,5 @@
     <string name="controller_connect_as_automatic">Автоматически</string>
     <string name="controller_connect_as_xbox_summary">Xbox (без датчиков движения и тачпада)</string>
     <string name="pc_tap_to_pair">%1$s\nНажмите для сопряжения</string>
+    <string name="controller_button_scan">Дополнительная кнопка %1$s</string>
 </resources>

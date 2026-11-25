@@ -132,6 +132,7 @@ public class PreferenceConfiguration extends SettingsCatalogGen {
     public boolean bindAllUsb;
     public boolean mouseEmulation;
     public boolean mouseEmulationFixedStep;
+    public int mouseEmulationSensitivity = DEFAULT_MOUSE_EMULATION_SENSITIVITY;
     public boolean disableRumble;
     /** The rumble response curve ({@code list_rumble_feel}): "standard", "strong" or "subtle". */
     public String rumbleFeel = "standard";

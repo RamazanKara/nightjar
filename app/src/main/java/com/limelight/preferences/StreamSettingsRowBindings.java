@@ -343,7 +343,7 @@ final class StreamSettingsRowBindings {
         Preference simpleScreen = fragment.findPreference("simple_screen");
         if (simpleScreen != null) {
             simpleScreen.setOnPreferenceClickListener(preference -> {
-                ((StreamSettings) fragment.getActivity()).showSection("display");
+                ((StreamSettings) fragment.getActivity()).showSection("video");
                 return true;
             });
         }

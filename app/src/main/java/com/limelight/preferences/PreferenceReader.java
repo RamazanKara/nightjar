@@ -292,6 +292,8 @@ final class PreferenceReader {
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);
         config.mouseEmulation = prefs.getBoolean(MOUSE_EMULATION_STRING, DEFAULT_MOUSE_EMULATION);
         config.mouseEmulationFixedStep = prefs.getBoolean(MOUSE_EMULATION_FIXED_STEP_STRING, false);
+        config.mouseEmulationSensitivity = Math.max(25, Math.min(200,
+                prefs.getInt(MOUSE_EMULATION_SENSITIVITY_PREF_STRING, DEFAULT_MOUSE_EMULATION_SENSITIVITY)));
         config.disableRumble = FoldedChoice.VIBRATION.isOff(prefs);
         config.rumbleFeel = FoldedChoice.VIBRATION.valueWhileOn(prefs);
         config.backAsMeta = prefs.getBoolean(BACK_AS_META_PREF_STRING, false);

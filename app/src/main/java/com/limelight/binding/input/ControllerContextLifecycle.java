@@ -389,10 +389,20 @@ final class ControllerContextLifecycle {
         int oldMouseLastInputMap;
         boolean oldMouseFixedStepHeld;
         int oldMouseStep;
+        long oldMouseLastTickNs;
+        final MouseDeltaAccumulator oldMoveX = new MouseDeltaAccumulator();
+        final MouseDeltaAccumulator oldMoveY = new MouseDeltaAccumulator();
+        final MouseDeltaAccumulator oldScrollV = new MouseDeltaAccumulator();
+        final MouseDeltaAccumulator oldScrollH = new MouseDeltaAccumulator();
         synchronized (oldContext.mousePacketLock) {
             oldMouseLastInputMap = oldContext.mouseEmulationLastInputMap;
             oldMouseFixedStepHeld = oldContext.mouseEmulationFixedStepHeld;
             oldMouseStep = oldContext.mouseEmulationStep;
+            oldMouseLastTickNs = oldContext.mouseEmulationLastTickNs;
+            oldMoveX.copyFrom(oldContext.mouseMoveAccumX);
+            oldMoveY.copyFrom(oldContext.mouseMoveAccumY);
+            oldScrollV.copyFrom(oldContext.mouseScrollVAccum);
+            oldScrollH.copyFrom(oldContext.mouseScrollHAccum);
             oldContext.mouseEmulationLastInputMap = 0;
             oldContext.mouseEmulationFixedStepHeld = false;
         }
@@ -400,6 +410,11 @@ final class ControllerContextLifecycle {
             target.mouseEmulationLastInputMap = oldMouseLastInputMap;
             target.mouseEmulationFixedStepHeld = oldMouseFixedStepHeld;
             target.mouseEmulationStep = oldMouseStep;
+            target.mouseEmulationLastTickNs = oldMouseLastTickNs;
+            target.mouseMoveAccumX.copyFrom(oldMoveX);
+            target.mouseMoveAccumY.copyFrom(oldMoveY);
+            target.mouseScrollVAccum.copyFrom(oldScrollV);
+            target.mouseScrollHAccum.copyFrom(oldScrollH);
         }
         synchronized (oldContext) {
             // Take ownership of the sensor and light sessions

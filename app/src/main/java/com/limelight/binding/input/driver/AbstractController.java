@@ -95,20 +95,23 @@ public abstract class AbstractController {
     }
 
     /** Waits boundedly on a background thread for any queued USB stop/release work on {@code usbDeviceName}. */
-    static void awaitUsbWorker(String usbDeviceName, long timeoutMs) {
-        if (usbDeviceName == null) return;
+    static boolean awaitUsbWorker(String usbDeviceName, long timeoutMs) {
+        if (usbDeviceName == null) return true;
         ThreadPoolExecutor worker;
         synchronized (AbstractController.class) {
             worker = usbWorkers.get(usbDeviceName);
         }
-        if (worker == null) return;
+        if (worker == null) return true;
         try {
             worker.submit(() -> { }).get(timeoutMs, TimeUnit.MILLISECONDS);
+            return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return false;
         } catch (java.util.concurrent.ExecutionException
                 | java.util.concurrent.TimeoutException
-                | java.util.concurrent.RejectedExecutionException ignored) {
+                | java.util.concurrent.RejectedExecutionException e) {
+            return false;
         }
     }
 

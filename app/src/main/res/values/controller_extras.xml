@@ -56,4 +56,6 @@
     <string name="title_usb_switch_pro">USB Switch Pro driver</string>
     <string name="summary_usb_switch_pro">Nightjar reads a wired Switch Pro Controller itself, so gyro, rumble, Home and Capture work. Android asks for USB access in a stream; Bluetooth controllers and Joy-Con stay on Android’s input.</string>
     <string name="usb_switch_pro_denied">No USB access; the Switch Pro Controller stays on Android’s input.\nReconnect the cable to retry.</string>
+    <string name="title_seekbar_mouse_emulation_sensitivity">Controller mouse sensitivity</string>
+    <string name="summary_seekbar_mouse_emulation_sensitivity">Adjust how fast the sticks move the pointer in controller mouse mode. Lower makes fine aiming easier.</string>
 </resources>

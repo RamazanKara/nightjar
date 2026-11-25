@@ -56,4 +56,6 @@
     <string name="title_usb_switch_pro">Driver Switch Pro qua USB</string>
     <string name="summary_usb_switch_pro">Nightjar tự đọc Switch Pro Controller có dây, nên con quay hồi chuyển, rung, Home và Capture đều hoạt động. Android hỏi quyền truy cập USB khi stream; Bluetooth và Joy-Con vẫn dùng đầu vào của Android.</string>
     <string name="usb_switch_pro_denied">Không có quyền truy cập USB; Switch Pro Controller vẫn dùng đầu vào của Android.\nHãy cắm lại cáp để thử lại.</string>
+    <string name="title_seekbar_mouse_emulation_sensitivity">Độ nhạy chuột tay cầm</string>
+    <string name="summary_seekbar_mouse_emulation_sensitivity">Điều chỉnh tốc độ cần điều khiển di chuyển con trỏ ở chế độ chuột tay cầm. Giá trị thấp hơn giúp ngắm chính xác dễ hơn.</string>
 </resources>

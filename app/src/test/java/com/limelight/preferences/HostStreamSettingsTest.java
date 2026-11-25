@@ -139,4 +139,47 @@ public class HostStreamSettingsTest {
             controller.pause().stop().destroy();
         }
     }
+
+    @Test
+    public void capabilityRebuildPreservesListScrollPositionAndFocusedPreference() {
+        HostCapabilityCache.save(app, "scroll-pc", TestHosts.fixture("sunshine-serverinfo.xml"));
+        Intent intent = new Intent(app, HostStreamSettings.class)
+                .putExtra("host_uuid", "scroll-pc")
+                .putExtra("host_name", "Desk");
+        ActivityController<HostStreamSettings> controller = Robolectric.buildActivity(HostStreamSettings.class, intent).setup();
+        try {
+            HostStreamSettings screen = controller.get();
+            HostStreamSettings.SettingsFragment fragment = (HostStreamSettings.SettingsFragment)
+                    screen.getFragmentManager().findFragmentById(R.id.host_profile_settings);
+            android.widget.ListView listView = fragment.getView().findViewById(android.R.id.list);
+            listView.measure(android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(600, android.view.View.MeasureSpec.EXACTLY));
+            listView.layout(0, 0, 1080, 600);
+            int targetPos = Math.max(1, listView.getCount() - 2);
+            listView.setSelectionFromTop(targetPos, -12);
+            listView.requestFocus();
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            int firstBefore = listView.getFirstVisiblePosition();
+            assertTrue("scrolled past row 0 before rebuild", firstBefore > 0);
+
+            com.limelight.nvstream.http.ComputerDetails updated = new com.limelight.nvstream.http.ComputerDetails();
+            updated.uuid = "scroll-pc";
+            updated.name = "Desk";
+            updated.state = com.limelight.nvstream.http.ComputerDetails.State.ONLINE;
+            updated.activeAddress = new com.limelight.nvstream.http.ComputerDetails.AddressTuple("10.0.0.5", 47989);
+            updated.caps = TestHosts.caps(TestHosts.serverInfo("rubylight-serverinfo.xml")
+                    .replace("</root>", "<NvidiaEnhancements>3</NvidiaEnhancements><DisplayScaleVersion>1</DisplayScaleVersion></root>"));
+            screen.showComputer(updated);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+
+            android.widget.ListView rebuiltList = fragment.getView().findViewById(android.R.id.list);
+            assertTrue("scroll position kept near prior row across capability rebuild: was " + firstBefore
+                    + ", now " + rebuiltList.getFirstVisiblePosition(),
+                    rebuiltList.getFirstVisiblePosition() >= firstBefore - 1);
+            assertTrue("list focus kept after rebuild", rebuiltList.hasFocus());
+        } finally {
+            HostCapabilityCache.forget(app, "scroll-pc");
+            controller.pause().stop().destroy();
+        }
+    }
 }

@@ -282,8 +282,17 @@ public class ControllerMappingActivity extends NightjarActivity {
     }
 
     private static boolean isControllerEvent(KeyEvent event) {
-        return (event.getSource() & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
-                (event.getSource() & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
+        int source = event.getSource();
+        if ((source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+                (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) {
+            return true;
+        }
+        InputDevice dev = event.getDevice();
+        return dev != null &&
+                ((dev.getSources() & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+                        (dev.getSources() & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) &&
+                ControllerButtonMap.isScanCodeSource(
+                        ControllerButtonMap.sourceForKey(event.getKeyCode(), event.getScanCode()));
     }
 
     @Override
@@ -295,7 +304,8 @@ public class ControllerMappingActivity extends NightjarActivity {
             }
             return true;
         }
-        if (!capturing || !isControllerEvent(event) || !ControllerButtonMap.isRemappableSource(event.getKeyCode())) {
+        int source = ControllerButtonMap.sourceForKey(event.getKeyCode(), event.getScanCode());
+        if (!capturing || !isControllerEvent(event) || !ControllerButtonMap.isRemappableSource(source)) {
             return super.dispatchKeyEvent(event);
         }
         // Act on release so the press cannot leak into the dialog that opens next
@@ -309,7 +319,7 @@ public class ControllerMappingActivity extends NightjarActivity {
                 select(0, 0, null);
             }
             refresh();
-            chooseTarget(event.getKeyCode());
+            chooseTarget(source);
         }
         return true;
     }
@@ -374,6 +384,18 @@ public class ControllerMappingActivity extends NightjarActivity {
             default:
                 if (keyCode >= KeyEvent.KEYCODE_BUTTON_1 && keyCode <= KeyEvent.KEYCODE_BUTTON_16) {
                     return getString(R.string.controller_button_number, keyCode - KeyEvent.KEYCODE_BUTTON_1 + 1);
+                }
+                int scanCode = ControllerButtonMap.scanCodeOf(keyCode);
+                if (scanCode != 0) {
+                    switch (scanCode) {
+                        case 306: return "C";
+                        case 309: return "Z";
+                        case 0x2c0: return "L4";
+                        case 0x2c1: return "R4";
+                        default:
+                            return getString(R.string.controller_button_scan,
+                                    String.format(java.util.Locale.ROOT, "0x%x", scanCode));
+                    }
                 }
                 return KeyEvent.keyCodeToString(keyCode);
         }

@@ -285,6 +285,7 @@ public class SettingsKeysTest {
         reads.put("checkbox_mouse_emulation", new Read(true, false, c -> c.mouseEmulation));
         reads.put("analog_scrolling", new Read("right", "left", c -> c.analogStickForScrolling));
         reads.put("checkbox_mouse_emulation_fixed_step", new Read(false, true, c -> c.mouseEmulationFixedStep));
+        reads.put("seekbar_mouse_emulation_sensitivity", new Read(100, 150, c -> c.mouseEmulationSensitivity));
         reads.put("checkbox_back_as_meta", new Read(false, true, c -> c.backAsMeta));
         reads.put("checkbox_back_opens_menu", new Read(false, true, c -> c.backOpensMenu));
         reads.put("list_rumble_feel", new Read("standard", "strong", c -> c.disableRumble ? "off" : c.rumbleFeel));
