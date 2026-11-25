@@ -97,6 +97,7 @@ public final class StreamMenu {
         /** Stretching can change live: local MediaCodec video without an upscaler. */
         public boolean scalingAvailable;
         public boolean zoomEnabled;
+        public boolean zoomed;
         public boolean pictureInPicture;
         public boolean externalDisplays;
         /** The host can change resolution and frame rate in place, which automatic quality needs. */

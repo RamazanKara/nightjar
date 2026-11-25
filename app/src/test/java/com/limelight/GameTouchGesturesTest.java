@@ -189,6 +189,56 @@ public class GameTouchGesturesTest {
     }
 
     @Test
+    public void passivePinchZoomWorksAlongsideTwoFingerScrollAndTransformsDirectTouch() {
+        RecordingConnection connection = new RecordingConnection();
+        Game game = game(connection);
+        PreferenceConfiguration config = touchConfig(game, TouchMode.TRACKPAD);
+        FrameLayout container = gestureContainer(game);
+        com.limelight.ui.StreamView stream = ReflectionHelpers.getField(game, "streamView");
+        com.limelight.ui.DesktopGestures desktop = new com.limelight.ui.DesktopGestures(
+                game, stream, game.touchInput::cancelHostTouchInput, game.touchInput::clickRightMouseButton);
+        desktop.viewport().resize(800, 400);
+        ReflectionHelpers.setField(game, "desktopGestures", desktop);
+        assertFalse(desktop.enabled());
+
+        // Parallel 2-finger drag at 1.0x passes through to trackpad scroll.
+        dispatch(container, MotionEvent.ACTION_DOWN, 0, new int[] {0}, new float[] {200, 150});
+        dispatch(container, MotionEvent.ACTION_POINTER_DOWN, 1, new int[] {0, 1},
+                new float[] {200, 150}, new float[] {400, 150});
+        dispatch(container, MotionEvent.ACTION_MOVE, 0, new int[] {0, 1},
+                new float[] {200, 260}, new float[] {400, 260});
+        dispatch(container, MotionEvent.ACTION_POINTER_UP, 1, new int[] {0, 1},
+                new float[] {200, 260}, new float[] {400, 260});
+        dispatch(container, MotionEvent.ACTION_UP, 0, new int[] {0}, new float[] {200, 260});
+        assertFalse("expected scroll events at 1.0x", connection.scrolls.isEmpty());
+        assertEquals(1.0f, desktop.viewport().scale(), 0f);
+        int scrollCountBeforePinch = connection.scrolls.size();
+
+        // Pinching out starts passive zoom without extra scrolls.
+        dispatch(container, MotionEvent.ACTION_DOWN, 0, new int[] {0}, new float[] {300, 200});
+        dispatch(container, MotionEvent.ACTION_POINTER_DOWN, 1, new int[] {0, 1},
+                new float[] {300, 200}, new float[] {500, 200});
+        dispatch(container, MotionEvent.ACTION_MOVE, 0, new int[] {0, 1},
+                new float[] {200, 200}, new float[] {600, 200});
+        dispatch(container, MotionEvent.ACTION_MOVE, 0, new int[] {0, 1},
+                new float[] {100, 200}, new float[] {700, 200});
+        dispatch(container, MotionEvent.ACTION_POINTER_UP, 1, new int[] {0, 1},
+                new float[] {100, 200}, new float[] {700, 200});
+        dispatch(container, MotionEvent.ACTION_UP, 0, new int[] {0}, new float[] {100, 200});
+        assertTrue(desktop.viewport().scale() > 1.0f);
+        assertEquals(scrollCountBeforePinch, connection.scrolls.size());
+
+        // Single-finger Direct touch transforms through zoomInverse even though Zoom toggle is off.
+        config.touchscreenTrackpad = false;
+        config.touchMode = TouchMode.DIRECT;
+        ReflectionHelpers.callInstanceMethod(game.touchInput, "initializeTouchContexts");
+        dispatch(container, MotionEvent.ACTION_DOWN, 0, new int[] {0}, new float[] {400, 200});
+        dispatch(container, MotionEvent.ACTION_UP, 0, new int[] {0}, new float[] {400, 200});
+        assertFalse(connection.positions.isEmpty());
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(100, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
     public void desktopTapWobbleDoesNotPanAndClickRespectsModeAreaAndInputCapture() {
         for (String policy : new String[] {"allowed", "off", "native", "direct", "area", "ungrabbed"}) {
             RecordingConnection connection = new RecordingConnection();

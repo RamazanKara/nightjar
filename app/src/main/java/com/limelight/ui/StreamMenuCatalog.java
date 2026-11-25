@@ -116,7 +116,7 @@ final class StreamMenuCatalog {
             if (o.localOutput) {
                 entries.add(entry(Section.DISPLAY, Item.ZOOM, o.zoomEnabled ?
                         R.string.desktop_zoom_disable : R.string.desktop_zoom_enable, R.drawable.ic_zoom_in, o.zoomEnabled));
-                if (o.zoomEnabled) {
+                if (o.zoomEnabled || o.zoomed) {
                     entries.add(action(Section.DISPLAY, Item.ZOOM_RESET, R.string.desktop_zoom_reset, R.drawable.ic_zoom_out));
                 }
             }

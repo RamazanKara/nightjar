@@ -222,6 +222,7 @@ final class GameMenuActions {
         options.keyboardKeysShown = game.keyboardInput.isKeyboardOverlayVisible();
         options.scalingAvailable = game.videoOutput.canScaleLive();
         options.zoomEnabled = game.desktopGestures != null && game.desktopGestures.enabled();
+        options.zoomed = game.desktopGestures != null && game.desktopGestures.viewport().scale() > 1.01f;
         options.pictureInPicture = game.videoOutput.canEnterPictureInPicture();
         options.externalDisplays = game.videoOutput.hasPresentationDisplays();
         options.automaticQuality = game.adaptation.showsAdaptiveQuality();

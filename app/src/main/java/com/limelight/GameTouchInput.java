@@ -350,7 +350,7 @@ final class GameTouchInput {
         game.keyboardInput.noteStreamPress(view, event);
         if (game.gameTouchControls != null && game.gameTouchControls.isEditing() &&
                 (event.getSource() & InputDevice.SOURCE_CLASS_POINTER) != 0) return true;
-        if (game.desktopGestures != null && game.desktopGestures.enabled() &&
+        if (game.desktopGestures != null &&
                 game.desktopGestures.viewport().scale() != 1 && event.getPointerCount() > 0 &&
                 (event.getSource() & InputDevice.SOURCE_CLASS_POINTER) != 0 &&
                 (!game.prefConfig.touchscreenTrackpad || event.getToolType(0) != MotionEvent.TOOL_TYPE_FINGER)) {
@@ -438,14 +438,16 @@ final class GameTouchInput {
     boolean onTouch(View view, MotionEvent event) {
         noteTouchArrivals(event);
         game.keyboardInput.noteStreamPress(view, event);
-        if (game.desktopGestures != null && game.desktopGestures.enabled() && game.foreground && game.connected && game.streamMenu == null) {
+        if (game.desktopGestures != null && game.foreground && game.connected && game.streamMenu == null
+                && (game.desktopGestures.enabled() || (!game.nativeTouchEnabled && touchMode() != TouchMode.OFF))) {
             MotionEvent relative = MotionEvent.obtain(event);
             relative.offsetLocation(GameNativeTouchSender.getStreamViewOffsetX(game, view),
                     GameNativeTouchSender.getStreamViewOffsetY(game, view));
             boolean handled;
             try {
-                handled = game.desktopGestures.onTouch(relative, game.grabbedInput &&
-                        TouchMode.isRelative(touchMode()) && fingerTouch.isInTrackpadArea(view, event));
+                boolean allowRightClick = game.grabbedInput &&
+                        TouchMode.isRelative(touchMode()) && fingerTouch.isInTrackpadArea(view, event);
+                handled = game.desktopGestures.onTouch(relative, allowRightClick, !game.desktopGestures.enabled());
             }
             finally { relative.recycle(); }
             if (handled) {
