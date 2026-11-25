@@ -17,10 +17,21 @@ pub(super) fn read_response_with_headers<R: Read + ?Sized>(stream: &mut R, body_
         buffer: Vec::new(),
         eof: false,
     };
-    let head = read_head(&mut reader)?;
+    let head = read_final_head(&mut reader)?;
     on_headers(head.status, &head.headers)?;
     let body = read_body(&mut reader, &head, body_limit)?;
     Ok(head.into_response(body))
+}
+
+/// Reads the next non-informational (`!(100..=199)`) HTTP response head, discarding any interim
+/// `100 Continue` or `1xx` status lines sent ahead of the final reply.
+pub(crate) fn read_final_head<R: Read + ?Sized>(reader: &mut Reader<'_, R>) -> Result<Head, Error> {
+    loop {
+        let head = read_head(reader)?;
+        if !(100..=199).contains(&head.status) {
+            return Ok(head);
+        }
+    }
 }
 
 /// A response's status line and header fields.

@@ -3,8 +3,11 @@
 
 use super::poll::note_sent;
 use super::{InputPacket, InputQueue, Pending, MAX_MOTION_TYPES};
+use crate::control::negotiation::feature;
 use crate::control::wire::Delivery;
-use crate::input::packets::{touch_event, touchpad, InputEvent, MAX_CONTROLLERS};
+use crate::input::packets::{
+    touch_event, touchpad, InputEvent, TouchpadContact, MAX_CONTROLLERS,
+};
 
 const HELD_KEYS: usize = 256;
 const HELD_MOUSE_BUTTONS: usize = 8;
@@ -55,6 +58,7 @@ impl InputQueue {
 
     pub(super) fn hold(&mut self, mut pending: Pending) {
         self.note_held();
+        let touchpad_single = self.feature_flags & feature::TOUCHPAD_EVENTS != 0;
         let held = &mut self.held;
         match pending.event {
             InputEvent::Keyboard { key_code, .. } => {
@@ -122,18 +126,37 @@ impl InputQueue {
                 height_mm,
                 ..
             } => {
-                let cancel = InputEvent::Touchpad {
-                    event: touch_event::CANCEL_ALL,
-                    buttons: 0,
-                    rotation: touchpad::ROTATION_UNKNOWN,
-                    pointer_id: 0,
-                    width_mm,
-                    height_mm,
-                    x: 0.0,
-                    y: 0.0,
-                    pressure: 0.0,
-                    contact_major: 0.0,
-                    contact_minor: 0.0,
+                let cancel = if touchpad_single {
+                    InputEvent::Touchpad {
+                        event: touch_event::CANCEL_ALL,
+                        buttons: 0,
+                        rotation: touchpad::ROTATION_UNKNOWN,
+                        pointer_id: 0,
+                        width_mm,
+                        height_mm,
+                        x: 0.0,
+                        y: 0.0,
+                        pressure: 0.0,
+                        contact_major: 0.0,
+                        contact_minor: 0.0,
+                    }
+                } else {
+                    let mut contacts = [TouchpadContact::default(); touchpad::MAX_FRAME_CONTACTS];
+                    contacts[0] = TouchpadContact {
+                        event: touch_event::CANCEL_ALL,
+                        pointer_id: 0,
+                        x: 0.0,
+                        y: 0.0,
+                        pressure: 0.0,
+                    };
+                    InputEvent::TouchpadFrame {
+                        count: 1,
+                        buttons: 0,
+                        rotation: touchpad::ROTATION_UNKNOWN,
+                        width_mm,
+                        height_mm,
+                        contacts,
+                    }
                 };
                 held.touchpad = Some(Pending {
                     channel: cancel.channel(),

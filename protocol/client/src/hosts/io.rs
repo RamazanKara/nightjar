@@ -151,6 +151,13 @@ impl UnreadableGuard {
             .insert(path.to_owned());
     }
 
+    pub(crate) fn clear(&self, path: &Path) {
+        self.paths
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(path);
+    }
+
     pub(crate) fn check_writable(&self, path: &Path) -> io::Result<()> {
         let flagged = self
             .paths
@@ -169,5 +176,93 @@ impl UnreadableGuard {
             )));
         }
         Ok(())
+    }
+}
+
+/// Synchronized JSON store file that treats only `NotFound` as empty, refuses overwrites after
+/// an unreadable or corrupt read, and clears the unreadable flag once a subsequent read succeeds.
+#[derive(Clone, Debug)]
+pub(crate) struct GuardedJsonFile {
+    path: PathBuf,
+    lock: Arc<Mutex<()>>,
+    unreadable: Arc<UnreadableGuard>,
+    private: bool,
+}
+
+impl GuardedJsonFile {
+    pub(crate) fn new(path: PathBuf, lock: Arc<Mutex<()>>, private: bool) -> Self {
+        Self {
+            path,
+            lock,
+            unreadable: Arc::new(UnreadableGuard::default()),
+            private,
+        }
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub(crate) fn lock(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.lock.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub(crate) fn try_lock(&self) -> Result<std::sync::MutexGuard<'_, ()>, String> {
+        self.lock.lock().map_err(|_| "lock poisoned".to_owned())
+    }
+
+    pub(crate) fn mark_readable(&self) {
+        self.unreadable.clear(&self.path);
+    }
+
+    pub(crate) fn mark_unreadable(&self, reason: &dyn std::fmt::Display) {
+        eprintln!(
+            "nightjar: cannot read {} ({reason}); it is left as it is",
+            self.path.display()
+        );
+        self.unreadable.leave_as_it_is(&self.path);
+    }
+
+    /// Reads the raw file text: returns `Ok(None)` strictly on `NotFound` (clearing any stale
+    /// guard) and records non-`NotFound` I/O failures so writes refuse to clobber the file.
+    pub(crate) fn read_text(&self) -> Option<String> {
+        match fs::read_to_string(&self.path) {
+            Ok(text) => Some(text),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                self.unreadable.clear(&self.path);
+                None
+            }
+            Err(e) => {
+                self.mark_unreadable(&e);
+                None
+            }
+        }
+    }
+
+    /// Reads and parses JSON `T` (falling back to `T::default()` on `NotFound` or error),
+    /// clearing the guard on a good read and refusing subsequent overwrites on any non-`NotFound`
+    /// I/O or parse failure.
+    pub(crate) fn read_json_or_default<T>(&self) -> T
+    where
+        T: serde::de::DeserializeOwned + Default,
+    {
+        let Some(text) = self.read_text() else {
+            return T::default();
+        };
+        match serde_json::from_str::<T>(&text) {
+            Ok(value) => {
+                self.mark_readable();
+                value
+            }
+            Err(e) => {
+                self.mark_unreadable(&e);
+                T::default()
+            }
+        }
+    }
+
+    pub(crate) fn write_bytes(&self, bytes: &[u8]) -> io::Result<()> {
+        self.unreadable.check_writable(&self.path)?;
+        write_atomic(&self.path, bytes, self.private)
     }
 }

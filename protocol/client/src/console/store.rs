@@ -2,6 +2,7 @@
 //! recent launches (`console_recents.json`), favourites with damaged-file `.bak` preservation
 //! (`console_favourites.json`), and hidden apps (`hidden_apps.json`).
 
+use crate::hosts::io::{GuardedJsonFile, write_atomic};
 use nightjar_policy::console::{
     parse_favourites, set_hidden_strict, toggle_favourite, Favourite, Recent, ANDROID_RECENT_LIMIT,
 };
@@ -9,10 +10,7 @@ use nightjar_policy::http::NativeLibrary;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
-
-static NEXT_TMP: AtomicU64 = AtomicU64::new(1);
+use std::sync::{Arc, Mutex};
 
 /// Sanitizes a host UUID into a safe single filename stem, matching Android `FileLibraryCache`.
 pub fn sanitize_host_id(uuid: &str) -> String {
@@ -34,16 +32,15 @@ pub fn sanitize_host_id(uuid: &str) -> String {
 }
 
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let seq = NEXT_TMP.fetch_add(1, Ordering::Relaxed);
-    let tmp = path.with_extension(format!("json.tmp.{seq}"));
-    fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
-    fs::rename(&tmp, path).map_err(|e| {
-        let _ = fs::remove_file(&tmp);
-        e.to_string()
-    })
+    write_atomic(path, bytes, false).map_err(|e| e.to_string())
+}
+
+fn console_file(base_dir: &Path, name: &str) -> GuardedJsonFile {
+    GuardedJsonFile::new(
+        base_dir.join("console").join(name),
+        Arc::new(Mutex::new(())),
+        false,
+    )
 }
 
 /// Per-host cached native library files (`<base>/console-library/<sanitized_uuid>.json`).
@@ -190,25 +187,26 @@ pub struct StoredRecent {
 
 /// Recent game launches (`<base>/console/console_recents.json`), capped at [`ANDROID_RECENT_LIMIT`].
 pub struct RecentsStore {
-    path: PathBuf,
-    lock: Mutex<()>,
+    file: GuardedJsonFile,
 }
 
 impl RecentsStore {
     pub fn new(base_dir: &Path) -> Self {
-        Self {
-            path: base_dir.join("console").join("console_recents.json"),
-            lock: Mutex::new(()),
-        }
+        Self { file: console_file(base_dir, "console_recents.json") }
     }
 
     fn read_stored_locked(&self) -> Vec<StoredRecent> {
-        let Ok(text) = fs::read_to_string(&self.path) else {
+        let Some(text) = self.file.read_text() else {
             return Vec::new();
         };
-        let Ok(entries) = serde_json::from_str::<Vec<serde_json::Value>>(&text) else {
-            return Vec::new();
+        let entries = match serde_json::from_str::<Vec<serde_json::Value>>(&text) {
+            Ok(entries) => entries,
+            Err(e) => {
+                self.file.mark_unreadable(&e);
+                return Vec::new();
+            }
         };
+        self.file.mark_readable();
         entries
             .into_iter()
             .filter_map(|v| serde_json::from_value(v).ok())
@@ -218,11 +216,11 @@ impl RecentsStore {
 
     fn write_stored_locked(&self, list: &[StoredRecent]) -> Result<(), String> {
         let json = serde_json::to_vec(list).map_err(|e| e.to_string())?;
-        atomic_write(&self.path, &json)
+        self.file.write_bytes(&json).map_err(|e| e.to_string())
     }
 
     pub fn list(&self) -> Vec<Recent> {
-        let _guard = self.lock.lock();
+        let _guard = self.file.lock();
         self.read_stored_locked()
             .into_iter()
             .map(|s| s.recent)
@@ -230,7 +228,7 @@ impl RecentsStore {
     }
 
     pub fn list_stored(&self) -> Vec<StoredRecent> {
-        let _guard = self.lock.lock();
+        let _guard = self.file.lock();
         self.read_stored_locked()
     }
 
@@ -239,7 +237,7 @@ impl RecentsStore {
     }
 
     pub fn record_with_host_name(&self, entry: Recent, host_name: &str) -> Result<(), String> {
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         let mut stored = self.read_stored_locked();
         stored.retain(|r| !r.recent.same_game(&entry));
         stored.insert(
@@ -257,7 +255,7 @@ impl RecentsStore {
         if host_id.is_empty() {
             return Ok(());
         }
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         let mut list = self.read_stored_locked();
         let before = list.len();
         list.retain(|r| r.recent.host != host_id);
@@ -270,8 +268,8 @@ impl RecentsStore {
     /// One-shot migration helper for legacy JSON (`SharedPreferences "console_recents"`).
     /// Only writes if `console_recents.json` does not already exist on disk.
     pub fn import_legacy_json(&self, json: &str) -> Result<bool, String> {
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
-        if self.path.exists() {
+        let _guard = self.file.try_lock()?;
+        if self.file.path().exists() {
             return Ok(false);
         }
         let Ok(raw) = serde_json::from_str::<Vec<serde_json::Value>>(json) else {
@@ -292,48 +290,34 @@ impl RecentsStore {
 
 /// Starred games (`<base>/console/console_favourites.json`), preserving `.bak` on damaged reads.
 pub struct FavouritesStore {
-    path: PathBuf,
-    lock: Mutex<()>,
+    file: GuardedJsonFile,
 }
 
 impl FavouritesStore {
     pub fn new(base_dir: &Path) -> Self {
-        Self {
-            path: base_dir.join("console").join("console_favourites.json"),
-            lock: Mutex::new(()),
-        }
+        Self { file: console_file(base_dir, "console_favourites.json") }
     }
 
     fn backup_path(&self) -> PathBuf {
-        self.path.with_extension("json.bak")
+        self.file.path().with_extension("json.bak")
     }
 
     fn read_locked(&self) -> Vec<Favourite> {
-        let Ok(text) = fs::read_to_string(&self.path) else {
-            return Vec::new();
-        };
-        let (list, damaged) = parse_favourites(&text);
-        if damaged && !text.trim().is_empty() {
-            let bak = self.backup_path();
-            if !bak.exists() {
-                let _ = fs::write(bak, text.as_bytes());
-            }
-        }
-        list
+        read_favourites_guarded(&self.file, Some(&self.backup_path()))
     }
 
     fn write_locked(&self, list: &[Favourite]) -> Result<(), String> {
         let json = serde_json::to_vec(list).map_err(|e| e.to_string())?;
-        atomic_write(&self.path, &json)
+        self.file.write_bytes(&json).map_err(|e| e.to_string())
     }
 
     pub fn list(&self) -> Vec<Favourite> {
-        let _guard = self.lock.lock();
+        let _guard = self.file.lock();
         self.read_locked()
     }
 
     pub fn toggle(&self, entry: Favourite) -> Result<bool, String> {
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         let mut list = self.read_locked();
         let starred = toggle_favourite(&mut list, entry);
         self.write_locked(&list)?;
@@ -341,7 +325,7 @@ impl FavouritesStore {
     }
 
     pub fn set_explicit(&self, entry: Favourite, starred: bool) -> Result<(), String> {
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         let mut list = self.read_locked();
         let mut changed = false;
         if starred {
@@ -381,12 +365,12 @@ impl FavouritesStore {
             app_id,
             title: String::new(),
         };
-        let _guard = self.lock.lock();
+        let _guard = self.file.lock();
         self.read_locked().iter().any(|f| f.same_game(&probe))
     }
 
     pub fn replace(&self, list: Vec<Favourite>) -> Result<(), String> {
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         self.write_locked(&list)
     }
 
@@ -394,7 +378,7 @@ impl FavouritesStore {
         if host_id.is_empty() {
             return Ok(());
         }
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         let mut list = self.read_locked();
         let before = list.len();
         list.retain(|f| f.host != host_id);
@@ -405,13 +389,13 @@ impl FavouritesStore {
     }
 
     pub fn import_legacy_json(&self, json: &str) -> Result<bool, String> {
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
-        if self.path.exists() {
+        let _guard = self.file.try_lock()?;
+        if self.file.path().exists() {
             return Ok(false);
         }
         let (list, damaged) = parse_favourites(json);
         if damaged && !json.trim().is_empty() {
-            let _ = fs::create_dir_all(self.path.parent().unwrap_or_else(|| Path::new(".")));
+            let _ = fs::create_dir_all(self.file.path().parent().unwrap_or_else(|| Path::new(".")));
             let _ = fs::write(self.backup_path(), json.as_bytes());
         }
         if list.is_empty() {
@@ -422,40 +406,58 @@ impl FavouritesStore {
     }
 }
 
+fn read_favourites_guarded(file: &GuardedJsonFile, bak_path: Option<&Path>) -> Vec<Favourite> {
+    let Some(text) = file.read_text() else {
+        return Vec::new();
+    };
+    let (list, damaged) = parse_favourites(&text);
+    let mut bak_ok = false;
+    if let Some(bak) = bak_path
+        && damaged
+        && !text.trim().is_empty()
+    {
+        if bak.exists() {
+            bak_ok = true;
+        } else {
+            bak_ok = fs::write(bak, text.as_bytes()).is_ok();
+        }
+    }
+    if let Err(e) = serde_json::from_str::<serde_json::Value>(&text)
+        && !bak_ok
+    {
+        file.mark_unreadable(&e);
+        return Vec::new();
+    }
+    file.mark_readable();
+    list
+}
+
 /// Hidden games store (`<base>/console/hidden_apps.json`), mutex-serialized for concurrent updates.
 pub struct HiddenStore {
-    path: PathBuf,
-    lock: Mutex<()>,
+    file: GuardedJsonFile,
 }
 
 impl HiddenStore {
     pub fn new(base_dir: &Path) -> Self {
-        Self {
-            path: base_dir.join("console").join("hidden_apps.json"),
-            lock: Mutex::new(()),
-        }
+        Self { file: console_file(base_dir, "hidden_apps.json") }
     }
 
     fn read_locked(&self) -> Vec<Favourite> {
-        let Ok(text) = fs::read_to_string(&self.path) else {
-            return Vec::new();
-        };
-        let (list, _) = parse_favourites(&text);
-        list
+        read_favourites_guarded(&self.file, None)
     }
 
     fn write_locked(&self, list: &[Favourite]) -> Result<(), String> {
         let json = serde_json::to_vec(list).map_err(|e| e.to_string())?;
-        atomic_write(&self.path, &json)
+        self.file.write_bytes(&json).map_err(|e| e.to_string())
     }
 
     pub fn list(&self) -> Vec<Favourite> {
-        let _guard = self.lock.lock();
+        let _guard = self.file.lock();
         self.read_locked()
     }
 
     pub fn is_hidden(&self, host_id: &str, install_id: &str, app_id: u32) -> bool {
-        let _guard = self.lock.lock();
+        let _guard = self.file.lock();
         let list = self.read_locked();
         nightjar_policy::console::is_hidden_entry(&list, host_id, install_id, app_id)
     }
@@ -464,7 +466,7 @@ impl HiddenStore {
         if games.is_empty() {
             return Ok(false);
         }
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         let mut list = self.read_locked();
         let changed = set_hidden_strict(&mut list, games, hidden);
         if changed {
@@ -477,7 +479,7 @@ impl HiddenStore {
         if host_id.is_empty() {
             return Ok(());
         }
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         let mut list = self.read_locked();
         let before = list.len();
         list.retain(|h| h.host != host_id);
@@ -491,7 +493,7 @@ impl HiddenStore {
         if entries.is_empty() {
             return Ok(false);
         }
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         let mut list = self.read_locked();
         let before = list.len();
         for entry in entries {
@@ -511,7 +513,7 @@ impl HiddenStore {
     }
 
     pub fn of_app_ids(&self, host_id: &str) -> BTreeSet<u32> {
-        let _guard = self.lock.lock();
+        let _guard = self.file.lock();
         self.read_locked()
             .into_iter()
             .filter(|f| f.host == host_id)
@@ -520,7 +522,7 @@ impl HiddenStore {
     }
 
     pub fn stable_ids(&self, host_id: &str) -> BTreeMap<String, u32> {
-        let _guard = self.lock.lock();
+        let _guard = self.file.lock();
         let mut map = BTreeMap::new();
         for f in self.read_locked() {
             if f.host == host_id && !f.install_id.is_empty() {
@@ -540,7 +542,7 @@ impl HiddenStore {
         if host_id.is_empty() || (app_id == 0 && stable_id.is_empty()) {
             return Ok(());
         }
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         let mut list = self.read_locked();
         let snapshot = list.clone();
         if hidden {
@@ -616,7 +618,7 @@ impl HiddenStore {
         host_id: &str,
         games: &BTreeMap<String, u32>,
     ) -> Result<BTreeSet<u32>, String> {
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         let mut list = self.read_locked();
         let mut changed = false;
 
@@ -677,7 +679,7 @@ impl HiddenStore {
         shown: &[u32],
         hidden: &[u32],
     ) -> Result<BTreeSet<u32>, String> {
-        let _guard = self.lock.lock().map_err(|_| "lock poisoned".to_owned())?;
+        let _guard = self.file.try_lock()?;
         let mut list = self.read_locked();
         let before = list.len();
         list.retain(|f| !(f.host == host_id && shown.contains(&f.app_id)));

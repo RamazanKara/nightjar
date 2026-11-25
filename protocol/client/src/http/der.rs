@@ -132,7 +132,7 @@ pub(crate) fn parse_certificate(der: &[u8]) -> Result<CertificateParts, Error> {
     let (algorithm, key) = expect(spki, TAG_SEQUENCE)?;
     let (key_algorithm, parameters) = expect(algorithm, TAG_OID)?;
     let key_parameters = match read(parameters) {
-        Ok((TAG_OID, oid, _, rest)) if rest.is_empty() => Some(oid.to_vec()),
+        Ok((TAG_OID, oid, _, [])) => Some(oid.to_vec()),
         _ => None,
     };
     let (public_key, key_trailing) = expect(key, TAG_BIT_STRING)?;

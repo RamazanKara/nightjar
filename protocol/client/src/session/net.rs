@@ -502,9 +502,15 @@ impl Pinger {
             .name(name.into())
             .spawn(move || {
                 let mut count = 0u32;
+                let mut connected = socket.peer_addr().is_ok();
                 loop {
                     count = count.wrapping_add(1);
-                    let _ = socket.send_to(&ping_datagram(payload, count), target);
+                    let datagram = ping_datagram(payload, count);
+                    let _ = if connected {
+                        socket.send(&datagram)
+                    } else {
+                        socket.send_to(&datagram, target)
+                    };
                     let state = signal.state.lock().unwrap_or_else(|p| p.into_inner());
                     let (mut state, _) = signal
                         .wake
@@ -517,6 +523,7 @@ impl Pinger {
                     }
                     state.now = false;
                     if let Some(next) = state.next.take() {
+                        connected = next.peer_addr().is_ok();
                         socket = next;
                     }
                 }

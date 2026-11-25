@@ -162,11 +162,17 @@ pub(crate) const MAX_IN_FLIGHT: usize = 1024;
 /// The bytes those transfers may ask for together, each up to [`wire::MAX_TRANSFER`].
 pub(crate) const MAX_BUFFERED: u64 = 64 << 20;
 
+struct Pending {
+    id: u64,
+    bytes: u64,
+}
+
 #[derive(Default)]
 struct State {
     /// Submits the device has yet to complete, with the bytes each asked for; a completion for
     /// any other is dropped.
-    pending: HashMap<u32, u64>,
+    pending: HashMap<u32, Pending>,
+    next_id: u64,
     /// The sum of `pending`'s bytes.
     buffered: u64,
     /// A submit was refused for going past [`MAX_IN_FLIGHT`] or [`MAX_BUFFERED`]: said once.
@@ -193,11 +199,20 @@ impl Shared {
 }
 
 impl State {
-    /// Takes `seqnum` out of `pending`: whether it was there.
-    fn settle(&mut self, seqnum: u32) -> bool {
+    /// Takes `seqnum` out of `pending` (only if its submit `id` matches when given): whether it
+    /// was there.
+    fn settle(&mut self, seqnum: u32, id: Option<u64>) -> bool {
+        if let Some(expected) = id
+            && !self
+                .pending
+                .get(&seqnum)
+                .is_some_and(|pending| pending.id == expected)
+        {
+            return false;
+        }
         match self.pending.remove(&seqnum) {
-            Some(bytes) => {
-                self.buffered -= bytes;
+            Some(pending) => {
+                self.buffered -= pending.bytes;
                 true
             }
             None => false,
@@ -276,6 +291,7 @@ impl Shared {
 
 /// What a completion must fit: the submit's direction, size and packets.
 struct Asked {
+    id: u64,
     seqnum: u32,
     direction: Direction,
     length: u32,
@@ -313,7 +329,7 @@ impl Drop for Completion {
 
 fn finish(shared: &Shared, asked: &Asked, reply: Reply) {
     let mut state = shared.state();
-    if state.closed || !state.settle(asked.seqnum) {
+    if state.closed || !state.settle(asked.seqnum, Some(asked.id)) {
         return;
     }
     let message = match ret_submit(asked, reply) {
@@ -328,8 +344,8 @@ fn finish(shared: &Shared, asked: &Asked, reply: Reply) {
 /// The `RET_SUBMIT` for `reply`, or why it does not fit the submit.
 fn ret_submit(asked: &Asked, mut reply: Reply) -> Result<Vec<u8>, String> {
     let seqnum = asked.seqnum;
-    if reply.status != 0 && reply.iso.is_empty() {
-        // A failure moves no data, and every packet fails with it.
+    if reply.status != 0 && reply.iso.is_empty() && !asked.iso.is_empty() {
+        // An isochronous failure with no per-packet statuses marks every packet failed.
         reply.data.clear();
         reply.sent = 0;
         reply.iso = asked
@@ -559,6 +575,11 @@ fn run(
                             "a submit of {length} bytes and {packets} packets"
                         ))
                     })?;
+                if endpoint == 0 && packets != 0 && packets != wire::NOT_ISO {
+                    return Err(ServeError::Protocol(format!(
+                        "isochronous packets ({packets}) on control endpoint 0"
+                    )));
+                }
                 let mut body = vec![0; payload];
                 if !read_whole(tunnel, &mut body)? && payload > 0 {
                     return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
@@ -567,13 +588,6 @@ fn run(
                     .ok_or_else(|| ServeError::Protocol("short packet descriptors".into()))?
                     .collect();
                 body.truncate(body.len() - iso.len() * wire::ISO_PACKET_BYTES);
-                let asked = Asked {
-                    seqnum: base.seqnum,
-                    direction,
-                    length,
-                    packets,
-                    iso: iso.clone(),
-                };
                 let bytes = u64::from(length);
                 let mut state = shared.state();
                 if state.pending.contains_key(&base.seqnum) {
@@ -582,6 +596,16 @@ fn run(
                         base.seqnum
                     )));
                 }
+                let id = state.next_id;
+                state.next_id += 1;
+                let asked = Asked {
+                    id,
+                    seqnum: base.seqnum,
+                    direction,
+                    length,
+                    packets,
+                    iso: iso.clone(),
+                };
                 // Answers still waiting for the tunnel count as in flight.
                 if state.pending.len() + state.out.len() >= MAX_IN_FLIGHT
                     || state.buffered + state.out_bytes + bytes > MAX_BUFFERED
@@ -610,7 +634,7 @@ fn run(
                     }
                     continue;
                 }
-                state.pending.insert(base.seqnum, bytes);
+                state.pending.insert(base.seqnum, Pending { id, bytes });
                 state.buffered += bytes;
                 drop(state);
                 let done = Completion {
@@ -635,7 +659,7 @@ fn run(
             }
             Some(Header::Unlink { base, unlink }) => {
                 // Out of `pending` first, so its completion, however close, is dropped.
-                let cancelled = shared.state().settle(unlink);
+                let cancelled = shared.state().settle(unlink, None);
                 // Stopped before it is answered, as Linux's own USB/IP host does: once the
                 // driver hears, the endpoint's next transfer gets what the device sends next,
                 // not the transfer it gave up on. Out of the lock, because stopping it may

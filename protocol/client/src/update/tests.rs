@@ -529,7 +529,7 @@ fn download_android_apk_checks_sums_first_verifies_sha256_size_and_cancel() {
     );
     assert!(!tampered_dir.join("nightjar-2.0.0.apk.part").exists());
 
-    // Size mismatch -> SizeMismatch.
+    // Size mismatch (including 0 / negative / missing) -> SizeMismatch before downloading.
     let bad_size_rel = Release::parse(
         &release_json.replace(&format!("\"size\":{}", apk_bytes.len()), "\"size\":999"),
     )
@@ -541,6 +541,22 @@ fn download_android_apk_checks_sums_first_verifies_sha256_size_and_cancel() {
             &bad_size_rel,
             false,
             &temp_dir("size"),
+            None,
+            &mut |_, _| {}
+        ),
+        Err(UpdateError::SizeMismatch)
+    );
+    let zero_size_rel = Release::parse(
+        &release_json.replace(&format!("\"size\":{}", apk_bytes.len()), "\"size\":0"),
+    )
+    .unwrap();
+    assert_eq!(
+        download_android_apk_with(
+            &trusted,
+            allow_localhost,
+            &zero_size_rel,
+            false,
+            &temp_dir("zero-size"),
             None,
             &mut |_, _| {}
         ),

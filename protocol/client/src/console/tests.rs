@@ -619,3 +619,158 @@ fn hidden_store_and_repo_prevent_collisions_bare_leaks_and_split_brain() {
     let _ = std::fs::remove_dir_all(&dir);
     let _ = std::fs::remove_dir_all(&repo_dir);
 }
+
+#[test]
+fn console_stores_refuse_corrupt_overwrite_and_clear_guard_on_good_read() {
+    let dir = temp_dir("console-guard");
+    let recents = RecentsStore::new(&dir);
+    let favs = FavouritesStore::new(&dir);
+    let hidden = HiddenStore::new(&dir);
+
+    std::fs::create_dir_all(dir.join("console")).unwrap();
+    std::fs::write(dir.join("console").join("console_recents.json"), b"{bad").unwrap();
+    assert!(recents.list().is_empty());
+    assert!(recents
+        .record(Recent {
+            host: "h1".into(),
+            install_id: "g1".into(),
+            app_id: 1,
+            title: "One".into(),
+            at: 1,
+        })
+        .is_err());
+    std::fs::write(dir.join("console").join("console_recents.json"), b"[]").unwrap();
+    assert!(recents.list().is_empty());
+    assert!(recents
+        .record(Recent {
+            host: "h1".into(),
+            install_id: "g1".into(),
+            app_id: 1,
+            title: "One".into(),
+            at: 1,
+        })
+        .is_ok());
+
+    // FavouritesStore recovers corrupt JSON into .bak, and guards against non-NotFound I/O errors.
+    let fav_path = dir.join("console").join("console_favourites.json");
+    std::fs::create_dir_all(&fav_path).unwrap();
+    assert!(favs.list().is_empty());
+    assert!(favs
+        .toggle(Favourite {
+            host: "h1".into(),
+            install_id: "g1".into(),
+            app_id: 1,
+            title: "One".into(),
+        })
+        .is_err());
+    std::fs::remove_dir(&fav_path).unwrap();
+    assert!(favs.list().is_empty());
+    assert!(favs
+        .toggle(Favourite {
+            host: "h1".into(),
+            install_id: "g1".into(),
+            app_id: 1,
+            title: "One".into(),
+        })
+        .is_ok());
+
+    std::fs::write(dir.join("console").join("hidden_apps.json"), b"{bad").unwrap();
+    assert!(hidden.of_app_ids("h1").is_empty());
+    assert!(hidden
+        .set_hidden(
+            vec![Favourite {
+                host: "h1".into(),
+                install_id: "g1".into(),
+                app_id: 1,
+                title: "One".into(),
+            }],
+            true
+        )
+        .is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn repository_caps_refresh_after_ttl_and_forget_host_beats_racing_refresh() {
+    use std::sync::{Arc, Barrier};
+
+    let dir = temp_dir("repo-race-ttl");
+    let repo = Arc::new(ConsoleRepository::new(&dir));
+    let mut map = BTreeMap::new();
+    map.insert(
+        "pc-race".into(),
+        NativeLibrary::from(Library {
+            revision: "r1".into(),
+            games: vec![sample_game("g1", 1, "Game", None)],
+        }),
+    );
+
+    struct RacingTransport {
+        entered: Arc<Barrier>,
+        release: Arc<Barrier>,
+        caps_calls: AtomicUsize,
+        libs: BTreeMap<String, NativeLibrary>,
+    }
+    impl NativeTransport for RacingTransport {
+        fn capabilities(&self, _: &HostDescriptor) -> Result<NativeCapabilities, String> {
+            self.caps_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(NativeCapabilities::parse_lenient(&serde_json::json!({})).unwrap())
+        }
+        fn library(&self, h: &HostDescriptor, _: bool) -> Result<NativeLibrary, String> {
+            self.entered.wait();
+            self.release.wait();
+            self.libs.get(&h.uuid).cloned().ok_or_else(|| "missing".into())
+        }
+        fn session(&self, _: &HostDescriptor) -> Result<Session, String> {
+            Err("none".into())
+        }
+        fn add_to_library(&self, _: &HostDescriptor, _: &str) -> Result<Option<AddedGame>, String> {
+            Ok(None)
+        }
+    }
+
+    let entered = Arc::new(Barrier::new(2));
+    let release = Arc::new(Barrier::new(2));
+    let transport = Arc::new(RacingTransport {
+        entered: Arc::clone(&entered),
+        release: Arc::clone(&release),
+        caps_calls: AtomicUsize::new(0),
+        libs: map,
+    });
+
+    // Normal refresh caches capabilities, TTL expiry re-probes capabilities cleanly.
+    let no_wait_transport = MockTransport {
+        caps_calls: AtomicUsize::new(0),
+        fail_caps: false,
+        libs: Mutex::new({
+            let mut m = BTreeMap::new();
+            m.insert(
+                "pc-ttl".into(),
+                NativeLibrary::from(Library {
+                    revision: "r1".into(),
+                    games: vec![sample_game("g2", 2, "Two", None)],
+                }),
+            );
+            m
+        }),
+    };
+    let ttl_hosts = [host_desc("pc-ttl", "TTL")];
+    assert!(repo.refresh(&ttl_hosts, &no_wait_transport).host_states[0].capabilities_fetched);
+    assert!(!repo.refresh(&ttl_hosts, &no_wait_transport).host_states[0].capabilities_fetched);
+    repo.expire_capabilities_for_test("pc-ttl");
+    assert!(repo.refresh(&ttl_hosts, &no_wait_transport).host_states[0].capabilities_fetched);
+    assert_eq!(no_wait_transport.caps_calls.load(Ordering::SeqCst), 2);
+
+    // Racing forget_host while refresh is in-flight prevents stale disk or memory re-save.
+    let race_hosts = vec![host_desc("pc-race", "Race")];
+    let repo_bg = Arc::clone(&repo);
+    let tr_bg = Arc::clone(&transport);
+    let t = std::thread::spawn(move || repo_bg.refresh(&race_hosts, &*tr_bg));
+    entered.wait();
+    repo.forget_host("pc-race");
+    release.wait();
+    let _ = t.join().unwrap();
+
+    assert!(!repo.library_store().has_host("pc-race"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -151,6 +151,9 @@ type Tunnels = HashMap<[u8; 8], ([u8; 16], Tunnel)>;
 /// Why a device's path did not start, by its tag: (device name, words, when).
 type PathErrors = HashMap<[u8; 8], (String, String, Millis)>;
 
+/// Sessions that already closed or were replaced, remembered until their stamps expire.
+type EndedSessions = HashMap<([u8; 8], [u8; 16]), u64>;
+
 struct Shared {
     node: Node,
     config: HostConfig,
@@ -162,6 +165,8 @@ struct Shared {
     path_errors: Mutex<PathErrors>,
     /// Paths a punch is starting (tag and device session), so repeated punches start one.
     starting: Mutex<HashSet<([u8; 8], [u8; 16])>>,
+    /// Sessions that already closed or were replaced, remembered until their stamps expire.
+    ended: Mutex<EndedSessions>,
     /// The records are being published.
     publishing: AtomicBool,
     stop: AtomicBool,
@@ -184,6 +189,7 @@ impl HostService {
             status: Mutex::new(Status::default()),
             path_errors: Mutex::new(HashMap::new()),
             starting: Mutex::new(HashSet::new()),
+            ended: Mutex::new(HashMap::new()),
             publishing: AtomicBool::new(false),
             stop: AtomicBool::new(false),
         });
@@ -237,14 +243,21 @@ impl HostService {
         *states = next;
         let tags: Vec<[u8; 8]> = states.iter().map(|state| state.tag).collect();
         drop(states);
-        let mut tunnels = self.shared.tunnels.write().unwrap();
-        tunnels.retain(|tag, (_, tunnel)| {
-            let keep = tags.contains(tag);
-            if !keep {
-                tunnel.close("the device is no longer paired");
-            }
-            keep
-        });
+        let mut ended_closed = Vec::new();
+        {
+            let mut tunnels = self.shared.tunnels.write().unwrap();
+            tunnels.retain(|tag, (session, tunnel)| {
+                let keep = tags.contains(tag);
+                if !keep {
+                    ended_closed.push((*tag, *session, tunnel.epoch()));
+                    tunnel.close("the device is no longer paired");
+                }
+                keep
+            });
+        }
+        for (tag, session, epoch) in ended_closed {
+            self.mark_ended(tag, session, epoch);
+        }
     }
 
     pub fn status(&self) -> Status {
@@ -335,6 +348,27 @@ impl HostService {
         ));
     }
 
+    fn mark_ended(&self, tag: [u8; 8], client: [u8; 16], epoch: u64) {
+        let expires = epoch
+            .max(unix_now())
+            .saturating_add(record::CLIENT_FRESH_SECONDS * 2);
+        self.shared
+            .ended
+            .lock()
+            .unwrap()
+            .insert((tag, client), expires);
+    }
+
+    fn is_ended(&self, tag: [u8; 8], client: [u8; 16]) -> bool {
+        let now = unix_now();
+        self.shared
+            .ended
+            .lock()
+            .unwrap()
+            .get(&(tag, client))
+            .is_some_and(|&until| now < until)
+    }
+
     /// Starts (or restarts) the path to a device for its session `client`. The tunnel starts
     /// (sockets bound, threads started) with no lock held, so other paths' media and the
     /// console's status never wait on it.
@@ -345,12 +379,20 @@ impl HostService {
         epoch: u64,
         candidates: Vec<SocketAddr>,
     ) -> Option<Tunnel> {
+        if self.is_ended(peer.tag, client) {
+            return None;
+        }
         {
             let tunnels = self.shared.tunnels.read().unwrap();
             if let Some((session, tunnel)) = tunnels.get(&peer.tag)
                 && *session == client
-                && !tunnel.is_closed()
             {
+                if tunnel.is_closed() {
+                    let prev_epoch = tunnel.epoch();
+                    drop(tunnels);
+                    self.mark_ended(peer.tag, client, prev_epoch);
+                    return None;
+                }
                 tunnel.add_candidates(&candidates);
                 return Some(tunnel.clone());
             }
@@ -387,10 +429,21 @@ impl HostService {
         tunnel.set_epoch(epoch);
         let mut tunnels = self.shared.tunnels.write().unwrap();
         // Meanwhile a path for this session, or another device's path, may have started.
+        if self.is_ended(peer.tag, client) {
+            drop(tunnels);
+            tunnel.close("session already ended");
+            return None;
+        }
         if let Some((session, existing)) = tunnels.get(&peer.tag)
             && *session == client
-            && !existing.is_closed()
         {
+            if existing.is_closed() {
+                let prev_epoch = existing.epoch();
+                drop(tunnels);
+                tunnel.close("session already ended");
+                self.mark_ended(peer.tag, client, prev_epoch);
+                return None;
+            }
             let existing = existing.clone();
             drop(tunnels);
             tunnel.close("the path started twice");
@@ -405,7 +458,8 @@ impl HostService {
         }
         let old = tunnels.insert(peer.tag, (client, tunnel.clone()));
         drop(tunnels);
-        if let Some((_, old)) = old {
+        if let Some((old_session, old)) = old {
+            self.mark_ended(peer.tag, old_session, old.epoch());
             old.close("the device connected again");
         }
         self.shared.path_errors.lock().unwrap().remove(&peer.tag);
@@ -435,6 +489,10 @@ impl HostService {
                 tunnel.receive(datagram, from);
                 return;
             }
+            if tunnel.is_closed() && punch_session == Some(*session) {
+                self.mark_ended(tag, *session, tunnel.epoch());
+                return;
+            }
             // A new session replaces a connected path only once the old one is gone, or by a
             // punch that proves its device started again (below): an old punch replayed by
             // someone on the way can't break a working stream.
@@ -443,6 +501,9 @@ impl HostService {
             }
         }
         let Some(client) = punch_session else { return };
+        if self.is_ended(tag, client) {
+            return;
+        }
         let peer = {
             let devices = self.shared.devices.lock().unwrap();
             let Some(state) = devices.iter().find(|state| state.tag == tag) else {

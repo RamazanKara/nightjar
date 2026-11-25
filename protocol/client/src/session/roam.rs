@@ -113,6 +113,7 @@ pub(super) struct MediaPath {
     pub qos: Qos,
     /// The receive buffer to ask for (0 keeps the default).
     pub buffer: usize,
+    pub target: SocketAddr,
     pub ping: Option<PingHandle>,
     pub receive: Option<Arc<NextSocket>>,
 }
@@ -439,6 +440,7 @@ impl Roamer {
                 self.shared.network_priority,
                 warn,
             )?;
+            socket.connect(path.target)?;
             let receive = path.receive.as_ref().map(|_| socket.try_clone()).transpose()?;
             sockets.push((socket, receive));
         }

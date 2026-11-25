@@ -322,17 +322,64 @@ pub trait Listener: Send + Sync {
     }
 }
 
+type InterruptWake = Arc<Mutex<Option<Box<dyn Fn() + Send + Sync>>>>;
+
 /// Aborts a [`Session::start`] in progress from another thread (`LiInterruptConnection`).
-#[derive(Clone, Debug, Default)]
-pub struct Interrupt(Arc<AtomicBool>);
+#[derive(Clone, Default)]
+pub struct Interrupt {
+    pub(crate) flag: Arc<AtomicBool>,
+    wake: InterruptWake,
+}
+
+impl std::fmt::Debug for Interrupt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Interrupt")
+            .field("interrupted", &self.is_interrupted())
+            .finish()
+    }
+}
+
+pub(crate) struct InterruptGuard {
+    wake: InterruptWake,
+}
+
+impl Drop for InterruptGuard {
+    fn drop(&mut self) {
+        *self.wake.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    }
+}
 
 impl Interrupt {
     pub fn interrupt(&self) {
-        self.0.store(true, Ordering::SeqCst);
+        self.flag.store(true, Ordering::SeqCst);
+        if let Some(wake) = self.wake.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
+            wake();
+        }
     }
 
     pub fn is_interrupted(&self) -> bool {
-        self.0.load(Ordering::SeqCst)
+        self.flag.load(Ordering::SeqCst)
+    }
+
+    /// Registers a callback fired when [`Self::interrupt`] is called; fires immediately if
+    /// already interrupted.
+    pub(crate) fn on_interrupt(
+        &self,
+        wake: impl Fn() + Send + Sync + 'static,
+    ) -> InterruptGuard {
+        let guard = {
+            let mut slot = self.wake.lock().unwrap_or_else(|p| p.into_inner());
+            *slot = Some(Box::new(wake));
+            InterruptGuard {
+                wake: self.wake.clone(),
+            }
+        };
+        if self.is_interrupted()
+            && let Some(wake) = self.wake.lock().unwrap_or_else(|p| p.into_inner()).as_ref()
+        {
+            wake();
+        }
+        guard
     }
 }
 

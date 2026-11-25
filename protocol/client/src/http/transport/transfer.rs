@@ -1,6 +1,6 @@
 //! Streaming HTTP uploads (`Expect: 100-continue`), downloads, and throttled progress.
 
-use super::super::wire::{read_body, read_head, read_response, Reader};
+use super::super::wire::{read_body, read_final_head, read_head, read_response, Reader};
 use super::super::Error;
 use super::{
     connection, head_with, io_tls_error, request_head, write_timeout, Cancel, Deadline, Request,
@@ -212,7 +212,7 @@ pub(crate) fn download_optional(
     let head = request_head(request, None);
     connection(request, &[cancel, transfer], Deadline::idle(request), Some(write_timeout(request)), &head, None, |stream, _| {
         let mut reader = Reader { stream, buffer: Vec::new(), eof: false };
-        let head = read_head(&mut reader)?;
+        let head = read_final_head(&mut reader)?;
         if !(200..=299).contains(&head.status) {
             let body = read_body(&mut reader, &head, request.body_limit)?;
             return Ok(head.into_response(body));
@@ -258,7 +258,7 @@ pub(crate) fn download_optional(
             done += n as u64;
             throttle.update(&mut |d, t| progress(d, Some(t)), done);
         }
-        if !reader.buffer.is_empty() || reader.fill()? {
+        if !reader.buffer.is_empty() {
             return Err(Error::Malformed(format!("the download is longer than its {length} bytes")));
         }
         sink.flush()?;
@@ -268,7 +268,7 @@ pub(crate) fn download_optional(
 
 fn receive(stream: &mut dyn Stream, body_limit: usize, sink: &mut dyn Write, progress: &mut Progress<'_>, transfer: &Cancel) -> Result<Response, Error> {
     let mut reader = Reader { stream, buffer: Vec::new(), eof: false };
-    let head = read_head(&mut reader)?;
+    let head = read_final_head(&mut reader)?;
     if !(200..=299).contains(&head.status) {
         let body = read_body(&mut reader, &head, body_limit)?;
         return Ok(head.into_response(body));
@@ -294,8 +294,8 @@ fn receive(stream: &mut dyn Stream, body_limit: usize, sink: &mut dyn Write, pro
         done += n as u64;
         throttle.update(progress, done);
     }
-    // Bytes past the Content-Length mean the host and this client disagree on the file.
-    if !reader.buffer.is_empty() || reader.fill()? {
+    // Trailing bytes already received past Content-Length mean the host and client disagree.
+    if !reader.buffer.is_empty() {
         return Err(Error::Malformed(format!("the download is longer than its {length} bytes")));
     }
     sink.flush()?;

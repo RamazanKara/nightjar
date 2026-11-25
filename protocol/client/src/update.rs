@@ -278,13 +278,16 @@ pub(crate) fn download_android_apk_with(
         .map_err(|e| UpdateError::Io(format!("Cannot create {}: {e}", dir.display())))?;
     let part = dir.join(format!("{}.part", apk.name));
     let target = dir.join(&apk.name);
-    let expected_size = u64::try_from(apk.size).ok().filter(|s| *s > 0);
+    let expected_size = u64::try_from(apk.size)
+        .ok()
+        .filter(|s| *s > 0)
+        .ok_or(UpdateError::SizeMismatch)?;
     let mut last_notify = Instant::now() - Duration::from_secs(1);
     download_verified_file(
         net,
         allow,
         &apk.url,
-        expected_size,
+        Some(expected_size),
         &expected,
         &part,
         cancel,

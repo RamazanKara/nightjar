@@ -206,16 +206,18 @@ impl PinStore {
         }
         let hash = self.crypto.create(pin, iterations)?;
         let _file = file_lock();
-        let mut memory = self.memory();
-        if memory.problem.is_some() {
-            return Err("the PIN lock's file cannot be used".into());
-        }
-        let mut candidate = memory.saved.clone();
+        let mut candidate = {
+            let memory = self.memory();
+            if memory.problem.is_some() {
+                return Err("the PIN lock's file cannot be used".into());
+            }
+            memory.saved.clone()
+        };
         candidate.hash = Some(hash);
         candidate.length = pin.len();
         (candidate.fails, candidate.lock_until, candidate.lock_boot) = (0, 0, 0);
         write_file(&self.path, &candidate).map_err(|e| format!("saving the PIN failed: {e}"))?;
-        memory.saved = candidate;
+        self.memory().saved = candidate;
         Ok(())
     }
 
@@ -352,15 +354,17 @@ impl PinStore {
             boot: self.clock.boot(),
         };
         let _file = file_lock();
-        let mut memory = self.memory();
-        if memory.problem.is_some() {
-            return Err("the PIN lock's file cannot be used".into());
-        }
-        let mut candidate = memory.saved.clone();
+        let mut candidate = {
+            let memory = self.memory();
+            if memory.problem.is_some() {
+                return Err("the PIN lock's file cannot be used".into());
+            }
+            memory.saved.clone()
+        };
         candidate.hand_over = Some(entry);
         write_file(&self.path, &candidate)
             .map_err(|e| format!("saving the PIN lock failed: {e}"))?;
-        memory.saved = candidate;
+        self.memory().saved = candidate;
         Ok(Some(token))
     }
 

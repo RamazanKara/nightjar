@@ -82,7 +82,9 @@ impl App {
     /// Whether this is the game the host reports running; a UUID decides when both have one.
     pub fn matches_running_app(&self, running_id: i32, running_uuid: Option<&str>) -> bool {
         match running_uuid {
-            Some(uuid) if !self.uuid.is_empty() && !uuid.is_empty() => self.uuid == uuid,
+            Some(uuid) if !self.uuid.is_empty() && !uuid.is_empty() => {
+                self.uuid.eq_ignore_ascii_case(uuid)
+            }
             _ => running_id != 0 && self.id == running_id,
         }
     }
@@ -219,6 +221,7 @@ mod tests {
         assert!(apps[2].is_control_action());
         assert_eq!(apps[0].role(true), AppRole::InputOnly);
         assert!(apps[0].matches_running_app(5, Some("u-1")));
+        assert!(apps[0].matches_running_app(5, Some("U-1")));
         assert!(!apps[0].matches_running_app(881_448_767, Some("other")));
     }
 

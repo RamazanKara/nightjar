@@ -24,9 +24,12 @@ type AddSocketToFlow =
     unsafe extern "system" fn(Handle, usize, *const c_void, i32, u32, *mut u32) -> i32;
 type RemoveSocketFromFlow = unsafe extern "system" fn(Handle, usize, u32, u32) -> i32;
 
+/// `LOAD_LIBRARY_SEARCH_SYSTEM32`: search System32 only, avoiding DLL hijacking.
+const LOAD_LIBRARY_SEARCH_SYSTEM32: u32 = 0x0000_0800;
+
 #[link(name = "kernel32")]
 unsafe extern "system" {
-    fn LoadLibraryW(name: *const u16) -> *mut c_void;
+    fn LoadLibraryExW(name: *const u16, file: *mut c_void, flags: u32) -> *mut c_void;
     fn GetProcAddress(module: *mut c_void, name: *const u8) -> *mut c_void;
 }
 
@@ -43,8 +46,14 @@ fn qwave() -> Result<&'static Qwave, String> {
     QWAVE
         .get_or_init(|| {
             let name: Vec<u16> = "qwave.dll\0".encode_utf16().collect();
-            // SAFETY: a NUL-terminated name; the module is never freed.
-            let module = unsafe { LoadLibraryW(name.as_ptr()) };
+            // SAFETY: a NUL-terminated name loaded strictly from System32; never freed.
+            let module = unsafe {
+                LoadLibraryExW(
+                    name.as_ptr(),
+                    std::ptr::null_mut(),
+                    LOAD_LIBRARY_SEARCH_SYSTEM32,
+                )
+            };
             if module.is_null() {
                 return Err(format!("qwave.dll: {}", io::Error::last_os_error()));
             }

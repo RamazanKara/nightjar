@@ -135,6 +135,39 @@ fn hidden_split_and_tracker_and_reconcile_work_end_to_end() {
 }
 
 #[test]
+fn ambiguous_install_id_hides_only_targeted_app_id() {
+    let lib = Library {
+        revision: "r1".into(),
+        games: vec![
+            game("dup-id", 101, "Alpha", Some("steam:1"), None, Some(true), false),
+            game("dup-id", 202, "Beta", Some("steam:2"), None, Some(true), false),
+            game("dup-manual", 303, "Manual A", None, None, Some(true), false),
+            game("dup-manual", 404, "Manual B", None, None, Some(true), false),
+        ],
+    };
+    let src = source(1, "pc-1", "Desk", true, &lib);
+    let keys = hide_keys(&[src], 1, 101);
+    assert_eq!(keys.len(), 1);
+    assert_eq!(keys[0].install_id, "");
+    assert_eq!(keys[0].app_id, 101);
+    assert!(is_hidden(&src, "dup-id", 101, &keys));
+    assert!(!is_hidden(&src, "dup-id", 202, &keys));
+
+    let manual_keys = hide_keys(&[src], 1, 303);
+    assert_eq!(manual_keys.len(), 1);
+    assert_eq!(manual_keys[0].install_id, "");
+    assert_eq!(manual_keys[0].app_id, 303);
+    assert!(is_hidden(&src, "dup-manual", 303, &manual_keys));
+    assert!(!is_hidden(&src, "dup-manual", 404, &manual_keys));
+
+    let keys_by_id = hide_keys_by_id(&[src], "pc-1", 202);
+    assert_eq!(keys_by_id.len(), 1);
+    assert_eq!(keys_by_id[0].install_id, "");
+    assert!(is_hidden(&src, "dup-id", 202, &keys_by_id));
+    assert!(!is_hidden(&src, "dup-id", 101, &keys_by_id));
+}
+
+#[test]
 fn home_projection_filters_searches_and_sorts() {
     let mut g1 = game("i1", 1, "Alpha", Some("steam:1"), Some(("steam", "Steam")), Some(true), false);
     g1.last_played = Some(100);

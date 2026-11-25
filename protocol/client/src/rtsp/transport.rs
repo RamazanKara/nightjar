@@ -3,7 +3,8 @@
 use super::{Handshake, HandshakeParams, RtspError, RtspOutcome};
 use crate::priority::{self, Qos};
 use ring::aead;
-use std::io::{ErrorKind, Read, Write};
+use socket2::{Domain, Protocol, Socket, Type};
+use std::io::{self, ErrorKind, Read, Write};
 use std::net::{IpAddr, SocketAddr, SocketAddrV6, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -11,6 +12,7 @@ use std::time::{Duration, Instant};
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const RECEIVE_TIMEOUT: Duration = Duration::from_secs(15);
 const RETRY_DELAY: Duration = Duration::from_millis(500);
+const INTERRUPT_SLICE: Duration = Duration::from_millis(50);
 const MAX_RESPONSE_SIZE: usize = 1024 * 1024;
 
 pub(super) const ENCRYPTED_RTSP_BIT: u32 = 0x8000_0000;
@@ -23,6 +25,8 @@ pub(super) struct RtspCipher {
     key: aead::LessSafeKey,
     sequence: u32,
     last_received: Option<u32>,
+    strict: bool,
+    non_monotonic_before_describe: bool,
 }
 
 pub(super) fn rtsp_iv(sequence: u32, origin: u8) -> aead::Nonce {
@@ -40,7 +44,19 @@ impl RtspCipher {
             key: aead::LessSafeKey::new(key),
             sequence: 0,
             last_received: None,
+            strict: false,
+            non_monotonic_before_describe: false,
         }
+    }
+
+    pub(super) fn enable_strict(&mut self) -> Result<(), RtspError> {
+        self.strict = true;
+        if self.non_monotonic_before_describe {
+            return Err(RtspError::Encryption(
+                "replayed or out-of-order RTSP response".into(),
+            ));
+        }
+        Ok(())
     }
 
     pub(super) fn seal(&mut self, plain: &[u8]) -> Result<Vec<u8>, RtspError> {
@@ -72,10 +88,12 @@ impl RtspCipher {
             return Err(fail("encrypted RTSP message length mismatch"));
         }
         let sequence = u32::from_be_bytes(raw[4..8].try_into().unwrap());
-        if let Some(prev) = self.last_received
-            && sequence <= prev
-        {
-            return Err(fail("replayed or out-of-order RTSP response"));
+        let non_monotonic = self.last_received.is_some_and(|prev| sequence <= prev);
+        if non_monotonic {
+            if self.strict {
+                return Err(fail("replayed or out-of-order RTSP response"));
+            }
+            self.non_monotonic_before_describe = true;
         }
         let mut body = raw[ENCRYPTED_HEADER..].to_vec();
         body.extend_from_slice(&raw[8..24]);
@@ -83,9 +101,131 @@ impl RtspCipher {
             .key
             .open_in_place(rtsp_iv(sequence, b'H'), aead::Aad::empty(), &mut body)
             .map_err(|_| fail("failed to decrypt RTSP response"))?;
-        self.last_received = Some(sequence);
+        self.last_received = Some(self.last_received.map_or(sequence, |prev| prev.max(sequence)));
         Ok(plain.to_vec())
     }
+}
+
+fn sleep_interruptible(duration: Duration, interrupted: &AtomicBool) -> Result<(), RtspError> {
+    let until = Instant::now() + duration;
+    loop {
+        if interrupted.load(Ordering::SeqCst) {
+            return Err(RtspError::Interrupted);
+        }
+        let left = until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Ok(());
+        }
+        std::thread::sleep(left.min(INTERRUPT_SLICE));
+    }
+}
+
+fn is_connect_pending(error: &io::Error) -> bool {
+    if error.kind() == ErrorKind::WouldBlock {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        matches!(error.raw_os_error(), Some(10035..=10037))
+    }
+    #[cfg(unix)]
+    {
+        matches!(
+            error.raw_os_error(),
+            Some(libc::EINPROGRESS | libc::EALREADY | libc::EINTR)
+        )
+    }
+    #[cfg(not(any(windows, unix)))]
+    false
+}
+
+fn poll_writable(socket: &Socket, timeout: Duration) -> io::Result<bool> {
+    let millis = i32::try_from(timeout.as_nanos().div_ceil(1_000_000)).unwrap_or(i32::MAX);
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawSocket;
+        use windows_sys::Win32::Networking::WinSock::{POLLWRNORM, WSAPOLLFD, WSAPoll};
+        let mut fd = WSAPOLLFD {
+            fd: socket.as_raw_socket() as _,
+            events: POLLWRNORM,
+            revents: 0,
+        };
+        let ready = unsafe { WSAPoll(&mut fd, 1, millis) };
+        if ready < 0 {
+            let err = io::Error::last_os_error();
+            return if err.kind() == ErrorKind::Interrupted {
+                Ok(false)
+            } else {
+                Err(err)
+            };
+        }
+        Ok(ready > 0 && fd.revents != 0)
+    }
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        let mut fd = libc::pollfd {
+            fd: socket.as_raw_fd(),
+            events: libc::POLLOUT,
+            revents: 0,
+        };
+        let ready = unsafe { libc::poll(&mut fd, 1, millis) };
+        if ready < 0 {
+            let err = io::Error::last_os_error();
+            return if err.kind() == ErrorKind::Interrupted {
+                Ok(false)
+            } else {
+                Err(err)
+            };
+        }
+        Ok(ready > 0 && fd.revents != 0)
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        let _ = socket;
+        std::thread::sleep(timeout);
+        Ok(false)
+    }
+}
+
+fn connect_interruptible(
+    address: SocketAddr,
+    timeout: Duration,
+    interrupted: &AtomicBool,
+) -> Result<TcpStream, RtspError> {
+    if interrupted.load(Ordering::SeqCst) {
+        return Err(RtspError::Interrupted);
+    }
+    let socket = Socket::new(Domain::for_address(address), Type::STREAM, Some(Protocol::TCP))?;
+    socket.set_nonblocking(true)?;
+    match socket.connect(&address.into()) {
+        Ok(()) => {}
+        Err(e) if is_connect_pending(&e) => {
+            let deadline = Instant::now() + timeout;
+            loop {
+                if interrupted.load(Ordering::SeqCst) {
+                    return Err(RtspError::Interrupted);
+                }
+                let left = deadline.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    return Err(RtspError::Io(ErrorKind::TimedOut.into()));
+                }
+                let ready = poll_writable(&socket, left.min(INTERRUPT_SLICE))?;
+                if let Some(err) = socket.take_error()? {
+                    return Err(err.into());
+                }
+                if ready && socket.peer_addr().is_ok() {
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    return Err(RtspError::Io(ErrorKind::TimedOut.into()));
+                }
+            }
+        }
+        Err(e) => return Err(e.into()),
+    }
+    socket.set_nonblocking(false)?;
+    Ok(socket.into())
 }
 
 /// Runs the handshake over TCP. `interrupted` aborts it from another thread.
@@ -125,13 +265,13 @@ pub fn transact(
     let mut retries = 0;
     let mut socket = loop {
         check()?;
-        match TcpStream::connect_timeout(&address, CONNECT_TIMEOUT) {
+        match connect_interruptible(address, CONNECT_TIMEOUT, interrupted) {
             Ok(socket) => break socket,
-            Err(e) if e.kind() == ErrorKind::ConnectionRefused && retries < 20 => {
+            Err(RtspError::Io(e)) if e.kind() == ErrorKind::ConnectionRefused && retries < 20 => {
                 retries += 1;
-                std::thread::sleep(RETRY_DELAY);
+                sleep_interruptible(RETRY_DELAY, interrupted)?;
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         }
     };
     socket.set_nodelay(true)?;

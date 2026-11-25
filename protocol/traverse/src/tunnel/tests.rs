@@ -264,3 +264,97 @@ fn loopback_addresses_are_stable_and_spread() {
     assert_eq!(ip.octets()[..2], [127, 77]);
     assert!(ip.is_loopback());
 }
+
+#[test]
+fn a_stalled_connection_bounds_queued_bytes_and_closes_receive_window() {
+    let local = bindable_loopback("127.0.0.3".parse().unwrap());
+    if local == IpAddr::from([127, 0, 0, 1]) {
+        return;
+    }
+    let service = TcpListener::bind("127.0.0.1:0").unwrap();
+    let ports = Ports {
+        http: service.local_addr().unwrap().port(),
+        ..Ports::default()
+    };
+    let (accepted_tx, accepted_rx) = mpsc::channel();
+    thread::spawn(move || {
+        let (conn, _) = service.accept().unwrap();
+        let _ = accepted_tx.send(conn);
+    });
+
+    let keys = Keys::new([9; 32]).path(&[1; 16], &[2; 16]);
+    let host_node = Node::bind("127.0.0.1:0".parse().unwrap(), Vec::new()).unwrap();
+    let device_node = Node::bind("127.0.0.1:0".parse().unwrap(), Vec::new()).unwrap();
+    let host = Tunnel::start(
+        host_node.clone(),
+        Role::Host,
+        keys,
+        [2; 16],
+        vec![device_node.local_addr().unwrap()],
+        Bridge::Host {
+            service: "127.0.0.1".parse().unwrap(),
+            source: "127.0.0.1".parse().unwrap(),
+            ports,
+            device: "backpressure".into(),
+        },
+    )
+    .unwrap();
+    let device = Tunnel::start(
+        device_node.clone(),
+        Role::Client,
+        keys,
+        [2; 16],
+        vec![host_node.local_addr().unwrap()],
+        Bridge::Device { local, ports },
+    )
+    .unwrap();
+    let (h, d) = (host.clone(), device.clone());
+    host_node.set_handler(Box::new(move |datagram, from| h.receive(datagram, from)));
+    device_node.set_handler(Box::new(move |datagram, from| d.receive(datagram, from)));
+    for _ in 0..100 {
+        if matches!(device.state(), State::Connected(_))
+            && matches!(host.state(), State::Connected(_))
+        {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert!(matches!(device.state(), State::Connected(_)));
+
+    let mut tcp = TcpStream::connect((local, ports.http)).unwrap();
+    tcp.set_write_timeout(Some(Duration::from_millis(250))).unwrap();
+    let mut server_conn = accepted_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+
+    // Flood ~1.6 MiB while server_conn reads nothing: host queued bytes must remain bounded.
+    let chunk = vec![0x5au8; 64 * 1024];
+    let mut sent_total = 0usize;
+    let sender = thread::spawn(move || {
+        for _ in 0..25 {
+            match tcp.write(&chunk) {
+                Ok(n) if n > 0 => sent_total += n,
+                Ok(_) | Err(_) => break,
+            }
+        }
+        let _ = tcp.shutdown(Shutdown::Write);
+        sent_total
+    });
+    thread::sleep(Duration::from_millis(300));
+    let queued = host.shared.queued.load(Ordering::Acquire);
+    assert!(
+        queued <= MAX_RECEIVE_QUEUE + crate::stream::MAX_PAYLOAD,
+        "queued bytes {queued} exceeded bound {}",
+        MAX_RECEIVE_QUEUE
+    );
+
+    let mut got = Vec::new();
+    server_conn.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let _ = server_conn.read_to_end(&mut got);
+    let sent_total = sender.join().unwrap();
+    assert_eq!(got.len(), sent_total);
+    assert_eq!(host.shared.queued.load(Ordering::Acquire), 0);
+
+    device.close("test over");
+    host.close("test over");
+    host_node.stop();
+    device_node.stop();
+}

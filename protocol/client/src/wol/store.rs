@@ -1,16 +1,14 @@
 //! Atomic, `0600`-protected `wake_targets.json` persistence with one-time legacy import.
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::path::Path;
 
 use nightjar_policy::wol::{MAX_BROADCASTS, MAX_MACS, extract_targets, normal_mac, parse_ipv4_literal};
 use rubylight_native_api::wake::Wake;
 use serde::{Deserialize, Serialize};
 
-use crate::hosts::io::{dir_lock, write_atomic};
+use crate::hosts::io::{GuardedJsonFile, dir_lock};
 
 const WAKE_TARGETS_FILE: &str = "wake_targets.json";
 
@@ -34,36 +32,28 @@ struct WakeTargetsFile {
 /// Persistent `wake_targets.json` store synchronized per canonical directory.
 #[derive(Clone, Debug)]
 pub struct WakeTargetsStore {
-    path: PathBuf,
-    lock: Arc<Mutex<()>>,
+    file: GuardedJsonFile,
 }
 
 impl WakeTargetsStore {
     pub fn open(dir: impl AsRef<Path>) -> Self {
         let dir = dir.as_ref();
         Self {
-            path: dir.join(WAKE_TARGETS_FILE),
-            lock: dir_lock(dir),
+            file: GuardedJsonFile::new(dir.join(WAKE_TARGETS_FILE), dir_lock(dir), true),
         }
     }
 
     pub fn path(&self) -> &Path {
-        &self.path
+        self.file.path()
     }
 
     fn read_unlocked(&self) -> WakeTargetsFile {
-        let Ok(text) = fs::read_to_string(&self.path) else {
-            return WakeTargetsFile::default();
-        };
-        serde_json::from_str(&text).unwrap_or_else(|e| {
-            eprintln!("nightjar: ignoring unreadable {}: {e}", self.path.display());
-            WakeTargetsFile::default()
-        })
+        self.file.read_json_or_default()
     }
 
     fn write_unlocked(&self, file: &WakeTargetsFile) -> io::Result<()> {
         let text = serde_json::to_string_pretty(file).map_err(io::Error::other)?;
-        write_atomic(&self.path, text.as_bytes(), true)
+        self.file.write_bytes(text.as_bytes())
     }
 
     /// Loads merged targets (`hosts[uuid]` + deduplicated `manual[uuid]`) for `uuid`.
@@ -71,7 +61,7 @@ impl WakeTargetsStore {
         if uuid.is_empty() {
             return WakeTargetEntry::default();
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let file = self.read_unlocked();
         let mut macs = Vec::new();
         let mut broadcasts = Vec::new();
@@ -105,7 +95,7 @@ impl WakeTargetsStore {
         if uuid.is_empty() {
             return Vec::new();
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let file = self.read_unlocked();
         let mut macs = Vec::new();
         if let Some(list) = file.manual.get(uuid) {
@@ -122,7 +112,7 @@ impl WakeTargetsStore {
         if uuid.is_empty() {
             return Ok(());
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         let mut normalized = Vec::new();
         for mac in macs.iter().filter_map(|m| normal_mac(m)) {
@@ -167,7 +157,7 @@ impl WakeTargetsStore {
         if uuid.is_empty() {
             return Ok(());
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         let entry = WakeTargetEntry { macs, broadcasts };
         if file.hosts.get(uuid) == Some(&entry) {
@@ -182,7 +172,7 @@ impl WakeTargetsStore {
         if uuid.is_empty() {
             return Ok(());
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         if file.hosts.remove(uuid).is_none() {
             return Ok(());
@@ -195,7 +185,7 @@ impl WakeTargetsStore {
         if uuid.is_empty() {
             return Ok(());
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         let a = file.hosts.remove(uuid).is_some();
         let b = file.manual.remove(uuid).is_some();
@@ -216,7 +206,7 @@ impl WakeTargetsStore {
         hosts: BTreeMap<String, WakeTargetEntry>,
         manual: BTreeMap<String, Vec<String>>,
     ) -> io::Result<bool> {
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         if file.imported {
             return Ok(false);
@@ -258,7 +248,7 @@ impl WakeTargetsStore {
                 changed = true;
             }
         }
-        if changed || (!file.imported && (had_payload || self.path.exists())) {
+        if changed || (!file.imported && (had_payload || self.file.path().exists())) {
             file.imported = true;
             self.write_unlocked(&file)?;
         }

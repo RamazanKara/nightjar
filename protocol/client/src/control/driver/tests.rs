@@ -1,6 +1,7 @@
 use super::*;
 use crate::roaming::{Rejections, MAX_ATTEMPT};
 use std::cell::Cell;
+use std::net::IpAddr;
 
 /// A code [`datagram_lost`] takes for packet loss: network unreachable.
 const UNREACHABLE: i32 = if cfg!(windows) {
@@ -36,6 +37,10 @@ fn control_socket(
 ) -> (ControlSocket, Arc<Mutex<Vec<String>>>) {
     let warnings = Arc::new(Mutex::new(Vec::new()));
     let control = ControlSocket {
+        host_ip: Some(match socket.local_addr() {
+            Ok(SocketAddr::V6(_)) => IpAddr::V6(Ipv6Addr::LOCALHOST),
+            _ => IpAddr::V4(Ipv4Addr::LOCALHOST),
+        }),
         socket,
         roam_inbox: VecDeque::new(),
         roaming: false,
@@ -670,15 +675,85 @@ fn datagram_lost_recognizes_network_unreachable_kinds_and_platform_errnos() {
     assert!(!datagram_lost(&io::Error::other("other")));
 
     #[cfg(windows)]
-    for code in [10050, 10051, 10064, 10065] {
+    for code in [10040, 10050, 10051, 10052, 10055, 10064, 10065] {
         assert!(datagram_lost(&io::Error::from_raw_os_error(code)), "WSA {code}");
     }
-    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
-    for code in [50, 51, 52, 64, 65] {
-        assert!(datagram_lost(&io::Error::from_raw_os_error(code)), "BSD {code}");
+    #[cfg(unix)]
+    for code in [
+        libc::EPERM,
+        libc::EMSGSIZE,
+        libc::ENOBUFS,
+        libc::ENETDOWN,
+        libc::ENETUNREACH,
+        libc::ENETRESET,
+        libc::EHOSTDOWN,
+        libc::EHOSTUNREACH,
+    ] {
+        assert!(datagram_lost(&io::Error::from_raw_os_error(code)), "POSIX {code}");
     }
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    for code in [100, 101, 112, 113] {
-        assert!(datagram_lost(&io::Error::from_raw_os_error(code)), "Linux {code}");
+}
+
+#[test]
+fn oversized_datagrams_and_non_host_senders_do_not_break_or_refresh_control() {
+    use rusty_enet::Socket as _;
+    let (mut control, _) = control_socket(UdpSocket::bind("127.0.0.1:0").unwrap(), None);
+    control.socket.set_nonblocking(true).unwrap();
+    let ours = control.socket.local_addr().unwrap();
+    let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let mut buffer = [0u8; MTU_MAX];
+
+    // Non-host IP datagrams are ignored and never refresh last_receive.
+    control.host_ip = Some(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1)));
+    sender.send_to(&[0x00, 0x00, 0x46, 0xff], ours).unwrap();
+    std::thread::sleep(Duration::from_millis(20));
+    assert!(control.receive(&mut buffer).unwrap().is_none());
+    assert!(control.last_receive.is_none());
+
+    // Oversized datagrams from the host (> MTU_MAX) are dropped cleanly (WSAEMSGSIZE on Windows),
+    // and valid ENet datagrams queued right behind them still arrive without error.
+    control.host_ip = Some(IpAddr::V4(Ipv4Addr::LOCALHOST));
+    let oversized = vec![0xAAu8; MTU_MAX + 64];
+    sender.send_to(&oversized, ours).unwrap();
+    sender.send_to(&[0x10, 0x00], ours).unwrap();
+    let mut got = None;
+    for _ in 0..50 {
+        if let Some((_, PacketReceived::Complete(len))) = control.receive(&mut buffer).unwrap() {
+            got = Some(len);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
     }
+    assert_eq!(got, Some(2));
+    assert!(control.last_receive.is_some());
+}
+
+#[test]
+fn control_connect_stops_promptly_on_interrupt() {
+    let silent = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let interrupt = crate::session::Interrupt::default();
+    let mut config = DriverConfig {
+        connect_timeout: Duration::from_secs(5),
+        ..DriverConfig::new(silent.local_addr().unwrap())
+    };
+    config.interrupt = Some(interrupt.clone());
+    let caps = HostCapabilities {
+        app_version: [7, 1, 431, -1],
+        feature_flags: 3,
+        encryption_enabled: super::super::negotiation::encryption::CONTROL_V2,
+        control_messages: Vec::new(),
+        client_roaming: false,
+    };
+    let trigger = interrupt.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(50));
+        trigger.interrupt();
+    });
+    let start = Instant::now();
+    let result = connect(config, caps, &[0; 16], SessionOptions::default());
+    assert!(matches!(result, Err(ConnectError::Interrupted)));
+    assert!(
+        start.elapsed() < Duration::from_secs(1),
+        "interrupted connect took {:?}",
+        start.elapsed()
+    );
 }

@@ -48,8 +48,11 @@ fn remap_handles_all_device_quirks() {
     );
     assert_eq!(r.key_code, keycode::BUTTON_1);
 
+    // 8BitDo BTN_C (scan code 306) must stay remappable instead of forcing Guide.
     let r = remap_key_event(false, keycode::UNKNOWN, 306, 0, true, 0x2dc8, 0, 34, 0);
-    assert_eq!(r.key_code, keycode::BUTTON_MODE);
+    assert_eq!(r.key_code, keycode::UNKNOWN);
+    let r_btn_c = remap_key_event(false, keycode::BUTTON_C, 306, 0, true, 0x2dc8, 0, 34, 0);
+    assert_eq!(r_btn_c.key_code, keycode::BUTTON_C);
 
     let r = remap_key_event(
         false,
@@ -203,9 +206,19 @@ fn shared_preferences_codecs_round_trip() {
     bm.mappings.insert(keycode::BUTTON_A, keycode::BUTTON_B);
     bm.mappings
         .insert(keycode::BUTTON_C, keycode::TARGET_PADDLE1);
+    bm.mappings.insert(0x30132, keycode::BUTTON_MODE);
+    bm.mappings.insert(0x30135, keycode::TARGET_PADDLE2);
+    bm.mappings.insert(0x302c0, keycode::TARGET_PADDLE3);
+    bm.mappings.insert(0x302c1, keycode::TARGET_PADDLE4);
     bm.connect_as = controller_type::PS;
     let s = bm.serialize();
     assert_eq!(ButtonMap::deserialize(Some(&s)), bm);
+    assert!(is_remappable_source(0x30120));
+    assert!(is_remappable_source(0x3013f));
+    assert!(is_remappable_source(0x302c0));
+    assert!(is_remappable_source(0x302cf));
+    assert!(!is_remappable_source(0x3011f));
+    assert!(!is_remappable_source(0x302d0));
 
     let mut am = AxisMap::default();
     am.axes[0] = -2;

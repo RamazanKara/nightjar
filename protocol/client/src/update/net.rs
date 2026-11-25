@@ -12,7 +12,7 @@ use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned};
 
 use crate::http::transport::{Abort, Host, connect, io_tls_error, tls_error};
-use crate::http::wire::{Reader, read_head};
+use crate::http::wire::{Reader, read_final_head};
 
 const MAX_REDIRECTS: usize = 5;
 /// Cap on buffered response bodies for [`WebPkiTransport::exchange`] (24 MiB).
@@ -46,9 +46,15 @@ impl Url {
             (_, Some(rest)) => (false, rest),
             _ => return None,
         };
-        let (authority, path) = match rest.find(['/', '?', '#']) {
+        let rest = rest.split_once('#').map_or(rest, |(head, _)| head);
+        let (authority, path) = match rest.find(['/', '?']) {
             Some(at) => rest.split_at(at),
             None => (rest, "/"),
+        };
+        let path = if path.starts_with('?') {
+            format!("/{path}")
+        } else {
+            path.to_owned()
         };
         let (host, port) = match authority.split_once(':') {
             Some((host, port)) => (host, port.parse().ok()?),
@@ -66,12 +72,13 @@ impl Url {
             secure,
             host: host.to_ascii_lowercase(),
             port,
-            path: path.to_owned(),
+            path,
         })
     }
 
     /// Resolves a redirect's `Location` relative to `self`.
     pub fn resolve(&self, location: &str) -> Option<Self> {
+        let location = location.split_once('#').map_or(location, |(head, _)| head);
         if location.starts_with('/') && !location.starts_with("//") {
             if location.bytes().any(|b| b <= b' ' || b == 0x7F) {
                 return None;
@@ -322,7 +329,7 @@ impl Transport for WebPkiTransport {
                 buffer: std::mem::take(&mut buffer),
                 eof,
             };
-            let head = read_head(&mut reader).map_err(|e| e.to_string())?;
+            let head = read_final_head(&mut reader).map_err(|e| e.to_string())?;
             buffer = reader.buffer;
             eof = reader.eof;
             head
@@ -529,14 +536,21 @@ impl WebPkiTransport {
                     return Err("redirect downgraded off HTTPS".into());
                 }
                 if next.host != current.host || next.port != current.port {
-                    // Never leak credentials or API keys across origins on a redirect.
+                    // Drop credential and unlisted headers cross-origin; only keep safe content
+                    // negotiation headers, and refuse cross-origin 307/308 bodies/mutations.
                     current_headers.retain(|(k, _)| {
-                        !k.eq_ignore_ascii_case("authorization")
-                            && !k.eq_ignore_ascii_case("proxy-authorization")
-                            && !k.eq_ignore_ascii_case("cookie")
-                            && !k.eq_ignore_ascii_case("client-id")
-                            && !k.eq_ignore_ascii_case("x-api-key")
+                        k.eq_ignore_ascii_case("accept")
+                            || k.eq_ignore_ascii_case("accept-language")
                     });
+                    if matches!(status, 307 | 308)
+                        && (current_body.is_some()
+                            || (!current_method.eq_ignore_ascii_case("GET")
+                                && !current_method.eq_ignore_ascii_case("HEAD")))
+                    {
+                        return Err(format!(
+                            "refusing cross-origin {status} redirect for {current_method}"
+                        ));
+                    }
                 }
                 if matches!(status, 301..=303) && current_method.eq_ignore_ascii_case("POST") {
                     current_method = "GET".to_owned();
@@ -596,7 +610,12 @@ impl WebPkiTransport {
             if let Some(parent) = target.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
-            let part = target.with_extension("part");
+            let mut part_name = target
+                .file_name()
+                .ok_or_else(|| "missing target file name".to_owned())?
+                .to_os_string();
+            part_name.push(".part");
+            let part = target.with_file_name(part_name);
             let write_res = (|| -> Result<(), String> {
                 let mut file = std::fs::File::create(&part).map_err(|e| e.to_string())?;
                 let mut total = 0u64;
@@ -695,6 +714,8 @@ impl WebPkiTransport {
         }
         if let Some(bytes) = body {
             req.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
+        } else if method.eq_ignore_ascii_case("POST") || method.eq_ignore_ascii_case("PUT") {
+            req.push_str("Content-Length: 0\r\n");
         }
         req.push_str("\r\n");
         tls.write_all(req.as_bytes())
@@ -715,7 +736,7 @@ impl WebPkiTransport {
                 buffer: std::mem::take(&mut buffer),
                 eof,
             };
-            let head = read_head(&mut reader).map_err(|e| e.to_string())?;
+            let head = read_final_head(&mut reader).map_err(|e| e.to_string())?;
             buffer = reader.buffer;
             eof = reader.eof;
             head

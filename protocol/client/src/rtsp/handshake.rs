@@ -69,6 +69,9 @@ pub struct Handshake {
     mic_offered_port: u16,
     has_session: bool,
     describe: Option<DescribeInfo>,
+    rubylight: bool,
+    options_cseq: Option<Option<i32>>,
+    describe_cseq: Option<i32>,
     pub(super) out: RtspOutcome,
 }
 
@@ -176,6 +179,9 @@ impl Handshake {
             mic_offered_port: 0,
             has_session: false,
             describe: None,
+            rubylight: false,
+            options_cseq: None,
+            describe_cseq: None,
             out: RtspOutcome {
                 config,
                 app_version: quad,
@@ -427,7 +433,8 @@ impl Handshake {
             None => raw.to_vec(),
         };
         let response = parse_response(&plain)?;
-        if self.cipher.is_some()
+        if self.rubylight
+            && self.cipher.is_some()
             && response.sequence() != Some(self.sequence.saturating_sub(1) as i32)
         {
             return Err(RtspError::Malformed(format!(
@@ -442,13 +449,27 @@ impl Handshake {
     pub fn handle_plain_response(&mut self, response: &RtspResponse) -> Result<(), RtspError> {
         self.awaiting = false;
         let expected_seq = self.sequence.saturating_sub(1) as i32;
-        if let Some(cseq) = response.sequence()
-            && cseq != expected_seq
-        {
-            return Err(RtspError::Malformed(format!(
-                "{}: unexpected RTSP CSeq {cseq} (expected {expected_seq})",
-                self.stage.name()
-            )));
+        if self.stage == Stage::Options {
+            self.options_cseq = Some(response.sequence());
+        } else if self.stage == Stage::Describe {
+            self.describe_cseq = response.sequence();
+        }
+        if self.rubylight {
+            match response.sequence() {
+                Some(cseq) if cseq == expected_seq => {}
+                Some(cseq) => {
+                    return Err(RtspError::Malformed(format!(
+                        "{}: unexpected RTSP CSeq {cseq} (expected {expected_seq})",
+                        self.stage.name()
+                    )));
+                }
+                None => {
+                    return Err(RtspError::Malformed(format!(
+                        "{}: missing RTSP CSeq (expected {expected_seq})",
+                        self.stage.name()
+                    )));
+                }
+            }
         }
         let stage = self.stage;
         let ok = response.status_code == 200;
@@ -610,6 +631,29 @@ impl Handshake {
 
     fn handle_describe(&mut self, text: &str) -> Result<(), RtspError> {
         let info = DescribeInfo::parse(text);
+        let rubylight = !info.control_messages.is_empty()
+            || info.roaming
+            || text.lines().any(|line| {
+                line.trim_end_matches('\r').starts_with("a=x-rl-")
+            });
+        if rubylight {
+            if self.options_cseq != Some(Some(1)) {
+                return Err(RtspError::Malformed(format!(
+                    "{}: unexpected or missing RTSP CSeq",
+                    Stage::Options.name()
+                )));
+            }
+            if self.describe_cseq != Some(2) {
+                return Err(RtspError::Malformed(format!(
+                    "{}: unexpected or missing RTSP CSeq",
+                    Stage::Describe.name()
+                )));
+            }
+            if let Some(cipher) = &mut self.cipher {
+                cipher.enable_strict()?;
+            }
+            self.rubylight = true;
+        }
         let config = self.out.config.clone();
         let format = if config.experimental_packed_444 {
             info.select_packed_format(&config)?

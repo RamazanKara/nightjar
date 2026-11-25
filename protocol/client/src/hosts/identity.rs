@@ -80,14 +80,20 @@ impl IdentityStore {
         let path = self.path();
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                self.unreadable.clear(&path);
+                return Ok(None);
+            }
             Err(e) => {
                 self.unreadable.leave_as_it_is(&path);
                 return Err(format!("{} cannot be read: {e}", path.display()));
             }
         };
         match serde_json::from_str::<IdentityFile>(&text) {
-            Ok(identity) => Ok(Some(identity)),
+            Ok(identity) => {
+                self.unreadable.clear(&path);
+                Ok(Some(identity))
+            }
             Err(e) => {
                 if !self.read_only
                     && let Err(copy) = back_up(&path, "bad")

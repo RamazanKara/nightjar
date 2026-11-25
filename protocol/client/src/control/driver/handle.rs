@@ -68,6 +68,8 @@ pub struct DriverConfig {
     pub warn: Warn,
     /// Frame Warp's shared state: counts input as it leaves and takes the host's messages.
     pub frame_warp: Option<Arc<crate::frame_warp::FrameWarp>>,
+    /// Session-start cancellation signal checked during [`super::connect`].
+    pub interrupt: Option<crate::session::Interrupt>,
 }
 
 impl DriverConfig {
@@ -85,6 +87,7 @@ impl DriverConfig {
             roam_seq: LaunchSeq::default(),
             warn: Warn::default(),
             frame_warp: None,
+            interrupt: None,
         }
     }
 

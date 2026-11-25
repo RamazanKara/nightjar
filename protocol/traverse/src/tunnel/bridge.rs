@@ -71,8 +71,16 @@ impl Tunnel {
         let mut tcp = tcp;
         for write in writes {
             match write {
-                Outgoing::Data(data) => {
-                    if tcp.write_all(&data).is_err() {
+                Outgoing::Data(chunk) => {
+                    let result = tcp.write_all(&chunk.data);
+                    let prev = chunk.queued.load(Ordering::Acquire);
+                    drop(chunk);
+                    if prev >= MAX_RECEIVE_QUEUE
+                        && self.shared.queued.load(Ordering::Acquire) < MAX_RECEIVE_QUEUE
+                    {
+                        self.wake_by(0);
+                    }
+                    if result.is_err() {
                         let _ = tcp.shutdown(Shutdown::Both);
                         let mut inner = self.shared.inner.lock().unwrap();
                         inner.reliable.reset(stream);
@@ -87,10 +95,12 @@ impl Tunnel {
                 }
                 Outgoing::Reset => {
                     let _ = tcp.shutdown(Shutdown::Both);
+                    self.wake_by(0);
                     return;
                 }
             }
         }
+        self.wake_by(0);
     }
 
     fn read_connection(&self, stream: StreamId, mut tcp: TcpStream) {

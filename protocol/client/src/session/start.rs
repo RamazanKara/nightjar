@@ -129,10 +129,24 @@ pub(super) fn start(
             if rtsp_port == rtsp::DEFAULT_RTSP_PORT {
                 return Err(e);
             }
-            std::thread::sleep(Duration::from_secs(1));
+            let until = Instant::now() + Duration::from_secs(1);
+            loop {
+                if interrupt.is_interrupted() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Interrupted,
+                        "interrupted",
+                    ));
+                }
+                let left = until.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    break;
+                }
+                std::thread::sleep(left.min(Duration::from_millis(50)));
+            }
             net::resolve(&host.address, test_ports)
         })
         .map_err(|e| fail(Stage::NameResolution, io_code(&e), e.to_string()))?;
+    check_interrupt(Stage::NameResolution)?;
     let local = net::local_address_toward(net::with_port(remote, rtsp_port))
         .map_err(|e| fail(Stage::NameResolution, io_code(&e), e.to_string()))?;
     parts.remote = Some(remote);
@@ -160,7 +174,7 @@ pub(super) fn start(
     .map_err(rtsp_fail)?;
     let mut rtsp_address = remote;
     rtsp_address.set_port(handshake.rtsp_port());
-    let interrupted = interrupt.0.clone();
+    let interrupted = interrupt.flag.clone();
     while let Some(request) = handshake.next_request().map_err(rtsp_fail)? {
         let response = rtsp::transact(
             rtsp_address,
@@ -175,15 +189,20 @@ pub(super) fn start(
             && let Some(port) = handshake.audio_port()
         {
             // notifyAudioPortNegotiationComplete: ping before PLAY.
+            let audio_target = net::with_port(remote, port);
             let socket = net::bind_udp(local, 0, Qos::Audio, config.network_priority, |m| {
                 listener.warn(m)
+            })
+            .and_then(|socket| {
+                socket.connect(audio_target)?;
+                Ok(socket)
             })
             .map_err(|e| fail(Stage::RtspHandshake, io_code(&e), e.to_string()))?;
             parts.audio_pinger = Some(
                 net::Pinger::start(
                     "AudioPing",
                     &socket,
-                    net::with_port(remote, port),
+                    audio_target,
                     handshake.audio_ping_payload(),
                 )
                 .map_err(|e| fail(Stage::RtspHandshake, io_code(&e), e.to_string()))?,
@@ -221,6 +240,7 @@ pub(super) fn start(
     let roaming = config.roaming.enabled && outcome.host_roaming;
     driver_config.local = Some(local);
     driver_config.roaming = config.roaming.enabled;
+    driver_config.interrupt = Some(interrupt.clone());
     if roaming {
         driver_config.roam_seq = roam::launch_seq(&outcome.config.remote_input_aes_key);
     }
@@ -339,16 +359,18 @@ pub(super) fn start(
         stream.bitrate_kbps.max(0) as u32,
         stream.packet_size as usize,
     );
+    let video_target = net::with_port(remote, outcome.video_port);
     if config.input_only {
         // Pings are best effort: a refused or failed send is ignored, nothing reads replies.
         match net::bind_udp(local, 0, Qos::Video, config.network_priority, |m| {
             listener.warn(m)
         })
         .and_then(|socket| {
+            socket.connect(video_target)?;
             net::Pinger::start(
                 "VideoPing",
                 &socket,
-                net::with_port(remote, outcome.video_port),
+                video_target,
                 outcome.video_ping_payload,
             )
         }) {
@@ -385,6 +407,10 @@ pub(super) fn start(
         }
         let socket = match net::bind_udp_sized(local, video_buffer, Qos::Video, config.network_priority, |m| {
             listener.warn(m)
+        })
+        .and_then(|(socket, buffer)| {
+            socket.connect(video_target)?;
+            Ok((socket, buffer))
         }) {
             Ok((socket, buffer)) => {
                 if let Some(buffer) = buffer {
@@ -402,7 +428,7 @@ pub(super) fn start(
         decoder.start();
         let start = video::VideoStart {
             socket,
-            target: net::with_port(remote, outcome.video_port),
+            target: video_target,
             ping_payload: outcome.video_ping_payload,
             direct_submit: outcome.video_capabilities & sdp::CAPABILITY_DIRECT_SUBMIT != 0,
             receive_coalescing: config.receive_coalescing,
@@ -525,12 +551,14 @@ pub(super) fn start(
             roam::MediaPath {
                 qos: Qos::Video,
                 buffer: video_buffer,
+                target: video_target,
                 ping: video,
                 receive: parts.video.is_some().then(|| parts.video_next_socket.clone()),
             },
             roam::MediaPath {
                 qos: Qos::Audio,
                 buffer: 0,
+                target: net::with_port(remote, outcome.audio_port),
                 ping: parts.audio_pinger.as_ref().map(net::Pinger::handle),
                 receive: parts.audio.is_some().then(|| parts.audio_next_socket.clone()),
             },

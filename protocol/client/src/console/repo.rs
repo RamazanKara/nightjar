@@ -23,6 +23,8 @@ use std::time::{Duration, Instant};
 
 /// Minimum wait before retrying a failed `GET /capabilities` probe on an online host.
 pub const FEATURES_RETRY_COOLDOWN: Duration = Duration::from_secs(300);
+/// Refresh cached capabilities periodically without requiring a process restart.
+const CAPS_REFRESH_TTL: Duration = Duration::from_secs(300);
 
 /// Metadata describing one paired/known host supplied by the platform host registry.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -147,6 +149,7 @@ pub struct ConsoleSnapshot {
 #[derive(Default)]
 struct RepoState {
     capabilities: HashMap<String, NativeCapabilities>,
+    capabilities_fetched_at: HashMap<String, Instant>,
     cached_features: HashMap<String, Vec<String>>,
     features_retry_at: HashMap<String, Instant>,
     libraries: HashMap<String, NativeLibrary>,
@@ -154,6 +157,8 @@ struct RepoState {
     errors: HashMap<String, String>,
     live: HashMap<String, bool>,
     sessions: HashMap<String, Session>,
+    clear_gen: u64,
+    forget_gen: HashMap<String, u64>,
 }
 
 /// Unified console repository coordinating disk stores, parallel host refreshes, and pure merge logic.
@@ -218,7 +223,11 @@ impl ConsoleRepository {
     /// Clears transient in-memory host/session state (used in tests or host teardown).
     pub fn clear_in_memory_cache(&self) {
         if let Ok(mut guard) = self.state.write() {
-            *guard = RepoState::default();
+            let next_gen = guard.clear_gen.wrapping_add(1);
+            *guard = RepoState {
+                clear_gen: next_gen,
+                ..RepoState::default()
+            };
         }
     }
 
@@ -268,19 +277,29 @@ impl ConsoleRepository {
         );
         let results: Mutex<Vec<RefreshResult>> = Mutex::new(Vec::new());
 
-        let snapshot_state: HashMap<String, (Option<NativeCapabilities>, Vec<String>, bool)> = {
+        let (start_clear_gen, start_forget_gens, snapshot_state) = {
             let guard = self.state.read().unwrap();
-            hosts
+            let forget_gens: HashMap<String, u64> = hosts
+                .iter()
+                .map(|h| (h.uuid.clone(), guard.forget_gen.get(&h.uuid).copied().unwrap_or(0)))
+                .collect();
+            let state_map: HashMap<String, _> = hosts
                 .iter()
                 .map(|h| {
-                    let caps = guard.capabilities.get(&h.uuid).cloned();
-                    let disk_entry = if caps.is_none() && !guard.cached_features.contains_key(&h.uuid) {
-                        self.libraries.load_entry(&h.uuid)
-                    } else {
-                        None
-                    };
-                    let fallback = caps
-                        .as_ref()
+                    let fresh_caps = guard
+                        .capabilities_fetched_at
+                        .get(&h.uuid)
+                        .is_some_and(|&at| now.saturating_duration_since(at) < CAPS_REFRESH_TTL)
+                        .then(|| guard.capabilities.get(&h.uuid).cloned())
+                        .flatten();
+                    let stale_caps = guard.capabilities.get(&h.uuid);
+                    let disk_entry =
+                        if stale_caps.is_none() && !guard.cached_features.contains_key(&h.uuid) {
+                            self.libraries.load_entry(&h.uuid)
+                        } else {
+                            None
+                        };
+                    let fallback = stale_caps
                         .map(|c| c.capabilities.features.clone())
                         .or_else(|| guard.cached_features.get(&h.uuid).cloned())
                         .or_else(|| disk_entry.map(|(_, _, f)| f))
@@ -289,9 +308,10 @@ impl ConsoleRepository {
                         .features_retry_at
                         .get(&h.uuid)
                         .is_none_or(|&until| now >= until);
-                    (h.uuid.clone(), (caps, fallback, cooldown_ok))
+                    (h.uuid.clone(), (fresh_caps, fallback, cooldown_ok))
                 })
-                .collect()
+                .collect();
+            (guard.clear_gen, forget_gens, state_map)
         };
 
         std::thread::scope(|scope| {
@@ -343,59 +363,68 @@ impl ConsoleRepository {
         let mut newly_fetched_caps = HashSet::new();
         {
             let mut guard = self.state.write().unwrap();
-            for (
-                uuid,
-                caps,
-                caps_failed,
-                caps_newly_fetched,
-                effective_features,
-                lib_res,
-                sess,
-            ) in collected
-            {
-                if caps_newly_fetched {
-                    newly_fetched_caps.insert(uuid.clone());
-                }
-                if let Some(c) = caps {
-                    guard
-                        .cached_features
-                        .insert(uuid.clone(), c.capabilities.features.clone());
-                    guard.capabilities.insert(uuid.clone(), c);
-                    guard.features_retry_at.remove(&uuid);
-                } else {
-                    if !effective_features.is_empty() {
+            if guard.clear_gen == start_clear_gen {
+                for (
+                    uuid,
+                    caps,
+                    caps_failed,
+                    caps_newly_fetched,
+                    effective_features,
+                    lib_res,
+                    sess,
+                ) in collected
+                {
+                    let started_gen = start_forget_gens.get(&uuid).copied().unwrap_or(0);
+                    if guard.forget_gen.get(&uuid).copied().unwrap_or(0) != started_gen {
+                        continue;
+                    }
+                    if caps_newly_fetched {
+                        newly_fetched_caps.insert(uuid.clone());
+                    }
+                    if let Some(c) = caps {
                         guard
                             .cached_features
-                            .insert(uuid.clone(), effective_features.clone());
+                            .insert(uuid.clone(), c.capabilities.features.clone());
+                        guard.capabilities.insert(uuid.clone(), c);
+                        if caps_newly_fetched {
+                            guard.capabilities_fetched_at.insert(uuid.clone(), Instant::now());
+                        }
+                        guard.features_retry_at.remove(&uuid);
+                    } else {
+                        if !effective_features.is_empty() {
+                            guard
+                                .cached_features
+                                .insert(uuid.clone(), effective_features.clone());
+                        }
+                        if caps_failed {
+                            guard
+                                .features_retry_at
+                                .insert(uuid.clone(), Instant::now() + FEATURES_RETRY_COOLDOWN);
+                        }
                     }
-                    if caps_failed {
-                        guard
-                            .features_retry_at
-                            .insert(uuid.clone(), Instant::now() + FEATURES_RETRY_COOLDOWN);
+                    match lib_res {
+                        Ok(l) => {
+                            let _ = self.libraries.save_entry(
+                                &uuid,
+                                &l,
+                                now_unix_ms,
+                                &effective_features,
+                            );
+                            guard.libraries.insert(uuid.clone(), l);
+                            guard.fetched_at_ms.insert(uuid.clone(), now_unix_ms);
+                            guard.errors.remove(&uuid);
+                            guard.live.insert(uuid.clone(), true);
+                        }
+                        Err(err) => {
+                            guard.errors.insert(uuid.clone(), err);
+                            guard.live.insert(uuid.clone(), false);
+                        }
                     }
-                }
-                match lib_res {
-                    Ok(l) => {
-                        let _ = self.libraries.save_entry(
-                            &uuid,
-                            &l,
-                            now_unix_ms,
-                            &effective_features,
-                        );
-                        guard.libraries.insert(uuid.clone(), l);
-                        guard.fetched_at_ms.insert(uuid.clone(), now_unix_ms);
-                        guard.errors.remove(&uuid);
-                        guard.live.insert(uuid.clone(), true);
+                    if let Some(s) = sess {
+                        guard.sessions.insert(uuid, s);
+                    } else {
+                        guard.sessions.remove(&uuid);
                     }
-                    Err(err) => {
-                        guard.errors.insert(uuid.clone(), err);
-                        guard.live.insert(uuid.clone(), false);
-                    }
-                }
-                if let Some(s) = sess {
-                    guard.sessions.insert(uuid, s);
-                } else {
-                    guard.sessions.remove(&uuid);
                 }
             }
         }
@@ -446,7 +475,13 @@ impl ConsoleRepository {
             return;
         }
         if let Ok(mut guard) = self.state.write() {
+            guard
+                .forget_gen
+                .entry(host_id.to_owned())
+                .and_modify(|g| *g = g.wrapping_add(1))
+                .or_insert(1);
             guard.capabilities.remove(host_id);
+            guard.capabilities_fetched_at.remove(host_id);
             guard.cached_features.remove(host_id);
             guard.features_retry_at.remove(host_id);
             guard.libraries.remove(host_id);
@@ -454,8 +489,10 @@ impl ConsoleRepository {
             guard.errors.remove(host_id);
             guard.live.remove(host_id);
             guard.sessions.remove(host_id);
+            self.libraries.forget(host_id);
+        } else {
+            self.libraries.forget(host_id);
         }
-        self.libraries.forget(host_id);
         let _ = self.recents.forget_host(host_id);
         let _ = self.favourites.forget_host(host_id);
         let _ = self.hidden.forget_host(host_id);
@@ -714,6 +751,12 @@ impl ConsoleRepository {
             library_revision,
             has_any_library,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn expire_capabilities_for_test(&self, uuid: &str) {
+        let ts = Instant::now() - (CAPS_REFRESH_TTL + Duration::from_secs(1));
+        self.state.write().unwrap().capabilities_fetched_at.insert(uuid.to_owned(), ts);
     }
 }
 

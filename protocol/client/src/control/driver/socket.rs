@@ -3,7 +3,7 @@
 
 use std::collections::VecDeque;
 use std::io;
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::time::{Duration, Instant};
 
 use rubylight_protocol::roaming::is_roaming;
@@ -18,21 +18,38 @@ const CONTROL_RECV_BUFFER: usize = 256 * 1024;
 const CONTROL_SEND_BUFFER: usize = 128 * 1024;
 /// Roaming datagrams set aside between services at most; the host sends one per PROBE.
 const MAX_ROAM_INBOX: usize = 8;
+/// Most skipped wakes, non-host datagrams or transient errors drained per [`ControlSocket::receive`]
+/// call so a flood cannot starve the control thread's stop check or transmit timers.
+const MAX_SKIPPED_PER_RECEIVE: usize = 64;
+
+fn set_control_buffers(socket: &UdpSocket) {
+    // rusty_enet's UdpSocket::init leaves the buffer sizes at the OS default (its TODO: std
+    // cannot set them), so they are set here. A refusal keeps the default.
+    let socket = socket2::SockRef::from(socket);
+    let _ = socket.set_recv_buffer_size(CONTROL_RECV_BUFFER);
+    let _ = socket.set_send_buffer_size(CONTROL_SEND_BUFFER);
+}
 
 /// Codes of sends and receives that only mean a datagram was lost, which ENet treats as
-/// packet loss: unreachable networks and hosts during a roam, and ICMP port unreachable.
+/// packet loss: unreachable networks and hosts during a roam, ICMP port unreachable,
+/// oversized UDP datagrams (`WSAEMSGSIZE` / `EMSGSIZE`), full kernel queues (`ENOBUFS`) and
+/// local firewall drops (`EPERM`).
 pub(super) fn datagram_lost(error: &io::Error) -> bool {
     #[cfg(windows)]
-    const LOST: &[i32] = &[10050, 10051, 10052, 10064, 10065];
-    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
-    const LOST: &[i32] = &[50, 51, 52, 64, 65];
-    #[cfg(not(any(
-        windows,
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "freebsd"
-    )))]
-    const LOST: &[i32] = &[100, 101, 102, 112, 113];
+    const LOST: &[i32] = &[10040, 10050, 10051, 10052, 10055, 10064, 10065];
+    #[cfg(unix)]
+    const LOST: &[i32] = &[
+        libc::EPERM,
+        libc::EMSGSIZE,
+        libc::ENOBUFS,
+        libc::ENETDOWN,
+        libc::ENETUNREACH,
+        libc::ENETRESET,
+        libc::EHOSTDOWN,
+        libc::EHOSTUNREACH,
+    ];
+    #[cfg(not(any(windows, unix)))]
+    const LOST: &[i32] = &[];
     matches!(
         error.kind(),
         io::ErrorKind::ConnectionReset
@@ -79,6 +96,9 @@ pub(super) struct ControlSocket {
     /// `socket` so `ControlFlow::drop` removes the flow while the Winsock handle is still open.
     pub(super) flow: Option<priority::ControlFlow>,
     pub(super) socket: UdpSocket,
+    /// Connected peer IP for this session (set after ENet handshake completes); datagrams >= 2
+    /// bytes from other IPs are ignored.
+    pub(super) host_ip: Option<IpAddr>,
     /// Roaming datagrams for [`crate::roaming::Roaming::handle_datagram`]; ENet would drop them.
     pub(super) roam_inbox: VecDeque<Vec<u8>>,
     /// Both sides have roaming on; otherwise roaming datagrams are dropped, not kept.
@@ -265,6 +285,7 @@ impl ControlSocket {
                     .say(&format!("Could not mark the moved control socket for QoS: {e}"));
             }
         }
+        set_control_buffers(&socket);
         self.socket = socket;
     }
 }
@@ -275,11 +296,7 @@ impl rusty_enet::Socket for ControlSocket {
 
     fn init(&mut self, options: rusty_enet::SocketOptions) -> io::Result<()> {
         rusty_enet::Socket::init(&mut self.socket, options)?;
-        // rusty_enet's UdpSocket::init leaves the buffer sizes at the OS default (its TODO: std
-        // cannot set them), so they are set here. A refusal keeps the default.
-        let socket = socket2::SockRef::from(&self.socket);
-        let _ = socket.set_recv_buffer_size(CONTROL_RECV_BUFFER);
-        let _ = socket.set_send_buffer_size(CONTROL_SEND_BUFFER);
+        set_control_buffers(&self.socket);
         Ok(())
     }
 
@@ -336,17 +353,37 @@ impl rusty_enet::Socket for ControlSocket {
             buffer[..datagram.len()].copy_from_slice(&datagram);
             return Ok(Some((address, PacketReceived::Complete(datagram.len()))));
         }
+        let mut skipped = 0usize;
         loop {
             let (address, length) = match rusty_enet::Socket::receive(&mut self.socket, buffer) {
                 Ok(Some((address, PacketReceived::Complete(length)))) => (address, length),
                 Ok(other) => return Ok(other),
-                Err(error) if datagram_lost(&error) => return Ok(None),
+                Err(error) if datagram_lost(&error) => {
+                    skipped += 1;
+                    if skipped >= MAX_SKIPPED_PER_RECEIVE {
+                        return Ok(None);
+                    }
+                    continue;
+                }
                 Err(error) => return Err(error),
             };
             // A wake, or anything else shorter than ENet's 2-byte peer ID: not ENet's (ENet
             // drops it), so it does not count as the host. The waker's source address is
             // the OS's choice, so the length tells a wake apart.
             if length < 2 {
+                skipped += 1;
+                if skipped >= MAX_SKIPPED_PER_RECEIVE {
+                    return Ok(None);
+                }
+                continue;
+            }
+            if let Some(expected_ip) = self.host_ip
+                && address.ip().to_canonical() != expected_ip.to_canonical()
+            {
+                skipped += 1;
+                if skipped >= MAX_SKIPPED_PER_RECEIVE {
+                    return Ok(None);
+                }
                 continue;
             }
             // Roaming datagrams are not ENet's, and count as the host only once they open.
@@ -354,11 +391,17 @@ impl rusty_enet::Socket for ControlSocket {
                 if self.roaming && self.roam_inbox.len() < MAX_ROAM_INBOX {
                     self.roam_inbox.push_back(buffer[..length].to_vec());
                 }
+                skipped += 1;
+                if skipped >= MAX_SKIPPED_PER_RECEIVE {
+                    return Ok(None);
+                }
                 continue;
             }
-            // Anything else on this private socket is the host, from whichever of its
-            // addresses it replies (ENet follows the source, as moonlight-common-c's does).
-            self.last_receive = Some(Instant::now());
+            // Anything else after connecting belongs to the verified host peer (supporting
+            // multi-homed replies learned at handshake while rejecting unrelated senders).
+            if self.host_ip.is_some() {
+                self.last_receive = Some(Instant::now());
+            }
             // The host answered: the marking works, so stop watching it.
             self.marking = None;
             let disconnect = enet_disconnect(&buffer[..length]);

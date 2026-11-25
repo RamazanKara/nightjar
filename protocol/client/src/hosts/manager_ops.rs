@@ -83,9 +83,8 @@ impl HostManager {
                 true,
                 Some(&self.inner.shutdown_cancel),
             );
-            if let Some(pwin) = pinned_direct.winner {
-                return Some(self.finish_adding(candidate, existing_cert, pwin));
-            }
+            let pwin = pinned_direct.winner?;
+            return Some(self.finish_adding(candidate, existing_cert, pwin));
         }
         Some(self.finish_adding(candidate, existing_cert, win))
     }
@@ -140,7 +139,15 @@ impl HostManager {
                 true,
                 Some(&self.inner.shutdown_cancel),
             );
-            pinned_direct.winner.unwrap_or(win)
+            let Some(pwin) = pinned_direct.winner else {
+                let outcome = if pinned_direct.another_certificate {
+                    LinkAddOutcome::CertificateMismatch
+                } else {
+                    LinkAddOutcome::Unreachable
+                };
+                return (outcome, None);
+            };
+            pwin
         } else {
             win
         };
@@ -493,8 +500,8 @@ impl HostManager {
                     (uuid, Some(t.snapshot.clone()))
                 }
             };
-            internet::stop(&uuid);
             if let Some(snap) = snap {
+                internet::stop(&uuid);
                 self.emit(&snap);
             }
         }
@@ -704,6 +711,9 @@ pub(super) fn merge_entry_in_memory(dst: &mut HostEntry, src: HostEntry) {
     }
     if src.shared.server_certificate.is_some() {
         dst.shared.server_certificate = src.shared.server_certificate;
+    }
+    if src.shared.internet_play.is_some() {
+        dst.shared.internet_play = src.shared.internet_play;
     }
     dst.sync_shared_from_slots();
 }

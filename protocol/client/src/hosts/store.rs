@@ -227,7 +227,10 @@ impl HostStore {
         let path = self.path();
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Vec::new(),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                self.unreadable.clear(&path);
+                return Vec::new();
+            }
             Err(e) => {
                 eprintln!(
                     "nightjar: cannot read {} ({e}); it is left as it is",
@@ -238,17 +241,29 @@ impl HostStore {
             }
         };
         if let Ok(list) = serde_json::from_str::<Vec<T>>(&text) {
+            self.unreadable.clear(&path);
             return list;
         }
         eprintln!("nightjar: {} can't be read whole", path.display());
-        if !self.read_only
+        let backup_failed = if !self.read_only
             && let Err(e) = back_up(&path, "bad")
         {
             eprintln!("nightjar: could not keep a copy of {}: {e}", path.display());
-        }
+            true
+        } else {
+            false
+        };
         let Ok(mut value) = serde_json::from_str::<Value>(&text) else {
+            if self.read_only || backup_failed {
+                self.unreadable.leave_as_it_is(&path);
+            }
             return Vec::new();
         };
+        if backup_failed {
+            self.unreadable.leave_as_it_is(&path);
+        } else {
+            self.unreadable.clear(&path);
+        }
         keep_readable_hosts(&mut value, &mut keep_settings, |entry| {
             serde_json::from_value::<T>(entry.clone()).is_ok()
         });
@@ -386,7 +401,21 @@ impl HostStore {
         if self.read_only {
             return Ok(false);
         }
+        let path = self.path();
+        if path.exists() {
+            let text =
+                fs::read_to_string(&path).inspect_err(|_| self.unreadable.leave_as_it_is(&path))?;
+            if serde_json::from_str::<Value>(&text).is_err() {
+                let _ = back_up(&path, "bad");
+                self.unreadable.leave_as_it_is(&path);
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("{} is unreadable; refusing to finalize migration", path.display()),
+                ));
+            }
+        }
         let mut entries: Vec<HostEntry> = self.read_kept_unlocked(|_| {});
+        self.unreadable.check_writable(&path)?;
         let mut changed = false;
         for host in legacy_hosts {
             if host.shared.unique_id.is_empty()
@@ -399,10 +428,8 @@ impl HostStore {
             entries.push(host);
             changed = true;
         }
-        if changed || !self.path().exists() {
+        if changed || !path.exists() {
             self.write_unlocked(&entries)?;
-        } else {
-            self.unreadable.check_writable(&self.path())?;
         }
         write_atomic(&marker, b"1\n", true)?;
         Ok(changed)
