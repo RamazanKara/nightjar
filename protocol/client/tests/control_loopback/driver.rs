@@ -503,3 +503,86 @@ fn connects_to_a_host_that_replies_from_another_port() {
 fn connects_to_a_host_that_replies_from_another_ip() {
     connect_to_a_multi_homed_host("127.0.0.1:0", "127.0.0.2:0");
 }
+
+#[test]
+fn oversized_control_datagram_does_not_drop_control_stream() {
+    let mut host = TestHost::new();
+    let (client, handle) = connect_to(&mut host);
+    let client_addr = host.peer_address().expect("connected peer address");
+    let (events_tx, events) = mpsc::channel();
+    let running = thread::spawn(move || client.run(move |event| events_tx.send(event).unwrap()));
+    host.until("start and ping", |h| h.has(0x0302) && h.has(0x0200));
+
+    let oversized = vec![0xAAu8; MTU_MAX + 512];
+    host.host.socket().send_to(&oversized, client_addr).unwrap();
+    host.send(0x010b, &[0, 0, 0, 0, 1, 0, 0x44, 0x44, 0, 0]);
+    handle
+        .send(ClientMessage::Reconfigure(Reconfigure {
+            width: 1280,
+            height: 720,
+            fps_millihz: 60_000,
+        }))
+        .unwrap();
+
+    host.until("reconfigure after oversized datagram", |h| h.has(0x5532));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        assert!(Instant::now() < deadline, "rumble event never arrived");
+        host.pump();
+        if let Ok(ControlEvent::Rumble {
+            low_frequency: 0x4444,
+            ..
+        }) = events.recv_timeout(Duration::from_millis(5))
+        {
+            break;
+        }
+    }
+    assert!(!running.is_finished());
+    handle.stop();
+    host.until("disconnect", |h| h.disconnected);
+    assert_eq!(running.join().unwrap(), Outcome::Stopped);
+}
+
+#[test]
+fn reused_control_sequence_number_is_ignored_over_loopback() {
+    let mut host = TestHost::new();
+    let (client, handle) = connect_to(&mut host);
+    let (events_tx, events) = mpsc::channel();
+    let running = thread::spawn(move || client.run(move |event| events_tx.send(event).unwrap()));
+    host.until("start and ping", |h| h.has(0x0302) && h.has(0x0200));
+
+    host.send_seq(1, 0x010b, &[0, 0, 0, 0, 1, 0, 0x11, 0x11, 0, 0]);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut rumbles = Vec::new();
+    while !rumbles.contains(&0x1111) {
+        assert!(Instant::now() < deadline, "first rumble timed out: {rumbles:?}");
+        host.pump();
+        if let Ok(ControlEvent::Rumble { low_frequency, .. }) =
+            events.recv_timeout(Duration::from_millis(5))
+        {
+            rumbles.push(low_frequency);
+        }
+    }
+
+    // Reuse sequence 1 with a different payload, then send a fresh sequence 2.
+    host.send_seq(1, 0x010b, &[0, 0, 0, 0, 1, 0, 0x22, 0x22, 0, 0]);
+    for _ in 0..20 {
+        host.pump();
+        thread::sleep(Duration::from_millis(2));
+    }
+    host.send_seq(2, 0x010b, &[0, 0, 0, 0, 1, 0, 0x33, 0x33, 0, 0]);
+    while !rumbles.contains(&0x3333) {
+        assert!(Instant::now() < deadline, "third rumble timed out: {rumbles:?}");
+        host.pump();
+        if let Ok(ControlEvent::Rumble { low_frequency, .. }) =
+            events.recv_timeout(Duration::from_millis(5))
+        {
+            rumbles.push(low_frequency);
+        }
+    }
+    assert_eq!(rumbles, [0x1111, 0x3333]);
+
+    handle.stop();
+    host.until("disconnect", |h| h.disconnected);
+    assert_eq!(running.join().unwrap(), Outcome::Stopped);
+}

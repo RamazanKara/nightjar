@@ -15,7 +15,16 @@ pub(crate) struct Packetizer {
 
 impl Packetizer {
     pub(crate) fn frame(&mut self, payload: &[u8], kind: u8) -> Vec<Vec<u8>> {
-        let slice = PACKET_SIZE - 16;
+        self.frame_sized(payload, kind, PACKET_SIZE)
+    }
+
+    pub(crate) fn frame_sized(
+        &mut self,
+        payload: &[u8],
+        kind: u8,
+        packet_size: usize,
+    ) -> Vec<Vec<u8>> {
+        let slice = packet_size - 16;
         let mut data = vec![1, 0, 0, kind];
         let total = payload.len() + 8;
         let last = if total.is_multiple_of(slice) {
@@ -30,7 +39,7 @@ impl Packetizer {
         let parity = (count * 20).div_ceil(100);
         let mut shards: Vec<Vec<u8>> = (0..count + parity)
             .map(|i| {
-                let mut s = vec![0u8; PACKET_SIZE + 16];
+                let mut s = vec![0u8; packet_size + 16];
                 if i < count {
                     s[16..20].copy_from_slice(&((self.spi + i as u32) << 8).to_le_bytes());
                     s[24] = 1 | if i == 0 { 4 } else { 0 } | if i == count - 1 { 2 } else { 0 };
@@ -44,7 +53,7 @@ impl Packetizer {
             .collect();
         let rs = ReedSolomon::new(count, parity).unwrap();
         let mut refs: Vec<&mut [u8]> = shards.iter_mut().map(|s| &mut s[..]).collect();
-        rs.encode(&mut refs, PACKET_SIZE + 16).unwrap();
+        rs.encode(&mut refs, packet_size + 16).unwrap();
         for (i, s) in shards.iter_mut().enumerate() {
             s[0] = 0x90;
             s[2..4].copy_from_slice(&self.seq.wrapping_add(i as u16).to_be_bytes());

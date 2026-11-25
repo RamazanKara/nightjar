@@ -61,9 +61,7 @@ pub fn check(kind: &str, key: u64, output: u64) {
     let expected = recorded()
         .get(&(kind.to_string(), key))
         .unwrap_or_else(|| panic!("no recorded {kind} run for inputs {key:016x}: its test changed"));
-    if output != *expected {
-        eprintln!("GOLDEN_MISMATCH {kind} {key:016x} {output:016x} (was {expected:016x})");
-    }
+    assert_eq!(output, *expected, "{kind} run {key:016x}");
 }
 
 /// One input to the receivers.

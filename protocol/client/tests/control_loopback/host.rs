@@ -167,13 +167,21 @@ impl<S: rusty_enet::Socket<Address = SocketAddr, Error = io::Error>> TestHost<S>
 
     pub(crate) fn send(&mut self, kind: u16, payload: &[u8]) {
         self.sequence += 1;
-        let datagram = encrypted_control(&KEY, self.sequence, kind, payload, true).unwrap();
+        self.send_seq(self.sequence, kind, payload);
+    }
+
+    pub(crate) fn send_seq(&mut self, sequence: u32, kind: u16, payload: &[u8]) {
+        let datagram = encrypted_control(&KEY, sequence, kind, payload, true).unwrap();
         let peer = self.peer.expect("connected");
         self.host
             .peer_mut(peer)
             .send(0, &Packet::reliable(datagram))
             .unwrap();
         self.host.flush();
+    }
+
+    pub(crate) fn peer_address(&self) -> Option<SocketAddr> {
+        self.peer.and_then(|id| self.host.peer(id).address())
     }
 
     pub(crate) fn has(&self, kind: u16) -> bool {

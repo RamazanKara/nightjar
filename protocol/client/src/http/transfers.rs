@@ -143,22 +143,28 @@ fn link_and_unlink(from: &Path, to: &Path) -> std::io::Result<()> {
                 Some(libc::EPERM | libc::EXDEV | libc::EOPNOTSUPP | libc::ENOSYS | libc::EINVAL)
             ) =>
         {
-            let mut created = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(to)?;
-            let mut src = std::fs::File::open(from)?;
-            if let Err(copy_err) = std::io::copy(&mut src, &mut created).and_then(|_| created.sync_all()) {
-                drop(created);
-                let _ = std::fs::remove_file(to);
-                return Err(copy_err);
-            }
-            drop(created);
-            let _ = std::fs::remove_file(from);
-            Ok(())
+            copy_new_and_unlink(from, to)
         }
         Err(e) => Err(e),
     }
+}
+
+/// Opens `from` before exclusively creating `to` so a missing source never leaves an empty target.
+#[cfg(any(unix, test))]
+fn copy_new_and_unlink(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut src = std::fs::File::open(from)?;
+    let mut created = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(to)?;
+    if let Err(copy_err) = std::io::copy(&mut src, &mut created).and_then(|_| created.sync_all()) {
+        drop(created);
+        let _ = std::fs::remove_file(to);
+        return Err(copy_err);
+    }
+    drop(created);
+    let _ = std::fs::remove_file(from);
+    Ok(())
 }
 
 impl HostClient {

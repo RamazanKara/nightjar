@@ -163,6 +163,8 @@ pub(crate) struct FakeHost {
     /// The control stream stops servicing ENet while set.
     pub(crate) silent: Arc<AtomicBool>,
     pub(crate) media: Arc<Mutex<MediaState>>,
+    /// Raw payloads of `0x5547` transport feedback messages the control stream received.
+    pub(crate) feedback_reports: Arc<Mutex<Vec<Vec<u8>>>>,
 }
 
 impl FakeHost {
@@ -200,12 +202,26 @@ impl FakeHost {
 }
 
 pub(crate) fn start_host(packed_format: Option<u32>) -> FakeHost {
-    start_host_with(packed_format, false)
+    start_host_options(packed_format, false, false, false)
 }
 
 /// With `roaming`, the host advertises client roaming, answers PROBE and CONFIRM, and offers
 /// the microphone.
 pub(crate) fn start_host_with(packed_format: Option<u32>, roaming: bool) -> FakeHost {
+    start_host_options(packed_format, roaming, false, false)
+}
+
+/// A host that negotiates encrypted video (`SS_ENC_VIDEO`) and per-packet transport feedback (`0x5547`).
+pub(crate) fn start_encrypted_feedback_host() -> FakeHost {
+    start_host_options(None, false, true, true)
+}
+
+fn start_host_options(
+    packed_format: Option<u32>,
+    roaming: bool,
+    video_encrypted: bool,
+    transport_feedback: bool,
+) -> FakeHost {
     let video = UdpSocket::bind("127.0.0.1:0").unwrap();
     let audio = UdpSocket::bind("127.0.0.1:0").unwrap();
     let mic = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -244,17 +260,21 @@ pub(crate) fn start_host_with(packed_format: Option<u32>, roaming: bool) -> Fake
             let mut body = Vec::new();
             match request.method.as_str() {
                 "DESCRIBE" => {
-                    // Control encryption v2 only: plain audio and video.
+                    // Control encryption v2 only unless `video_encrypted` asks for SS_ENC_VIDEO.
+                    let (supported, requested) = if video_encrypted { (1 | 2, 2) } else { (1, 0) };
                     let mut describe = host_rtsp::describe(
                         0,
-                        1,
-                        0,
+                        supported,
+                        requested,
                         false,
                         packed_format.is_some(),
                         false,
                         roaming,
                         roaming,
                     );
+                    if transport_feedback {
+                        describe.push_str("a=x-rl-control:0x5547\r\n");
+                    }
                     if packed_format.is_some() {
                         describe.push_str(
                             "a=x-rl-video.packed444Version:1\r\na=x-rl-video.packed444Modes:15\r\n",
@@ -298,13 +318,15 @@ pub(crate) fn start_host_with(packed_format: Option<u32>, roaming: bool) -> Fake
     let terminate = Arc::new(AtomicBool::new(false));
     let roamed = Arc::new(Mutex::new(Vec::new()));
     let silent = Arc::new(AtomicBool::new(false));
-    let (messages, disconnected, terminating, roam_log, silenced, control_media) = (
+    let feedback_reports = Arc::new(Mutex::new(Vec::new()));
+    let (messages, disconnected, terminating, roam_log, silenced, control_media, feedback) = (
         control_messages.clone(),
         control_disconnected.clone(),
         terminate.clone(),
         roamed.clone(),
         silent.clone(),
         media.clone(),
+        feedback_reports.clone(),
     );
     thread::spawn(move || {
         let settings = HostSettings {
@@ -344,9 +366,12 @@ pub(crate) fn start_host_with(packed_format: Option<u32>, roaming: bool) -> Fake
                         current = p.address();
                     }
                     Event::Receive { packet, .. } => {
-                        let (_, kind, _) = decrypt_control(&KEY, packet.data(), true).unwrap();
+                        let (_, kind, payload) = decrypt_control(&KEY, packet.data(), true).unwrap();
                         if kind == ptype::INPUT_DATA {
                             arrivals.lock().unwrap().push(Instant::now());
+                        }
+                        if kind == rubylight_protocol::transport_feedback::TRANSPORT_FEEDBACK_MESSAGE_TYPE {
+                            feedback.lock().unwrap().push(payload);
                         }
                         messages.lock().unwrap().push(kind);
                     }
@@ -456,5 +481,6 @@ pub(crate) fn start_host_with(packed_format: Option<u32>, roaming: bool) -> Fake
         roaming: roamed,
         silent,
         media,
+        feedback_reports,
     }
 }
