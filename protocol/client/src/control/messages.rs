@@ -129,6 +129,10 @@ pub enum ClientMessage {
     /// answers each with a [`ControlEvent::QuickSuspend`](super::events::ControlEvent) of the
     /// same request id, and from then on also says when the state changes.
     QuickSuspend(rubylight_protocol::quick_suspend::ClientRequest),
+    /// A Stream DVR request (0x554A): the host's state, a clip, or a recording started or
+    /// stopped. The host answers with a state or a clip result
+    /// ([`ControlEvent`](super::events::ControlEvent)) carrying the same request id.
+    StreamDvr(rubylight_protocol::stream_dvr::Request),
 }
 
 impl ClientMessage {
@@ -161,6 +165,7 @@ impl ClientMessage {
             Self::FrameWarpRequest(_) => ptype::FRAME_WARP_REQUEST,
             Self::TransportFeedback(_) => ptype::TRANSPORT_FEEDBACK,
             Self::QuickSuspend(_) => ptype::QUICK_SUSPEND,
+            Self::StreamDvr(_) => ptype::STREAM_DVR,
         }
     }
 
@@ -235,6 +240,11 @@ impl ClientMessage {
                 let _ = report.encode_into(out);
             }
             Self::QuickSuspend(request) => out.extend_from_slice(&request.encode()),
+            // A request has no clip id, so it always encodes.
+            Self::StreamDvr(request) => {
+                let message = rubylight_protocol::stream_dvr::Message::Request(*request);
+                out.extend_from_slice(&message.encode().unwrap_or_default());
+            }
         }
     }
 
@@ -293,7 +303,8 @@ impl ClientMessage {
             | Self::Usb(_)
             | Self::ClipboardSync(_)
             | Self::TransportFeedback(_)
-            | Self::QuickSuspend(_) => Some(self.message_type()),
+            | Self::QuickSuspend(_)
+            | Self::StreamDvr(_) => Some(self.message_type()),
             // A host before 7.0 announced 0x5543 to 0x5546 but not the meta, and took a request
             // this client no longer sends: it gets none.
             Self::FrameWarpRequest(_) => Some(ptype::FRAME_WARP_V2_META),

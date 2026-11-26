@@ -718,6 +718,11 @@ impl ControlSession {
             {
                 Some(events::clipboard_sync(p))
             }
+            ptype::STREAM_DVR
+                if extensions && self.caps.supports_control_message(ptype::STREAM_DVR) =>
+            {
+                events::stream_dvr(p)
+            }
             _ => None,
         };
         if let Some(event) = event {

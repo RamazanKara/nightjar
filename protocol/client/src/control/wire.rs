@@ -71,6 +71,8 @@ pub mod ptype {
     pub const USB: u16 = rubylight_protocol::usb::USB_MESSAGE_TYPE;
     /// Rubylight's Quick Suspend: the client's request, the host's state (both ways).
     pub const QUICK_SUSPEND: u16 = rubylight_protocol::quick_suspend::QUICK_SUSPEND_MESSAGE_TYPE;
+    /// Rubylight's Stream DVR (both ways): clip and recording requests, the host's state.
+    pub const STREAM_DVR: u16 = rubylight_protocol::stream_dvr::DVR_STATE_MESSAGE_TYPE;
 }
 
 /// ENet channels of the control stream (`CTRL_CHANNEL_*`).

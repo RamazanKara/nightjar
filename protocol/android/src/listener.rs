@@ -14,7 +14,7 @@ use rubylight_protocol::steam_controller::SteamSettings;
 use rubylight_protocol::text_input::{InputType, NoticeKind, TextInputNotice};
 
 use crate::bridge::{self, Bridge};
-use crate::extras::{cursor_shape_message, hdr_metadata_bytes};
+use crate::extras::{self, cursor_shape_message, hdr_metadata_bytes};
 use crate::{engine, platform};
 
 struct TerminationGate {
@@ -502,6 +502,18 @@ impl Listener for Events {
             // Android's stream menu reads and changes Quick Suspend through the native API
             // (StreamMenuSuspendSection) and never asks on the control stream.
             ControlEvent::QuickSuspend(_) => {}
+            ControlEvent::StreamDvrState(state) => {
+                let (ints, longs) = extras::dvr_state_args(&state);
+                let mut args: Vec<_> = ints.into_iter().map(bridge::int).collect();
+                args.extend(longs.into_iter().map(bridge::long));
+                b.post(m.dvr_state, &args);
+            }
+            ControlEvent::StreamDvrClip(clip) => {
+                let (ints, bytes) = extras::dvr_clip_args(&clip);
+                let mut args: Vec<_> = ints.into_iter().map(bridge::int).collect();
+                args.push(bridge::long(bytes));
+                b.post(m.dvr_clip, &args);
+            }
             // The session reports terminations through connection_terminated.
             ControlEvent::Terminated { .. } => {}
         }
