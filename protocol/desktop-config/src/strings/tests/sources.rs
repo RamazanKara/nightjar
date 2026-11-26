@@ -1,7 +1,7 @@
 //! Source inventories for the desktop localization table tests (`SOURCES` and `MARKED_ONLY`).
 
 /// The UI sources, up to their test modules.
-pub(super) const SOURCES: [(&str, &str); 76] = [
+pub(super) const SOURCES: [(&str, &str); 77] = [
     ("strings.rs", include_str!("../../strings.rs")),
     ("app_types.rs", include_str!("../../app_types.rs")),
     ("gamepad_types.rs", include_str!("../../gamepad_types.rs")),
@@ -37,6 +37,7 @@ pub(super) const SOURCES: [(&str, &str); 76] = [
     ("ui/dialogs/host_dialogs.rs", include_str!("../../../../desktop-ui/src/ui/dialogs/host_dialogs.rs")),
     ("ui/dialogs/menus.rs", include_str!("../../../../desktop-ui/src/ui/dialogs/menus.rs")),
     ("ui/dialogs/pair_dialogs.rs", include_str!("../../../../desktop-ui/src/ui/dialogs/pair_dialogs.rs")),
+    ("ui/dialogs/pairing_panel.rs", include_str!("../../../../desktop-ui/src/ui/dialogs/pairing_panel.rs")),
     ("ui/dialogs/session_dialogs.rs", include_str!("../../../../desktop-ui/src/ui/dialogs/session_dialogs.rs")),
     ("ui/launch_scene.rs", include_str!("../../../../desktop-ui/src/ui/launch_scene.rs")),
     ("host_page.rs", include_str!("../../../../desktop-ui/src/host_page.rs")),

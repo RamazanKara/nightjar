@@ -9,7 +9,7 @@ use egui::Shape;
 use nightjar_policy::internet_path::InternetPath;
 
 mod glyph;
-pub(super) use glyph::display_well;
+pub(super) use glyph::{display_well, well_under};
 
 const PC_CARD_H: f32 = 216.0;
 const PC_CARD_PAD: f32 = 22.0;

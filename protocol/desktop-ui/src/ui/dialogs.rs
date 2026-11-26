@@ -635,6 +635,7 @@ impl Launcher {
 mod host_dialogs;
 mod menus;
 mod pair_dialogs;
+mod pairing_panel;
 mod session_dialogs;
 
 pub use menus::{pc_sheet, popover, Anchor, MenuOutcome, MenuRow};

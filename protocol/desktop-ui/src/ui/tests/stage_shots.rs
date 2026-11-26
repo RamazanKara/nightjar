@@ -86,6 +86,15 @@ fn stage_screenshots() {
             shoot(&mut stopped, named("first-run-no-search"));
             shoot(&mut found(look, window, &["Living Room PC"]), named("first-run-found"));
             shoot(&mut found(look, window, &["Living Room PC", "Office PC", "Studio"]), named("first-run-found-three"));
+            // Pairing with the PC the first run found: its PIN, then the PC turning it down.
+            let mut pairing = found(look, window, &["Living Room PC"]);
+            let id = pairing.hosts.list[0].id;
+            pairing.l.dialog = Dialog::Pairing { host: id, pin: "4071".into() };
+            pairing.l.focus_dialog = true;
+            shoot(&mut pairing, named("pairing-pin"));
+            let mut failed = found(look, window, &["Living Room PC"]);
+            failed.l.pair_failed(id, "PIN rejected. Generate a new one-time PIN in the PC’s web UI and check the passphrase.", false);
+            shoot(&mut failed, named("pairing-failed"));
         }
     }
 }

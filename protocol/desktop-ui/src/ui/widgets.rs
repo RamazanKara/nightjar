@@ -111,7 +111,8 @@ impl Tone {
                 } else {
                     *MOON
                 };
-                (fill, *ON_MOON)
+                // The amber it is painted in is the same in every look, and so is the ink on it.
+                (fill, glass::on_play())
             }
             Tone::Quiet | Tone::Current | Tone::Raised => surface(SURFACE_HIGH, ON_SURFACE),
             Tone::Chip => surface(SURFACE, ON_SURFACE),

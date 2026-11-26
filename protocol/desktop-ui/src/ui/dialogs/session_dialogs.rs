@@ -248,34 +248,15 @@ impl Launcher {
                 let name = view.hosts.get(*host).map_or(tr("the PC"), |h| h.display_name()).to_owned();
                 let pin = pin.clone();
                 modal(ctx, "pairing", |ui| {
-                    ui.set_width(440.0);
-                    ui.label(RichText::new(trf("Pair with {}", &[&name])).font(semibold(text::SECTION)));
-                    ui.add_space(18.0);
-                    let digits: Vec<char> = pin.chars().collect();
-                    pin_slots(ui, &digits, digits.len(), false, 76.0, &pin);
-                    if !pin.is_empty() {
-                        ui.add_space(14.0);
-                        ui.label(
-                            RichText::new(tr("Enter this PIN in the PC’s settings or web UI, usually on its PIN or pairing page."))
-                                .color(ON_SURFACE_VARIANT),
-                        );
+                    let cancel = pairing_panel::waiting(ui, &name, &pin);
+                    if focus_first {
+                        cancel.request_focus();
+                        focused = true;
                     }
-                    ui.add_space(14.0);
-                    ui.horizontal(|ui| {
-                        spinner(ui, 9.0);
-                        ui.label(RichText::new(tr("Waiting for the PC…")).color(ON_SURFACE_VARIANT));
-                    });
-                    dialog_buttons(ui, |ui| {
-                        let r = quiet_button(ui, "Cancel");
-                        if focus_first {
-                            r.request_focus();
-                            focused = true;
-                        }
-                        if r.clicked() {
-                            commands.push(Command::CancelPair);
-                            close = true;
-                        }
-                    });
+                    if cancel.clicked() {
+                        commands.push(Command::CancelPair);
+                        close = true;
+                    }
                 });
             }
             Dialog::Message { title, body } => {

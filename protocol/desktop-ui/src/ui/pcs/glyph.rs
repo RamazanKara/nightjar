@@ -1,5 +1,5 @@
 //! A PC as a mark: a small display on its stand, drawn in line in one ink, in a tinted well. The
-//! card of a PC found on the first run shows it.
+//! card of a PC found on the first run shows it, and the panel that pairs with it.
 
 use egui::{pos2, vec2, Color32, Context, CornerRadius, Rect, Shape, Stroke, StrokeKind};
 
@@ -23,9 +23,14 @@ fn display(out: &mut Vec<Shape>, well: Rect, ink: Color32) {
     out.extend(ends.map(|end| Shape::circle_filled(end, STROKE / 2.0, ink)));
 }
 
+/// The tinted well at `well` alone, for another mark of its size (pairing's, when it failed).
+pub(in crate::ui) fn well_under(out: &mut Vec<Shape>, ctx: &Context, well: Rect) {
+    glass::control(out, ctx, well, well.width() * CORNER);
+}
+
 /// The tinted well at `well` (a square of 52 points or more) with the display in it.
 pub(in crate::ui) fn display_well(out: &mut Vec<Shape>, ctx: &Context, well: Rect, ink: Color32) {
-    glass::control(out, ctx, well, well.width() * CORNER);
+    well_under(out, ctx, well);
     display(out, well, ink);
 }
 

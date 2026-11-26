@@ -165,11 +165,11 @@ fn the_pairing_pin_is_large_and_bold_in_its_slots() {
     f.shapes.iter().for_each(|c| digits(&c.shape, &mut texts));
     let pin: Vec<_> = texts.iter().filter(|(t, ..)| t.len() == 1 && "4071".contains(t.as_str())).collect();
     assert_eq!(pin.len(), 4, "{texts:?}");
-    // Centred in the dialog's 440-point column, which starts where its title does.
-    let left = f.placed.iter().find(|(t, ..)| t == "Pair with Studio").map(|p| p.1.left()).expect("the title");
+    // Centred in the panel's column, as its title is.
+    let title = f.placed.iter().find(|(t, ..)| t == "Pair with Studio").map(|p| p.1.center().x).expect("the title");
     let digit = |d: &str| f.placed.iter().find(|(t, ..)| t == d).map(|p| p.1.center().x).expect("the digit");
     let middle = (digit("4") + digit("1")) / 2.0;
-    assert!((middle - (left + 220.0)).abs() < 2.0, "the PIN is centred: {middle} in {left}..{}", left + 440.0);
+    assert!((middle - title).abs() < 2.0, "the PIN is centred under the title: {middle}, {title}");
     assert!(pin.iter().all(|(_, font, color)| font.size >= 36.0 && *font == semibold(font.size) && *color == Color32::from(ON_SURFACE)), "{pin:?}");
 }
 
