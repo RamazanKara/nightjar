@@ -34,3 +34,4 @@ mod pad_links_and_pin_tests;
 mod stage_shots;
 mod first_run_scan_tests;
 mod pairing_panel_tests;
+mod host_details_limiter_tests;

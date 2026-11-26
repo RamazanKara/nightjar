@@ -59,6 +59,18 @@ fn found(look: (Theme, bool), window: ([f32; 2], f32), names: &[&str]) -> Frames
     f
 }
 
+/// A paired PC's details page, the PC reporting its frame limiter.
+fn details_page(look: (Theme, bool), window: ([f32; 2], f32)) -> Frames {
+    let limiter = "<FrameLimiterSupported>1</FrameLimiterSupported><FrameLimiterEnabled>1</FrameLimiterEnabled>\
+        <VirtualDisplayFrameLimiterEnabled>0</VirtualDisplayFrameLimiterEnabled><FrameLimiterFpsLimitMilliHz>119880</FrameLimiterFpsLimitMilliHz>";
+    let mut f = stage_frames(look, window, false, vec![HostRecord { address: "192.0.2.10".into(), ..record("Living Room PC", true, true) }]);
+    f.hosts.list[0].reach = Reach::Online;
+    f.hosts.list[0].info = Some(host_answer("SUNSHINE_SERVER_FREE", &format!("{RUBYLIGHT}{limiter}")));
+    let id = f.hosts.list[0].id;
+    f.l.open(Screen::HostDetails(id));
+    f
+}
+
 #[test]
 #[ignore = "writes PNGs; set NIGHTJAR_SHOTS"]
 fn stage_screenshots() {
@@ -80,6 +92,7 @@ fn stage_screenshots() {
             let (look, window) = ((theme, high), (size, ppp));
             let named = |page: &str| format!("stage-{page}-{look_name}-{window_name}");
             shoot(&mut pcs(look, window), named("pcs"));
+            shoot(&mut details_page(look, window), named("pc-details"));
             shoot(&mut stage_frames(look, window, true, Vec::new()), named("first-run-scanning"));
             let mut stopped = stage_frames(look, window, true, Vec::new());
             stopped.hosts.discovering = false;

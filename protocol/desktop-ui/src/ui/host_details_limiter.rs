@@ -1,5 +1,7 @@
 //! The PC details page's read-only frame limiter rows, for a PC that reports its frame limiter
-//! in serverinfo (`Feature::FrameLimiterStatus`); other PCs show nothing.
+//! in serverinfo (`Feature::FrameLimiterStatus`); other PCs show nothing. The rows stand in one
+//! glass group as the page's other rows do: what each is at its leading edge, its value at the
+//! trailing one.
 
 use super::*;
 use nightjar_policy::http::{Feature, HostCapabilities, ServerInfo};
@@ -36,9 +38,27 @@ impl Launcher {
         };
         section(ui, "Frame limiter");
         for (label, value) in rows {
-            detail(ui, tr(label), &value);
+            value_row(ui, tr(label), &value);
         }
     }
+}
+
+/// A read-only row of a group: `label` as a settings row's, and `value` at the trailing edge in the
+/// quieter ink. The value is never cut: a long label wraps beside it. A screen reader hears both
+/// as one line.
+fn value_row(ui: &mut Ui, label: &str, value: &str) {
+    group_row(ui, |ui| {
+        let width = ui.available_width();
+        let value_galley = ui.painter().layout_no_wrap(value.to_owned(), regular(text::BODY), *ON_SURFACE_VARIANT);
+        let room = (width - value_galley.size().x - space::M).max(0.0);
+        let label_galley = ui.painter().layout(label.to_owned(), semibold(text::BODY), *ON_SURFACE, room);
+        let height = label_galley.size().y.max(value_galley.size().y).max(design_tokens::SIZE_ROW_HEIGHT - 2.0 * 8.0);
+        let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, format!("{label}: {value}")));
+        let middle = rect.center().y;
+        ui.painter().galley(pos2(rect.left(), middle - label_galley.size().y / 2.0), label_galley, *ON_SURFACE);
+        ui.painter().galley(pos2(rect.right() - value_galley.size().x, middle - value_galley.size().y / 2.0), value_galley, *ON_SURFACE_VARIANT);
+    });
 }
 
 #[cfg(test)]
