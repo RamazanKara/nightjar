@@ -72,13 +72,16 @@ public class ResolutionChoicesTest {
     }
 
     @Test
-    public void theScreenSizeLeadsAndLargerFixedSizesAreLeftOut() {
+    public void theScreenSizeLeadsItsStepsJoinAndLargerFixedSizesAreLeftOut() {
         ListPreference resolution = choices(PreferenceConfiguration.RESOLUTION_PREF_STRING);
-        assertEquals(Arrays.asList("1600x720", "1520x720", "1280x720", "854x480", "640x360"), values(resolution));
+        assertEquals(Arrays.asList("1600x720", "1520x720", "1280x720", "1360x612", "1200x540", "1068x480", "854x480", "800x360", "640x360"), values(resolution));
         Application app = RuntimeEnvironment.getApplication();
         assertEquals(app.getString(R.string.resolution_screen, "1600×720"), resolution.getEntries()[0].toString());
         assertEquals(app.getString(R.string.resolution_screen_cutout, "1520×720"), resolution.getEntries()[1].toString());
         assertEquals(app.getString(R.string.resolution_720p), resolution.getEntries()[2].toString());
+        // The screen's own size at 85, 75, 67 and 50 % (#137), each named by its share; 50 % of 720 high is 360p's height
+        // but not its width, so both stay.
+        assertEquals(app.getString(R.string.resolution_screen_percent, "85%", "1360×612"), resolution.getEntries()[3].toString());
     }
 
     @Test
@@ -88,7 +91,7 @@ public class ResolutionChoicesTest {
                 .putInt(PreferenceConfiguration.PREFS_VERSION_PREF_STRING, PreferenceConfiguration.PROFILE_NATIVE_VERSION)
                 .commit();
         ListPreference resolution = choices(PreferenceConfiguration.RESOLUTION_PREF_STRING);
-        assertEquals(Arrays.asList("1920x1080", "1600x720", "1520x720", "1280x720", "854x480", "640x360"), values(resolution));
+        assertEquals(Arrays.asList("1920x1080", "1600x720", "1520x720", "1280x720", "1360x612", "1200x540", "1068x480", "854x480", "800x360", "640x360"), values(resolution));
         assertEquals("1920x1080", resolution.getValue());
     }
 
@@ -158,7 +161,7 @@ public class ResolutionChoicesTest {
                 assertNotSame(Looper.getMainLooper().getThread(), thread);
             }
             ListPreference resolution = (ListPreference) fragment.findPreference(PreferenceConfiguration.RESOLUTION_PREF_STRING);
-            assertEquals(Arrays.asList("1600x720", "1520x720", "1280x720", "854x480", "640x360"), values(resolution));
+            assertEquals(Arrays.asList("1600x720", "1520x720", "1280x720", "1360x612", "1200x540", "1068x480", "854x480", "800x360", "640x360"), values(resolution));
         } finally {
             StreamSettings.SettingsFragment.decoderWidthProbe = previous;
         }

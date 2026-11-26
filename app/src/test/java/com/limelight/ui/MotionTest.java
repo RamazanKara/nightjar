@@ -182,7 +182,7 @@ public class MotionTest {
             assertTrue(card.requestFocus());
             assertEquals("the press does not wait for the spring to arrive", 1f, card.getScaleX(), 0.001f);
             Springs.finish(card);
-            assertEquals(1.12f, card.getScaleX(), 0.001f);
+            assertEquals(androidx.core.content.res.ResourcesCompat.getFloat(controller.get().getResources(), R.dimen.nj_focus_scale_cover_tv), card.getScaleX(), 0.001f);
             card.setPressed(true);
             Springs.finish(card);
             assertEquals(0.97f, card.getScaleX(), 0.001f);
@@ -210,7 +210,7 @@ public class MotionTest {
         PreferenceManager.getDefaultSharedPreferences(RuntimeEnvironment.getApplication()).edit().clear().commit();
         try (var controller = Robolectric.buildActivity(Screen.class).setup()) {
             for (int layout : new int[] {R.layout.app_grid_item, R.layout.app_grid_item_small}) {
-                assertEquals(1.12f, focusedGridCover(controller.get(), layout).getScaleX(), 0.001f);
+                assertEquals(androidx.core.content.res.ResourcesCompat.getFloat(controller.get().getResources(), R.dimen.nj_focus_scale_cover_tv), focusedGridCover(controller.get(), layout).getScaleX(), 0.001f);
             }
         }
     }
