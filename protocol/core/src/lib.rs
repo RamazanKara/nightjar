@@ -37,6 +37,7 @@ pub mod pipeline_rates;
 pub mod present_clock;
 pub mod ps_speaker_pcm;
 pub mod pyrowave;
+pub mod quick_suspend;
 pub mod rate_change;
 pub mod roaming;
 pub mod steam_controller;
