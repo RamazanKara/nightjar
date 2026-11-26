@@ -16,8 +16,8 @@
     <string name="frame_warp_replaces_upscaling">Frame Warp 繪製畫面時不進行放大。</string>
     <string name="title_experimental_chipset_tuning">晶片組調校</string>
     <string name="summary_experimental_chipset_tuning">在某些裝置上可能導致無法解碼。為 MediaTek 天璣和三星 Exynos 解碼器加入額外的低延遲設定，旨在降低解碼延遲；其他晶片組不受影響。除非解碼器跟不上，否則請保持關閉。</string>
-    <string name="title_tv_display_compatibility">電視顯示相容性</string>
-    <string name="summary_tv_display_compatibility">適用於在串流過程中，如果畫面上沒有繪製任何內容就會凍結、閃爍或重新啟動的電視。代價是左上角一個近乎黑色的小點，每秒重繪十次。除非你的電視會這樣，否則請保持關閉。</string>
+    <string name="title_tv_display_compatibility">保持電視畫面流暢</string>
+    <string name="summary_tv_display_compatibility">適用於畫面過一段時間就卡頓、凍結、閃爍或重新啟動的電視和電視盒，前提是畫面上沒有繪製任何內容，例如效能覆蓋層。代價是左上角一個近乎黑色的小點，每秒重繪十次。除非你的電視會這樣，否則請保持關閉。</string>
     <string name="scut_deleted_pc">已刪除電腦</string>
     <string name="scut_not_paired">電腦未配對</string>
     <string name="scut_pc_not_found">找不到電腦</string>

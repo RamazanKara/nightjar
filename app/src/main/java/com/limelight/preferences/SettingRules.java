@@ -475,8 +475,9 @@ final class SettingRules {
             case CHIPSET_TUNING:
                 return devices.tunedChip();
             case TV_DISPLAY_COMPATIBILITY:
-                // For TV firmware; the stream still draws the dot from a stored value on any device.
-                return devices.television();
+                // For TV firmware, and listed elsewhere with Show debug settings to try it; the stream still draws
+                // the dot from a stored value on any device.
+                return devices.television() || prefs.getBoolean(SHOW_DEBUG, false);
             case IGDB_SECRET:
                 return igdbClientIdSet(context);
             case PYROWAVE_PREACQUIRE:

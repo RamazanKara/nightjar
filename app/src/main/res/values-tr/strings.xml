@@ -16,8 +16,8 @@
     <string name="frame_warp_replaces_upscaling">Frame Warp görüntüyü ölçeklendirme olmadan çizer.</string>
     <string name="title_experimental_chipset_tuning">Yonga seti ayarı</string>
     <string name="summary_experimental_chipset_tuning">Bazı cihazlarda kod çözmeyi bozabilir. MediaTek Dimensity ve Samsung Exynos kod çözücülerine, kod çözme gecikmesini azaltmaya yönelik ek düşük gecikme ayarları verir; diğer yonga setleri etkilenmez. Kod çözücü geride kalmıyorsa kapalı bırakın.</string>
-    <string name="title_tv_display_compatibility">TV ekran uyumluluğu</string>
-    <string name="summary_tv_display_compatibility">Görüntünün üzerine bir şey çizilmediğinde yayın sırasında donan, yanıp sönen veya yeniden başlayan televizyonlar için. Maliyeti, sol üst köşede saniyede on kez yeniden çizilen neredeyse siyah bir nokta. Televizyonunuz böyle yapmıyorsa kapalı bırakın.</string>
+    <string name="title_tv_display_compatibility">TV videosu akıcı kalsın</string>
+    <string name="summary_tv_display_compatibility">Görüntünün üzerine performans katmanı gibi bir şey çizilmediğinde zamanla takılan, donan, yanıp sönen veya yeniden başlayan televizyonlar ve TV kutuları için. Maliyeti, sol üst köşede saniyede on kez yeniden çizilen neredeyse siyah bir nokta. Televizyonunuz böyle yapmıyorsa kapalı bırakın.</string>
     <string name="scut_deleted_pc">Bilgisayar silindi</string>
     <string name="scut_not_paired">Bilgisayar eşleştirilmedi</string>
     <string name="scut_pc_not_found">Bilgisayar bulunamadı</string>

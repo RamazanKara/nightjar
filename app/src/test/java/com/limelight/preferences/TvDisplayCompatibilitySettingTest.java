@@ -29,8 +29,8 @@ import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
 
 /**
- * Settings › Advanced › Compatibility › TV display compatibility: off by default, listed on a TV (FEATURE_LEANBACK)
- * behind Advanced's More row, elsewhere only while it is on, and read from the stored value on any device.
+ * Settings › Advanced › Compatibility › Keep TV video smooth (formerly TV display compatibility): off by default, listed on a TV (FEATURE_LEANBACK)
+ * behind Advanced's More row, elsewhere with Show debug settings or while it is on, and read from the stored value on any device.
  * The preference part follows the derflacco fork's TvCompositorPreferenceTest (branch Artemide_Experimental_Async, GPL-3.0, commit 784b4eca).
  */
 @RunWith(org.robolectric.RobolectricTestRunner.class)
@@ -87,10 +87,23 @@ public class TvDisplayCompatibilitySettingTest {
             StreamSettings screen = controller.get();
             assertFalse(visible(open(screen, "advanced")).contains(KEY));
             // As every row that can do nothing here: search finds it and says why (SettingRules.WHEN_ROWS).
-            Preference found = screenResult(search(screen, "TV display compatibility"));
+            Preference found = screenResult(search(screen, "Keep TV video smooth"));
             assertNotNull(found);
             assertTrue(String.valueOf(found.getSummary()),
                     String.valueOf(found.getSummary()).endsWith(context().getString(com.limelight.R.string.tag_tv_only)));
+        }
+    }
+
+    @Test
+    public void listedOnAPhoneWithDebugSettingsShown() {
+        PreferenceManager.getDefaultSharedPreferences(context()).edit().putBoolean(SettingRules.SHOW_DEBUG, true).commit();
+        try (ActivityController<StreamSettings> controller = start(false)) {
+            StreamSettings.SettingsFragment advanced = open(controller.get(), "advanced");
+            assertTrue(visible(advanced).contains(KEY));
+            TwoStatePreference row = (TwoStatePreference) advanced.findPreference(KEY);
+            assertFalse(row.isChecked());
+            assertFalse(String.valueOf(row.getSummary()),
+                    String.valueOf(row.getSummary()).contains(context().getString(com.limelight.R.string.tag_tv_only)));
         }
     }
 
@@ -123,7 +136,7 @@ public class TvDisplayCompatibilitySettingTest {
             assertTrue(visible(advanced).contains(KEY));
             assertTrue("a rarely needed row", StreamSettings.foldsInSection(context(), "advanced", KEY));
             assertFalse(((TwoStatePreference) advanced.findPreference(KEY)).isChecked());
-            assertNotNull("search finds it", resultGroup(search(screen, "TV display compatibility"), KEY));
+            assertNotNull("search finds it", resultGroup(search(screen, "Keep TV video smooth"), KEY));
         }
     }
 }

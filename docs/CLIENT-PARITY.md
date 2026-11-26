@@ -85,7 +85,7 @@ The tables below have no macOS column. The Mac client shares the desktop library
 | Take back display queue delay | Yes | N/A | N/A | Lowest latency and Balanced, under **Advanced → More**. Desktop has no compositor display queue to watch. |
 | Lower refresh rate | Yes | N/A | N/A | Off, On, or On and matched to the game. |
 | Fixed timing on adaptive screens | Yes | N/A | N/A | Adaptive refresh (ARR) screens on Android 16 with VRR off; off by default. |
-| TV display compatibility (setting) | Yes | N/A | N/A | Android TV, off by default, under **Advanced → More** (on other devices listed only while it is on): a nearly black dot in the video's top-left corner is redrawn ten times a second for TVs that freeze, flash or restart while the video is the only thing on screen. A behaviour of Android TV firmware; the desktop client has no counterpart. |
+| Keep TV video smooth (setting, formerly TV display compatibility) | Yes | N/A | N/A | Android TV, off by default, under **Advanced → More** (on other devices listed with Show debug settings or while it is on): a nearly black dot in the video's top-left corner is redrawn ten times a second for TVs whose picture stutters after a while, freezes, flashes or restarts while the video is the only thing on screen. A behaviour of Android TV firmware; the desktop client has no counterpart. |
 | Phase-lock frame timing | Yes | Yes | Partial | Linux: X11 (EGL/GLX sync control), Wayland (`wp_presentation`), KMS, and DRM vblank (including the GPU/Vulkan renderer). macOS does not report vblank timing yet. |
 | Beam racing and early decode (PyroWave, wired) | N/A | Yes | Yes | Both off by default; see [beam racing](beam-racing.md). |
 | Rotation, picture-in-picture, external displays | Yes | N/A | N/A | |

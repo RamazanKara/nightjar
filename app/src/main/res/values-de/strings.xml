@@ -16,8 +16,8 @@
     <string name="frame_warp_replaces_upscaling">Frame Warp zeichnet das Bild ohne Hochskalierung.</string>
     <string name="title_experimental_chipset_tuning">Chipsatz-Optimierung</string>
     <string name="summary_experimental_chipset_tuning">Kann auf manchen Geräten das Dekodieren verhindern. Gibt Decodern von MediaTek Dimensity und Samsung Exynos zusätzliche Low-Latency-Einstellungen, die die Dekodierverzögerung senken sollen; andere Chipsätze sind nicht betroffen. Lass es aus, außer der Decoder hinkt hinterher.</string>
-    <string name="title_tv_display_compatibility">TV-Anzeigekompatibilität</string>
-    <string name="summary_tv_display_compatibility">Für Fernseher, die während eines Streams einfrieren, flackern oder neu starten, wenn nichts über das Bild gezeichnet wird. Es kostet einen fast schwarzen Punkt in der oberen linken Ecke, der zehnmal pro Sekunde neu gezeichnet wird. Lass es aus, außer dein Fernseher macht das.</string>
+    <string name="title_tv_display_compatibility">TV-Video flüssig halten</string>
+    <string name="summary_tv_display_compatibility">Für Fernseher und TV-Boxen, deren Bild nach einer Weile ruckelt, einfriert, flackert oder neu startet, solange nichts darübergezeichnet wird, etwa die Leistungsanzeige. Kostet einen fast schwarzen Punkt in der oberen linken Ecke, der zehnmal pro Sekunde neu gezeichnet wird. Lass es aus, außer dein Fernseher macht das.</string>
     <string name="scut_deleted_pc">PC gelöscht</string>
     <string name="scut_not_paired">PC nicht gekoppelt</string>
     <string name="scut_pc_not_found">PC nicht gefunden</string>

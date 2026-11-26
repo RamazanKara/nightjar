@@ -10,7 +10,7 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
 /**
- * Settings › TV display compatibility: a 1 dp dot in the window that holds the video, switched between two
+ * Settings › Keep TV video smooth: a 1 dp dot in the window that holds the video, switched between two
  * near-black colours every 100 ms while it runs.
  *
  * Some Android TV firmware takes an unstable direct-composition path when the video surface is the only

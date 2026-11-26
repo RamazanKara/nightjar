@@ -16,8 +16,8 @@
     <string name="frame_warp_replaces_upscaling">Frame Warp dessine l’image sans mise à l’échelle.</string>
     <string name="title_experimental_chipset_tuning">Réglage du chipset</string>
     <string name="summary_experimental_chipset_tuning">Peut empêcher le décodage sur certains appareils. Donne aux décodeurs MediaTek Dimensity et Samsung Exynos des réglages de faible latence supplémentaires destinés à réduire le délai de décodage ; les autres puces ne sont pas concernées. Laissez-le désactivé sauf si le décodeur prend du retard.</string>
-    <string name="title_tv_display_compatibility">Compatibilité d\'affichage TV</string>
-    <string name="summary_tv_display_compatibility">Pour les téléviseurs qui se figent, clignotent ou redémarrent pendant une diffusion si rien n’est dessiné par-dessus l’image. Cela coûte un point presque noir dans le coin supérieur gauche, redessiné dix fois par seconde. Laissez-le désactivé sauf si votre téléviseur le fait.</string>
+    <string name="title_tv_display_compatibility">Garder la vidéo TV fluide</string>
+    <string name="summary_tv_display_compatibility">Pour les téléviseurs et boîtiers TV dont l’image saccade au bout d’un moment, se fige, clignote ou redémarre si rien n’est dessiné par-dessus, comme la superposition des performances. Cela coûte un point presque noir dans le coin supérieur gauche, redessiné dix fois par seconde. Laissez-le désactivé sauf si votre téléviseur fait cela.</string>
     <string name="scut_deleted_pc">PC supprimé</string>
     <string name="scut_not_paired">PC non associé</string>
     <string name="scut_pc_not_found">PC introuvable</string>

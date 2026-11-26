@@ -16,8 +16,8 @@
     <string name="frame_warp_replaces_upscaling">Frame Warp выводит изображение без масштабирования.</string>
     <string name="title_experimental_chipset_tuning">Настройка чипсета</string>
     <string name="summary_experimental_chipset_tuning">На некоторых устройствах может нарушить декодирование. Даёт декодерам MediaTek Dimensity и Samsung Exynos дополнительные настройки низкой задержки, которые должны уменьшить задержку декодирования; другие чипсеты не затрагиваются. Оставьте выключенным, если декодер не отстаёт.</string>
-    <string name="title_tv_display_compatibility">Совместимость экрана ТВ</string>
-    <string name="summary_tv_display_compatibility">Для телевизоров, которые во время трансляции зависают, мерцают или перезапускаются, если поверх изображения ничего не нарисовано. Стоимость — одна почти чёрная точка в левом верхнем углу, перерисовываемая десять раз в секунду. Оставьте выключенным, если ваш телевизор так не делает.</string>
+    <string name="title_tv_display_compatibility">Плавное видео на ТВ</string>
+    <string name="summary_tv_display_compatibility">Для телевизоров и ТВ-приставок, у которых картинка со временем начинает дёргаться, зависает, мерцает или перезапускается, если поверх изображения ничего не нарисовано, например оверлей производительности. Стоимость — одна почти чёрная точка в левом верхнем углу, перерисовываемая десять раз в секунду. Оставьте выключенным, если ваш телевизор так не делает.</string>
     <string name="scut_deleted_pc">ПК удалён</string>
     <string name="scut_not_paired">ПК не сопряжён</string>
     <string name="scut_pc_not_found">ПК не найден</string>

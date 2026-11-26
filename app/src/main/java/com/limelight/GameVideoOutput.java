@@ -59,7 +59,7 @@ final class GameVideoOutput {
     String launchPanel;
 
     boolean orientationNoticeShown;
-    // Settings › TV display compatibility while it runs (updateCompositorHeartbeat); null otherwise.
+    // Settings › Keep TV video smooth while it runs (updateCompositorHeartbeat); null otherwise.
     com.limelight.ui.CompositorHeartbeat compositorHeartbeat;
     // UI actions that read the decoder's limits or ask for a size and met a decoder rebuild, in the
     // order they were asked for; one per key, a newer one taking the older one's place.
@@ -293,7 +293,7 @@ final class GameVideoOutput {
     }
 
     /**
-     * Settings › TV display compatibility: the dot runs while the stream is shown in the foreground, in the window
+     * Settings › Keep TV video smooth: the dot runs while the stream is shown in the foreground, in the window
      * that holds the video (an external display's while the video is there). Paused, in picture-in-picture, input
      * only, after the stream or with the setting off it is gone. Read from the stored value on any device.
      */
