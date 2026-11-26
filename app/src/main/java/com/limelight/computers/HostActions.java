@@ -171,7 +171,7 @@ public final class HostActions {
     private void pair(final ComputerDetails computer, final String oneTimePin, final String passphrase,
                       final PairingLink link) {
         if (computer.state == ComputerDetails.State.OFFLINE || computer.activeAddress == null) {
-            showError(R.string.pair_pairing_title, activity.getString(R.string.pair_pc_offline), null);
+            showPairingFailure(activity.getString(R.string.pair_pc_offline), null);
             return;
         }
         final ComputerManagerService.ComputerManagerBinder binder = requireBinder(R.string.pair_pairing_title);
@@ -180,7 +180,7 @@ public final class HostActions {
         LinkGate.hold(this);
         final int generation = pairingGeneration;
         final String pin = oneTimePin == null ? NightjarHostsJni.randomPairingPin() : oneTimePin;
-        pairingDialog = HostFlowRoutes.showPairingDialog(activity, oneTimePin, pin, () -> {
+        pairingDialog = com.limelight.ui.PairingCinemaSheet.show(activity, computer.name, oneTimePin, pin, () -> {
             cancelPairing();
             callbacks.resumePolling();
         });
@@ -229,7 +229,7 @@ public final class HostActions {
             callbacks.onPaired(computer);
         } else {
             callbacks.resumePolling();
-            showError(R.string.pair_pairing_title, failure, fromLink ? null : () -> {
+            showPairingFailure(failure, fromLink ? null : () -> {
                 if (oneTimePin == null) pair(computer); else pairWithOneTimePin(computer);
             });
         }
@@ -622,7 +622,17 @@ public final class HostActions {
             builder.setNegativeButton(android.R.string.cancel, null)
                     .setPositiveButton(R.string.pair_try_again, (dialog, which) -> retry.run());
         }
-        AlertDialog shown = builder.show();
+        keepError(builder.show());
+    }
+
+    /** A pairing that failed says so where its PIN stood, on the pairing panel. */
+    private void showPairingFailure(CharSequence message, Runnable retry) {
+        if (gone()) return;
+        keepError(com.limelight.ui.PairingCinemaSheet.showFailure(
+                activity, activity.getString(R.string.pair_pairing_title), message, retry));
+    }
+
+    private void keepError(AlertDialog shown) {
         errorDialog = shown;
         shown.setOnDismissListener(ignored -> { if (errorDialog == shown) errorDialog = null; });
     }
