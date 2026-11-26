@@ -17,7 +17,6 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
-import android.graphics.Rect;
 import android.graphics.Shader;
 import android.os.Looper;
 import android.preference.PreferenceManager;
@@ -61,8 +60,9 @@ import java.util.HashSet;
 
 /**
  * Home's hero art on each form: on a phone the hero's words stand under the art at the foot of the window's top third, on a
- * handheld the scrim lies under the whole hero, on a TV under the words of the card that has focus; the art moves with the
- * list and goes with the hero. With {@code NIGHTJAR_PREVIEW_OUTPUT} set, each form is also drawn to a file.
+ * handheld the art lies behind the whole hero, on a TV it is the focused card's; the art moves with the list and goes with
+ * the hero, and is in the stage's light on all three. With {@code NIGHTJAR_PREVIEW_OUTPUT} set, each form is also drawn to
+ * a file.
  */
 @RunWith(RobolectricTestRunner.class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -120,6 +120,8 @@ public class HomeHeroStageTest {
 
     /** One PC with these games in its library, nothing running. */
     private RecyclerView show(Home home) throws Exception {
+        // The art is baked in the test's thread, so what a step asks for is there when the step is over.
+        stage(home).setWorker(Runnable::run);
         ComputerDetails tower = nativeHost("tower", "Tower", true);
         tower.caps = HostCapabilities.UNKNOWN;
         HostFeed feed = ReflectionHelpers.getField(home, "feed");
@@ -156,12 +158,6 @@ public class HomeHeroStageTest {
         int[] at = new int[2];
         view.getLocationInWindow(at);
         return at[1];
-    }
-
-    private static int leftOf(View view) {
-        int[] at = new int[2];
-        view.getLocationInWindow(at);
-        return at[0];
     }
 
     /** A cover with a picture in its upper part, so a preview shows what the crop and the mask keep of it. */
@@ -220,16 +216,11 @@ public class HomeHeroStageTest {
             HeroStageView stage = stage(home);
             assertEquals(View.VISIBLE, stage.getVisibility());
             assertEquals("the backdrop lies in the window's corner", 0, topOf(home.findViewById(R.id.home_backdrop)));
-            Rect scrim = new Rect();
-            stage.getWords(scrim);
-            assertEquals("the scrim starts at the name", topOf(title), scrim.top);
-            assertEquals("and ends with the words", foot, scrim.bottom);
+            assertFalse("under the night's light words the art is the night's", stage.isDay());
 
             // The art is part of the hero: it goes up with it, and is gone when the hero is.
             list.scrollBy(0, 120);
             assertEquals(-120f, stage.getTranslationY(), 0f);
-            stage.getWords(scrim);
-            assertEquals("the words have not moved in the art", foot, scrim.bottom);
             // Search hides the list: the art goes with it, and is back with it.
             list.setVisibility(View.INVISIBLE);
             settle(home);
@@ -256,6 +247,7 @@ public class HomeHeroStageTest {
             show(home);
             HeroStageView stage = stage(home);
             assertEquals(View.VISIBLE, stage.getVisibility());
+            assertTrue("under the day's dark words the art is lifted, not held down", stage.isDay());
             stage.show(cover(), false);
             capture(home, "home-phone-day");
         } finally {
@@ -286,7 +278,7 @@ public class HomeHeroStageTest {
 
     @Test
     @Config(qualifiers = "w891dp-h411dp-land-night-xxhdpi")
-    public void onAHandheldTheScrimLiesUnderTheWholeHero() throws Exception {
+    public void onAHandheldTheArtLiesBehindTheWholeHero() throws Exception {
         ActivityController<Home> controller = Robolectric.buildActivity(Home.class).setup().visible();
         try {
             Home home = controller.get();
@@ -297,12 +289,9 @@ public class HomeHeroStageTest {
             assertNotNull("the handheld's hero has the line too", item.findViewById(R.id.hero_line));
             HeroStageView stage = stage(home);
             assertEquals(View.VISIBLE, stage.getVisibility());
-            Rect scrim = new Rect();
-            stage.getWords(scrim);
-            assertEquals(topOf(item), scrim.top);
-            assertEquals(leftOf(item) + item.getPaddingLeft(), scrim.left);
-            assertEquals(leftOf(item) + item.getWidth() - item.getPaddingRight(), scrim.right);
-            assertTrue("down to the buttons", scrim.bottom >= topOf(item.findViewById(R.id.hero_play)) + item.findViewById(R.id.hero_play).getHeight());
+            View play = item.findViewById(R.id.hero_play);
+            assertTrue("the art's view lies behind the whole hero, down to its buttons", stage.getHeight() >= topOf(play) + play.getHeight());
+            assertFalse(stage.isDay());
             stage.show(cover(), false);
             capture(home, "home-handheld-night");
         } finally {
@@ -312,7 +301,7 @@ public class HomeHeroStageTest {
 
     @Test
     @Config(qualifiers = "w960dp-h540dp-land-television-night-xhdpi")
-    public void onATvTheScrimIsAsWideAsTheFocusedCardsWords() throws Exception {
+    public void onATvTheArtIsTheFocusedCardsAndTheNightsWhateverTheTheme() throws Exception {
         ActivityController<Home> controller = Robolectric.buildActivity(Home.class).setup().visible();
         try {
             Home home = controller.get();
@@ -329,17 +318,9 @@ public class HomeHeroStageTest {
             assertNotNull("a shelf of cards", cards);
             assertTrue(cards.getChildAt(0).requestFocus());
             settle(home);
-            ViewGroup hero = home.findViewById(R.id.home_hero);
             TextView title = home.findViewById(R.id.home_hero_title);
             assertTrue("the hero names the card", title.getText().length() > 0);
-            Rect scrim = new Rect();
-            stage.getWords(scrim);
-            assertFalse("the scrim has the words' place", scrim.isEmpty());
-            assertEquals(leftOf(hero) - Math.round(hero.getTranslationX()) + hero.getPaddingLeft(), scrim.left);
-            assertEquals(topOf(title), scrim.top);
-            assertTrue("no wider than the words: " + scrim.width(),
-                    scrim.width() <= hero.getWidth() - hero.getPaddingLeft() - hero.getPaddingRight());
-            assertTrue("and no narrower than the name", scrim.width() >= (int) title.getPaint().measureText(title.getText(), 0, title.getText().length()));
+            assertFalse("the TV's hero is written in the light label colours: its art is the night's", stage.isDay());
 
             stage.show(cover(), false);
             capture(home, "home-tv-night");

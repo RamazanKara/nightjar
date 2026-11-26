@@ -15,6 +15,8 @@ import android.graphics.RadialGradient;
 import android.graphics.Rect;
 import android.graphics.Shader;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
@@ -22,22 +24,27 @@ import android.view.animation.LinearInterpolator;
 import com.google.android.material.color.MaterialColors;
 import com.limelight.R;
 
-import java.nio.ByteBuffer;
+import java.util.concurrent.Executor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The hero's art on the stage: the cover of the game Home is about, shown wide behind the hero's words and faded into the
- * stage, under a scrim that keeps those words readable on any art.
+ * stage, in the stage's own light.
  *
  * <p>In a wide window the art takes the end side of the hero and is lit from that edge; in a tall one it lies across the top.
- * Either way it is the cover itself, cropped to its upper part, where most covers have their picture, behind a soft round
- * mask. No copy and no blur are made of it, so a change of game costs two small shader objects; it cross-fades over
- * {@code motion.ambient.ms}, and the caller makes it a cut with reduced motion.
+ * Either way it is the cover, cropped to its upper part, where most covers have their picture, behind a soft round mask.
  *
- * <p>The scrim is the stage's own colour, whole where the words are ({@link #setWords}) and gone a little past them, with a
- * lighter shade under the top edge for the status bar and the top row. Its strength is not chosen by eye: {@link #scrimShare}
- * is the least that gives WCAG's 4.5:1 to the fainter of the words' two colours over the worst art there could be, white
- * under light words and black under dark ones. It is one small alpha map drawn stretched. At rest nothing moves and nothing
- * is allocated. High contrast shows neither art nor scrim: its page is solid.
+ * <p>One rule holds on every form and in every theme: the art is the ambient's recipe on the sharp picture. A copy of the
+ * cover is baked once, off the main thread ({@link #held}): its colour lifted, yellows turned toward orange so they never
+ * read as Play, and each pixel's luminance held to {@code ambient.textZoneMaxLuma} under light words, or lifted to
+ * {@code day.ambient.textZoneMinLuma} under dark ones. The art keeps its colour and is never brighter than the ambient may
+ * be, so whatever is readable on the stage is as readable on the art: the hero's name and its fainter line keep WCAG's 4.5:1
+ * and a button's glyph more than 3:1 wherever they stand, and no scrim has to be placed under them.
+ *
+ * <p>A change of game cross-fades over {@code motion.ambient.ms} once its copy is baked; the caller makes it a cut with
+ * reduced motion. At rest nothing moves and nothing is allocated. High contrast shows no art: its page is solid.
  */
 public class HeroStageView extends View {
     /** A wide window: the art's share of the width, from the end edge. */
@@ -51,47 +58,38 @@ public class HeroStageView extends View {
     static final float MIDDLE_DOWN_TALL = .25f;
     /** Of the cover's height that does not fit, this share is cut off above: the picture is in the upper part. */
     static final float CROP_ABOVE = .22f;
-    /** A wide window: the scrim is whole over at least this share of the width from the start edge, and further under longer words. */
-    public static final float BLOCK_SHARE = .46f;
-    /** How far past the words the scrim runs out: across, as a share of the width; up and down, of the words' height. */
-    static final float RAMP = .2f;
-    static final float EDGE = .5f;
-    /** And up and down no further than this share of the art's height. */
-    static final float EDGE_MOST = .2f;
-    /** Under the top edge: this share of the scrim, gone this far down the art's height. */
-    static final float TOP_SHADE = .6f;
-    static final float TOP_BAND = .18f;
-    /** WCAG's contrast for text, and what is kept in hand for the rounding of 8-bit alpha. */
+    /** The baked copy's longer side at most, in pixels: a 2:3 cover of 480x720, about 1.4 MB. */
+    static final int HELD_SIDE = 720;
+    /** WCAG's contrast for text, and for the glyph of a control. */
     public static final double TEXT_CONTRAST = 4.5;
-    static final float SCRIM_MARGIN = .03f;
-    /** One texel of the scrim's map covers this many pixels each way. */
-    private static final int MAP_STEP = 16;
+    public static final double CONTROL_CONTRAST = 3.0;
     private static final float[] MASK_STOPS = {0f, HOLD, HOLD + (1f - HOLD) * .25f, HOLD + (1f - HOLD) * .5f, HOLD + (1f - HOLD) * .75f, 1f};
     private static final int[] MASK_COLORS = {0xFFFFFFFF, 0xFFFFFFFF, 0xD7FFFFFF, 0x80FFFFFF, 0x28FFFFFF, 0x00FFFFFF};
+    /** One thread for every stage, gone again half a minute after its last bake. */
+    private static final Executor WORKER = worker();
 
     private final Paint incoming = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
     private final Paint outgoing = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
-    private final Paint scrim = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
     private final Rect artRect = new Rect();
-    private final Rect window = new Rect();
-    private final Rect words = new Rect();
     private final Matrix matrix = new Matrix();
+    private final Handler main = new Handler(Looper.getMainLooper());
     private final boolean highContrast;
     private final long fadeMs;
-    private int ink;
-    private int faintInk;
+    private Executor executor = WORKER;
+    /** The words over the art are dark: the art is the day's. */
+    private boolean day;
+    private int canvasColor;
     private Shader mask;
+    /** The cover that was asked for, and which asking it was: a bake that comes back late is dropped. */
+    private Bitmap source;
+    private int asked;
+    /** The baked copies: the one shown or coming in, and the one going. */
     private Bitmap art;
     private Bitmap old;
     private ValueAnimator change;
     /** The change's progress: 1 at rest. */
     private float fade = 1f;
     private float heroShare = .5f;
-    private int canvasColor;
-    private float share;
-    private Bitmap map;
-    private ByteBuffer mapBytes;
-    private boolean mapStale = true;
 
     public HeroStageView(Context context) {
         this(context, null);
@@ -100,16 +98,25 @@ public class HeroStageView extends View {
     public HeroStageView(Context context, AttributeSet attrs) {
         super(context, attrs);
         highContrast = AppTheme.isHighContrast(context);
-        ink = MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnSurface, 0xFFF5F7FA) | 0xFF000000;
-        faintInk = MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFFC7CDD9) | 0xFF000000;
+        day = dark(MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnSurface, 0xFFF5F7FA));
         fadeMs = context.getResources().getInteger(R.integer.nj_motion_ambient_ms);
-        setCanvasColor(MaterialColors.getColor(context, android.R.attr.colorBackground, 0xFF050608));
+        canvasColor = MaterialColors.getColor(context, android.R.attr.colorBackground, 0xFF050608) | 0xFF000000;
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         setFocusable(false);
     }
 
+    private static Executor worker() {
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(0, 1, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), task -> {
+            Thread thread = new Thread(task, "hero-art");
+            thread.setDaemon(true);
+            thread.setPriority(Thread.NORM_PRIORITY - 1);
+            return thread;
+        });
+        return pool;
+    }
+
     /** WCAG's relative luminance of an opaque colour. */
-    static double luminance(int color) {
+    public static double luminance(int color) {
         return .2126 * linear((color >> 16) & 0xFF) + .7152 * linear((color >> 8) & 0xFF) + .0722 * linear(color & 0xFF);
     }
 
@@ -125,6 +132,11 @@ public class HeroStageView extends View {
         return (Math.max(first, second) + .05) / (Math.min(first, second) + .05);
     }
 
+    /** Words of this colour are the dark ones, written on a light page. */
+    static boolean dark(int ink) {
+        return luminance(ink | 0xFF000000) < .5;
+    }
+
     /** {@code over} drawn at {@code share} of its strength on {@code under}, as the screen blends it. */
     static int mix(int under, int over, float share) {
         int red = Math.round(((under >> 16) & 0xFF) * (1f - share) + ((over >> 16) & 0xFF) * share);
@@ -133,26 +145,59 @@ public class HeroStageView extends View {
         return 0xFF000000 | (red << 16) | (green << 8) | blue;
     }
 
-    /** The art that is hardest on words of this colour over this scrim: white under light words, black under dark ones. */
-    static int worstArt(int text, int scrimColor) {
-        return luminance(text) > luminance(scrimColor) ? 0xFFFFFFFF : 0xFF000000;
+    /**
+     * The ambient's values on each of these pixels: the night's hold, or the day's lift for {@code day}. A pixel that is not
+     * opaque lies on {@code canvas} first.
+     */
+    static void hold(int[] pixels, int canvas, boolean day) {
+        float[] hsv = new float[3];
+        int last = 0;
+        int lastHeld = 0;
+        boolean any = false;
+        for (int i = 0; i < pixels.length; i++) {
+            int color = pixels[i];
+            int alpha = color >>> 24;
+            color = alpha == 255 ? color : mix(canvas, color, alpha / 255f);
+            // Flat art repeats its colours: the one before is the commonest.
+            if (!any || color != last) {
+                any = true;
+                last = color;
+                lastHeld = day ? BackdropBlur.bakeDay(color, hsv) : BackdropBlur.bakeNight(color, hsv);
+            }
+            pixels[i] = lastHeld;
+        }
     }
 
     /**
-     * The least share of the scrim that gives words of colour {@code text} the contrast {@code wanted} over the worst art;
-     * 1 where even the bare scrim does not, which a theme's own page colour never leaves its labels at.
+     * The cover in the stage's light: no longer than {@link #HELD_SIDE} on its longer side, with the ambient's values on every
+     * pixel. A new opaque bitmap, and the cover is left as it is; null when the cover cannot be read or there is no memory for
+     * the copy, which leaves the stage without art rather than with art that is too bright.
      */
-    public static float scrimShare(int text, int scrimColor, double wanted) {
-        int worst = worstArt(text, scrimColor);
-        if (contrast(text, mix(worst, scrimColor, 1f)) < wanted) return 1f;
-        float low = 0f;
-        float high = 1f;
-        for (int i = 0; i < 20; i++) {
-            float middle = (low + high) / 2f;
-            if (contrast(text, mix(worst, scrimColor, middle)) >= wanted) high = middle;
-            else low = middle;
+    static Bitmap held(Bitmap cover, int canvas, boolean day) {
+        Bitmap readable = null;
+        Bitmap small = null;
+        try {
+            if (cover == null || cover.isRecycled() || cover.getWidth() <= 0 || cover.getHeight() <= 0) return null;
+            // The artwork loader decodes straight to the GPU on newer Android: its pixels cannot be read there.
+            readable = hardware(cover) ? cover.copy(Bitmap.Config.ARGB_8888, false) : cover;
+            if (readable == null) return null;
+            float shrink = Math.min(1f, HELD_SIDE / (float) Math.max(readable.getWidth(), readable.getHeight()));
+            int width = Math.max(1, Math.round(readable.getWidth() * shrink));
+            int height = Math.max(1, Math.round(readable.getHeight() * shrink));
+            small = shrink < 1f ? Bitmap.createScaledBitmap(readable, width, height, true) : readable;
+            int[] pixels = new int[width * height];
+            small.getPixels(pixels, 0, width, 0, 0, width, height);
+            hold(pixels, canvas | 0xFF000000, day);
+            Bitmap result = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888);
+            result.setHasAlpha(false);
+            return result;
+        } catch (RuntimeException | OutOfMemoryError e) {
+            return null;
+        } finally {
+            // Only the copies made here are let go: the cover is its cache's.
+            if (small != null && small != readable && small != cover) small.recycle();
+            if (readable != null && readable != cover) readable.recycle();
         }
-        return high;
     }
 
     /** Where the art goes in a window of this size, whose hero takes {@code heroShare} of the height. */
@@ -184,46 +229,25 @@ public class HeroStageView extends View {
         return new float[] {x, rect.top + rect.height() * down, wide ? rect.width() : width * TALL_REACH, rect.height() * (1f - down)};
     }
 
-    /** 0 to 1 with no kink at either end. */
-    static float smooth(float value) {
-        float t = Math.max(0f, Math.min(1f, value));
-        return t * t * (3f - 2f * t);
-    }
-
-    /**
-     * How much of the scrim stands at a point: whole from the words' top to their foot and, in a wide window, from the start
-     * edge to their end; running out over {@code edge} above and below and over {@code ramp} past their end; and never less
-     * than the shade under the top edge. {@code fromStart} is the distance from the start edge; a tall window passes no end.
-     */
-    static float scrimAt(float fromStart, float y, float wordsEnd, float ramp, float wordsTop, float wordsFoot, float edge, float topBand) {
-        float shade = topBand <= 0f ? 0f : TOP_SHADE * (1f - smooth(y / topBand));
-        if (wordsFoot <= wordsTop) return shade;
-        float down = y < wordsTop ? 1f - smooth((wordsTop - y) / edge) : 1f - smooth((y - wordsFoot) / edge);
-        float across = ramp <= 0f ? 1f : 1f - smooth((fromStart - wordsEnd) / ramp);
-        return Math.max(shade, down * across);
-    }
-
-    /** The stage's colour here: the scrim is made of it. */
+    /** The stage's colour here: what a cover with transparency lies on. */
     public void setCanvasColor(int color) {
         int opaque = color | 0xFF000000;
         if (opaque == canvasColor) return;
         canvasColor = opaque;
-        scrim.setColor(opaque);
-        weigh();
+        if (source != null) bake(false);
     }
 
-    /** The colours of the hero's words, the strong and the faint: the scrim is as strong as the harder of them needs. */
-    public void setInks(int strong, int faint) {
-        if (ink == (strong | 0xFF000000) && faintInk == (faint | 0xFF000000)) return;
-        ink = strong | 0xFF000000;
-        faintInk = faint | 0xFF000000;
-        weigh();
+    /** The colour of the words that stand on the art: light words get the night's art, dark ones the day's. */
+    public void setInk(int color) {
+        boolean wanted = dark(color);
+        if (wanted == day) return;
+        day = wanted;
+        if (source != null) bake(false);
     }
 
-    private void weigh() {
-        share = Math.min(1f, Math.max(scrimShare(ink, canvasColor, TEXT_CONTRAST), scrimShare(faintInk, canvasColor, TEXT_CONTRAST)) + SCRIM_MARGIN);
-        mapStale = true;
-        invalidate();
+    /** Whether the art is the day's: lifted under dark words instead of held down under light ones. */
+    public boolean isDay() {
+        return day;
     }
 
     /** The hero's share of the stage's height: the art ends where the hero does. */
@@ -233,36 +257,50 @@ public class HeroStageView extends View {
         layOut();
     }
 
-    /** Where the hero's words stand in this view: the scrim is whole there. */
-    public void setWords(int left, int top, int right, int bottom) {
-        if (words.left == left && words.top == top && words.right == right && words.bottom == bottom) return;
-        words.set(left, top, right, bottom);
-        mapStale = true;
-        invalidate();
-    }
-
-    /** Where the words stand, as {@link #setWords} was told; empty for none. */
-    public void getWords(Rect out) {
-        out.set(words);
-    }
-
-    /** The hero has no words now: only the shade under the top edge stays. */
-    public void clearWords() {
-        setWords(0, 0, 0, 0);
+    /** For tests: bakes in the caller's thread. */
+    public void setWorker(Executor worker) {
+        executor = worker;
     }
 
     /**
-     * The game's cover, or null for none: a PC, or no game at all. {@code animate} cross-fades from what is shown; the caller
-     * passes false with reduced motion.
+     * The game's cover, or null for none: a PC, or no game at all. {@code animate} cross-fades from what is shown, once the
+     * cover's copy is baked; the caller passes false with reduced motion. The cover itself is never drawn and never changed.
      */
     public void show(Bitmap cover, boolean animate) {
-        if (cover == art) return;
+        if (cover == source) return;
+        source = cover;
+        bake(animate);
+    }
+
+    /** The cover that was asked for goes to the worker, and what was shown stays until its copy is back. */
+    private void bake(boolean animate) {
+        int asking = ++asked;
+        Bitmap cover = source;
+        if (cover == null || highContrast) {
+            change(null, animate && !highContrast);
+            return;
+        }
+        int page = canvasColor;
+        boolean lifted = day;
+        executor.execute(() -> {
+            Bitmap made = held(cover, page, lifted);
+            if (Looper.myLooper() == Looper.getMainLooper()) arrive(asking, made, animate);
+            else main.post(() -> arrive(asking, made, animate));
+        });
+    }
+
+    private void arrive(int asking, Bitmap made, boolean animate) {
+        if (asking == asked) change(made, animate && isAttachedToWindow());
+    }
+
+    private void change(Bitmap next, boolean animate) {
+        if (next == art) return;
         land();
         old = art;
         outgoing.setShader(incoming.getShader());
-        art = cover;
-        incoming.setShader(shaderOf(cover));
-        if (!animate || highContrast || getWidth() == 0) {
+        art = next;
+        incoming.setShader(shaderOf(next));
+        if (!animate || getWidth() == 0) {
             land();
             return;
         }
@@ -284,9 +322,9 @@ public class HeroStageView extends View {
         running.start();
     }
 
-    /** Whether a cover is shown or coming in. */
+    /** Whether a cover was asked for: shown, coming in or still being baked. */
     public boolean hasArt() {
-        return art != null;
+        return source != null;
     }
 
     /** Whether a change is under way. */
@@ -294,9 +332,9 @@ public class HeroStageView extends View {
         return change != null;
     }
 
-    /** The scrim's share of the stage's colour where the words are. */
-    public float scrimShare() {
-        return share;
+    /** The baked copy that is shown or coming in; null for none. */
+    Bitmap art() {
+        return art;
     }
 
     /** A change lands where it is headed: what was shown is let go. */
@@ -310,14 +348,14 @@ public class HeroStageView extends View {
         invalidate();
     }
 
-    private Shader shaderOf(Bitmap cover) {
-        if (cover == null || mask == null || artRect.isEmpty() || cover.isRecycled()) return null;
-        float[] at = place(cover.getWidth(), cover.getHeight(), artRect);
-        BitmapShader picture = new BitmapShader(cover, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+    private Shader shaderOf(Bitmap picture) {
+        if (picture == null || mask == null || artRect.isEmpty()) return null;
+        float[] at = place(picture.getWidth(), picture.getHeight(), artRect);
+        BitmapShader shader = new BitmapShader(picture, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
         matrix.setScale(at[0], at[0]);
         matrix.postTranslate(at[1], at[2]);
-        picture.setLocalMatrix(matrix);
-        return new ComposeShader(picture, mask, PorterDuff.Mode.DST_IN);
+        shader.setLocalMatrix(matrix);
+        return new ComposeShader(shader, mask, PorterDuff.Mode.DST_IN);
     }
 
     private boolean isRtl() {
@@ -328,8 +366,6 @@ public class HeroStageView extends View {
     private void layOut() {
         int w = getWidth();
         int h = getHeight();
-        window.set(0, 0, w, h);
-        mapStale = true;
         if (w == 0 || h == 0) return;
         boolean rtl = isRtl();
         artRect(w, h, heroShare, rtl, artRect);
@@ -362,55 +398,13 @@ public class HeroStageView extends View {
         super.onDetachedFromWindow();
     }
 
-    /** The scrim's map for this size and these words: a byte for each sixteenth pixel each way, strongest where the words are. */
-    private void bakeMap() {
-        mapStale = false;
-        int w = getWidth();
-        int h = getHeight();
-        int columns = Math.max(2, w / MAP_STEP);
-        int rows = Math.max(2, h / MAP_STEP);
-        if (map == null || map.getWidth() != columns || map.getHeight() != rows) {
-            map = Bitmap.createBitmap(columns, rows, Bitmap.Config.ALPHA_8);
-            mapBytes = ByteBuffer.allocate(columns * rows);
-        }
-        boolean wide = w > h;
-        boolean rtl = isRtl();
-        float texelW = w / (float) columns;
-        float texelH = h / (float) rows;
-        // The words' place, a texel and a half wider each way: the map is drawn stretched, which softens its edges by that much.
-        float top = words.top - texelH * 1.5f;
-        float foot = words.isEmpty() ? top : words.bottom + texelH * 1.5f;
-        float end = Math.max(w * BLOCK_SHARE, rtl ? w - words.left : words.right) + texelW * 1.5f;
-        float edge = Math.max(texelH, Math.min(words.height() * EDGE, artRect.height() * EDGE_MOST));
-        float band = artRect.height() * TOP_BAND;
-        byte[] bytes = mapBytes.array();
-        for (int row = 0; row < rows; row++) {
-            float y = (row + .5f) * texelH;
-            for (int column = 0; column < columns; column++) {
-                float x = (column + .5f) * texelW;
-                float shape = scrimAt(rtl ? w - x : x, y, end, wide ? w * RAMP : 0f, top, foot, edge, band);
-                bytes[row * columns + column] = (byte) Math.min(255, (int) Math.ceil(share * shape * 255f));
-            }
-        }
-        mapBytes.rewind();
-        map.copyPixelsFromBuffer(mapBytes);
-    }
-
     private static boolean hardware(Bitmap bitmap) {
-        return bitmap != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && bitmap.getConfig() == Bitmap.Config.HARDWARE;
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && bitmap.getConfig() == Bitmap.Config.HARDWARE;
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         if (highContrast || artRect.isEmpty()) return;
-        if ((art != null && art.isRecycled()) || (old != null && old.isRecycled())) {
-            // Its cache let the cover go under us: nothing is better than a crash.
-            art = null;
-            incoming.setShader(null);
-            land();
-        }
-        // A cover that lives on the GPU cannot be drawn into a picture of this view.
-        if (!canvas.isHardwareAccelerated() && (hardware(art) || hardware(old))) return;
         if (old != null && outgoing.getShader() != null && fade < 1f) {
             // Under a cover that comes in, the old one stays whole; with nothing coming, it goes.
             outgoing.setAlpha(art != null ? 255 : Math.round(255 * (1f - fade)));
@@ -420,10 +414,5 @@ public class HeroStageView extends View {
             incoming.setAlpha(Math.round(255 * fade));
             canvas.drawRect(artRect, incoming);
         }
-        float strength = art != null ? (old != null ? 1f : fade) : (old != null ? 1f - fade : 0f);
-        if (strength <= 0f) return;
-        if (mapStale) bakeMap();
-        scrim.setAlpha(Math.round(255 * strength));
-        canvas.drawBitmap(map, null, window, scrim);
     }
 }

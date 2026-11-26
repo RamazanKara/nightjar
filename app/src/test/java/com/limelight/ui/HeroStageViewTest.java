@@ -30,8 +30,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The hero's art and its scrim: where the art goes on each form, how a cover fills that place, and that the words keep WCAG's
- * 4.5:1 over the worst art there could be, measured on the pixels that are drawn.
+ * The hero's art: where it goes on each form, how a cover fills that place, and that it is held to the stage's light, so the
+ * words keep WCAG's 4.5:1 and a control's glyph 3:1 over the worst art there could be, measured on the pixels that are drawn.
  */
 @RunWith(RobolectricTestRunner.class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -41,8 +41,10 @@ public class HeroStageViewTest {
     private static final int NIGHT_INK = 0xFFF5F7FA;
     private static final int NIGHT_FAINT = 0xFFC7CDD9;
     private static final int DAY_CANVAS = 0xFFF2F4F8;
-    private static final int DAY_INK = 0xFF10131A;
-    private static final int DAY_FAINT = 0xFF4A5261;
+    private static final int DAY_INK = 0xFF111318;
+    private static final int DAY_FAINT = 0xFF3A404D;
+    /** What rounding to eight bits can add to a held luminance. */
+    private static final double ROUNDING = .004;
 
     @After
     public void tearDown() {
@@ -55,9 +57,11 @@ public class HeroStageViewTest {
         return cover;
     }
 
-    /** A stage of this size in a window, with nothing shown yet. */
+    /** A stage of this size in a window, with nothing shown yet; it bakes in the test's thread. */
     private static HeroStageView stage(Activity activity, int w, int h, float heroShare) {
         HeroStageView stage = new HeroStageView(activity);
+        stage.setWorker(Runnable::run);
+        stage.setInk(NIGHT_INK);
         activity.setContentView(stage);
         stage.setHeroShare(heroShare);
         stage.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY));
@@ -83,6 +87,20 @@ public class HeroStageViewTest {
         return least;
     }
 
+    /** The darkest and the brightest pixel of a picture, as luminance. */
+    private static double[] range(Bitmap picture) {
+        double most = 0;
+        double fewest = 1;
+        for (int y = 0; y < picture.getHeight(); y += 2) {
+            for (int x = 0; x < picture.getWidth(); x += 2) {
+                double luminance = HeroStageView.luminance(picture.getPixel(x, y) | 0xFF000000);
+                most = Math.max(most, luminance);
+                fewest = Math.min(fewest, luminance);
+            }
+        }
+        return new double[] {fewest, most};
+    }
+
     @Test
     public void contrastIsWcags() {
         assertEquals(21.0, HeroStageView.contrast(0xFFFFFFFF, 0xFF000000), .001);
@@ -94,20 +112,65 @@ public class HeroStageViewTest {
     }
 
     @Test
-    public void theScrimIsTheLeastThatKeepsTheWordsReadableOverTheWorstArt() {
-        int[][] looks = {{NIGHT_INK, NIGHT_CANVAS}, {NIGHT_FAINT, NIGHT_CANVAS}, {DAY_INK, DAY_CANVAS}, {DAY_FAINT, DAY_CANVAS}};
-        for (int[] look : looks) {
-            int worst = HeroStageView.worstArt(look[0], look[1]);
-            float share = HeroStageView.scrimShare(look[0], look[1], HeroStageView.TEXT_CONTRAST);
-            String name = Integer.toHexString(look[0]) + " on " + Integer.toHexString(look[1]) + " at " + share;
-            assertTrue(name, share > .2f && share < .95f);
-            assertTrue(name, HeroStageView.contrast(look[0], HeroStageView.mix(worst, look[1], share)) >= 4.5);
-            assertTrue("no more than it takes: " + name, HeroStageView.contrast(look[0], HeroStageView.mix(worst, look[1], share - .03f)) < 4.5);
+    public void heldArtKeepsItsColourAndIsNeverBrighterThanTheAmbientMayBe() {
+        int[] covers = {0xFFFFFFFF, 0xFFFFE600, 0xFFFF0000, 0xFF00C040, 0xFF0000FF, 0xFF808080, 0xFF000000};
+        for (int color : covers) {
+            Bitmap cover = plain(color);
+            Bitmap held = HeroStageView.held(cover, NIGHT_CANVAS, false);
+            String name = Integer.toHexString(color) + " held as " + Integer.toHexString(held.getPixel(10, 10));
+            assertTrue("a copy: " + name, held != cover);
+            assertEquals("the cover is left as it was", color, cover.getPixel(10, 10));
+            assertTrue(name, range(held)[1] <= BackdropBlur.MAX_LUMA + ROUNDING);
+            int pixel = held.getPixel(10, 10) | 0xFF000000;
+            assertTrue("the name on " + name, HeroStageView.contrast(NIGHT_INK, pixel) >= HeroStageView.TEXT_CONTRAST);
+            assertTrue("the faint line on " + name, HeroStageView.contrast(NIGHT_FAINT, pixel) >= HeroStageView.TEXT_CONTRAST);
+            assertTrue("a glyph on " + name, HeroStageView.contrast(NIGHT_FAINT, pixel) >= HeroStageView.CONTROL_CONTRAST);
         }
-        assertEquals("white is the worst under light words", 0xFFFFFFFF, HeroStageView.worstArt(NIGHT_INK, NIGHT_CANVAS));
-        assertEquals("black under dark ones", 0xFF000000, HeroStageView.worstArt(DAY_INK, DAY_CANVAS));
-        assertTrue("fainter words need more", HeroStageView.scrimShare(NIGHT_FAINT, NIGHT_CANVAS, 4.5) > HeroStageView.scrimShare(NIGHT_INK, NIGHT_CANVAS, 4.5));
-        assertEquals("words the bare page cannot carry get all of it", 1f, HeroStageView.scrimShare(0xFF404040, NIGHT_CANVAS, 4.5), 0f);
+        int red = HeroStageView.held(plain(0xFFFF0000), NIGHT_CANVAS, false).getPixel(10, 10);
+        assertTrue("red is still red: " + Integer.toHexString(red), ((red >> 16) & 0xFF) > 140 && ((red >> 8) & 0xFF) < 24 && (red & 0xFF) < 24);
+        int blue = HeroStageView.held(plain(0xFF0000FF), NIGHT_CANVAS, false).getPixel(10, 10);
+        assertTrue("a colour that is dark enough is left alone: " + Integer.toHexString(blue), (blue & 0xFF) > 240);
+        int white = HeroStageView.held(plain(0xFFFFFFFF), NIGHT_CANVAS, false).getPixel(10, 10);
+        assertEquals("white is a grey", (white >> 16) & 0xFF, white & 0xFF);
+        assertTrue("a dark one: " + Integer.toHexString(white), (white & 0xFF) > 60 && (white & 0xFF) < 96);
+        int yellow = HeroStageView.held(plain(0xFFFFE600), NIGHT_CANVAS, false).getPixel(10, 10);
+        assertTrue("yellow turns toward orange, away from Play: " + Integer.toHexString(yellow),
+                ((yellow >> 16) & 0xFF) > 2 * ((yellow >> 8) & 0xFF));
+    }
+
+    @Test
+    public void byDayTheArtIsLiftedUnderDarkWords() {
+        for (int color : new int[] {0xFF000000, 0xFF202020, 0xFFFF0000, 0xFF0000FF, 0xFFFFFFFF}) {
+            Bitmap held = HeroStageView.held(plain(color), DAY_CANVAS, true);
+            String name = Integer.toHexString(color) + " held as " + Integer.toHexString(held.getPixel(10, 10));
+            assertTrue(name, range(held)[0] >= BackdropBlur.MIN_LUMA_DAY - ROUNDING * 2);
+            int pixel = held.getPixel(10, 10) | 0xFF000000;
+            assertTrue("the name on " + name, HeroStageView.contrast(DAY_INK, pixel) >= HeroStageView.TEXT_CONTRAST);
+            assertTrue("the faint line on " + name, HeroStageView.contrast(DAY_FAINT, pixel) >= HeroStageView.TEXT_CONTRAST);
+        }
+        int red = HeroStageView.held(plain(0xFFFF0000), DAY_CANVAS, true).getPixel(10, 10);
+        assertTrue("red is still red: " + Integer.toHexString(red), ((red >> 16) & 0xFF) > ((red >> 8) & 0xFF) + 40);
+        assertTrue(HeroStageView.dark(DAY_INK));
+        assertFalse(HeroStageView.dark(NIGHT_INK));
+        assertFalse(HeroStageView.dark(NIGHT_FAINT));
+    }
+
+    @Test
+    public void aLargeCoverIsBakedSmallAndATransparentOneLiesOnTheStage() {
+        Bitmap large = Bitmap.createBitmap(1200, 1800, Bitmap.Config.ARGB_8888);
+        large.eraseColor(0xFF3060C0);
+        Bitmap held = HeroStageView.held(large, NIGHT_CANVAS, false);
+        assertEquals(HeroStageView.HELD_SIDE, held.getHeight());
+        assertEquals(HeroStageView.HELD_SIDE * 2 / 3, held.getWidth());
+        assertFalse("opaque", held.hasAlpha());
+        Bitmap clear = Bitmap.createBitmap(20, 30, Bitmap.Config.ARGB_8888);
+        Bitmap onStage = HeroStageView.held(clear, NIGHT_CANVAS, false);
+        Bitmap stageItself = HeroStageView.held(plain(NIGHT_CANVAS), NIGHT_CANVAS, false);
+        assertEquals("where the cover has nothing, the stage's own colour is held", stageItself.getPixel(5, 5), onStage.getPixel(5, 5));
+        assertNull("no cover, no copy", HeroStageView.held(null, NIGHT_CANVAS, false));
+        Bitmap gone = plain(0xFFFFFFFF);
+        gone.recycle();
+        assertNull("a cover its cache let go is not read", HeroStageView.held(gone, NIGHT_CANVAS, false));
     }
 
     @Test
@@ -156,54 +219,37 @@ public class HeroStageViewTest {
     }
 
     @Test
-    public void theScrimIsWholeUnderTheWordsAndRunsOutPastThem() {
-        // Words from 100 to 200 down, ending 400 across; a ramp of 200 across and an edge of 50 up and down; no top shade.
-        assertEquals(1f, HeroStageView.scrimAt(0, 150, 400, 200, 100, 200, 50, 0), 0f);
-        assertEquals(1f, HeroStageView.scrimAt(400, 100, 400, 200, 100, 200, 50, 0), 0f);
-        assertEquals(.5f, HeroStageView.scrimAt(500, 150, 400, 200, 100, 200, 50, 0), .001f);
-        assertEquals(0f, HeroStageView.scrimAt(600, 150, 400, 200, 100, 200, 50, 0), 0f);
-        assertEquals(.5f, HeroStageView.scrimAt(0, 225, 400, 200, 100, 200, 50, 0), .001f);
-        assertEquals(.5f, HeroStageView.scrimAt(0, 75, 400, 200, 100, 200, 50, 0), .001f);
-        assertEquals(0f, HeroStageView.scrimAt(0, 250, 400, 200, 100, 200, 50, 0), 0f);
-        // A tall window has no end: the scrim goes all the way across.
-        assertEquals(1f, HeroStageView.scrimAt(5000, 150, 0, 0, 100, 200, 50, 0), 0f);
-        // The shade under the top edge, with or without words.
-        assertEquals(HeroStageView.TOP_SHADE, HeroStageView.scrimAt(900, 0, 400, 200, 100, 200, 50, 60), 0f);
-        assertEquals(0f, HeroStageView.scrimAt(900, 60, 400, 200, 100, 200, 50, 60), 0f);
-        assertEquals(HeroStageView.TOP_SHADE, HeroStageView.scrimAt(0, 0, 0, 0, 0, 0, 1, 60), 0f);
-        assertEquals("never less than the words need", 1f, HeroStageView.scrimAt(0, 0, 400, 200, 0, 200, 50, 60), 0f);
-    }
-
-    @Test
-    public void theWordsKeepTheirContrastOverWhiteArtOnAWideWindow() {
+    public void whiteArtIsNoBrighterThanTheStageAllowsAnywhereOnAWideWindow() {
         try (var controller = Robolectric.buildActivity(MotionTest.Screen.class).setup()) {
             HeroStageView stage = stage(controller.get(), 960, 540, .56f);
             stage.setCanvasColor(NIGHT_CANVAS);
-            stage.setInks(NIGHT_INK, NIGHT_FAINT);
             stage.show(plain(0xFFFFFFFF), false);
-            // A short name at the start, then one that runs across into the art.
-            for (Rect words : new Rect[] {new Rect(48, 80, 300, 158), new Rect(48, 80, 912, 158)}) {
-                stage.setWords(words.left, words.top, words.right, words.bottom);
-                Bitmap picture = drawn(stage, 0xFFFFFFFF);
-                assertTrue("the name at " + words + ": " + least(picture, words, NIGHT_INK), least(picture, words, NIGHT_INK) >= 4.5);
-                assertTrue("the faint line at " + words + ": " + least(picture, words, NIGHT_FAINT), least(picture, words, NIGHT_FAINT) >= 4.5);
-            }
+            assertFalse(stage.isDay());
+            Bitmap picture = drawn(stage, NIGHT_CANVAS);
+            assertTrue("there is art to measure", HeroStageView.luminance(picture.getPixel(950, 150)) > .05);
+            assertTrue("the brightest pixel: " + range(picture)[1], range(picture)[1] <= BackdropBlur.MAX_LUMA + ROUNDING);
+            // The name where it stands on a TV and a handheld, the top row's buttons at the end, and the whole art.
+            Rect words = new Rect(48, 80, 912, 158);
+            Rect buttons = new Rect(760, 12, 948, 68);
+            Rect all = new Rect(0, 0, 960, 540);
+            assertTrue("the name: " + least(picture, words, NIGHT_INK), least(picture, words, NIGHT_INK) >= HeroStageView.TEXT_CONTRAST);
+            assertTrue("the faint line: " + least(picture, all, NIGHT_FAINT), least(picture, all, NIGHT_FAINT) >= HeroStageView.TEXT_CONTRAST);
+            assertTrue("a button's glyph: " + least(picture, buttons, NIGHT_FAINT), least(picture, buttons, NIGHT_FAINT) >= HeroStageView.CONTROL_CONTRAST);
         }
     }
 
     @Test
     @Config(qualifiers = "w412dp-h915dp-port-night-mdpi")
-    public void theWordsKeepTheirContrastOverWhiteArtOnATallWindow() {
+    public void whiteArtIsNoBrighterThanTheStageAllowsOnATallWindow() {
         try (var controller = Robolectric.buildActivity(MotionTest.Screen.class).setup()) {
             HeroStageView stage = stage(controller.get(), 412, 915, .46f);
             stage.setCanvasColor(NIGHT_CANVAS);
-            stage.setInks(NIGHT_INK, NIGHT_FAINT);
             stage.show(plain(0xFFFFFFFF), false);
-            Rect words = new Rect(24, 225, 388, 305);
-            stage.setWords(words.left, words.top, words.right, words.bottom);
-            Bitmap picture = drawn(stage, 0xFFFFFFFF);
-            assertTrue("the name: " + least(picture, words, NIGHT_INK), least(picture, words, NIGHT_INK) >= 4.5);
-            assertTrue("the faint line: " + least(picture, words, NIGHT_FAINT), least(picture, words, NIGHT_FAINT) >= 4.5);
+            Bitmap picture = drawn(stage, NIGHT_CANVAS);
+            assertTrue("there is art at the top, under the status bar and the top row", HeroStageView.luminance(picture.getPixel(206, 20)) > .05);
+            Rect all = new Rect(0, 0, 412, 915);
+            assertTrue("the brightest pixel: " + range(picture)[1], range(picture)[1] <= BackdropBlur.MAX_LUMA + ROUNDING);
+            assertTrue("the faint line: " + least(picture, all, NIGHT_FAINT), least(picture, all, NIGHT_FAINT) >= HeroStageView.TEXT_CONTRAST);
         }
     }
 
@@ -213,13 +259,17 @@ public class HeroStageViewTest {
         try (var controller = Robolectric.buildActivity(MotionTest.Screen.class).setup()) {
             HeroStageView stage = stage(controller.get(), 960, 540, .56f);
             stage.setCanvasColor(DAY_CANVAS);
-            stage.setInks(DAY_INK, DAY_FAINT);
+            stage.setInk(DAY_INK);
+            assertTrue(stage.isDay());
             stage.show(plain(0xFF000000), false);
-            Rect words = new Rect(48, 80, 912, 158);
-            stage.setWords(words.left, words.top, words.right, words.bottom);
-            Bitmap picture = drawn(stage, 0xFF000000);
-            assertTrue("the name: " + least(picture, words, DAY_INK), least(picture, words, DAY_INK) >= 4.5);
-            assertTrue("the faint line: " + least(picture, words, DAY_FAINT), least(picture, words, DAY_FAINT) >= 4.5);
+            Bitmap picture = drawn(stage, DAY_CANVAS);
+            Rect all = new Rect(0, 0, 960, 540);
+            assertTrue("the name: " + least(picture, all, DAY_INK), least(picture, all, DAY_INK) >= HeroStageView.TEXT_CONTRAST);
+            assertTrue("the faint line: " + least(picture, all, DAY_FAINT), least(picture, all, DAY_FAINT) >= HeroStageView.TEXT_CONTRAST);
+            // A TV writes its hero in the light label colours whatever the theme: the art is the night's again.
+            stage.setInk(NIGHT_INK);
+            assertFalse(stage.isDay());
+            assertTrue("baked again for the new words", range(stage.art())[1] <= BackdropBlur.MAX_LUMA + ROUNDING);
         }
     }
 
@@ -228,19 +278,20 @@ public class HeroStageViewTest {
         try (var controller = Robolectric.buildActivity(MotionTest.Screen.class).setup()) {
             HeroStageView stage = stage(controller.get(), 960, 540, .56f);
             stage.setCanvasColor(NIGHT_CANVAS);
-            stage.setWords(48, 80, 300, 158);
             assertFalse(stage.hasArt());
             Bitmap empty = drawn(stage, NIGHT_CANVAS);
-            assertEquals("nothing is drawn without art, not even the scrim", NIGHT_CANVAS, empty.getPixel(100, 100));
+            assertEquals("nothing is drawn without art", NIGHT_CANVAS, empty.getPixel(100, 100));
             stage.show(plain(0xFFFF0000), false);
             assertTrue(stage.hasArt());
+            int held = (stage.art().getPixel(10, 10) >> 16) & 0xFF;
             Bitmap picture = drawn(stage, NIGHT_CANVAS);
             int whole = picture.getPixel(950, 150);
-            assertTrue("the cover itself by the end edge: " + Integer.toHexString(whole), ((whole >> 16) & 0xFF) > 240 && (whole & 0xFF) < 16);
+            assertTrue("the held cover itself by the end edge: " + Integer.toHexString(whole),
+                    Math.abs(((whole >> 16) & 0xFF) - held) <= 2 && (whole & 0xFF) < 16);
             assertEquals("gone at the foot of the hero", NIGHT_CANVAS, picture.getPixel(950, 320));
             assertEquals("and before the words' side", NIGHT_CANVAS, picture.getPixel(300, 300));
             int mid = (picture.getPixel(950, 250) >> 16) & 0xFF;
-            assertTrue("fading in between: " + mid, mid > 30 && mid < 240);
+            assertTrue("fading in between: " + mid, mid > 20 && mid < held - 8);
         }
     }
 
@@ -256,7 +307,7 @@ public class HeroStageViewTest {
             stage.show(second, true);
             assertTrue(stage.isChanging());
             int start = drawn(stage, NIGHT_CANVAS).getPixel(950, 150);
-            assertTrue("the old cover is still whole under the new one: " + Integer.toHexString(start), ((start >> 16) & 0xFF) > 240);
+            assertTrue("the old cover is still whole under the new one: " + Integer.toHexString(start), ((start >> 16) & 0xFF) > 140);
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));
             assertFalse(stage.isChanging());
             int end = drawn(stage, NIGHT_CANVAS).getPixel(950, 150);
@@ -272,14 +323,14 @@ public class HeroStageViewTest {
     }
 
     @Test
-    public void highContrastShowsNeitherArtNorScrim() {
+    public void highContrastShowsNoArt() {
         PreferenceManager.getDefaultSharedPreferences(RuntimeEnvironment.getApplication())
                 .edit().putBoolean(AppTheme.HIGH_CONTRAST, true).commit();
         try (var controller = Robolectric.buildActivity(MotionTest.Screen.class).setup()) {
             HeroStageView stage = stage(controller.get(), 960, 540, .56f);
-            stage.setWords(48, 80, 300, 158);
             stage.show(plain(0xFFFF0000), true);
             assertFalse(stage.isChanging());
+            assertNull("nothing is baked for a page that shows none", stage.art());
             Bitmap picture = drawn(stage, 0xFF000000);
             assertEquals(0xFF000000, picture.getPixel(950, 150));
             assertEquals(0xFF000000, picture.getPixel(100, 100));

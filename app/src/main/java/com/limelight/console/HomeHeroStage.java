@@ -8,7 +8,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
-import android.widget.TextView;
 
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
@@ -27,14 +26,14 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * Home's hero art: lays a {@link HeroStageView} over the backdrop and tells it which cover to show and where the hero's words
- * stand.
+ * Home's hero art: lays a {@link HeroStageView} over the backdrop and tells it which cover to show.
  *
- * <p>On a TV the hero is the card that has focus, so the art changes with the backdrop, in the same step, and the scrim is as
- * wide as the words HomeAmbience wrote. On a phone and a handheld the hero is the first item of the list and keeps its game
- * while focus roams the shelves: the art is that game's, moves with the item as the list scrolls and is gone with it. A phone
- * held upright gives the art room over the words, which stand at the foot of the window's top third as far as the carousel
- * still fits above the tab bar. A game without art shows its tile's gradient, as its backdrop does.
+ * <p>On a TV the hero is the card that has focus, so the art changes with the backdrop, in the same step. On a phone and a
+ * handheld the hero is the first item of the list and keeps its game while focus roams the shelves: the art is that game's,
+ * moves with the item as the list scrolls and is gone with it. A phone held upright gives the art room over the words, which
+ * stand at the foot of the window's top third as far as the carousel still fits above the tab bar. A game without art shows
+ * its tile's gradient, as its backdrop does. The art is in the stage's light on every form (the view holds it there), so the
+ * words need no scrim and this class does not have to know where they stand.
  */
 final class HomeHeroStage {
     /** The tag a hero's views hang their game on, on the list's item. */
@@ -45,7 +44,6 @@ final class HomeHeroStage {
     private final Activity activity;
     private final BackdropView backdrop;
     private final RecyclerView list;
-    private final View tvHero;
     private final GlassForm form;
     private final HeroStageView stage;
     private final Function<String, ComputerDetails> hosts;
@@ -61,12 +59,11 @@ final class HomeHeroStage {
     /** A change of game is waiting out its settle time. */
     private boolean settling;
 
-    HomeHeroStage(Activity activity, BackdropView backdrop, RecyclerView list, View tvHero, GlassForm form, int canvas,
+    HomeHeroStage(Activity activity, BackdropView backdrop, RecyclerView list, GlassForm form, int canvas,
                   Function<String, ComputerDetails> hosts, Supplier<CoverLoaders> covers) {
         this.activity = activity;
         this.backdrop = backdrop;
         this.list = list;
-        this.tvHero = tvHero;
         this.form = form;
         this.hosts = hosts;
         this.covers = covers;
@@ -76,9 +73,8 @@ final class HomeHeroStage {
         backdrop.addView(stage, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         if (form == GlassForm.TELEVISION) {
             // The TV's hero is written in the label colours whatever the theme.
-            stage.setInks(ContextCompat.getColor(activity, R.color.nj_color_label), ContextCompat.getColor(activity, R.color.nj_color_label_secondary));
+            stage.setInk(ContextCompat.getColor(activity, R.color.nj_color_label));
             backdrop.setCoverListener((key, cover, animate) -> stage.show(cover, animate));
-            if (tvHero != null) tvHero.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> words());
             return;
         }
         stage.setVisibility(View.INVISIBLE);
@@ -118,33 +114,6 @@ final class HomeHeroStage {
         at[1] -= base[1] + Math.round(view.getTranslationY());
     }
 
-    /** The TV hero's words changed or moved: the scrim stands under them, as wide as they are. */
-    void words() {
-        if (form != GlassForm.TELEVISION || !(tvHero instanceof ViewGroup) || tvHero.getWidth() == 0) return;
-        ViewGroup hero = (ViewGroup) tvHero;
-        float widest = 0f;
-        int top = Integer.MAX_VALUE;
-        int bottom = 0;
-        for (int i = 0; i < hero.getChildCount(); i++) {
-            View child = hero.getChildAt(i);
-            if (!(child instanceof TextView) || child.getVisibility() != View.VISIBLE) continue;
-            CharSequence text = ((TextView) child).getText();
-            if (text == null || text.length() == 0) continue;
-            widest = Math.max(widest, ((TextView) child).getPaint().measureText(text, 0, text.length()));
-            top = Math.min(top, child.getTop());
-            bottom = Math.max(bottom, child.getBottom());
-        }
-        if (widest == 0f) {
-            stage.clearWords();
-            return;
-        }
-        int width = (int) Math.ceil(Math.min(widest, hero.getWidth() - hero.getPaddingLeft() - hero.getPaddingRight()));
-        place(hero);
-        boolean rtl = hero.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
-        int left = rtl ? at[0] + hero.getWidth() - hero.getPaddingRight() - width : at[0] + hero.getPaddingLeft();
-        stage.setWords(left, at[1] + top, left + width, at[1] + bottom);
-    }
-
     /**
      * The list was laid out, scrolled, shown or hidden: the art stays with the hero's item, and goes when that is not on screen.
      * {@code laidOut} is false for a scrolled frame, which only moves it.
@@ -169,12 +138,6 @@ final class HomeHeroStage {
             if (room != words.getPaddingTop() && words.getHeight() > 0) {
                 words.post(() -> words.setPadding(words.getPaddingLeft(), room, words.getPaddingRight(), words.getPaddingBottom()));
             }
-            stage.setWords(at[0] + words.getLeft(), restTop + words.getTop() + words.getPaddingTop(),
-                    at[0] + words.getRight(), restTop + words.getBottom());
-        } else {
-            // A handheld's hero has words and controls from its cover to its panel: the scrim stands under all of it.
-            stage.setWords(at[0] + item.getPaddingLeft(), restTop, at[0] + item.getWidth() - item.getPaddingRight(),
-                    restTop + item.getHeight() - item.getPaddingBottom());
         }
         stage.setTranslationY(carried);
         stage.setVisibility(View.VISIBLE);

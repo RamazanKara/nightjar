@@ -126,7 +126,6 @@ final class HomeAmbience implements ShelfAdapter.FocusListener, Choreographer.Fr
         if (title != null) title.setText("");
         if (meta != null) meta.setText("");
         if (hints != null) hints.setText("");
-        if (stage != null) stage.words();
     }
 
     @Override
@@ -139,7 +138,6 @@ final class HomeAmbience implements ShelfAdapter.FocusListener, Choreographer.Fr
         boolean first = shown == null;
         shown = item.key;
         write(item);
-        if (stage != null) stage.words();
         if (!first && !fast.getAsBoolean() && !Motion.reduced(context)) enter();
         else {
             hero.animate().cancel();
@@ -211,7 +209,6 @@ final class HomeAmbience implements ShelfAdapter.FocusListener, Choreographer.Fr
         vendor = padVendor;
         ShelfAdapter.Item item = pending;
         if (item != null) setText(hints, hintText(item));
-        if (stage != null) stage.words();
     }
 
     /** Drops the pending frame callback: the screen is going away. */
