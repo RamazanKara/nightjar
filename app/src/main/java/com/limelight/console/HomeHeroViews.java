@@ -22,16 +22,23 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * A hero's views for its game. On a phone a carousel of covers with the one Play over the middle cover's foot; on a handheld
- * the cover, its chips, title and buttons, with the other games to continue in a panel beside them.
+ * A hero's views for its game. On a phone its name and when it was played, then a carousel of covers with the one Play
+ * under the middle cover; on a handheld the cover, its chips, title and buttons, with the other games to continue in a panel
+ * beside them. The game hangs on the item as a tag, where {@link HomeHeroStage} finds whose art to show.
  */
 abstract class HomeHeroViews {
     final MaterialButton play;
     final ConsoleHomeAdapter.Listener listener;
     final Context context;
+    private final View item;
+    private final TextView name;
+    private final TextView line;
     HomeModel.GameCard game;
 
     HomeHeroViews(View root, ConsoleHomeAdapter.Listener listener) {
+        this.item = root;
+        this.name = root.findViewById(R.id.hero_title);
+        this.line = root.findViewById(R.id.hero_line);
         this.play = root.findViewById(R.id.hero_play);
         this.listener = listener;
         this.context = root.getContext();
@@ -48,6 +55,18 @@ abstract class HomeHeroViews {
             if (focused && game != null) listener.onHeroShown(game);
             listener.onHeroFocus(focused ? play.getText() : null);
         });
+    }
+
+    /**
+     * The hero is about this game now: its name, one line of what is known about it, and whose art the stage shows.
+     * {@code keepLine} keeps the line's place when there is nothing to say, where games change under a finger.
+     */
+    void name(HomeModel.GameCard card, boolean keepLine) {
+        name.setText(card.title);
+        CharSequence said = lineOf(context, card, System.currentTimeMillis());
+        line.setText(said);
+        line.setVisibility(said != null && said.length() > 0 ? View.VISIBLE : keepLine ? View.INVISIBLE : View.GONE);
+        item.setTag(HomeHeroStage.GAME, card);
     }
 
     /** {@code animate}: the game changed under a press, so the new one comes in; a refresh just writes. */
@@ -156,6 +175,7 @@ abstract class HomeHeroViews {
 
         private void write(HomeModel.GameCard card) {
             game = card;
+            name(card, true);
             play.setText(HomeHero.playLabel(card));
             if (play.isFocused()) listener.onHeroFocus(play.getText());
         }
@@ -288,7 +308,7 @@ abstract class HomeHeroViews {
             }
             cover.setContentDescription(ShelfAdapter.CardHolder.describe(context, card, ShelfAdapter.CardHolder.whereOf(context, card),
                     ShelfAdapter.CardHolder.stateOf(context, card)));
-            title.setText(card.title);
+            name(card, false);
             boolean away = OfflineLook.allAway(card.hostUuids, hosts);
             CharSequence state = away ? context.getString(R.string.console_badge_asleep) : ShelfAdapter.CardHolder.stateOf(context, card);
             if (state == null) state = ShelfAdapter.CardHolder.availabilityOf(context, card);

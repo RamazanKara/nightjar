@@ -212,25 +212,26 @@ pub fn bake_tile(top: Color32, bottom: Color32) -> ColorImage {
     finish(&pixels, SIZE)
 }
 
-/// Where the sky's middle colour sits, top to bottom.
-pub const SKY_MID_AT: f32 = 0.46;
+/// The stage's bake. A cover's ambient is a blur, which hides how small it is; the stage is one
+/// wide, faint gradient, where a bake that coarse would show as bands in the dark. This fine, the
+/// noise [`finish`] adds stays near a pixel's size on screen and the gradient reads as continuous.
+const STAGE_SIZE: [usize; 2] = [640, 360];
+/// Where the stage reaches its middle colour, the page's canvas, top to bottom.
+const STAGE_MID_AT: f32 = 0.46;
 
-/// The moon's glow at `d` of its radius: 36 % of the token's strength a quarter of the way out,
-/// none at the rim, full at the middle.
-pub fn sky_glow(d: f32) -> f32 {
-    if d >= 1.0 {
-        0.0
-    } else if d >= 0.25 {
-        0.36 * (1.0 - (d - 0.25) / 0.75)
-    } else {
-        1.0 + (0.36 - 1.0) * d / 0.25
-    }
+/// The stage light at `d` of its reach: full in the middle and nothing at its reach, where its
+/// slope and its curvature are nothing too, so there is no edge to see, neither a disc's nor a
+/// cone's.
+pub fn stage_light(d: f32) -> f32 {
+    let inside = (1.0 - d * d).max(0.0);
+    inside * inside * inside
 }
 
-/// The night sky's colours, top to bottom, with the moon's warm glow around `moon` (fractions of
-/// the page, `glow_radius` likewise): what glass samples on a page without art.
-pub fn bake_sky(moon: [f32; 2], glow_radius: [f32; 2]) -> ColorImage {
-    let [w, h] = SIZE;
+/// The stage a page without art stands on: its colours, top to bottom, under one wide light around
+/// `light` (fractions of the bake, `reach` likewise), `strength` of the token's. What glass samples
+/// there.
+pub fn bake_stage(light: [f32; 2], reach: [f32; 2], strength: f32) -> ColorImage {
+    let [w, h] = STAGE_SIZE;
     let channel = |c: Color32| [c.r(), c.g(), c.b(), c.a()].map(|v| f32::from(v) / 255.0);
     let (top, mid, bottom, glow) = (
         channel(shade::SKY_TOP.get()),
@@ -240,23 +241,25 @@ pub fn bake_sky(moon: [f32; 2], glow_radius: [f32; 2]) -> ColorImage {
     );
     let mut pixels = vec![[0.0f32; 3]; w * h];
     for y in 0..h {
+        let v = (y as f32 + 0.5) / h as f32;
+        let (from, to, along) = if v < STAGE_MID_AT {
+            (top, mid, v / STAGE_MID_AT)
+        } else {
+            (mid, bottom, (v - STAGE_MID_AT) / (1.0 - STAGE_MID_AT))
+        };
+        // Eased, so the gradient has no crease where it reaches the canvas.
+        let along = along * along * (3.0 - 2.0 * along);
         for x in 0..w {
-            let v = (y as f32 + 0.5) / h as f32;
-            let (from, to, along) = if v < SKY_MID_AT {
-                (top, mid, v / SKY_MID_AT)
-            } else {
-                (mid, bottom, (v - SKY_MID_AT) / (1.0 - SKY_MID_AT))
-            };
-            let d = (((x as f32 + 0.5) / w as f32 - moon[0]) / glow_radius[0])
-                .hypot((v - moon[1]) / glow_radius[1]);
-            let glow_at = sky_glow(d);
+            let d = (((x as f32 + 0.5) / w as f32 - light[0]) / reach[0])
+                .hypot((v - light[1]) / reach[1]);
+            let lit = strength * stage_light(d);
             pixels[y * w + x] = std::array::from_fn(|k| {
-                let sky = from[k] + (to[k] - from[k]) * along;
-                sky * (1.0 - glow[3] * glow_at) + glow[k] * glow_at
+                let floor = from[k] + (to[k] - from[k]) * along;
+                floor * (1.0 - glow[3] * lit) + glow[k] * lit
             });
         }
     }
-    finish(&pixels, SIZE)
+    finish(&pixels, STAGE_SIZE)
 }
 
 #[cfg(test)]
@@ -278,7 +281,8 @@ mod tests {
                 luma(*pixel) <= t::AMBIENT_TEXT_ZONE_MAX_LUMA + 0.003,
                 "{pixel:?}"
             );
-            assert!((i32::from(pixel.r()) - 82).abs() <= 1, "{pixel:?}");
+            let grey = (to_srgb(t::AMBIENT_TEXT_ZONE_MAX_LUMA) * 255.0).round() as i32;
+            assert!((i32::from(pixel.r()) - grey).abs() <= 1, "{pixel:?}");
         }
     }
 
@@ -343,6 +347,45 @@ mod tests {
                 .iter()
                 .all(|p| luma(*p) <= t::AMBIENT_TEXT_ZONE_MAX_LUMA + 0.003));
         }
+    }
+
+    /// The stage reads as light on a matte floor, never as a disc or a cone: brightest under the
+    /// light, dimmer every way from there, no step anywhere larger than the noise, and the floor's
+    /// own colour where the light ends.
+    #[test]
+    fn the_stage_light_falls_off_with_no_edge_and_leaves_the_floor() {
+        crate::theme::own_palette();
+        let baked = bake_stage([0.5, 0.02], [0.6, 0.66], 0.6);
+        let [w, h] = baked.size;
+        assert_eq!([w, h], STAGE_SIZE);
+        let at = |x: usize, y: usize| f32::from(baked.pixels[y * w + x].g());
+        // Over a few texels, so the half level of noise does not count.
+        let smooth = |x: usize, y: usize| (0..16).map(|k| at(x + k, y)).sum::<f32>() / 16.0;
+        let middle = w / 2 - 8;
+        let lit = smooth(middle, 0);
+        assert!(lit > f32::from(shade::SKY_TOP.get().g()) + 8.0, "the light shows: {lit}");
+        assert!(lit > smooth(0, 0) + 4.0, "less to the sides: {lit} and {}", smooth(0, 0));
+        let mut last = lit;
+        for y in 1..h {
+            let here = smooth(middle, y);
+            assert!(here <= last + 0.5, "row {y}: it only falls, {last} to {here}");
+            last = here;
+        }
+        for y in 0..h {
+            for x in 0..w {
+                let here = at(x, y);
+                if x + 1 < w {
+                    assert!((at(x + 1, y) - here).abs() <= 2.0, "an edge at {x}, {y}");
+                }
+                if y + 1 < h {
+                    assert!((at(x, y + 1) - here).abs() <= 2.0, "an edge at {x}, {y}");
+                }
+            }
+        }
+        let floor = f32::from(shade::SKY_BOTTOM.get().g());
+        assert!((smooth(middle, h - 1) - floor).abs() <= 1.0, "the floor at the foot");
+        assert_eq!(stage_light(1.0), 0.0);
+        assert_eq!(stage_light(0.0), 1.0);
     }
 
     #[test]

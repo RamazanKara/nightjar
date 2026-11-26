@@ -2,36 +2,55 @@ package com.limelight.binding.input.pad;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.view.MotionEvent;
 import android.view.View;
 
-import java.util.Arrays;
+import androidx.core.content.ContextCompat;
+import androidx.core.graphics.ColorUtils;
+
+import com.limelight.R;
+import com.limelight.ui.Haptics;
 
 /**
- * The full-screen editing surface behind {@link PadEditor}'s glass panel: draws the dimmed stream, grid, controls with
- * their selection outlines and alignment guides, and handles tap-to-pick, drag-with-alignment, pinch-resize and corner
- * handle sizing.
+ * The full-screen editing surface behind {@link PadEditor}'s dock: draws the dimmed stream, the grid, the controls
+ * with their outlines, the picked one's corner handles and the guides, and handles tap-to-pick, drag, pinch-resize and
+ * corner handle sizing. {@link PadSnapGrid} says where a moved or sized control lands; a line it holds shows as one
+ * luminous guide while the finger is down, and taking hold of one is one light tick.
  */
 @SuppressLint("ViewConstructor") // Created by PadEditor.
 final class PadEditorSurface extends View {
+    /** How far outside a control's box its outline and its corner handles are drawn, in dp. */
+    static final float OUTLINE_DP = 3;
+    /** In dp, and not in the tokens: the outline's corner radius and a corner handle's weight. */
+    private static final float OUTLINE_RADIUS_DP = 10, HANDLE_WEIGHT_DP = 3.5f;
+    /** Every third grid line is drawn: 8 dp lines would hide the game under them. */
+    private static final int GRID_EVERY = 3;
+    /** A guide's light around its line: this many times as wide, at this share of its colour. */
+    private static final float GUIDE_SPILL = 4, GUIDE_SPILL_ALPHA = .22f;
+
     private final PadEditor editor;
     private final PadPainter painter;
     private final PadLayout draft;
-    private final float density;
-    private final Paint scrim = new Paint(), grid = new Paint(), guide = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final PadSnapGrid snap;
+    private final float density, gridStep, handle;
+    private final Paint scrim = new Paint(), grid = new Paint(), guide = new Paint(Paint.ANTI_ALIAS_FLAG),
+            guideSpill = new Paint(Paint.ANTI_ALIAS_FLAG), faint = new Paint(Paint.ANTI_ALIAS_FLAG),
+            picked = new Paint(Paint.ANTI_ALIAS_FLAG), under = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF rect = new RectF();
     private final float[] box = new float[4], other = new float[4];
     private final PadPainter.State idle = new PadPainter.State(), pointerIdle = new PadPainter.State();
-    private float offsetX, offsetY, pinchDistance, pinchWidth, pinchHeight, anchorX, anchorY;
-    private boolean dragging, pinching;
+    private float offsetX, offsetY, pinchDistance, pinchWidth, pinchHeight, anchorX, anchorY, downX, downY;
+    /** A finger that has moved this far along an axis is dragging along it, not tapping. */
+    private final float slop;
+    private boolean dragging, pinching, movedX, movedY;
+    /** Whether this gesture has changed the layout yet: its first change is what Undo takes back. */
+    private boolean changing;
     /** The corner handle being dragged ({@link #corner}'s bits), or -1. */
     private int resizing = -1;
-    /** The other controls' lines along one axis while a control is dragged ({@link #alignNudge}). */
-    private float[] lines = new float[96];
-    /** The lines the dragged control shares with others now: x of the upright guides, y of the level ones. */
-    private final float[] guideX = new float[3], guideY = new float[3];
-    private int guidesX, guidesY;
 
     PadEditorSurface(Context context, PadEditor editor, PadPainter painter, PadLayout draft, float density) {
         super(context);
@@ -39,23 +58,43 @@ final class PadEditorSurface extends View {
         this.painter = painter;
         this.draft = draft;
         this.density = density;
+        Resources resources = context.getResources();
+        gridStep = resources.getDimension(R.dimen.nj_pad_studio_grid);
+        handle = resources.getDimension(R.dimen.nj_pad_studio_handle);
+        snap = new PadSnapGrid(gridStep, resources.getDimension(R.dimen.nj_pad_studio_snap_distance));
+        slop = android.view.ViewConfiguration.get(context).getScaledTouchSlop();
         scrim.setColor(0x99000000);
-        grid.setColor(0x14FFFFFF);
+        grid.setColor(ContextCompat.getColor(context, R.color.nj_pad_studio_grid_color));
         grid.setStrokeWidth(Math.max(1, density));
-        guide.setColor(painter.accent());
-        guide.setStrokeWidth(Math.max(1, density));
+        int guideColor = ContextCompat.getColor(context, R.color.nj_pad_studio_guide_color);
+        float guideWidth = resources.getDimension(R.dimen.nj_pad_studio_guide_width);
+        guide.setColor(guideColor);
+        guide.setStrokeWidth(guideWidth);
+        guideSpill.setColor(ColorUtils.setAlphaComponent(guideColor,
+                Math.round(android.graphics.Color.alpha(guideColor) * GUIDE_SPILL_ALPHA)));
+        guideSpill.setStrokeWidth(guideWidth * GUIDE_SPILL);
+        // Every control's touch box, faintly; the picked one's in the studio's amber over a dark hairline.
+        faint.setStyle(Paint.Style.STROKE);
+        faint.setStrokeWidth(Math.max(1, density));
+        faint.setColor(ContextCompat.getColor(context, R.color.nj_pad_studio_inspector_rim));
+        picked.setStyle(Paint.Style.STROKE);
+        picked.setColor(ContextCompat.getColor(context, R.color.nj_pad_studio_selected_rim));
+        under.setStyle(Paint.Style.STROKE);
+        under.setColor(ContextCompat.getColor(context, R.color.nj_pad_skin_shadow));
+        // The sticks show the deadzone they play with.
+        idle.deadzone = editor.stickDeadzone();
     }
 
     /** How many alignment guides the surface shows now, for tests. */
     int guides() {
-        return guidesX + guidesY;
+        return snap.guides();
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         float width = getWidth(), height = getHeight();
         canvas.drawRect(0, 0, width, height, scrim);
-        float step = PadEditor.GRID_DP * 3 * density;
+        float step = gridStep * GRID_EVERY;
         for (float x = step; x < width; x += step) canvas.drawLine(x, 0, x, height, grid);
         for (float y = step; y < height; y += step) canvas.drawLine(0, y, width, y, grid);
         float base = editor.baseOpacity();
@@ -64,16 +103,63 @@ final class PadEditorSurface extends View {
             if (!editor.onSurface(control)) continue;
             PadLayout.Spec spec = draft.spec(control);
             draft.bounds(control, width, height, density, box);
-            // Show the real opacity, but never so faint that a control cannot be found.
-            float alpha = Math.max(.35f, base * spec.opacity / 100f);
-            int saved = canvas.saveLayerAlpha(box[0], box[1], box[0] + box[2], box[1] + box[3],
-                    Math.round(alpha * 255));
+            // Show the real opacity, but never so faint that a control cannot be found. The skin fades its own
+            // paints, so no control needs a layer.
+            painter.setOpacity(Math.max(.35f, base * spec.opacity / 100f));
             painter.draw(canvas, control, box[0], box[1], box[2], box[3], previewState(control));
-            canvas.restoreToCount(saved);
-            painter.drawOutline(canvas, box[0], box[1], box[2], box[3], control == selected);
+            painter.setOpacity(1);
+            if (control != selected) outline(canvas, false);
         }
-        for (int i = 0; i < guidesX; i++) canvas.drawLine(guideX[i], 0, guideX[i], height, guide);
-        for (int i = 0; i < guidesY; i++) canvas.drawLine(0, guideY[i], width, guideY[i], guide);
+        // The picked control's outline and handles over every control, so a neighbour never covers a handle.
+        if (selected != null && editor.onSurface(selected)) {
+            draft.bounds(selected, width, height, density, box);
+            outline(canvas, true);
+        }
+        float half = guide.getStrokeWidth() / 2;
+        if (!Float.isNaN(snap.guideX)) {
+            // A guide on the screen's edge stays whole on it.
+            float x = Math.max(half, Math.min(width - half, snap.guideX));
+            canvas.drawLine(x, 0, x, height, guideSpill);
+            canvas.drawLine(x, 0, x, height, guide);
+        }
+        if (!Float.isNaN(snap.guideY)) {
+            float y = Math.max(half, Math.min(height - half, snap.guideY));
+            canvas.drawLine(0, y, width, y, guideSpill);
+            canvas.drawLine(0, y, width, y, guide);
+        }
+    }
+
+    /**
+     * The outline around the control in {@link #box}: a faint line, or for the picked one the studio's amber with a
+     * handle at each corner, which is the outline's own corner drawn heavy for the length of a handle.
+     */
+    private void outline(Canvas canvas, boolean selected) {
+        float pad = OUTLINE_DP * density, radius = OUTLINE_RADIUS_DP * density;
+        rect.set(box[0] - pad, box[1] - pad, box[0] + box[2] + pad, box[1] + box[3] + pad);
+        if (!selected) {
+            canvas.drawRoundRect(rect, radius, radius, faint);
+            return;
+        }
+        float line = guide.getStrokeWidth(), weight = HANDLE_WEIGHT_DP * density, hair = Math.max(1, density);
+        under.setStrokeWidth(line + 2 * hair);
+        canvas.drawRoundRect(rect, radius, radius, under);
+        picked.setStrokeWidth(line);
+        canvas.drawRoundRect(rect, radius, radius, picked);
+        // Two handles never meet along a side, however small the control.
+        float leg = Math.min(handle, Math.min(rect.width(), rect.height()) / 2 - 2 * density);
+        float out = weight + hair;
+        for (int corner = 0; corner < 4; corner++) {
+            boolean right = (corner & PadEditor.RIGHT_CORNER) != 0, bottom = (corner & PadEditor.BOTTOM_CORNER) != 0;
+            float x = right ? rect.right : rect.left, y = bottom ? rect.bottom : rect.top;
+            int saved = canvas.save();
+            canvas.clipRect(right ? x - leg : x - out, bottom ? y - leg : y - out, right ? x + out : x + leg,
+                    bottom ? y + out : y + leg);
+            under.setStrokeWidth(weight + 2 * hair);
+            canvas.drawRoundRect(rect, radius, radius, under);
+            picked.setStrokeWidth(weight);
+            canvas.drawRoundRect(rect, radius, radius, picked);
+            canvas.restoreToCount(saved);
+        }
     }
 
     /** What a control shows at rest here: the pointer touchpad its mode's word, as it does in play. */
@@ -106,7 +192,7 @@ final class PadEditorSurface extends View {
         PadLayout.Control selected = editor.selected();
         if (selected == null || !editor.onSurface(selected)) return -1;
         draft.bounds(selected, getWidth(), getHeight(), density, box);
-        float reach = PadLayout.MIN_TOUCH_DP / 2 * density, outline = PadPainter.OUTLINE_DP * density;
+        float reach = PadLayout.MIN_TOUCH_DP / 2 * density, outline = OUTLINE_DP * density;
         float insideX = Math.min(reach, box[2] / 4), insideY = Math.min(reach, box[3] / 4);
         boolean inside = x > box[0] && x < box[0] + box[2] && y > box[1] && y < box[1] + box[3];
         int best = -1;
@@ -126,14 +212,18 @@ final class PadEditorSurface extends View {
         return best;
     }
 
-    @SuppressLint("ClickableViewAccessibility") // Editing gestures; the panel's buttons are the accessible path.
+    @SuppressLint("ClickableViewAccessibility") // Editing gestures; the dock's buttons are the accessible path.
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         PadLayout.Control selected = editor.selected();
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: {
                 pinching = false;
-                guidesX = guidesY = 0;
+                changing = false;
+                movedX = movedY = false;
+                downX = event.getX();
+                downY = event.getY();
+                snap.release();
                 // A corner handle of the picked control wins over whatever lies under it.
                 resizing = corner(event.getX(), event.getY());
                 if (resizing >= 0) {
@@ -162,7 +252,7 @@ final class PadEditorSurface extends View {
                     pinching = true;
                     dragging = false;
                     resizing = -1;
-                    guidesX = guidesY = 0;
+                    snap.release();
                     pinchDistance = distance(event);
                     pinchWidth = draft.spec(selected).widthScale;
                     pinchHeight = draft.spec(selected).heightScale;
@@ -170,13 +260,22 @@ final class PadEditorSurface extends View {
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (pinching && event.getPointerCount() >= 2 && pinchDistance > 0) {
+                    change(selected);
                     draft.scaleFrom(selected, pinchWidth, pinchHeight, distance(event) / pinchDistance, getWidth(),
                             getHeight(), density);
+                    editor.carryTwin(selected);
                     editor.changed();
-                } else if (resizing >= 0 && selected != null) {
-                    resize(selected, event.getX() + offsetX, event.getY() + offsetY);
-                } else if (dragging && selected != null) {
-                    drag(selected, event.getX() + offsetX, event.getY() + offsetY);
+                } else if ((resizing >= 0 || dragging) && selected != null) {
+                    // A tap that trembles moves nothing, and a drag straight along one axis leaves the other alone:
+                    // each axis follows once the finger has really set off along it.
+                    movedX |= Math.abs(event.getX() - downX) >= slop;
+                    movedY |= Math.abs(event.getY() - downY) >= slop;
+                    if (!movedX && !movedY) break;
+                    if (resizing >= 0) {
+                        resize(selected, event.getX() + offsetX, event.getY() + offsetY);
+                    } else {
+                        drag(selected, event.getX() + offsetX, event.getY() + offsetY);
+                    }
                 }
                 break;
             case MotionEvent.ACTION_POINTER_UP:
@@ -188,8 +287,9 @@ final class PadEditorSurface extends View {
                 dragging = false;
                 pinching = false;
                 resizing = -1;
-                guidesX = guidesY = 0;
+                snap.release();
                 invalidate();
+                editor.stepBack(false);
                 editor.keepPanelClear();
                 editor.updatePanel();
                 break;
@@ -200,128 +300,80 @@ final class PadEditorSurface extends View {
     }
 
     /**
-     * Moves the dragged control's centre to ({@code x}, {@code y}): onto another control's centre or edge line when
-     * one is within half a grid step, else onto the grid; then shows the lines it shares with others.
+     * The gesture is about to change {@code control} for the first time: Undo's step, the twin a lock carries, and
+     * the dock steps back until the finger lifts, so the control and its guides show through it.
      */
-    private void drag(PadLayout.Control selected, float x, float y) {
-        float width = getWidth(), height = getHeight(), grid = PadEditor.GRID_DP * density, tolerance = grid / 2;
-        draft.bounds(selected, width, height, density, box);
-        float w = box[2], h = box[3];
-        int count = otherLines(selected, true);
-        float nudge = alignNudge(x - w / 2, x, x + w / 2, lines, count, tolerance);
-        x = Float.isNaN(nudge) ? Math.round(x / grid) * grid : x + nudge;
-        count = otherLines(selected, false);
-        nudge = alignNudge(y - h / 2, y, y + h / 2, lines, count, tolerance);
-        y = Float.isNaN(nudge) ? Math.round(y / grid) * grid : y + nudge;
-        draft.moveTo(selected, x, y, width, height, density);
-        // Where it landed, kept on the surface, decides the guides.
-        draft.bounds(selected, width, height, density, box);
-        float left = box[0], top = box[1], right = box[0] + box[2], bottom = box[1] + box[3];
-        count = otherLines(selected, true);
-        guidesX = alignedLines(left, (left + right) / 2, right, lines, count, guideX);
-        count = otherLines(selected, false);
-        guidesY = alignedLines(top, (top + bottom) / 2, bottom, lines, count, guideY);
-        invalidate();
-    }
-
-    /** The other shown controls' start, centre and end along x ({@code across}) or y, into {@link #lines}. */
-    private int otherLines(PadLayout.Control selected, boolean across) {
-        int count = 0;
-        for (PadLayout.Control control : PadLayout.Control.values()) {
-            if (control == selected || !editor.onSurface(control)) continue;
-            draft.bounds(control, getWidth(), getHeight(), density, other);
-            if (lines.length < count + 3) lines = Arrays.copyOf(lines, lines.length * 2);
-            float start = across ? other[0] : other[1], size = across ? other[2] : other[3];
-            lines[count++] = start;
-            lines[count++] = start + size / 2;
-            lines[count++] = start + size;
-        }
-        return count;
+    private void change(PadLayout.Control control) {
+        if (changing) return;
+        changing = true;
+        editor.beginChange(control);
+        editor.stepBack(true);
     }
 
     /**
-     * Puts the dragged corner at ({@code x}, {@code y}), on the grid or flush with the surface's edge, and sizes
-     * the picked control's width and height between it and the opposite corner, which stays: never smaller than
-     * a full touch, never past the surface.
+     * Tells {@link #snap} the lines {@code selected} can share: every other control on the surface and its twin's
+     * mirror. A twin the mirror lock carries moves with it, so it offers no line.
+     */
+    private void lines(PadLayout.Control selected) {
+        float width = getWidth(), height = getHeight();
+        snap.begin(width, height);
+        PadLayout.Control carried = editor.carried(), twin = PadSnapGrid.twin(selected);
+        for (PadLayout.Control control : PadLayout.Control.values()) {
+            if (control == selected || control == carried || !editor.onSurface(control)) continue;
+            draft.bounds(control, width, height, density, other);
+            snap.neighbour(other[0], other[1], other[2], other[3]);
+            if (control == twin) snap.twin(other[0], other[1], other[2], other[3]);
+        }
+    }
+
+    /** One light tick as an axis takes hold of a line it did not hold a step ago. */
+    private void tick(float heldX, float heldY) {
+        boolean taken = (!Float.isNaN(snap.guideX) && snap.guideX != heldX)
+                || (!Float.isNaN(snap.guideY) && snap.guideY != heldY);
+        if (taken) Haptics.feedback(this, Haptics.Event.SNAP_GRID);
+    }
+
+    /** Moves the dragged control's centre to where {@link PadSnapGrid#move} lands ({@code x}, {@code y}). */
+    private void drag(PadLayout.Control selected, float x, float y) {
+        float width = getWidth(), height = getHeight(), heldX = snap.guideX, heldY = snap.guideY;
+        change(selected);
+        draft.bounds(selected, width, height, density, box);
+        lines(selected);
+        snap.move(x, y, box[2], box[3]);
+        if (!movedX) snap.keepX(box[0] + box[2] / 2);
+        if (!movedY) snap.keepY(box[1] + box[3] / 2);
+        draft.moveTo(selected, snap.x, snap.y, width, height, density);
+        editor.carryTwin(selected);
+        tick(heldX, heldY);
+        invalidate();
+    }
+
+    /**
+     * Puts the dragged corner where {@link PadSnapGrid#size} lands ({@code x}, {@code y}) and sizes the picked
+     * control's width and height between it and the opposite corner, which stays: never smaller than a full touch,
+     * never past the surface.
      */
     private void resize(PadLayout.Control selected, float x, float y) {
-        float width = getWidth(), height = getHeight();
+        float width = getWidth(), height = getHeight(), heldX = snap.guideX, heldY = snap.guideY;
         float u = PadLayout.unit(width, height, density);
         float leastWide = PadLayout.width(selected, u, density, PadLayout.MIN_SCALE);
         float leastHigh = PadLayout.height(selected, u, density, PadLayout.MIN_SCALE);
-        x = snapEdge(x, width);
-        y = snapEdge(y, height);
-        float left, right, top, bottom;
-        if ((resizing & PadEditor.RIGHT_CORNER) != 0) {
-            left = anchorX;
-            right = Math.max(anchorX + leastWide, Math.min(width, x));
-        } else {
-            right = anchorX;
-            left = Math.min(anchorX - leastWide, Math.max(0, x));
-        }
-        if ((resizing & PadEditor.BOTTOM_CORNER) != 0) {
-            top = anchorY;
-            bottom = Math.max(anchorY + leastHigh, Math.min(height, y));
-        } else {
-            bottom = anchorY;
-            top = Math.min(anchorY - leastHigh, Math.max(0, y));
-        }
-        draft.setBounds(selected, left, top, right - left, bottom - top, width, height, density);
+        boolean right = (resizing & PadEditor.RIGHT_CORNER) != 0, bottom = (resizing & PadEditor.BOTTOM_CORNER) != 0;
+        change(selected);
+        draft.bounds(selected, width, height, density, box);
+        lines(selected);
+        snap.size(x, y, anchorX, anchorY, right, bottom, leastWide, leastHigh);
+        if (!movedX) snap.keepX(right ? box[0] + box[2] : box[0]);
+        if (!movedY) snap.keepY(bottom ? box[1] + box[3] : box[1]);
+        float left = right ? anchorX : snap.x, top = bottom ? anchorY : snap.y;
+        draft.setBounds(selected, left, top, Math.abs(snap.x - anchorX), Math.abs(snap.y - anchorY), width, height,
+                density);
+        editor.carryTwin(selected);
+        tick(heldX, heldY);
         editor.changed();
-    }
-
-    /** A dragged edge lands on the grid, or flush with the surface's edge when that is nearer. */
-    private float snapEdge(float position, float size) {
-        float grid = PadEditor.GRID_DP * density;
-        float snapped = Math.round(position / grid) * grid;
-        return Math.abs(size - position) < Math.abs(snapped - position) ? size : snapped;
     }
 
     private float distance(MotionEvent event) {
         return (float) Math.hypot(event.getX(0) - event.getX(1), event.getY(0) - event.getY(1));
-    }
-
-    /**
-     * The nudge that lines a dragged box's start, centre or end up with another control's when one is within
-     * {@code tolerance}, the nearest winning; NaN when none is near. {@code lines} holds each other control's start,
-     * centre and end along the same axis, {@code count} values in all. Edges meet edges, on either side, and centres
-     * meet centres.
-     */
-    static float alignNudge(float start, float centre, float end, float[] lines, int count, float tolerance) {
-        float best = Float.NaN;
-        for (int i = 0; i + 2 < count; i += 3) {
-            float otherStart = lines[i], otherCentre = lines[i + 1], otherEnd = lines[i + 2];
-            best = nearer(best, otherCentre - centre, tolerance);
-            best = nearer(best, otherStart - start, tolerance);
-            best = nearer(best, otherEnd - end, tolerance);
-            best = nearer(best, otherStart - end, tolerance);
-            best = nearer(best, otherEnd - start, tolerance);
-        }
-        return best;
-    }
-
-    private static float nearer(float best, float candidate, float tolerance) {
-        if (Math.abs(candidate) > tolerance) return best;
-        return Float.isNaN(best) || Math.abs(candidate) < Math.abs(best) ? candidate : best;
-    }
-
-    /**
-     * Which of the other controls' {@code lines} (as {@link #alignNudge} takes them) the box's start, centre or end lies
-     * on, to half a pixel: edges on edges, centres on centres. Each line goes once into {@code out}, as far as it
-     * reaches; returns how many.
-     */
-    static int alignedLines(float start, float centre, float end, float[] lines, int count, float[] out) {
-        int found = 0;
-        for (int mine = 0; mine < 3 && found < out.length; mine++) {
-            float line = mine == 0 ? start : mine == 1 ? centre : end;
-            for (int i = 0; i < count; i++) {
-                if ((i % 3 == 1) != (mine == 1) || Math.abs(lines[i] - line) > .5f) continue;
-                boolean known = false;
-                for (int k = 0; k < found; k++) known |= Math.abs(out[k] - line) <= .5f;
-                if (!known) out[found++] = line;
-                break;
-            }
-        }
-        return found;
     }
 }

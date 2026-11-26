@@ -15,6 +15,8 @@
     <string name="stream_bitrate_manual">Задать битрейт</string>
     <string-array name="stream_preset_names">
         <item>Нативный (советуем)</item>
+        <item>Плавный ТВ</item>
+        <item>Wi-Fi / В дороге</item>
         <item>Экономия заряда</item>
     </string-array>
     <string name="applist_menu_show_app">Показать игру</string>

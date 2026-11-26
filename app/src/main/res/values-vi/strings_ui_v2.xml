@@ -15,6 +15,8 @@
     <string name="stream_bitrate_manual">Đặt tốc độ bit</string>
     <string-array name="stream_preset_names">
         <item>Gốc (khuyên dùng)</item>
+        <item>TV mượt</item>
+        <item>Wi-Fi / Đi xa</item>
         <item>Tiết kiệm pin</item>
     </string-array>
     <string name="applist_menu_show_app">Hiện trò chơi</string>

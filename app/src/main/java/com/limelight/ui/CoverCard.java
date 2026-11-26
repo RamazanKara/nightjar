@@ -5,6 +5,7 @@ import android.graphics.Canvas;
 import android.graphics.LinearGradient;
 import android.graphics.Outline;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.util.AttributeSet;
@@ -20,6 +21,7 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntSupplier;
 
 /**
  * A game's cover: art clipped to a round rectangle with a soft shadow under it and a lit rim and sheen on it, all drawn
@@ -27,6 +29,11 @@ import java.util.function.BooleanSupplier;
  * has focus the others step back. The art's slot keeps its size whatever is loading, so nothing jumps.
  */
 public class CoverCard extends LinearLayout {
+    /** Which side the lift of focus keeps still: neither, it grows about the middle; the start edge; the end edge. */
+    public static final int LIFT_MIDDLE = 0;
+    public static final int LIFT_FROM_START = 1;
+    public static final int LIFT_FROM_END = 2;
+
     /** Covers that step back together. */
     public static final class Group {
         private final Set<CoverCard> cards = Collections.newSetFromMap(new WeakHashMap<>());
@@ -75,6 +82,10 @@ public class CoverCard extends LinearLayout {
         if (group != null) group.release(this);
     };
     private BooleanSupplier instant = () -> false;
+    private IntSupplier liftFrom;
+    private int lift = LIFT_MIDDLE;
+    private final Path softClip = new Path();
+    private final RectF softRect = new RectF();
     private int shaderW;
     private int shaderH;
     private final boolean highContrast;
@@ -123,6 +134,42 @@ public class CoverCard extends LinearLayout {
     /** A hero's cover is already large: a smaller lift. */
     public void setFocusScale(float scale) {
         focusScale = focusScaleUsual == 1f ? 1f : scale;
+    }
+
+    /**
+     * Asked each time focus arrives: which side the lift keeps still ({@link #LIFT_MIDDLE}, {@link #LIFT_FROM_START} or
+     * {@link #LIFT_FROM_END}). A card that rests on its row's margin lifts away from it, so its ring stays on the margin
+     * instead of reaching into it; without a source a card lifts about its middle.
+     */
+    public void setLift(IntSupplier from) {
+        liftFrom = from;
+    }
+
+    /**
+     * The pivot across of a lift to {@code scale}: the middle, or so far outside the frame's start or end edge that the ring's
+     * outer side, {@code outset} outside the frame, comes to rest on that edge.
+     */
+    static float liftPivot(int width, float frameLeft, float frameRight, float outset, float scale, int lift, boolean rtl) {
+        if (lift == LIFT_MIDDLE || scale <= 1f) return width / 2f;
+        // A point p goes to pivot + (p - pivot) * scale: the pivot that sends the ring's outer side to the frame's edge.
+        float out = outset * scale / (scale - 1f);
+        boolean left = (lift == LIFT_FROM_START) != rtl;
+        return left ? frameLeft - out : frameRight + out;
+    }
+
+    private void placePivot() {
+        int w = getWidth();
+        int h = getHeight();
+        if (w == 0 || h == 0) return;
+        setPivotX(liftPivot(w, frame == null ? 0 : frame.getLeft(), frame == null ? w : frame.getRight(), focusRing.outset(),
+                focusScale, lift, getLayoutDirection() == LAYOUT_DIRECTION_RTL));
+        setPivotY(h / 2f);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        super.onLayout(changed, l, t, r, b);
+        if (lift != LIFT_MIDDLE) placePivot();
     }
 
     @Override
@@ -190,6 +237,13 @@ public class CoverCard extends LinearLayout {
     }
 
     protected final void onFocusShown(boolean shown) {
+        if (shown && liftFrom != null) {
+            int from = liftFrom.getAsInt();
+            if (from != lift || from != LIFT_MIDDLE) {
+                lift = from;
+                placePivot();
+            }
+        }
         if (group != null) {
             // A move between covers loses focus here before the next one gains it: on the next turn, if at all.
             if (shown) group.set(this);
@@ -229,6 +283,23 @@ public class CoverCard extends LinearLayout {
         setScaleX(restScale * (showsFocus() ? focusScale : 1f));
         setScaleY(restScale * (showsFocus() ? focusScale : 1f));
         applyDim();
+    }
+
+    /**
+     * A software canvas, which draws a picture of this view (a screenshot, a drag shadow), knows no outline clip: there the
+     * art is clipped to the same round rectangle by hand, so no square corner shows behind the rim.
+     */
+    @Override
+    protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+        if (child != frame || canvas.isHardwareAccelerated()) return super.drawChild(canvas, child, drawingTime);
+        int saved = canvas.save();
+        softClip.rewind();
+        softRect.set(child.getLeft(), child.getTop(), child.getRight(), child.getBottom());
+        softClip.addRoundRect(softRect, radius, radius, Path.Direction.CW);
+        canvas.clipPath(softClip);
+        boolean more = super.drawChild(canvas, child, drawingTime);
+        canvas.restoreToCount(saved);
+        return more;
     }
 
     @Override

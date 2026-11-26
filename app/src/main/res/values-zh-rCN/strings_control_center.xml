@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="control_center_quick">快捷</string>
+    <string name="control_center_picture">画面</string>
+    <string name="control_center_audio">音频</string>
+    <string name="control_center_clips">片段</string>
+    <string name="control_center_pc">电脑</string>
+    <string name="control_center_controller">手柄</string>
+    <string name="control_center_guests">访客</string>
+    <string name="control_center_power">电源</string>
+</resources>

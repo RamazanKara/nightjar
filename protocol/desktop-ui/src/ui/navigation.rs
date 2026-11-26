@@ -186,6 +186,7 @@ impl Launcher {
         if response.has_focus() && self.focused_key.as_deref() != Some(key) {
             self.focused_key = Some(key.to_owned());
             self.reveal(response);
+            super::feedback_hook::report(&response.ctx, nightjar_policy::ui_feedback_contract::Event::FocusTick);
         }
         if response.gained_focus() {
             self.reveal(response);

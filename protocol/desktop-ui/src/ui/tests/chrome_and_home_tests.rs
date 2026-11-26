@@ -165,11 +165,11 @@ fn the_pairing_pin_is_large_and_bold_in_its_slots() {
     f.shapes.iter().for_each(|c| digits(&c.shape, &mut texts));
     let pin: Vec<_> = texts.iter().filter(|(t, ..)| t.len() == 1 && "4071".contains(t.as_str())).collect();
     assert_eq!(pin.len(), 4, "{texts:?}");
-    // Centred in the dialog's 440-point column, which starts where its title does.
-    let left = f.placed.iter().find(|(t, ..)| t == "Pair with Studio").map(|p| p.1.left()).expect("the title");
+    // Centred in the panel's column, as its title is.
+    let title = f.placed.iter().find(|(t, ..)| t == "Pair with Studio").map(|p| p.1.center().x).expect("the title");
     let digit = |d: &str| f.placed.iter().find(|(t, ..)| t == d).map(|p| p.1.center().x).expect("the digit");
     let middle = (digit("4") + digit("1")) / 2.0;
-    assert!((middle - (left + 220.0)).abs() < 2.0, "the PIN is centred: {middle} in {left}..{}", left + 440.0);
+    assert!((middle - title).abs() < 2.0, "the PIN is centred under the title: {middle}, {title}");
     assert!(pin.iter().all(|(_, font, color)| font.size >= 36.0 && *font == semibold(font.size) && *color == Color32::from(ON_SURFACE)), "{pin:?}");
 }
 
@@ -208,7 +208,7 @@ fn the_home_card_of_a_pc_to_pair_fits_its_state() {
     assert!(!f.drawn.iter().any(|t| t.contains("Games not") || t.ends_with('…')), "{:?}", f.drawn);
 }
 
-/// The first run is the moon, what is happening in one line, one action and the way to help; Home
+/// The first run is the stage, what is happening in one line, one action and the way to help; Home
 /// sends it there.
 #[test]
 fn the_first_run_is_one_line_and_add_pc_from_home_too() {
@@ -268,8 +268,8 @@ fn a_short_pc_list_with_no_search_offers_search_again() {
     assert!(commands.iter().any(|c| matches!(c, Command::SearchAgain)));
 }
 
-/// A found PC arrives as a card with Pair as the page's one moon action, which takes the focus; Add PC
-/// steps down, and more PCs than a first run has make the page a list.
+/// A found PC arrives as a card with Pair, the page's one amber action, beside its name; Pair takes
+/// the focus, Add PC steps down, and more PCs than a first run has make the page a list.
 #[test]
 fn a_found_pc_rises_in_with_pair_and_add_pc_steps_down() {
     let mut f = first_run_frames(Vec::new());
@@ -289,7 +289,8 @@ fn a_found_pc_rises_in_with_pair_and_add_pc_steps_down() {
     assert!(rising.top() > settled.top(), "it rises: {rising:?} to {settled:?}");
     let at = |f: &Frames, text: &str| f.placed.iter().find(|(t, ..)| t == text).map(|p| p.1).unwrap_or_else(|| panic!("{text} in {:?}", f.drawn));
     let (pair, line, add) = (at(&f, "Pair"), at(&f, "Searching for PCs\u{2026}"), at(&f, "Add PC"));
-    assert!(settled.bottom() <= pair.top() && pair.bottom() <= line.top() && line.bottom() <= add.top(), "{pair:?} {line:?} {add:?}");
+    assert!(settled.right() <= pair.left() && pair.center().y > settled.top(), "Pair in the card's row, after the name: {settled:?} {pair:?}");
+    assert!(pair.bottom() <= line.top() && line.bottom() <= add.top(), "{pair:?} {line:?} {add:?}");
     assert!(add.top() != before.top(), "Add PC stepped down");
     assert_eq!(f.placed.iter().filter(|(t, ..)| t == "PCs").count(), 1, "the tab's alone, no page title: {:?}", f.drawn);
     let focused = f.ctx.memory(|m| m.focused()).and_then(|i| f.ctx.read_response(i)).expect("Pair has focus").rect;

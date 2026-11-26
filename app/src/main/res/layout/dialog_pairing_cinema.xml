@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The pairing panel's body, filled in by PairingCinemaSheet: the PC, its PIN in cells, where to type it, and the wait. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:fillViewport="true" android:scrollbars="none" android:focusable="false">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:gravity="center_horizontal"
+        android:paddingStart="@dimen/space_xl" android:paddingEnd="@dimen/space_xl"
+        android:paddingTop="@dimen/space_s" android:paddingBottom="@dimen/space_s">
+        <TextView android:id="@+id/pairing_cinema_pc" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:gravity="center" android:maxLines="1" android:ellipsize="end"
+            android:textAppearance="@style/TextAppearance.Nightjar.Title" android:textColor="?attr/colorOnSurface" />
+        <com.limelight.ui.PinSlots android:id="@+id/pairing_cinema_pin" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_l" />
+        <TextView android:id="@+id/pairing_cinema_where" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_l" android:gravity="center"
+            android:text="@string/pair_pairing_help"
+            android:textAppearance="@style/TextAppearance.Nightjar.Body" android:textColor="?attr/colorOnSurfaceVariant" />
+        <LinearLayout android:id="@+id/pairing_cinema_wait" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:minHeight="24dp" android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginTop="@dimen/space_l">
+            <ProgressBar android:id="@+id/pairing_cinema_spinner" style="?android:attr/progressBarStyleSmall"
+                android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="@dimen/space_s"
+                android:indeterminate="true" android:indeterminateTint="?attr/colorOnSurfaceVariant"
+                android:importantForAccessibility="no" />
+            <TextView android:id="@+id/pairing_cinema_state" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/pairing"
+                android:textAppearance="@style/TextAppearance.Nightjar.Body" android:textColor="?attr/colorOnSurfaceVariant" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

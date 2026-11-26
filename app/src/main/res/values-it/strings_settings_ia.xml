@@ -28,4 +28,5 @@
     <string name="resolution_screen_portrait">Dimensioni schermo, verticale (%1$s)</string>
     <string name="resolution_screen_cutout_portrait">Dimensioni schermo, verticale, evitando il foro della fotocamera (%1$s)</string>
     <string name="fps_screen">Frequenza di aggiornamento dello schermo (%1$d FPS)</string>
+    <string name="resolution_screen_percent">%1$s delle dimensioni schermo (%2$s)</string>
 </resources>

@@ -60,6 +60,38 @@ fn presets_show_only_on_the_sections_they_change_with_chips_of_one_size() {
     assert!(shows(&f, "Presets"), "{:?}", f.drawn);
 }
 
+/// The four presets are one line of chips down to a 900-point window and past it: beside the
+/// label while the row has room for both, then under it. Narrower still they are two lines of two
+/// whose second chips start under each other, as on a phone, and no chip leaves the window.
+#[test]
+fn the_presets_are_one_line_at_900_points_and_two_lines_of_two_in_a_narrow_window() {
+    const CHIPS: [&str; 4] = ["Native (recommended)", "Smooth TV", "Wi-Fi / Away", "Battery saver"];
+    let chips_at = |width: f32| {
+        let mut f = settings_with(Settings::default());
+        f.size = vec2(width, 800.0);
+        f.settle();
+        f.settle();
+        let at = |label: &str| f.placed.iter().find(|(t, ..)| t == label).map(|p| p.1).unwrap_or_else(|| panic!("{width}: {label}: {:?}", f.drawn));
+        let chips = CHIPS.map(at);
+        assert!(chips.iter().all(|chip| chip.left() >= 0.0 && chip.right() <= width), "{width}: a chip leaves the window: {chips:?}");
+        (chips, at("Presets"))
+    };
+    let one_line = |chips: &[Rect]| chips.windows(2).all(|pair| (pair[0].center().y - pair[1].center().y).abs() < 1.0 && pair[0].right() < pair[1].left());
+    // The chips' words start under the label's last line when they are under it.
+    let under = |chips: &[Rect; 4], label: Rect| chips[0].top() > label.bottom() + 12.0;
+    for width in [1280.0, 900.0, 800.0] {
+        let (chips, label) = chips_at(width);
+        assert!(one_line(&chips), "{width}: one line, in order: {chips:?}");
+        assert!(chips[0].left() > label.right() && !under(&chips, label), "{width}: beside the label: {chips:?} {label:?}");
+    }
+    let (chips, label) = chips_at(680.0);
+    assert!(one_line(&chips) && under(&chips, label), "one line under the label: {chips:?} {label:?}");
+    let (chips, label) = chips_at(520.0);
+    assert!(under(&chips, label) && one_line(&chips[..2]) && one_line(&chips[2..]), "two lines under the label: {chips:?} {label:?}");
+    assert!(chips[2].top() > chips[0].bottom(), "the second line is under the first: {chips:?}");
+    assert!((chips[0].left() - chips[2].left()).abs() < 1.0 && (chips[1].left() - chips[3].left()).abs() < 1.0, "in two columns: {chips:?}");
+}
+
 /// Native puts back what the presets set, the desktop's defaults among them, and turns on every
 /// latency switch the desktop has; Battery saver leaves those. VRR the screen can't use never
 /// makes a preset Custom, as on Android.
@@ -89,6 +121,42 @@ fn a_preset_sets_and_reads_the_desktops_settings() {
     assert_eq!(presets::chosen(&preset_current(&s, false)), Some(Preset::BatterySaver), "VRR the screen lacks reads as its default");
     assert_eq!(preset_value(Preset::Native), "Native");
     assert_eq!(preset_value(Preset::BatterySaver), "Battery saver");
+}
+
+/// Smooth TV and Wi-Fi / Away set their own values and read as themselves; each of the four reads
+/// as no other, and Native and Battery saver set exactly what they did before there were four.
+#[test]
+fn the_four_presets_set_their_own_values_and_read_as_themselves() {
+    use crate::config::FramePacing;
+    let start = Settings { drop_late_frames: false, unbatched_input: false, network_priority: false, ..Settings::default() };
+    for preset in Preset::ALL {
+        let mut s = start.clone();
+        apply_preset(&mut s, preset);
+        assert_eq!(presets::chosen(&preset_current(&s, true)), Some(preset), "{preset:?}: {s:?}");
+        for other in Preset::ALL.into_iter().filter(|o| *o != preset) {
+            assert!(!other.matches(&preset_current(&s, true)), "{other:?} reads {preset:?}'s values");
+        }
+        let switches = (s.drop_late_frames, s.unbatched_input, s.network_priority);
+        assert_eq!(switches, if preset == Preset::Native { (true, true, true) } else { (false, false, false) }, "{preset:?}");
+        assert!(!s.host_frame_times && s.bitrate_kbps == 0 && (s.width, s.height) == (0, 0), "{preset:?}");
+    }
+    let set = |preset| {
+        let mut s = start.clone();
+        apply_preset(&mut s, preset);
+        (s.native_scale, s.fps, s.frame_pacing)
+    };
+    assert_eq!(set(Preset::Native), (100, 0, FramePacing::Latency));
+    assert_eq!(set(Preset::SmoothTv), (100, 0, FramePacing::Smoothness));
+    assert_eq!(set(Preset::WifiAway), (67, 60, FramePacing::Balanced));
+    assert_eq!(set(Preset::BatterySaver), (100, 30, FramePacing::CapFps));
+    // Wi-Fi / Away's 67 % is two thirds of the display (the Native picker's step).
+    assert_eq!(nightjar_policy::resolution_scale::scaled(1920, 1080, 67), (1280, 720));
+    let mut s = start.clone();
+    apply_preset(&mut s, Preset::WifiAway);
+    s.native_scale = 75;
+    assert_eq!(presets::chosen(&preset_current(&s, true)), None, "another step is Custom");
+    assert_eq!(preset_value(Preset::SmoothTv), "Smooth TV");
+    assert_eq!(preset_value(Preset::WifiAway), "Wi-Fi / Away");
 }
 
 /// Frame pacing is one row over its three keys, as on Android: Balanced's newest frame and the

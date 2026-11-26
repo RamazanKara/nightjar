@@ -7,6 +7,7 @@
 use super::*;
 
 mod command;
+mod control_center;
 mod launch;
 mod launch_probe;
 mod launcher;

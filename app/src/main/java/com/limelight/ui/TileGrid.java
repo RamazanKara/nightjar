@@ -107,6 +107,10 @@ public final class TileGrid extends ViewGroup {
         private boolean capShown = true;
         private String hotkey;
         private boolean hotkeyAtEnd;
+        private float endInset = -1;
+        // A card's cap moves into the top end corner, and its end padding with it, where its name needs the room beside it.
+        private int besideEnd = -1, cornerEnd, besideTop;
+        private boolean inCorner;
         private boolean isSwitch;
 
         public Tile(Context context) {
@@ -131,6 +135,58 @@ public final class TileGrid extends ViewGroup {
         void setHotkeyAtEnd(boolean atEnd) {
             hotkeyAtEnd = atEnd;
             invalidate();
+        }
+
+        /** The cap at the end, {@code inset} pixels in from it. */
+        void setHotkeyAtEnd(boolean atEnd, float inset) {
+            endInset = inset;
+            setHotkeyAtEnd(atEnd);
+        }
+
+        private float capWidth(float text) {
+            return Math.max(text + capText * 0.8f, capText * 1.6f);
+        }
+
+        private float capInset() {
+            if (!hotkeyAtEnd) return cornerInset;
+            return endInset >= 0 ? endInset : 2 * cornerInset + 4 * dp;
+        }
+
+        /** The cap at the end may move to the top end corner: {@code besideEnd} is the end padding beside it, {@code cornerEnd} there. */
+        void setCapMoves(int besideEnd, int cornerEnd) {
+            this.besideEnd = besideEnd;
+            this.cornerEnd = cornerEnd;
+            besideTop = getPaddingTop();
+            requestLayout();
+        }
+
+        /** Whether the cap stands in the top end corner now, as its name needs the room beside it. */
+        boolean capInCorner() {
+            return inCorner;
+        }
+
+        /** Where the cap in the corner ends, in pixels from the top: the name starts under it. */
+        int capFoot() {
+            return Math.round(cornerInset - dp + capText * 1.45f);
+        }
+
+        private boolean wordsFit(float room) {
+            CharSequence text = getText();
+            int end = text.toString().indexOf('\n');
+            for (String word : text.subSequence(0, end < 0 ? text.length() : end).toString().split("\\s+")) {
+                if (getPaint().measureText(word) > room) return false;
+            }
+            return true;
+        }
+
+        /** How far in from its edge the cap's far side stands, in pixels: what a label beside it must leave free. */
+        float capReach() {
+            if (hotkey == null) return 0;
+            paint.setTextSize(capText);
+            paint.setFakeBoldText(true);
+            float reach = capInset() + capWidth(paint.measureText(hotkey));
+            paint.setFakeBoldText(false);
+            return reach;
         }
 
         /** Whether the cap is drawn; its button works either way. */
@@ -173,13 +229,16 @@ public final class TileGrid extends ViewGroup {
         @Override
         protected void onMeasure(int widthSpec, int heightSpec) {
             if (MeasureSpec.getMode(widthSpec) != MeasureSpec.UNSPECIFIED) {
-                float room = MeasureSpec.getSize(widthSpec) - getCompoundPaddingLeft() - getCompoundPaddingRight();
-                CharSequence text = getText();
-                int end = text.toString().indexOf('\n');
-                boolean fits = true;
-                for (String word : text.subSequence(0, end < 0 ? text.length() : end).toString().split("\\s+")) {
-                    fits &= getPaint().measureText(word) <= room;
+                int size = MeasureSpec.getSize(widthSpec);
+                if (besideEnd >= 0 && hotkey != null && capShown) {
+                    int end = getPaddingEnd();
+                    inCorner = !wordsFit(size - getCompoundPaddingLeft() - getCompoundPaddingRight() + end - besideEnd);
+                    int want = inCorner ? cornerEnd : besideEnd;
+                    // In the corner the cap stands over the name's end, so the name starts under it.
+                    int top = inCorner ? Math.max(besideTop, capFoot() + Math.round(2 * dp)) : besideTop;
+                    if (end != want || getPaddingTop() != top) setPaddingRelative(getPaddingStart(), top, want, getPaddingBottom());
                 }
+                boolean fits = wordsFit(size - getCompoundPaddingLeft() - getCompoundPaddingRight());
                 int frequency = fits ? android.text.Layout.HYPHENATION_FREQUENCY_NONE : android.text.Layout.HYPHENATION_FREQUENCY_FULL;
                 if (getHyphenationFrequency() != frequency) setHyphenationFrequency(frequency);
             }
@@ -196,10 +255,11 @@ public final class TileGrid extends ViewGroup {
                 paint.setTextSize(capText);
                 paint.setFakeBoldText(true);
                 float text = paint.measureText(hotkey);
-                float w = Math.max(text + capText * 0.8f, capText * 1.6f), h = capText * 1.45f;
-                float inset = hotkeyAtEnd ? 2 * cornerInset + 4 * dp : cornerInset;
+                float w = capWidth(text), h = capText * 1.45f;
+                boolean beside = hotkeyAtEnd && !inCorner;
+                float inset = inCorner ? cornerInset : capInset();
                 float left = rtl != hotkeyAtEnd ? getWidth() - inset - w : inset;
-                float top = hotkeyAtEnd ? (getHeight() - h) / 2 : cornerInset - dp;
+                float top = beside ? (getHeight() - h) / 2 : cornerInset - dp;
                 box.set(left, top, left + w, top + h);
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(dp);
@@ -227,7 +287,8 @@ public final class TileGrid extends ViewGroup {
         tile.setAllCaps(false);
         tile.setTextAppearance(context, R.style.TextAppearance_Nightjar_Tile);
         tile.setSingleLine(false);
-        tile.setMaxLines(detail == null ? 2 : 3);
+        // A name on two lines leaves its keys two more, so Ctrl + Shift + Esc wraps instead of being cut.
+        tile.setMaxLines(detail == null ? 2 : 4);
         tile.setEllipsize(android.text.TextUtils.TruncateAt.END);
         // Layout's constant (API 23) is LineBreaker's (API 29) by value; lint knows only the newer one.
         //noinspection WrongConstant

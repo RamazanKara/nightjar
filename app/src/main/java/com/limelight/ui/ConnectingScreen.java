@@ -18,7 +18,7 @@ import com.limelight.R;
 
 /**
  * Connecting, launching and a failed connection, in one window of its own over the stream's still empty surface: the
- * cover in its ambient, the moon's orbit, one word. It goes away (the window is removed, as the spinner's was) the moment
+ * cover in its ambient, one thin ring turning around it, one word. It goes away (the window is removed, as the spinner's was) the moment
  * the connection stands, so it adds nothing to the stream; nothing waits for it.
  */
 public final class ConnectingScreen {
@@ -47,7 +47,7 @@ public final class ConnectingScreen {
     private final Dialog dialog;
     private final String title;
     private final BackdropView backdrop;
-    private final OrbitView orbit;
+    private final ConnectingRing ring;
     private final ImageView coverImage;
     private final NoArtTile coverTile;
     private final View coverCard;
@@ -80,7 +80,7 @@ public final class ConnectingScreen {
         }
         GlassHost host = dialog.findViewById(R.id.conn_host);
         backdrop = dialog.findViewById(R.id.conn_backdrop);
-        orbit = dialog.findViewById(R.id.conn_orbit);
+        ring = dialog.findViewById(R.id.conn_ring);
         coverCard = dialog.findViewById(R.id.conn_cover);
         coverImage = dialog.findViewById(R.id.conn_cover_image);
         coverTile = dialog.findViewById(R.id.conn_cover_tile);
@@ -130,7 +130,7 @@ public final class ConnectingScreen {
         screen.word.setText(word);
         screen.setDetail(detail);
         screen.dialog.show();
-        screen.orbit.setMoving(true);
+        screen.ring.setMoving(true);
         screen.focusCancelSoon();
         return screen;
     }
@@ -189,8 +189,8 @@ public final class ConnectingScreen {
         return dialog;
     }
 
-    public boolean isOrbitMoving() {
-        return orbit.isTurning();
+    public boolean isRingTurning() {
+        return ring.isTurning();
     }
 
     /** The stream's settings in a line, {@code 1920 × 1080, 60 FPS, 20 Mbps}. */
@@ -230,16 +230,16 @@ public final class ConnectingScreen {
     public void dismiss() {
         dismissed = true;
         activity.runOnUiThread(() -> {
-            orbit.setMoving(false);
+            ring.setMoving(false);
             if (dialog.isShowing()) dialog.dismiss();
         });
     }
 
-    /** The cover moves up and the error's panel comes in below it. The orbit stops: nothing is under way now. */
+    /** The cover moves up and the error's panel comes in below it. The ring goes: nothing is under way now. */
     private void fail(CharSequence heading, CharSequence message, Failure actions) {
         failed = true;
-        orbit.setMoving(false);
-        orbit.setBare(true);
+        ring.setMoving(false);
+        ring.setBare(true);
         stage.setVisibility(View.GONE);
         cancel.setVisibility(View.GONE);
         panel.setVisibility(View.VISIBLE);
@@ -311,22 +311,23 @@ public final class ConnectingScreen {
         if (width == 0 || height == 0) return;
         boolean wide = width > height;
         float density = host.getResources().getDisplayMetrics().density;
-        int orbitSize;
+        int ringSize;
         int coverHeight;
         if (wide) {
-            orbitSize = Math.round(height * (failed ? 0.72f : 0.82f));
-            coverHeight = Math.round(orbitSize * (failed ? 0.96f : 0.68f));
+            ringSize = Math.round(height * (failed ? 0.72f : 0.82f));
+            coverHeight = Math.round(ringSize * (failed ? 0.96f : 0.68f));
         } else if (failed) {
             coverHeight = Math.round(Math.min(width * 0.55f, height * 0.27f));
-            orbitSize = Math.round(coverHeight * 1.1f);
+            ringSize = Math.round(coverHeight * 1.1f);
         } else {
-            orbitSize = Math.round(Math.min(width * 0.92f, height * 0.5f));
-            coverHeight = Math.round(orbitSize * 0.8f);
+            ringSize = Math.round(Math.min(width * 0.92f, height * 0.5f));
+            // The cover's corners keep clear of the ring.
+            coverHeight = Math.round(ringSize * 0.72f);
         }
-        ViewGroup.LayoutParams o = orbit.getLayoutParams();
-        o.width = orbitSize;
-        o.height = orbitSize;
-        orbit.setLayoutParams(o);
+        ViewGroup.LayoutParams o = ring.getLayoutParams();
+        o.width = ringSize;
+        o.height = ringSize;
+        ring.setLayoutParams(o);
         View frame = dialog.findViewById(R.id.console_cover_frame);
         ViewGroup.LayoutParams f = frame.getLayoutParams();
         f.height = coverHeight;

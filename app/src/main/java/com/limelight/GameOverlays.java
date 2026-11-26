@@ -255,6 +255,21 @@ final class GameOverlays {
         return PerformanceOverlay.withHardwareMetrics(game, debug ? debugPerformanceText : statisticsPerformanceText, fresh, debug);
     }
 
+    /**
+     * The PC's video encoder load for the Control Center's Picture page, as the statistics overlay words it: the
+     * busiest card's, null while the PC reports none. Nothing is polled for it; it is known while the overlay asks.
+     */
+    String encoderLoad() {
+        HardwareMetrics fresh = SystemClock.uptimeMillis() < hardwareMetricsFreshUntil ? hardwareMetrics : null;
+        if (fresh == null) return null;
+        Double busiest = null;
+        for (HardwareMetrics.Gpu gpu : fresh.gpus) {
+            Double load = gpu.metrics.get("gpu_encoder_percent");
+            if (load != null && (busiest == null || load > busiest)) busiest = load;
+        }
+        return busiest == null ? null : String.format(game.getResources().getConfiguration().locale, "%.1f", busiest);
+    }
+
     void updateHardwareMetricsPolling() {
         if (!game.foreground || !game.connected || game.conn == null || game.isFinishing() || game.isDestroyed() || game.isHidingOverlays ||
                 game.performanceOverlayScroll == null || game.performanceOverlayScroll.getVisibility() != View.VISIBLE ||
@@ -282,6 +297,8 @@ final class GameOverlays {
         game.bitrateHandler.removeCallbacks(expireHardwareMetrics);
         if (metrics != null) game.bitrateHandler.postAtTime(expireHardwareMetrics, hardwareMetricsFreshUntil);
         updatePerformanceOverlay();
+        // An open Control Center shows the encoder load beside the picture's settings.
+        game.menuActions.refreshStreamMenu();
     }
 
     void stopHardwareMetricsPolling() {

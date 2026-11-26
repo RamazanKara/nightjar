@@ -345,7 +345,8 @@ fn try_again_on_a_failed_list_does_not_say_no_apps() {
     assert!(!shows(&f, "This PC lists no apps."), "the answer ended it: {:?}", f.drawn);
 }
 
-/// The smallest window holds the hero's whole row when Try again joins it.
+/// The smallest window holds the hero's whole row when Try again joins it: Play (or Resume) and
+/// Try again as its one quiet action.
 #[test]
 fn try_again_leaves_homes_row_in_the_smallest_window() {
     for running in [0, 1000] {
@@ -364,7 +365,7 @@ fn try_again_leaves_homes_row_in_the_smallest_window() {
             row
         };
         let row = words(&f);
-        assert!(row.len() >= 3, "{:?}", f.drawn);
+        assert_eq!(row.len(), 2, "running {running}: {:?}", f.drawn);
         assert!(row.iter().all(|r| r.right() <= f.size.x), "running {running}: {row:?} in {:?}", f.size);
         assert!(row.windows(2).all(|w| w[0].right() < w[1].left()), "running {running}: {row:?}");
     }
@@ -586,16 +587,14 @@ fn a_control_tile_with_the_running_id_is_never_what_resume_runs() {
     assert!(matches!(crate::hosts::launch_target(host, 77, false), crate::hosts::LaunchApp::Ready(a) if a.is_control_action()), "the tile's own press still is its action");
 }
 
-/// The moon stands in open sky: never under a card, chip, row or title and never cut by one, on
-/// every page that draws it, in the default window at 150 % (where it sat under the PCs' cards and
-/// on Settings' last chip), a large window, the smallest one and 150 % in German. Where a page
-/// leaves no sky the moon steps back; a large window keeps it on the PCs and Settings. Every kind
-/// of shape counts: meshes, rectangles, circles, paths and words.
+/// Behind a page without art is the stage and nothing else: the canvas, the stage's one layer and
+/// the page colour, on every such page, in the default window at 150 %, a large window, the
+/// smallest one and 150 % in German. No disc, ring or speck is painted behind or between a page's
+/// cards, chips, rows and titles.
 #[test]
-fn the_moon_stands_clear_of_every_card_and_chip() {
+fn behind_a_page_without_art_is_the_stage_and_nothing_else() {
     let pages = [Screen::Hosts, Screen::Settings, Screen::Help, Screen::Profiles, Screen::Controllers, Screen::Shortcuts, Screen::StreamHotkeys];
     let windows = [(vec2(1280.0, 800.0), 150, false), (vec2(1280.0, 800.0), 100, false), (vec2(1920.0, 1080.0), 100, false), (vec2(720.0, 490.0), 100, false), (vec2(1280.0, 800.0), 150, true)];
-    let mut kinds = std::collections::BTreeSet::new();
     for (window, zoom, german) in windows {
         for page in pages {
             let mut f = four_pcs();
@@ -606,14 +605,18 @@ fn the_moon_stands_clear_of_every_card_and_chip() {
             f.size = window;
             f.l.go(page);
             f.settle();
+            f.settle();
             let what = format!("{page:?} at {window:?}, {zoom} %{}", if german { ", German" } else { "" });
-            if backdrop::disc_of(&f.ctx).is_none() {
-                assert!(window.x < 1920.0 || !matches!(page, Screen::Hosts | Screen::Settings), "{what}: a large window has sky for the moon");
-            }
-            kinds.extend(assert_moon_clear(&f, &what));
+            let screen = f.ctx.content_rect();
+            let behind = backdrop_shapes(&f);
+            let [egui::Shape::Rect(canvas), egui::Shape::Mesh(stage), egui::Shape::Mesh(ground)] = behind else {
+                panic!("{what}: the canvas, the stage and the page colour: {behind:?}");
+            };
+            assert_eq!(canvas.rect, screen, "{what}");
+            assert_eq!(Some(stage.texture_id), glass::backdrop_of(&f.ctx).top.map(|layer| layer.texture), "{what}: what glass samples");
+            assert!(stage.calc_bounds().contains_rect(screen), "{what}: the stage covers the window");
+            assert_eq!(ground.texture_id, egui::TextureId::default(), "{what}");
+            assert!((ground.calc_bounds().bottom() - screen.bottom()).abs() < 0.5 && ground.calc_bounds().width() >= screen.width() - 0.5, "{what}: the page colour to the window's foot");
         }
-    }
-    for kind in ["mesh", "rect", "circle", "path", "text"] {
-        assert!(kinds.contains(kind), "a {kind} was checked: {kinds:?}");
     }
 }

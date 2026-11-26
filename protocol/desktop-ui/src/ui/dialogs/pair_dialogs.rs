@@ -224,32 +224,27 @@ impl Launcher {
                 let (id, one_time) = (*host, *one_time);
                 let name = view.hosts.get(id).map_or(tr("the PC"), |h| h.display_name()).to_owned();
                 modal(ctx, "pair-error", |ui| {
-                    ui.set_width(440.0);
-                    ui.label(RichText::new(trf("Pairing with {} failed", &[&name])).font(semibold(text::SECTION)));
-                    ui.label(RichText::new(tr(body.as_str())).color(ON_SURFACE_VARIANT));
-                    dialog_buttons(ui, |ui| {
-                        let retry = primary_button(ui, "Try again");
-                        if focus_first {
-                            retry.request_focus();
-                            focused = true;
+                    let buttons = pairing_panel::failed(ui, &name, tr(body.as_str()));
+                    if focus_first {
+                        buttons.retry.request_focus();
+                        focused = true;
+                    }
+                    if buttons.retry.clicked() {
+                        if one_time {
+                            next = Some(Dialog::Otp {
+                                host: id,
+                                pin: String::new(),
+                                passphrase: String::new(),
+                                error: None,
+                            });
+                        } else {
+                            commands.push(Command::Pair(id));
                         }
-                        if retry.clicked() {
-                            if one_time {
-                                next = Some(Dialog::Otp {
-                                    host: id,
-                                    pin: String::new(),
-                                    passphrase: String::new(),
-                                    error: None,
-                                });
-                            } else {
-                                commands.push(Command::Pair(id));
-                            }
-                            close = true;
-                        }
-                        if quiet_button(ui, "Close").clicked() {
-                            close = true;
-                        }
-                    });
+                        close = true;
+                    }
+                    if buttons.close.clicked() {
+                        close = true;
+                    }
                 });
             }
             Dialog::NetworkTest { stage, calibrate } => {

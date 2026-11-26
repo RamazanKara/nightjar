@@ -207,6 +207,7 @@ impl Streaming {
             hardware: None,
             link_notice: None,
             link_lowered_told: false,
+            launch_notice: None,
             keep_change: None,
             pipeline_rates: None,
             // A PC that set up no microphone gives Microphone only nothing to do.

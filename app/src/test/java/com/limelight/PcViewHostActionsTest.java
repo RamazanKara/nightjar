@@ -120,11 +120,13 @@ public class PcViewHostActionsTest {
             AlertDialog dialog = ReflectionHelpers.getField(screen.hostActions(), "pairingDialog");
             assertNotNull(dialog);
             assertTrue(dialog.isShowing());
-            TextView message = dialog.findViewById(android.R.id.message);
-            // One instruction, then the PIN.
-            String text = message.getText().toString();
-            assertTrue(text, text.matches("(?s)" + java.util.regex.Pattern.quote(
-                    screen.getString(R.string.pair_pairing_help)) + "\\n\\n[0-9]{4}"));
+            // The PC, its PIN in four cells, one instruction.
+            assertEquals("PC", ((TextView) dialog.findViewById(R.id.pairing_cinema_pc)).getText().toString());
+            com.limelight.ui.PinSlots cells = dialog.findViewById(R.id.pairing_cinema_pin);
+            assertTrue(cells.shown().toString(), cells.shown().toString().matches("[0-9]{4}"));
+            assertEquals(4, cells.getChildCount());
+            assertEquals(screen.getString(R.string.pair_pairing_help),
+                    ((TextView) dialog.findViewById(R.id.pairing_cinema_where)).getText().toString());
             assertFalse(ReflectionHelpers.<Boolean>getField(screen, "runningPolling"));
 
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();

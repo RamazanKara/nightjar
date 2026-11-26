@@ -3,8 +3,13 @@
     <LinearLayout
         android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
         <include android:id="@+id/qr_scan_toolbar" layout="@layout/view_top_app_bar" />
-        <androidx.camera.view.PreviewView android:id="@+id/qr_scan_preview"
-            android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+        <!-- The camera's picture, and over it the viewfinder's four corners. -->
+        <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+            <androidx.camera.view.PreviewView android:id="@+id/qr_scan_preview"
+                android:layout_width="match_parent" android:layout_height="match_parent" />
+            <com.limelight.ui.ViewfinderFrame android:id="@+id/qr_scan_frame"
+                android:layout_width="match_parent" android:layout_height="match_parent" />
+        </FrameLayout>
         <TextView android:id="@+id/qr_scan_status"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:paddingStart="@dimen/screen_gutter" android:paddingEnd="@dimen/screen_gutter"

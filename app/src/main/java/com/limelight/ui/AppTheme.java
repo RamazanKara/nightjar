@@ -158,7 +158,8 @@ public final class AppTheme {
 
     /**
      * {@link #scaled(Context)}, and with {@code compactOnTelevision} a screen that lays out as a TV is
-     * {@link #TV_COMPACT_PERCENT} of the interface size on top (Settings' screens).
+     * {@link #TV_COMPACT_PERCENT} of the interface size on top (Settings' screens). A TV that reports another canvas than
+     * 960x540 dp is normalised to it first ({@link ViewportScaler#factor}).
      */
     public static Context scaled(Context context, boolean compactOnTelevision) {
         int percent = uiScalePercent(context);
@@ -167,9 +168,12 @@ public final class AppTheme {
         int type = UI_MODE_TV.equals(mode) ? Configuration.UI_MODE_TYPE_TELEVISION :
                 UI_MODE_HANDHELD.equals(mode) ? Configuration.UI_MODE_TYPE_NORMAL : own;
         boolean retype = type != own;
-        float factor = percent / 100f;
-        if (compactOnTelevision && type == Configuration.UI_MODE_TYPE_TELEVISION) factor *= TV_COMPACT_PERCENT / 100f;
-        if (factor == 1f && !retype) return context;
+        // viewport_scale (ViewportScaler): a TV is normalised to the 960x540 dp canvas, then the user's size and the
+        // compaction; a phone or handheld takes the user's size alone.
+        float factor = ViewportScaler.factor(context.getResources().getConfiguration(),
+                own == Configuration.UI_MODE_TYPE_TELEVISION, type == Configuration.UI_MODE_TYPE_TELEVISION,
+                percent, compactOnTelevision);
+        if (Math.abs(factor - 1f) < 0.001f && !retype) return context;
         Configuration config = new Configuration(context.getResources().getConfiguration());
         if (retype) config.uiMode = (config.uiMode & ~Configuration.UI_MODE_TYPE_MASK) | type;
         if (factor != 1f) {

@@ -386,7 +386,8 @@ public class ShellNavigationTest {
     }
 
     @Test
-    @Config(qualifiers = "television")
+    // The TV canvas: a bare television qualifier is a 320x470 dp screen, which ViewportScaler draws at half size.
+    @Config(qualifiers = "w960dp-h540dp-land-television")
     public void shellScreensKeepOverscanMarginsOnTelevision() {
         ActivityController<PcViewLifecycleTest.Library> pcs = pcs();
         ActivityController<StreamSettings> settings = Robolectric.buildActivity(StreamSettings.class).setup().visible();

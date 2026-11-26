@@ -352,6 +352,8 @@ pub(in crate::ui) struct Rows<'a> {
     pub(super) reset_clicked: bool,
     /// Per-row default label and changed flag for rows that share one underlying map/setting key.
     pub(super) custom_reset: Option<(&'static str, bool)>,
+    /// The next row's preview card, drawn under its control; a search finds the row by its words too.
+    pub(super) preview: Option<Preview>,
 }
 
 /// The fold row of the open section, drawn before its first folded row; its words come once the
@@ -434,6 +436,11 @@ impl Rows<'_> {
         self.room = width;
     }
 
+    /// The next row shows `card`: a picture of the value chosen, under its control.
+    pub(super) fn preview(&mut self, card: Preview) {
+        self.preview = Some(card);
+    }
+
     /// The next row can do something only while `applies` (its mode, the setting it belongs to, or
     /// what this device has): otherwise it is left out while it holds its default, and search
     /// finds it saying `reason`. A row holding another value stays, with the reason as its note.
@@ -467,7 +474,9 @@ impl Rows<'_> {
         }
         self.past_fold |= folded;
         let visible = if self.searching() {
-            found(&self.words, &[tr(label), tr(description), tr(self.section), if self.group.is_empty() { "" } else { tr(self.group) }])
+            let mut texts = vec![tr(label), tr(description), tr(self.section), if self.group.is_empty() { "" } else { tr(self.group) }];
+            texts.extend(self.preview.map(Preview::search_words).unwrap_or_default());
+            found(&self.words, &texts)
         } else {
             browsing && !(behind && !self.more[at])
         };

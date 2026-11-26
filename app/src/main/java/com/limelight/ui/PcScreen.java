@@ -17,8 +17,9 @@ import androidx.core.content.res.ResourcesCompat;
 import com.limelight.R;
 
 /**
- * A PC drawn as a monitor on its stand: the running game's cover, or the PC's own gradient and disc (the same recipe as a game
- * with no art), dark while it is away. The children lie on the screen's face: the cover, the glyph and the spinner.
+ * A PC drawn as a small display on its stand, in one ink: a matte face that catches a little of the stage's light, a thin rim,
+ * the neck and the foot. While the PC plays, the game's cover lies on the face; the face is dark while the PC is away. The
+ * children lie on the face: the cover, the glyph and the spinner.
  */
 public class PcScreen extends FrameLayout {
     private static final float FACE = .62f;
@@ -27,29 +28,30 @@ public class PcScreen extends FrameLayout {
     private static final float NECK_H = .07f;
     private static final float BASE_W = .3f;
     private static final float BASE_H = .028f;
-    private static final float DISC = .7f;
-    private static final float DISC_LEFT = .42f;
-    private static final float DISC_TOP = .2f;
+    /** How much of the ink the face holds where the light lands, at its far corner and while the PC is away. */
+    static final float LIT = .18f;
+    static final float DIM = .05f;
+    static final float AWAY = .06f;
+    /** The rim's share of the ink, and an away PC's. */
+    static final float RIM = .32f;
+    static final float RIM_AWAY = .16f;
 
     private final Paint face = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
-    private final Paint disc = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint neck = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint base = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint shadowPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
     private final RectF rect = new RectF();
-    private final Path faceClip = new Path();
-    private final Runnable invalidator = this::invalidate;
+    private final Path softClip = new Path();
+    private final RectF softRect = new RectF();
+    private View backdrop;
     private final float density;
-    private final int offlineFace;
+    private final int ink;
     private final int onlineRim;
     private final int offlineRim;
     private final boolean highContrast;
-    private String title = "";
     private boolean away;
     private int shaderW;
     private int shaderH;
-    private String shaderTitle;
     private int faceW;
     private int faceH;
     private float radius;
@@ -67,16 +69,19 @@ public class PcScreen extends FrameLayout {
         setWillNotDraw(false);
         setClipChildren(false);
         setClipToPadding(false);
-        offlineFace = day ? 0x1A1A1C22 : 0x38787C8C;
-        onlineRim = highContrast ? ResourcesCompat.getColor(res, R.color.nj_hc_color_rim, null) : 0x33FFFFFF;
-        offlineRim = highContrast ? onlineRim : day ? 0x261A1C22 : 0x1FFFFFFF;
-        disc.setColor(NoArtTile.discColor(context));
+        ink = com.google.android.material.color.MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface, 0xFFF5F7FA);
+        onlineRim = highContrast ? ResourcesCompat.getColor(res, R.color.nj_hc_color_rim, null) : ink(ink, RIM);
+        offlineRim = highContrast ? onlineRim : ink(ink, RIM_AWAY);
         rim.setStyle(Paint.Style.STROKE);
-        rim.setStrokeWidth(highContrast ? res.getDimension(R.dimen.nj_glass_chrome_solid_rim_width) : Math.max(1f, density * .75f));
+        rim.setStrokeWidth(highContrast ? res.getDimension(R.dimen.nj_glass_chrome_solid_rim_width) : Math.max(1f, density));
         neck.setColor(ResourcesCompat.getColor(res, day ? R.color.nj_day_tint_track_fill : R.color.nj_tint_track_fill, null));
         int label = com.google.android.material.color.MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF8D90A0);
         base.setColor((label & 0xFFFFFF) | 0x80000000);
-        shadowPaint.setColor(ResourcesCompat.getColor(res, R.color.nj_cover_shadow, null));
+    }
+
+    /** The ink at this share of its strength. */
+    static int ink(int color, float share) {
+        return (color & 0xFFFFFF) | (Math.round(255 * share) << 24);
     }
 
     @Override
@@ -84,6 +89,7 @@ public class PcScreen extends FrameLayout {
         super.onFinishInflate();
         View cover = findViewById(R.id.grid_backdrop);
         if (cover == null) return;
+        backdrop = cover;
         cover.setOutlineProvider(new ViewOutlineProvider() {
             @Override public void getOutline(View view, Outline outline) {
                 outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), radius);
@@ -92,10 +98,23 @@ public class PcScreen extends FrameLayout {
         cover.setClipToOutline(true);
     }
 
-    /** Which PC this is, and whether it is away (a dark face). */
-    public void bind(String name, boolean isAway) {
-        if (name.equals(title) && away == isAway) return;
-        title = name;
+    /** The screen clips the cover to its outline; a canvas without a GPU knows none and gets the same round rectangle. */
+    @Override
+    protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+        if (child != backdrop || canvas.isHardwareAccelerated()) return super.drawChild(canvas, child, drawingTime);
+        int saved = canvas.save();
+        softClip.rewind();
+        softRect.set(child.getLeft(), child.getTop(), child.getRight(), child.getBottom());
+        softClip.addRoundRect(softRect, radius, radius, Path.Direction.CW);
+        canvas.clipPath(softClip);
+        boolean more = super.drawChild(canvas, child, drawingTime);
+        canvas.restoreToCount(saved);
+        return more;
+    }
+
+    /** Whether the PC is away: a dark face and a fainter rim. */
+    public void setAway(boolean isAway) {
+        if (away == isAway) return;
         away = isAway;
         invalidate();
     }
@@ -131,11 +150,8 @@ public class PcScreen extends FrameLayout {
             return;
         }
         drawStand(canvas, w, h);
-        if (!highContrast) {
-            GlassShadow shadow = GlassShadow.get(radius, 10 * density, invalidator);
-            if (shadow != null) shadow.draw(canvas, 0, 4 * density, w, h + 4 * density, shadowPaint);
-        }
-        drawFace(canvas, w, h);
+        // A drawing casts no shadow. The face lies under a cover too: this view is not told when one arrives.
+        if (!highContrast) drawFace(canvas, w, h);
         super.dispatchDraw(canvas);
         float inset = rim.getStrokeWidth() / 2f;
         rect.set(inset, inset, w - inset, h - inset);
@@ -153,28 +169,21 @@ public class PcScreen extends FrameLayout {
         canvas.drawRoundRect(rect, 2 * density, 2 * density, base);
     }
 
+    /** The bare face: the ink, strongest at the top corner the light comes from; one flat faint tone while the PC is away. */
     private void drawFace(Canvas canvas, int w, int h) {
         rect.set(0, 0, w, h);
         if (away) {
             face.setShader(null);
-            face.setColor(offlineFace);
-            shaderTitle = null;
-        } else if (w != shaderW || h != shaderH || !title.equals(shaderTitle)) {
+            face.setColor(ink(ink, AWAY));
+            shaderW = 0;
+        } else if (w != shaderW || h != shaderH) {
             shaderW = w;
             shaderH = h;
-            shaderTitle = title;
             face.setColor(0xFF000000);
-            face.setShader(NoArtTile.gradient(getContext(), title, w, h));
+            face.setShader(new android.graphics.LinearGradient(0, 0, w * .4f, h, ink(ink, LIT), ink(ink, DIM),
+                    android.graphics.Shader.TileMode.CLAMP));
         }
         canvas.drawRoundRect(rect, radius, radius, face);
-        if (away) return;
-        int save = canvas.save();
-        faceClip.rewind();
-        faceClip.addRoundRect(rect, radius, radius, Path.Direction.CW);
-        canvas.clipPath(faceClip);
-        float d = w * DISC;
-        canvas.drawCircle(w * DISC_LEFT + d / 2f, h * DISC_TOP + d / 2f, d / 2f, disc);
-        canvas.restoreToCount(save);
     }
 
     /** The face's height as measured, for tests. */

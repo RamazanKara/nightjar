@@ -104,7 +104,9 @@ public class StreamGlassTest {
                 GlassPanelDrawable glass = StreamGlass.glassOf(dialog.getWindow().getDecorView().getBackground());
                 String name = activity.getResources().getResourceEntryName(theme);
                 assertNotNull(name + ": the stream menu's glass", glass);
-                assertEquals(name + ": no blur here, as opaque as the menu without one", 0xFA, Color.alpha(glass.fillColor()));
+                assertEquals(name + ": no blur here, as opaque as the Control Center without one",
+                        Color.alpha(androidx.core.content.ContextCompat.getColor(activity, R.color.nj_surface_control_center_baked_fill)),
+                        Color.alpha(glass.fillColor()));
                 assertEquals(name + ": the game stays undimmed around it", 0,
                         dialog.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_DIM_BEHIND);
                 dialog.dismiss();

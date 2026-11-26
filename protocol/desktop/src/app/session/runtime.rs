@@ -96,6 +96,13 @@ impl App {
         repeat: bool,
     ) -> bool {
         let Some((streaming, _)) = self.streaming.as_mut() else { return false };
+            // What is in the hand names the Control Center's hints.
+            if let Some(source) = input_source::of(event, |id| self.pads.real_pad_type(id))
+                && source != self.overlay.input
+            {
+                self.overlay.input = source;
+                streaming.needs_redraw = true;
+            }
             let back_button = if self.pads.swap_face_buttons { SDL_GAMEPAD_BUTTON_SOUTH } else { SDL_GAMEPAD_BUTTON_EAST };
             // SAFETY: union members read by event type.
             let back = (kind == SDL_EVENT_KEY_DOWN && unsafe { event.key.scancode } == SDL_SCANCODE_ESCAPE)
@@ -118,6 +125,8 @@ impl App {
                 MenuStep::CloseSheet => { streaming.close_shortcut_sheet(self.window, &mut self.pads); return true; }
                 MenuStep::ClosePage => {
                     self.overlay.menu_page = stream_menu::Page::Grid;
+                    // Back on the module's page, the focus returns to the card that opened the page left.
+                    self.overlay.center.restore_focus(&self.gui.ctx);
                     streaming.needs_redraw = true;
                     return true;
                 }
@@ -135,6 +144,28 @@ impl App {
                 if let Some(key) = stream_menu::offered_hotkey(hotkey_sdl::menu_nav_button(button), &self.overlay.menu_hotkeys) {
                     self.overlay.menu_hotkey = Some(key);
                     streaming.needs_redraw = true;
+                    return true;
+                }
+            }
+            // LT and RT step along the Control Center's rail, one module for each pull; on a page a
+            // card opened, on the Session page and on the sheet they do nothing.
+            if kind == SDL_EVENT_GAMEPAD_AXIS_MOTION {
+                // SAFETY: union member read by event type.
+                let axis = unsafe { event.gaxis };
+                let right = match SDL_GamepadAxis(i32::from(axis.axis)) {
+                    SDL_GAMEPAD_AXIS_LEFT_TRIGGER => Some(false),
+                    SDL_GAMEPAD_AXIS_RIGHT_TRIGGER => Some(true),
+                    _ => None,
+                };
+                if let Some(right) = right {
+                    if let Some(forward) = self.overlay.triggers.pull(right, axis.value)
+                        && !page
+                        && self.overlay.session_page.is_none()
+                        && streaming.shortcut_sheet.is_none()
+                    {
+                        self.overlay.center.request_step(forward);
+                        streaming.needs_redraw = true;
+                    }
                     return true;
                 }
             }

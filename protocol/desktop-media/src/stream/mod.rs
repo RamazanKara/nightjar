@@ -345,6 +345,9 @@ pub struct Streaming {
     link_notice: Option<LinkNotice>,
     /// The stream said once that the PC lowered the bitrate (`notices::link_lowered_toast`).
     link_lowered_told: bool,
+    /// What the PC said about how this stream started (`Notice::LaunchWarning`), kept for the
+    /// Control Center once its toast is gone.
+    launch_notice: Option<String>,
     /// Keep my bitrate as the stream menu last turned it, for the main settings to keep; see
     /// `take_keep_change`.
     keep_change: Option<bool>,

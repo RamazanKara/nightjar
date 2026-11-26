@@ -6,8 +6,10 @@
 
 use egui::{vec2, RichText, Ui};
 use nightjar_policy::shortcuts::{self as format, Shortcut, Shortcuts};
+use nightjar_policy::control_center::{Dock, Gates, Module};
 use nightjar_policy::stream_menu::{self as model, Cell, Hotkey, Layout, Offer};
 use crate::platform_hooks::MenuNavButton;
+use crate::ui::control_center_cards as cards;
 
 use crate::glyphs::Icon;
 use crate::menu_style;
@@ -361,6 +363,100 @@ pub fn footer(ui: &mut Ui, layout: &Layout) -> Option<Leave> {
             };
             if response.clicked() {
                 picked = Some(leave);
+            }
+        }
+    });
+    picked
+}
+
+/// The Control Center for what is offered: the same tiles as [`layout`], sorted into modules by
+/// `nightjar_policy::control_center` (the dock Android draws too), with the extras `gates` allow.
+pub fn dock(a: &Available, saved: usize, buttons: &model::Buttons, gates: &Gates) -> Dock {
+    nightjar_policy::control_center::dock(&offers(a), a.shortcuts.then_some(saved), buttons, gates).expect("the desktop offers only tiles the model knows")
+}
+
+/// The way out in the Control Center's footer a controller button runs, when the user gave it one.
+pub fn dock_button_leave(dock: &Dock, key: Hotkey) -> Option<Leave> {
+    leave(dock.buttons.get(&key)?)
+}
+
+/// The tile the Control Center draws as its slider card: wide, the bitrate's track inside. The app
+/// draws it (it owns the stream), so [`cards`] leaves it out of the rows of two.
+pub const SLIDER: &str = "bitrate";
+
+/// A card's own id, so the focus finds it again the next time the Control Center opens.
+pub fn card_id(id: &str) -> egui::Id {
+    egui::Id::unique(("control-center-card", id))
+}
+
+/// The cards of `module`'s page, two to a row. `hotkey` is a controller button pressed since the
+/// last frame: it runs its card on whatever page that is. `focus_first` puts the focus on the
+/// first card, as when the Control Center opens.
+pub fn cards(ui: &mut Ui, dock: &Dock, module: Module, saved: &Shortcuts, hotkey: Option<Hotkey>, focus_first: bool) -> Option<Chosen> {
+    let pressed = hotkey
+        .and_then(|key| dock.hotkey(key))
+        .and_then(|(module, index)| dock.page(module).and_then(|page| page.cards.get(index)).map(chosen));
+    let Some(page) = dock.page(module) else { return pressed };
+    let shown: Vec<&Cell> = page.cards.iter().filter(|cell| !matches!(cell, Cell::Tile { id, .. } if *id == SLIDER)).collect();
+    let mut picked = None;
+    cards::grid(ui, shown.len(), |ui, index, width| {
+        let cell = shown[index];
+        let response = match cell {
+            Cell::Tile { id, on, hotkey } => {
+                let state = on.map(|on| if on { tr("On") } else { tr("Off") });
+                cards::card(ui, card_id(id), width, &cards::Card { icon: icon(id), label: label(id), state, on: *on, cap: hotkey.map(Hotkey::cap) })
+            }
+            Cell::Shortcut(n) => {
+                let shortcut = &saved.data[*n];
+                let keys = keys_under(&shortcut.name, &shortcut.keys);
+                let card = cards::Card { icon: Icon::Keyboard, label: &shortcut.name, state: keys.as_deref(), on: None, cap: None };
+                cards::card(ui, egui::Id::unique(("control-center-shortcut", *n)), width, &card)
+            }
+            Cell::Add => {
+                let card = cards::Card { icon: Icon::Plus, label: tr("Add shortcut"), state: None, on: None, cap: None };
+                cards::card(ui, egui::Id::unique("control-center-add"), width, &card)
+            }
+        };
+        if focus_first && index == 0 {
+            response.request_focus();
+        }
+        if response.clicked() {
+            picked = Some(chosen(cell));
+        }
+    });
+    pressed.or(picked)
+}
+
+/// The Control Center's footer, under every page: Return to stream, the main action (`back` is the
+/// key or button that also returns), then the ways out side by side, Disconnect and Quit game,
+/// the one red control.
+pub fn dock_footer(ui: &mut Ui, dock: &Dock, back: Option<&str>) -> Option<Leave> {
+    let mut picked = menu_style::primary(ui, tr("Return to stream"), back).clicked().then_some(Leave::Close);
+    let exits: Vec<Leave> = dock.footer.iter().filter_map(|id| leave(id)).filter(|leave| *leave != Leave::Close).collect();
+    if exits.is_empty() {
+        return picked;
+    }
+    let cap = |way: Leave| dock.buttons.iter().find(|(_, id)| leave(id) == Some(way)).map(|(key, _)| key.cap());
+    ui.add_space(menu_style::TILE_GAP - ui.spacing().item_spacing.y);
+    let count = exits.len() as f32;
+    let width = ((ui.available_width() - menu_style::TILE_GAP * (count - 1.0)) / count).floor();
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = menu_style::TILE_GAP;
+        for way in exits {
+            let response = match way {
+                Leave::Disconnect => {
+                    // The button the user gave it shows instead of the keyboard's chord, as on a card.
+                    let keys = cap(way).map(str::to_owned).or_else(|| {
+                        crate::shortcuts::chord_for(crate::shortcuts::Scope::Stream, crate::shortcuts::Action::Disconnect).map(crate::shortcuts::Chord::text)
+                    });
+                    menu_style::exit_button(ui, width, Icon::Leave, tr("Disconnect"), keys.as_deref(), Tone::Quiet)
+                }
+                // Quiet with red words: the question that follows keeps the solid red.
+                Leave::Exit(exit) => menu_style::quiet_danger_exit_button(ui, width, Icon::Power, tr(exit.label()), cap(way)),
+                Leave::Close => continue,
+            };
+            if response.clicked() {
+                picked = Some(way);
             }
         }
     });

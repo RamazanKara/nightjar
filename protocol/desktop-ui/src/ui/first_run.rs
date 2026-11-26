@@ -1,62 +1,52 @@
-//! The first run: the sky and the moon with its orbit, the one line of what is happening and one moon
-//! action. A PC found rises in as a card with Pair as that action, and Add PC steps down.
+//! The first run, on the stage: a scan pulse in its middle while the network is searched, the one
+//! line of what is happening and Add PC under it. A PC found rises in as a hardware card with the
+//! page's one amber action while the pulse fades, and Add PC steps down.
 
-use super::backdrop::{self, Moon};
+mod card;
+mod pulse;
+
 use super::chrome::{capsule_width, control_capsule, play_button, play_width};
 use super::design_tokens as t;
-use super::pcs::{monitor, pc_action, pc_line_of, status_line};
+use super::pcs::{action_button, pc_action, pc_line_of};
 use super::*;
 use super::{glass, spring};
 use egui::Shape;
+use pulse::Pulse;
 
 /// Past this many PCs found it is a list, whatever their state.
 const MOST_FOUND: usize = 3;
-/// The ring the orbit dot runs on, in moon radii: the first of the sky's.
-const ORBIT: f32 = backdrop::ORBIT;
-const WORDS_GAP: f32 = 44.0;
-const ADD_W: f32 = 220.0;
-const ADD_H: f32 = 56.0;
-const WORDS_TO_ADD: f32 = 28.0;
-const CARD_W: f32 = 460.0;
-const CARD_LEAST_W: f32 = 340.0;
-const CARD_H: f32 = 196.0;
-const CARD_PAD: f32 = 20.0;
-const CARD_GAP: f32 = 16.0;
-const FACE_W: f32 = 112.0;
-const PAIR_H: f32 = 56.0;
-/// A found card's top under the ring, and how far it rises in.
-const CARD_UNDER_RING: f32 = 14.0;
+/// The widest a line of the first run's words runs.
+const TEXT_MEASURE: f32 = 560.0;
+/// The pulse's radius in a window 800 points tall. It follows the window's height within bounds,
+/// and gives way to the words under it in a short one.
+const PULSE_R: f32 = 168.0;
+const PULSE_LEAST_R: f32 = 48.0;
+const PULSE_TO_WORDS: f32 = 32.0;
+/// Of the room a block of the page leaves, the share above it: a little over the middle, where
+/// the eye rests.
+const ABOVE: f32 = 0.4;
+const WORDS_TO_ADD: f32 = 24.0;
+const ADD_H: f32 = 52.0;
+/// Between Add PC and Search again: room for the focus ring of the one beside the other.
+const ACTIONS_GAP: f32 = 16.0;
+/// How far a found card rises in.
 const RISE: f32 = 28.0;
 const RISE_TUNE: spring::Tune = spring::Tune {
     stiffness: t::MOTION_SHEET_STIFFNESS,
     ratio: t::MOTION_SHEET_RATIO,
 };
-const OVER_RINGS: f32 = 0.72;
-const STILL_SEARCHING_GAP: f32 = 24.0;
-const STEPPED_DOWN_GAP: f32 = 34.0;
+const CARDS_TO_LINE: f32 = 24.0;
+const LINE_TO_ADD: f32 = 20.0;
 const STEPPED_DOWN_H: f32 = 48.0;
-const LINE_H: f32 = 20.0;
-/// How to connect under Add PC.
-const LINK_GAP: f32 = 8.0;
-/// Search again under Add PC, when the search could not start.
-const SEARCH_AGAIN_GAP: f32 = 14.0;
+/// How to connect under Add PC: its words, which stand in the middle of the link's own height,
+/// keep 12 points clear of Add PC's focus ring (its gap and its width, 7 points in high contrast).
+const LINK_GAP: f32 = 16.0;
 const LINK_H: f32 = 32.0;
-const TIGHT_UNDER_MOON: f32 = 16.0;
-const TIGHT_GAP: f32 = 10.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum FirstRun {
     Searching,
     Found,
-}
-
-impl FirstRun {
-    pub(super) fn moon(self) -> Moon {
-        match self {
-            Self::Searching => Moon::Searching,
-            Self::Found => Moon::Found,
-        }
-    }
 }
 
 /// Which first run this list of PCs is in, if any: none yet, or a few found with none of them paired.
@@ -86,12 +76,36 @@ fn arrive(ctx: &egui::Context, id: Id) -> f32 {
     spring::animate(ctx, id, 0.0, RISE_TUNE)
 }
 
-/// Where the first run's own column of cards goes in `width`: how many on a line, and how wide.
-fn found_grid(count: usize, width: f32) -> (usize, f32) {
-    let fit = ((width + CARD_GAP) / (CARD_LEAST_W + CARD_GAP)).floor() as usize;
-    let columns = fit.clamp(1, count.max(1));
-    let card = ((width - CARD_GAP * (columns as f32 - 1.0)) / columns as f32).min(CARD_W);
-    (columns, card)
+/// Where a block `height` tall starts in this window: [`ABOVE`] of the room the chrome leaves over
+/// it, and at that room's top once the window is too short (the page scrolls then).
+fn block_top(screen: Rect, height: f32) -> f32 {
+    let top = screen.top() + chrome::PAGE_TOP;
+    let room = screen.bottom() - space::M - top;
+    top + ((room - height) * ABOVE).max(0.0)
+}
+
+/// The pulse's centre and radius in this window, over `under` of words and actions.
+fn pulse_place(screen: Rect, under: f32) -> (Pos2, f32) {
+    let room = screen.bottom() - space::M - screen.top() - chrome::PAGE_TOP;
+    let wanted = PULSE_R * (screen.height() / 800.0).clamp(0.75, 1.5);
+    let radius = wanted.min((room - under - PULSE_TO_WORDS) / 2.0).max(PULSE_LEAST_R);
+    let top = block_top(screen, 2.0 * radius + PULSE_TO_WORDS + under);
+    (pos2(screen.center().x, top + radius), radius)
+}
+
+fn pulse_id() -> Id {
+    Id::unique("first-run-pulse")
+}
+
+/// Where the pulse last stood, for the frames it fades on once a PC is found.
+fn pulse_stood() -> Id {
+    pulse_id().with("stood")
+}
+
+/// How much of the pulse shows on its way to `target`: it yields to a found PC on the spring the
+/// card rises on, and is back the same way when the PC is gone again.
+fn pulse_shown(ctx: &egui::Context, target: f32) -> f32 {
+    spring::animate(ctx, pulse_id(), target, RISE_TUNE).clamp(0.0, 1.0)
 }
 
 impl Launcher {
@@ -150,62 +164,68 @@ impl Launcher {
         room.bottom()
     }
 
+    /// The quiet Add PC at `rect`: the way on by hand, whatever the search finds.
+    fn first_run_add(&mut self, ui: &mut Ui, rect: Rect, id: &str, first: bool) {
+        let label = tr("Add PC");
+        let add = control_capsule(ui, rect, Id::unique(id), Icon::Plus, label, label, true);
+        self.focus_item(&add, "first-run-add", first);
+        if add.clicked() {
+            self.add_host_dialog();
+        }
+    }
+
     fn first_run_searching(
         &mut self,
         ui: &mut Ui,
         view: &View<'_>,
         commands: &mut Vec<Command>,
     ) -> f32 {
-        let (center, r) = backdrop::moon_disc(ui.ctx().content_rect(), Moon::Searching);
+        let ctx = ui.ctx().clone();
+        let page = ui.max_rect();
+        let middle = page.center().x;
         let dy = -self.page_scrolled;
         let (words, searching) = self.search_words(view);
         let ink = *ON_SURFACE;
-        let middle = center.x;
-        let head = ui.painter().layout(
+        let mut job = egui::text::LayoutJob::simple(
             words.to_owned(),
             semibold(t::TYPE_TITLE_SIZE),
             ink,
-            ui.max_rect().width(),
+            page.width().min(TEXT_MEASURE),
         );
-        let head_at = pos2(
-            middle - head.size().x / 2.0,
-            center.y + r * ORBIT + WORDS_GAP + dy,
-        );
+        job.halign = Align::Center;
+        let head = ui.painter().layout_job(job);
         let head_h = head.size().y;
-        ui.painter().galley(head_at, head, ink);
-        let label = tr("Add PC");
-        let w = play_width(ui, label).max(ADD_W);
-        let rect = Rect::from_min_size(
-            pos2(middle - w / 2.0, head_at.y + head_h + WORDS_TO_ADD),
-            vec2(w, ADD_H),
-        );
-        let add = play_button(
-            ui,
-            rect,
-            Id::unique("first-run-add"),
-            Icon::Plus,
-            label,
-            true,
-            false,
-        );
-        self.focus_item(&add, "first-run-add", true);
-        if add.clicked() {
-            self.add_host_dialog();
-        }
         // The search could not start (no network yet, or its port held): it can be tried again.
-        let mut foot = rect.bottom();
-        if !searching && self.identity_ready {
+        let again = !searching && self.identity_ready;
+        let add_w = capsule_width(ui, tr("Add PC"));
+        let again_w = capsule_width(ui, tr("Search again"));
+        let beside = add_w + ACTIONS_GAP + again_w <= page.width();
+        let actions_h = if again && !beside { 2.0 * ADD_H + ACTIONS_GAP } else { ADD_H };
+        let under = head_h + WORDS_TO_ADD + actions_h + LINK_GAP + LINK_H;
+        let (center, radius) = pulse_place(ctx.content_rect(), under);
+        ctx.data_mut(|d| d.insert_temp(pulse_stood(), (center, radius)));
+        let mut rings = Vec::new();
+        let pulse = if searching { Pulse::Scanning } else { Pulse::Still };
+        pulse::paint(&ctx, &mut rings, pos2(middle, center.y + dy), radius, pulse_shown(&ctx, 1.0), pulse);
+        ui.painter().extend(rings);
+        let mut y = center.y + radius + PULSE_TO_WORDS + dy;
+        // A centred galley is placed by its middle line.
+        ui.painter().galley(pos2(middle, y), head, ink);
+        y += head_h + WORDS_TO_ADD;
+        let row_w = if again && beside { add_w + ACTIONS_GAP + again_w } else { add_w };
+        let add = Rect::from_min_size(pos2(middle - row_w / 2.0, y), vec2(add_w, ADD_H));
+        self.first_run_add(ui, add, "first-run-add", true);
+        if again {
+            let at = if beside { pos2(add.right() + ACTIONS_GAP, y) } else { pos2(middle - again_w / 2.0, add.bottom() + ACTIONS_GAP) };
+            let rect = Rect::from_min_size(at, vec2(again_w, ADD_H));
             let label = tr("Search again");
-            let w = capsule_width(ui, label);
-            let again = Rect::from_min_size(pos2(middle - w / 2.0, foot + SEARCH_AGAIN_GAP), vec2(w, STEPPED_DOWN_H));
-            let r = control_capsule(ui, again, Id::unique("first-run-search-again"), Icon::Refresh, label, label, true);
+            let r = control_capsule(ui, rect, Id::unique("first-run-search-again"), Icon::Refresh, label, label, true);
             self.focus_item(&r, "first-run-search-again", false);
             if r.clicked() {
                 commands.push(Command::SearchAgain);
             }
-            foot = again.bottom();
         }
-        self.first_run_link(ui, foot + LINK_GAP, commands)
+        self.first_run_link(ui, y + actions_h + LINK_GAP, commands)
     }
 
     fn first_run_found(
@@ -214,81 +234,64 @@ impl Launcher {
         view: &View<'_>,
         commands: &mut Vec<Command>,
     ) -> f32 {
-        let (center, r) = backdrop::moon_disc(ui.ctx().content_rect(), Moon::Found);
+        let ctx = ui.ctx().clone();
         let page = ui.max_rect();
         let middle = page.center().x;
-        let list = &view.hosts.list;
-        let (columns, card_w) = found_grid(list.len(), page.width());
-        let lines = list.len().div_ceil(columns) as f32;
-        let cards_h = lines * (CARD_H + CARD_GAP) - CARD_GAP;
-        let under = center.y + r * ORBIT + CARD_UNDER_RING;
-        let needs = under
-            + cards_h
-            + STILL_SEARCHING_GAP
-            + LINE_H
-            + STEPPED_DOWN_GAP
-            + STEPPED_DOWN_H
-            + LINK_GAP
-            + LINK_H;
-        // A short window keeps it all in view: the card comes over the ring, the gaps close up.
-        let tight = needs + space::M > ui.ctx().content_rect().bottom();
-        let (card_top, still_gap, step_gap) = if tight {
-            (center.y + r + TIGHT_UNDER_MOON, TIGHT_GAP, TIGHT_GAP)
-        } else {
-            (under, STILL_SEARCHING_GAP, STEPPED_DOWN_GAP)
-        };
-        let top = card_top - self.page_scrolled;
-        let mut y = top;
-        for (row, chunk) in list.chunks(columns).enumerate() {
-            let line_w = chunk.len() as f32 * (card_w + CARD_GAP) - CARD_GAP;
-            let left = middle - line_w / 2.0;
-            for (n, host) in chunk.iter().enumerate() {
-                let slot = Rect::from_min_size(
-                    pos2(left + n as f32 * (card_w + CARD_GAP), y),
-                    vec2(card_w, CARD_H),
-                );
-                self.found_card(ui, host, slot, row == 0 && n == 0, commands);
-            }
-            y += CARD_H + CARD_GAP;
+        let dy = -self.page_scrolled;
+        // The pulse yields where it stood while the first card lands on it.
+        let shown = pulse_shown(&ctx, 0.0);
+        if shown > 0.0
+            && let Some((center, radius)) = ctx.data(|d| d.get_temp::<(Pos2, f32)>(pulse_stood()))
+        {
+            let mut rings = Vec::new();
+            pulse::paint(&ctx, &mut rings, pos2(middle, center.y + dy), radius, shown, Pulse::Leaving);
+            ui.painter().extend(rings);
         }
-        y += still_gap - CARD_GAP;
+        let list = &view.hosts.list;
+        let card_w = page.width().min(card::WIDTH);
+        // One width for every card's action, so they stand in a column.
+        let action_w = list
+            .iter()
+            .map(|host| play_width(ui, pc_action(host).words()))
+            .fold(0.0, f32::max);
+        let card_h = card::height(card_w, action_w);
+        let cards_h = list.len() as f32 * (card_h + card::GAP) - card::GAP;
         // The search goes on, under what it found.
         let (words, _) = self.search_words(view);
         let ink = *ON_SURFACE_VARIANT;
-        let line = ui
-            .painter()
-            .layout_no_wrap(words.to_owned(), regular(t::TYPE_SUB_SIZE), ink);
-        let line_w = 8.0 + 8.0 + line.size().x;
-        let line_h = line.size().y;
-        let dot = pos2(middle - line_w / 2.0 + 4.0, y + line_h / 2.0);
-        ui.painter().circle_filled(dot, 4.0, shade::COLOR_OFFLINE.get());
-        ui.painter().galley(pos2(dot.x + 12.0, y), line, ink);
-        y += line_h + step_gap;
-        let label = tr("Add PC");
-        let w = capsule_width(ui, label);
-        let rect = Rect::from_min_size(pos2(middle - w / 2.0, y), vec2(w, STEPPED_DOWN_H));
-        let add = control_capsule(
-            ui,
-            rect,
-            Id::unique("first-run-add-small"),
-            Icon::Plus,
-            label,
-            label,
-            true,
-        );
-        self.focus_item(&add, "first-run-add", false);
-        if add.clicked() {
-            self.add_host_dialog();
+        let font = regular(t::TYPE_SUB_SIZE);
+        let one_line = ui.painter().layout_no_wrap(words.to_owned(), font.clone(), ink).size().y;
+        let mut job = egui::text::LayoutJob::simple(words.to_owned(), font, ink, page.width().min(TEXT_MEASURE) - 24.0);
+        job.halign = Align::Center;
+        let line = ui.painter().layout_job(job);
+        let line_size = line.size();
+        let under = CARDS_TO_LINE + line_size.y + LINE_TO_ADD + STEPPED_DOWN_H + LINK_GAP + LINK_H;
+        let mut y = block_top(ctx.content_rect(), cards_h + under) + dy;
+        for (n, host) in list.iter().enumerate() {
+            let slot = Rect::from_min_size(pos2(middle - card_w / 2.0, y), vec2(card_w, card_h));
+            self.found_card(ui, host, slot, action_w, n == 0, commands);
+            y += card_h + card::GAP;
         }
-        self.first_run_link(ui, rect.bottom() + LINK_GAP, commands)
+        y += CARDS_TO_LINE - card::GAP;
+        // Its dot before the words, the two centred as one.
+        let dot = pos2(middle + 6.0 - line_size.x / 2.0 - 12.0, y + one_line / 2.0);
+        ui.painter().circle_filled(dot, 4.0, shade::COLOR_OFFLINE.get());
+        ui.painter().galley(pos2(middle + 6.0, y), line, ink);
+        y += line_size.y + LINE_TO_ADD;
+        let add_w = capsule_width(ui, tr("Add PC"));
+        let add = Rect::from_min_size(pos2(middle - add_w / 2.0, y), vec2(add_w, STEPPED_DOWN_H));
+        self.first_run_add(ui, add, "first-run-add-small", false);
+        self.first_run_link(ui, add.bottom() + LINK_GAP, commands)
     }
 
-    /// A PC found: its screen, its name and its line, and Pair.
+    /// A PC found: its hardware card, and its one action. The first card's is the page's amber
+    /// one; the next cards' stand on a tint, so amber stays the one thing to press.
     fn found_card(
         &mut self,
         ui: &mut Ui,
         host: &Host,
         slot: Rect,
+        action_w: f32,
         first: bool,
         commands: &mut Vec<Command>,
     ) {
@@ -301,66 +304,23 @@ impl Launcher {
         card.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, said.clone()));
         let rising = arrive(&ctx, id.with("arrive"));
         let rect = slot.translate(vec2(0.0, RISE * rising));
-        let inner = rect.shrink(CARD_PAD);
-        let face = Rect::from_min_size(inner.min, vec2(FACE_W, (0.62 * FACE_W).round()));
-        let words_left = face.right() + 16.0;
-        let room = inner.right() - words_left;
+        let parts = card::parts(rect, action_w);
         let action = pc_action(host);
         let words = action.words();
-        let pair_rect = Rect::from_min_max(
-            pos2(inner.left(), inner.bottom() - PAIR_H),
-            inner.right_bottom(),
-        );
         let mut pair = None;
+        let mut cut = false;
         ui.scope(|ui| {
             ui.multiply_opacity((1.0 - rising).clamp(0.0, 1.0));
             let mut out = Vec::new();
-            let r = t::RADIUS_PANEL;
-            if !high_contrast() {
-                glass::solid(
-                    &mut out,
-                    &ctx,
-                    rect,
-                    r,
-                    shade::COLOR_CANVAS.get().gamma_multiply(OVER_RINGS),
-                );
-            }
-            glass::group(&mut out, &ctx, rect, r, group_fill());
-            // Found just now: nothing played there from this device yet, only what it runs.
-            monitor(ui, &mut out, host, super::pcs::card_game(host, &[]), face, id.with("art-in"));
-            let mut job = egui::text::LayoutJob::simple_singleline(
-                name.to_owned(),
-                semibold(t::TYPE_SECTION_SIZE),
-                *ON_SURFACE,
-            );
-            job.wrap = egui::text::TextWrapping::truncate_at_width(room);
-            let galley = ui.painter().layout_job(job);
-            let name_h = galley.size().y;
-            let block = (name_h + 4.0 + 20.0) / 2.0;
-            let name_top = face.center().y - block;
-            out.push(Shape::galley(
-                pos2(words_left, name_top),
-                galley,
-                *ON_SURFACE,
-            ));
-            status_line(
-                ui,
-                &mut out,
-                pos2(words_left, name_top + name_h + 4.0 + 10.0),
-                room,
-                &line,
-            );
+            let lift = (card.hovered(), card.is_pointer_button_down_on());
+            cut = card::paint(ui, &mut out, rect, &parts, host, &line, lift);
             ui.painter().extend(out);
-            let icon = action.icon().unwrap_or(Icon::Lock);
-            pair = Some(play_button(
-                ui,
-                pair_rect,
-                id.with("pair"),
-                icon,
-                words,
-                true,
-                false,
-            ));
+            let id = id.with("pair");
+            pair = Some(if first {
+                play_button(ui, parts.action, id, action.icon().unwrap_or(Icon::Lock), words, true, false)
+            } else {
+                action_button(ui, parts.action, id, action, &format!("{words}, {name}"))
+            });
         });
         let pair = pair.expect("the scope ran");
         self.focus_item(&pair, &format!("found:{}", host.id), first);
@@ -370,7 +330,7 @@ impl Launcher {
             host_clicked(host, self.settings.quick_resume, commands);
         }
         // Pair holds the focus for its card: its keys, its word, and the options by the card.
-        let keys = menu_request_going(ui, &pair, None, action.words()).map(|_| Anchor::Beside(card.rect));
+        let keys = menu_request_going(ui, &pair, None, words).map(|_| Anchor::Beside(card.rect));
         let asked = menu_request(ui, &card, None).or(keys);
         if let Some(anchor) = asked {
             self.open_menu(
@@ -379,6 +339,10 @@ impl Launcher {
                 format!("found:{}", host.id),
             );
         }
+        if cut {
+            // A name cut to fit is whole under the pointer.
+            let _ = card.on_hover_text(name);
+        }
     }
 }
 
@@ -386,17 +350,37 @@ impl Launcher {
 mod tests {
     use super::*;
 
+    fn window(w: f32, h: f32) -> Rect {
+        Rect::from_min_size(Pos2::ZERO, vec2(w, h))
+    }
+
     #[test]
-    fn a_few_found_cards_share_a_line_and_a_narrow_window_stacks_them() {
-        assert_eq!(found_grid(1, 1184.0), (1, CARD_W));
-        let (columns, w) = found_grid(3, 1184.0);
-        assert_eq!(columns, 3);
-        assert!(
-            w * 3.0 + 2.0 * CARD_GAP <= 1184.0 && w >= CARD_LEAST_W,
-            "{w}"
-        );
-        let (columns, w) = found_grid(2, 660.0);
-        assert_eq!(columns, 1);
-        assert_eq!(w, CARD_W);
+    fn the_pulse_stands_in_the_middle_over_its_words_in_every_window() {
+        let under = 158.0;
+        for (w, h) in [(1280.0, 800.0), (720.0, 480.0), (2560.0, 1080.0), (853.0, 320.0)] {
+            let screen = window(w, h);
+            let (center, radius) = pulse_place(screen, under);
+            assert_eq!(center.x, w / 2.0, "{w}x{h}");
+            assert!((PULSE_LEAST_R..=PULSE_R * 1.5).contains(&radius), "{w}x{h}: {radius}");
+            assert!(center.y - radius >= chrome::PAGE_TOP - 0.5, "{w}x{h}: under the chrome, {center:?} {radius}");
+            let foot = center.y + radius + PULSE_TO_WORDS + under;
+            // A window with the room for it shows it whole; a shorter one scrolls.
+            if h >= 480.0 {
+                assert!(foot <= h - space::M + 0.5, "{w}x{h}: its words end at {foot}");
+                assert!(center.y < h / 2.0, "{w}x{h}: above the middle, {center:?}");
+            }
+        }
+        let (_, tall) = pulse_place(window(1280.0, 800.0), under);
+        let (_, short) = pulse_place(window(720.0, 480.0), under);
+        assert_eq!(tall, PULSE_R);
+        assert!(short < tall, "a short window has a smaller pulse: {short}");
+    }
+
+    #[test]
+    fn a_block_too_tall_for_the_window_starts_under_the_chrome() {
+        let screen = window(1280.0, 480.0);
+        assert_eq!(block_top(screen, 900.0), chrome::PAGE_TOP);
+        let top = block_top(screen, 200.0);
+        assert!(top > chrome::PAGE_TOP && top + 200.0 < 480.0 - space::M, "{top}");
     }
 }

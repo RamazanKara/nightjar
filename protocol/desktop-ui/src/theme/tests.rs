@@ -307,7 +307,10 @@ fn oled_is_the_night_palette_on_black() {
 
 #[test]
 fn by_day_every_role_has_its_own_colour_and_text_is_dark_on_light() {
-    for i in 0..COUNT {
+    // The words on a red button are white on the night's red and on the day's.
+    let on_red = usize::from(ON_ERROR_CONTAINER.0);
+    assert_ne!(color(Look::Day, ERROR_CONTAINER), color(Look::Night, ERROR_CONTAINER));
+    for i in (0..COUNT).filter(|i| *i != on_red) {
         assert_ne!(DAY[i], NORMAL[i], "role {i} has a day colour of its own");
     }
     for ground in [NIGHT, SURFACE_LOWEST, SURFACE, SURFACE_HIGHEST] {
@@ -506,27 +509,6 @@ fn high_contrast_outlines_are_visible_against_the_surfaces() {
         let ratio = contrast(color(Look::HighContrast, OUTLINE_VARIANT), color(Look::HighContrast, ground));
         assert!(ratio >= 3.0, "outline on {ground:?} is {ratio:.2}:1, wants 3");
     }
-}
-
-/// The bird's mask holds as much as its polygon, at the place the moon's box puts it.
-#[test]
-fn the_birds_mask_covers_what_its_outline_does() {
-    let polygon = bird_polygon();
-    let twice: f32 = polygon
-        .iter()
-        .enumerate()
-        .map(|(i, a)| {
-            let b = polygon[(i + 1) % polygon.len()];
-            a.0 * b.1 - b.0 * a.1
-        })
-        .sum();
-    let area = (twice / 2.0).abs();
-    let size = 256;
-    let mask = bird_mask(size);
-    let covered: f32 = mask.pixels.iter().map(|p| f32::from(p.a()) / 255.0).sum();
-    let units = covered * (54.0 / size as f32).powi(2);
-    assert!((units - area).abs() / area < 0.03, "{units} of {area}");
-    assert!(mask.pixels.iter().any(|p| p.a() == 255) && mask.pixels.iter().any(|p| p.a() == 0));
 }
 
 #[test]

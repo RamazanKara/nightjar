@@ -18,6 +18,8 @@ impl Streaming {
                 Notice::PassthroughOpus => self.show_toast(tr("The PC did not offer PCM audio. This stream plays Opus.")),
                 Notice::LaunchWarning(warning) => {
                     if let Some(text) = launch_warning_text(&warning) {
+                        // The toast goes; the Control Center keeps saying it while the stream runs.
+                        self.launch_notice = Some(text.clone());
                         self.show_toast(text);
                     }
                 }
@@ -329,6 +331,18 @@ impl Streaming {
             }
             _ => {}
         }
+    }
+
+    /// What the PC said about how this stream started, for the Control Center's Quick page: the
+    /// same words as its toast, for as long as the stream runs.
+    pub fn launch_notice(&self) -> Option<&str> {
+        self.launch_notice.as_deref()
+    }
+
+    /// The load of the PC's video encoder as last read, for the Control Center's Picture page;
+    /// `None` while the PC's readings are not asked for or say nothing of the encoder.
+    pub fn encoder_load(&self) -> Option<String> {
+        self.hardware.as_ref().and_then(super::overlay::encoder_load)
     }
 
     fn cursor_error(&mut self, error: String) {

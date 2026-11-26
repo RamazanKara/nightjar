@@ -62,4 +62,5 @@
     <string name="pad_dpad_down">방향키 아래</string>
     <string name="pad_dpad_left">방향키 왼쪽</string>
     <string name="pad_dpad_right">방향키 오른쪽</string>
+    <string name="pad_edit_mirror">좌우 대칭 이동</string>
 </resources>

@@ -19,9 +19,10 @@ import com.google.android.material.color.MaterialColors;
 import com.limelight.R;
 
 /**
- * A PC's row in a phone's grouped list. The list has one spacing, so a row draws its share of the group's shape: rounded where
- * the group starts and ends, a line where another row follows, and the gap to the next group under it. Focus is the glass ring,
- * drawn around the row's own shape: the grid's selector could only frame the row and the gap together.
+ * A PC's row in a phone's list. The list has one spacing, so a row draws its share of its group's shape: rounded where the
+ * group starts and ends, a line where another row follows, and the gap to the next group under it. A row that is a group of
+ * its own is a card, a panel with a lit edge, which is what every PC is now. Focus is the glass ring, drawn around the row's
+ * own shape: the grid's selector could only frame the row and the gap together.
  */
 public class PcRow extends FrameLayout {
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -29,6 +30,7 @@ public class PcRow extends FrameLayout {
     private final Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint press = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path shape = new Path();
+    private final Path edge = new Path();
     private final RectF rect = new RectF();
     private final float[] corners = new float[8];
     private final FocusRing ring;
@@ -58,12 +60,13 @@ public class PcRow extends FrameLayout {
         groupRadius = res.getDimension(R.dimen.nj_radius_panel);
         rowRadius = 14 * density;
         gap = res.getDimensionPixelSize(R.dimen.pc_group_gap);
-        fill.setColor(NightSkyView.groupFill(context));
-        line.setColor(NightSkyView.separator(context));
+        fill.setColor(StageView.groupFill(context));
+        line.setColor(StageView.separator(context));
         line.setStrokeWidth(Math.max(1f, density * .5f));
         rim.setStyle(Paint.Style.STROKE);
-        rim.setStrokeWidth(res.getDimension(R.dimen.nj_glass_chrome_solid_rim_width));
-        rim.setColor(ResourcesCompat.getColor(res, R.color.nj_hc_color_rim, null));
+        rim.setStrokeWidth(highContrast ? res.getDimension(R.dimen.nj_glass_chrome_solid_rim_width) : Math.max(1f, density * .75f));
+        rim.setColor(highContrast ? ResourcesCompat.getColor(res, R.color.nj_hc_color_rim, null)
+                : MaterialColors.getColor(context, R.attr.glassGroupRim, 0x1FFFFFFF));
         press.setColor(MaterialColors.getColor(context, R.attr.glassControlFill, 0x22FFFFFF));
         ring = new FocusRing(this, false);
     }
@@ -80,6 +83,8 @@ public class PcRow extends FrameLayout {
             }
         });
         cover.setClipToOutline(true);
+        // A picture drawn without the GPU knows no outline: the frame rounds itself there.
+        if (cover instanceof RoundFrame) ((RoundFrame) cover).setRadius(radius);
     }
 
     /**
@@ -112,6 +117,12 @@ public class PcRow extends FrameLayout {
         rect.set(0, 0, w, h);
         shape.rewind();
         shape.addRoundRect(rect, corners, Path.Direction.CW);
+        // The edge is drawn inside the shape, so none of it is lost past the row.
+        float half = rim.getStrokeWidth() / 2f;
+        for (int i = 0; i < corners.length; i++) corners[i] = Math.max(0f, corners[i] - half);
+        rect.inset(half, half);
+        edge.rewind();
+        edge.addRoundRect(rect, corners, Path.Direction.CW);
     }
 
     /** The grid keeps a selection while focus is elsewhere; the ring is only for what the keys would act on now. */
@@ -157,7 +168,7 @@ public class PcRow extends FrameLayout {
             canvas.restoreToCount(save);
         }
         canvas.drawPath(shape, fill);
-        if (highContrast) canvas.drawPath(shape, rim);
+        if (highContrast || (startsGroup && endsGroup)) canvas.drawPath(edge, rim);
         if (!startsGroup) {
             boolean rtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
             canvas.drawLine(rtl ? 0 : lineInset, 0, rtl ? w - lineInset : w, 0, line);

@@ -33,6 +33,8 @@ final class GameMenuActions {
 
     // The sectioned stream menu while it is open; streamMenu is its sheet or a dialog it opened.
     private com.limelight.ui.StreamMenu streamMenuSheet;
+    // Where the Control Center was left, for as long as this stream runs: it reopens on that module and control.
+    private final com.limelight.ui.StreamMenu.Session menuSession = new com.limelight.ui.StreamMenu.Session();
     // Whether the system keyboard was open as the stream menu opened.
     private boolean systemKeyboardAtMenu;
     // Whether the current streamMenu is a post-stream / termination prompt that must survive onPause().
@@ -168,7 +170,7 @@ final class GameMenuActions {
         hostActions.resetHostAudio();
         hostActions.quickSuspend.forget();
         streamMenuSheet = new com.limelight.ui.StreamMenu(game, this::streamMenuOptions, this::onStreamMenuItem,
-                hostActions.nativeMenuController(), menuShortcuts);
+                hostActions.nativeMenuController(), menuShortcuts, menuSession);
         showStreamDialog(streamMenuSheet.sheet());
         if (byController) streamMenuSheet.sheet().focusFirstActionFromController();
         hostActions.refreshHostAudio();
@@ -237,6 +239,12 @@ final class GameMenuActions {
         options.rateChangeBitrate = game.rateChanges != null && game.prefConfig.rateChangeBitrate;
         options.webUiAddress = hostActions.hostWebUiUrl() != null;
         options.connection = connectionInfo();
+        // What the PC said about this launch and how busy its encoder is, in the words the toast and overlay use.
+        options.launchNotice = com.limelight.nvstream.http.LaunchWarning.text(
+                game.conn.getLaunchWarningCode(), game.conn.getLaunchWarningMessage(),
+                game.getString(R.string.launch_warning_virtual_display_unavailable),
+                game.getString(R.string.launch_warning_virtual_display_disabled_by_client));
+        options.encoderLoad = game.overlays.encoderLoad();
         return options;
     }
 

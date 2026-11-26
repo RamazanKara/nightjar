@@ -1,6 +1,7 @@
 //! Button names in hints follow the connected controller's layout: Xbox by default, PlayStation
 //! symbols or Switch labels when such a controller is attached. Ported from Moonlight V+
-//! (streaming/input/gamepadglyphs.h and SdlGamepadKeyNavigation::detectUiStyle).
+//! (streaming/input/gamepadglyphs.h and SdlGamepadKeyNavigation::detectUiStyle); the label
+//! tables of that port now live in nightjar-policy (`input_glyphs.rs`), shared with Android.
 //!
 //! Also how shortcuts are drawn (keycaps and controller buttons, [`Piece`]) and the line icons of
 //! the stream controls and the Help page ([`icon`]), all in theme roles.
@@ -14,89 +15,62 @@ use crate::shortcuts::{Action, Button, Chord, PadBinding};
 use crate::strings::tr;
 use crate::theme::{radius, regular, semibold, text, ON_SURFACE, ON_SURFACE_VARIANT, OUTLINE, OUTLINE_VARIANT, SURFACE_HIGHEST};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Style {
-    Xbox,
-    PlayStation,
-    Nintendo,
+/// A face button by its position, as SDL names them (shared with Android in nightjar-policy).
+pub use nightjar_policy::input_glyphs::Face;
+use nightjar_policy::input_glyphs as shared;
+
+/// The labels a controller carries. The labels themselves (`face`, `start`, `select`, the
+/// shoulders, `chord`, `mouse_clicks`) are nightjar-policy's `input_glyphs::Style`, which Android
+/// uses too, reached through `Deref`; this wrapper adds the desktop's drawing on top.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct Style(pub shared::Style);
+
+#[allow(non_upper_case_globals)]
+impl Style {
+    pub const Xbox: Style = Style(shared::Style::Xbox);
+    pub const PlayStation: Style = Style(shared::Style::PlayStation);
+    pub const Nintendo: Style = Style(shared::Style::Nintendo);
 }
 
-/// A face button by its position, as SDL names them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Face {
-    South,
-    East,
-    West,
-    North,
+impl std::fmt::Debug for Style {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::ops::Deref for Style {
+    type Target = shared::Style;
+    fn deref(&self) -> &shared::Style {
+        &self.0
+    }
+}
+
+impl From<shared::Style> for Style {
+    fn from(style: shared::Style) -> Style {
+        Style(style)
+    }
+}
+
+impl From<Style> for shared::Style {
+    fn from(style: Style) -> shared::Style {
+        style.0
+    }
 }
 
 impl Style {
     /// The first PlayStation or Switch controller sets the style; anything else reads as Xbox.
     pub fn of_brands(brands: impl IntoIterator<Item = PadBrand>) -> Style {
-        brands
-            .into_iter()
-            .find_map(|kind| match kind {
-                PadBrand::PlayStation => Some(Style::PlayStation),
-                PadBrand::Nintendo => Some(Style::Nintendo),
-                PadBrand::Xbox => None,
-            })
-            .unwrap_or(Style::Xbox)
+        Style(shared::Style::of_styles(brands.into_iter().map(|brand| match brand {
+            PadBrand::PlayStation => shared::Style::PlayStation,
+            PadBrand::Nintendo => shared::Style::Nintendo,
+            PadBrand::Xbox => shared::Style::Xbox,
+        })))
     }
 
     /// The style of the controllers attached now.
     pub fn of(pads: &PadsView) -> Style {
         Style::of_brands(pads.pads.iter().map(|pad| pad.brand))
-    }
-
-    /// The label on the face button at `face`: Switch labels follow its layout (south is B).
-    pub fn face(self, face: Face) -> &'static str {
-        match (self, face) {
-            // V+ shows ✕ (U+2715); no font here has it, × (U+00D7) is the same mark.
-            (Style::PlayStation, Face::South) => "×",
-            (Style::PlayStation, Face::East) => "○",
-            (Style::PlayStation, Face::West) => "□",
-            (Style::PlayStation, Face::North) => "△",
-            (Style::Nintendo, Face::South) => "B",
-            (Style::Nintendo, Face::East) => "A",
-            (Style::Nintendo, Face::West) => "Y",
-            (Style::Nintendo, Face::North) => "X",
-            (Style::Xbox, Face::South) => "A",
-            (Style::Xbox, Face::East) => "B",
-            (Style::Xbox, Face::West) => "X",
-            (Style::Xbox, Face::North) => "Y",
-        }
-    }
-
-    pub fn start(self) -> &'static str {
-        match self {
-            Style::PlayStation => "Options",
-            Style::Nintendo => "+",
-            Style::Xbox => "Start",
-        }
-    }
-
-    pub fn select(self) -> &'static str {
-        match self {
-            Style::PlayStation => "Share",
-            Style::Nintendo => "−",
-            Style::Xbox => "Select",
-        }
-    }
-
-    pub fn left_shoulder(self) -> &'static str {
-        match self {
-            Style::PlayStation => "L1",
-            Style::Nintendo => "L",
-            Style::Xbox => "LB",
-        }
-    }
-
-    pub fn right_shoulder(self) -> &'static str {
-        match self {
-            Style::PlayStation => "R1",
-            Style::Nintendo => "R",
-            Style::Xbox => "RB",
-        }
     }
 
     /// A quit combo in this controller's names. Its face buttons are positions (A is south, as
@@ -112,18 +86,6 @@ impl Style {
             GamepadQuitCombo::LbRbAB => [lb, rb, self.face(Face::South), self.face(Face::East)],
         };
         self.chord(&buttons)
-    }
-
-    /// Buttons held together: "Start+Select", or "+ + −" where the names are + and −.
-    pub fn chord(self, buttons: &[&str]) -> String {
-        buttons.join(if self == Style::Nintendo { " + " } else { "+" })
-    }
-
-    /// The buttons the controller mouse clicks left and right with: the PC's A and B, which the
-    /// Nintendo layout setting moves from south and east to east and south.
-    pub fn mouse_clicks(self, swapped: bool) -> (&'static str, &'static str) {
-        let (left, right) = if swapped { (Face::East, Face::South) } else { (Face::South, Face::East) };
-        (self.face(left), self.face(right))
     }
 }
 

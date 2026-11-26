@@ -238,24 +238,20 @@ public class PinLockActivity extends NightjarActivity {
 
     // ---- Views ----
 
-    /** A sheet along the bottom of a phone held upright; a panel in the middle on anything else, with the sky around it. */
+    /** A sheet along the bottom of a phone held upright; a panel in the middle on anything else, with the stage around it. */
     private void placePanel() {
         View panel = findViewById(R.id.pin_panel);
         Configuration config = getResources().getConfiguration();
         boolean sheet = config.orientation != Configuration.ORIENTATION_LANDSCAPE && config.smallestScreenWidthDp < 600;
         panel.setBackground(sheet ? com.limelight.ui.GlassPanelDrawable.sheet(this) : com.limelight.ui.GlassPanelDrawable.dialog(this));
-        // The moon stands above a sheet; a panel in the middle would cover half of it.
-        ((com.limelight.ui.NightSkyView) findViewById(R.id.pin_sky)).setMoonShown(sheet);
         if (!sheet && config.orientation != Configuration.ORIENTATION_LANDSCAPE) {
             android.widget.FrameLayout.LayoutParams params = (android.widget.FrameLayout.LayoutParams) panel.getLayoutParams();
             params.width = getResources().getDimensionPixelSize(R.dimen.content_max_width);
             params.gravity = android.view.Gravity.CENTER;
         }
-        com.limelight.ui.NightSkyView sky = findViewById(R.id.pin_sky);
-        // The sky runs under the system bars. A sheet stands on the screen's edge and lifts its keys above the bar; a panel in the
-        // middle stays clear of them all.
+        // The stage runs under the system bars. A sheet stands on the screen's edge and lifts its keys above the bar; a panel in
+        // the middle stays clear of them all.
         ((com.limelight.ui.GlassHost) findViewById(R.id.pin_root)).setSafeAreaListener((left, top, right, bottom) -> {
-            sky.setSafeTop(top);
             android.widget.FrameLayout.LayoutParams params = (android.widget.FrameLayout.LayoutParams) panel.getLayoutParams();
             panel.setPadding(sheet ? left : 0, 0, sheet ? right : 0, sheet ? bottom : 0);
             params.setMargins(sheet ? 0 : left, top, sheet ? 0 : right, sheet ? 0 : bottom);

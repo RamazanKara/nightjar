@@ -25,7 +25,7 @@
             android:layout_gravity="bottom" android:importantForAccessibility="no" />
         <LinearLayout android:id="@+id/console_empty" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_gravity="center" android:orientation="vertical" android:gravity="center_horizontal"
-            android:padding="@dimen/space_xl" android:visibility="gone">
+            android:padding="@dimen/space_xl" android:visibility="gone" android:clipChildren="false" android:clipToPadding="false">
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:gravity="center" android:text="@string/console_empty_title"
                 android:textAppearance="@style/TextAppearance.Nightjar.ScreenTitle" />

@@ -62,4 +62,5 @@
     <string name="pad_dpad_down">Yön tuşu aşağı</string>
     <string name="pad_dpad_left">Yön tuşu sol</string>
     <string name="pad_dpad_right">Yön tuşu sağ</string>
+    <string name="pad_edit_mirror">Solu ve sağı yansıt</string>
 </resources>

@@ -220,6 +220,79 @@ public class ActionSheetTest {
     }
 
     /**
+     * Review, day previews: a TV's PC menu drew near-black rows on its night glass, opened from a test screen that skipped
+     * AppTheme. A TV's app screens are night in every theme (AppTheme.isDark) and so is its sheet's glass: by day, by night
+     * and in high contrast its title, rows, icons and close read on that glass.
+     */
+    @Test @Config(qualifiers = "w960dp-h540dp-land-television-notnight-xhdpi")
+    public void aTvSheetReadsOnItsGlassByDay() {
+        tvSheetReadsOnItsGlass();
+    }
+
+    @Test @Config(qualifiers = "w960dp-h540dp-land-television-night-xhdpi")
+    public void aTvSheetReadsOnItsGlassByNight() {
+        tvSheetReadsOnItsGlass();
+    }
+
+    @Test @Config(qualifiers = "w960dp-h540dp-land-television-notnight-xhdpi")
+    public void aTvSheetReadsOnItsGlassInHighContrast() {
+        android.preference.PreferenceManager.getDefaultSharedPreferences(org.robolectric.RuntimeEnvironment.getApplication())
+                .edit().putBoolean(AppTheme.HIGH_CONTRAST, true).commit();
+        tvSheetReadsOnItsGlass();
+    }
+
+    private static void tvSheetReadsOnItsGlass() {
+        try (var controller = Robolectric.buildActivity(AppThemeTest.Screen.class).setup().visible()) {
+            ActionSheet sheet = new ActionSheet(controller.get(), "homepc");
+            sheet.addAction(R.drawable.ic_lock, "Pair");
+            sheet.addAction(R.drawable.ic_settings, "PC settings");
+            sheet.addDivider();
+            sheet.addDestructiveAction(R.drawable.ic_delete, "Remove PC");
+            sheet.show();
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            android.view.ViewGroup frame = sheet.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+            android.view.ViewGroup body = (android.view.ViewGroup) frame.getChildAt(0);
+            assertTrue(body.getBackground() instanceof GlassPanelDrawable);
+            int glass = ((GlassPanelDrawable) body.getBackground()).fillColor();
+            java.util.List<String> read = new java.util.ArrayList<>();
+            assertReads(body, glass, read);
+            assertTrue("the title, three rows with their icons and the close: " + read, read.size() >= 8);
+            sheet.dismiss();
+        }
+    }
+
+    /** Every shown word reads at 4.5:1 on the glass, and every icon at 3:1. */
+    private static void assertReads(View view, int glass, java.util.List<String> read) {
+        if (view.getVisibility() != View.VISIBLE) return;
+        if (view instanceof com.google.android.material.button.MaterialButton) {
+            var button = (com.google.android.material.button.MaterialButton) view;
+            if (button.getIcon() != null && button.getIconTint() != null) {
+                assertContrast(button.getText() + " icon", button.getIconTint().getColorForState(button.getDrawableState(), 0),
+                        glass, 3.0, read);
+            }
+        }
+        if (view instanceof android.widget.TextView) {
+            var text = (android.widget.TextView) view;
+            if (text.getText().length() > 0) assertContrast(text.getText().toString(), text.getCurrentTextColor(), glass, 4.5, read);
+        } else if (view instanceof android.widget.ImageView && ((android.widget.ImageView) view).getImageTintList() != null) {
+            var image = (android.widget.ImageView) view;
+            assertContrast(String.valueOf(image.getContentDescription()),
+                    image.getImageTintList().getColorForState(image.getDrawableState(), 0), glass, 3.0, read);
+        }
+        if (!(view instanceof android.view.ViewGroup)) return;
+        android.view.ViewGroup group = (android.view.ViewGroup) view;
+        for (int i = 0; i < group.getChildCount(); i++) assertReads(group.getChildAt(i), glass, read);
+    }
+
+    private static void assertContrast(String what, int ink, int glass, double minimum, java.util.List<String> read) {
+        int opaqueGlass = androidx.core.graphics.ColorUtils.compositeColors(glass, 0xFF000000);
+        double ratio = androidx.core.graphics.ColorUtils.calculateContrast(
+                androidx.core.graphics.ColorUtils.compositeColors(ink, opaqueGlass), opaqueGlass);
+        assertTrue(String.format(java.util.Locale.ROOT, "%s: %.2f:1 is under %.1f:1", what, ratio, minimum), ratio >= minimum);
+        read.add(what);
+    }
+
+    /**
      * On the real TV focus reaching the stream menu's Bitrate slid the tiles under the head although Bitrate was wholly in
      * view: the platform's scroll keeps a focused row clear of the fading edge too. A row in view stays put; one out of view
      * is still brought in.

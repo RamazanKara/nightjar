@@ -1,5 +1,8 @@
-//! The PC details page's read-only frame limiter rows, for a PC that reports its frame limiter
-//! in serverinfo (`Feature::FrameLimiterStatus`); other PCs show nothing.
+//! The PC details page's read-only rows: [`value_row`], which the page's "PC" section and its
+//! remote check's measurements stand in too, and the frame limiter's, for a PC that reports its
+//! frame limiter in serverinfo (`Feature::FrameLimiterStatus`); other PCs show nothing of it. The
+//! rows stand in one glass group as the page's other rows do: what each is at its leading edge, its
+//! value at the trailing one.
 
 use super::*;
 use nightjar_policy::http::{Feature, HostCapabilities, ServerInfo};
@@ -36,9 +39,47 @@ impl Launcher {
         };
         section(ui, "Frame limiter");
         for (label, value) in rows {
-            detail(ui, tr(label), &value);
+            value_row(ui, tr(label), &value);
         }
     }
+}
+
+/// Between a label and the value that went under it, as between a row's label and its description.
+const UNDER_GAP: f32 = 2.0;
+
+/// A read-only row of a group: `label` as a settings row's, and `value` at the trailing edge in the
+/// quieter ink. Neither is cut: a long label wraps beside its value, and a value that fits neither
+/// beside its label nor in half the row (a long address in a narrow window) goes under the label,
+/// as a row's description does. A screen reader hears both as one line.
+pub(super) fn value_row(ui: &mut Ui, label: &str, value: &str) {
+    group_row(ui, |ui| {
+        let width = ui.available_width();
+        let (label_font, value_font) = (semibold(text::BODY), regular(text::BODY));
+        let one_line = ui.painter().layout_no_wrap(value.to_owned(), value_font.clone(), *ON_SURFACE_VARIANT);
+        let label_w = ui.painter().layout_no_wrap(label.to_owned(), label_font.clone(), *ON_SURFACE).size().x;
+        let value_w = one_line.size().x;
+        let beside = label_w + space::M + value_w <= width || value_w <= (width - space::M) / 2.0;
+        let (label_room, value_galley) = if beside {
+            ((width - value_w - space::M).max(0.0), one_line)
+        } else {
+            (width, ui.painter().layout(value.to_owned(), value_font, *ON_SURFACE_VARIANT, width))
+        };
+        let label_galley = ui.painter().layout(label.to_owned(), label_font, *ON_SURFACE, label_room);
+        let (label_size, value_size) = (label_galley.size(), value_galley.size());
+        let words = if beside { label_size.y.max(value_size.y) } else { label_size.y + UNDER_GAP + value_size.y };
+        let height = words.max(design_tokens::SIZE_ROW_HEIGHT - 2.0 * 8.0);
+        let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, format!("{label}: {value}")));
+        let middle = rect.center().y;
+        let (label_at, value_at) = if beside {
+            (pos2(rect.left(), middle - label_size.y / 2.0), pos2(rect.right() - value_size.x, middle - value_size.y / 2.0))
+        } else {
+            let top = middle - words / 2.0;
+            (pos2(rect.left(), top), pos2(rect.left(), top + label_size.y + UNDER_GAP))
+        };
+        ui.painter().galley(label_at, label_galley, *ON_SURFACE);
+        ui.painter().galley(value_at, value_galley, *ON_SURFACE_VARIANT);
+    });
 }
 
 #[cfg(test)]

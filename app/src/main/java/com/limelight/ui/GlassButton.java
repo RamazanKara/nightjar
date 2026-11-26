@@ -48,7 +48,8 @@ public class GlassButton extends MaterialButton {
                 shape.setColor(ResourcesCompat.getColor(res, R.color.nj_hc_color_moon, null));
             } else {
                 shape.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
-                shape.setColors(new int[] {ResourcesCompat.getColor(res, R.color.nj_color_moon_hi, null), 0xFFEE9F2E});
+                shape.setColors(new int[] {ResourcesCompat.getColor(res, R.color.nj_play_fill_top, null),
+                        ResourcesCompat.getColor(res, R.color.nj_play_fill_bottom, null)});
             }
             setTextColor(ResourcesCompat.getColor(res, highContrast ? R.color.nj_hc_color_on_moon : R.color.nj_color_on_moon, null));
             setIconTint(android.content.res.ColorStateList.valueOf(
@@ -62,7 +63,7 @@ public class GlassButton extends MaterialButton {
         }
         setBackgroundTintList(null);
         setBackground(shape);
-        glow.setColor(0x66F2A93B);
+        glow.setColor(ResourcesCompat.getColor(res, R.color.nj_play_glow, null));
         glowBlur = moon && !highContrast ? res.getDimension(R.dimen.glass_play_glow) : 0f;
         boolean reduced = Motion.reduced(context);
         focusScale = reduced ? 1f : ResourcesCompat.getFloat(res, R.dimen.nj_focus_scale_control);

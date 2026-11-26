@@ -78,17 +78,26 @@ pub fn recipe(material: Material, tier: Tier) -> Recipe {
 
 fn day_recipe(material: Material, tier: Tier) -> Recipe {
     match (material, tier) {
+        (Material::Chrome, Tier::Lens) => {
+            recipe!(DAY_GLASS_CHROME_LENS_BRIGHTNESS DAY_GLASS_CHROME_LENS_FILL DAY_GLASS_CHROME_LENS_SHEEN_TOP DAY_GLASS_CHROME_LENS_SHEEN_END DAY_GLASS_CHROME_LENS_RIM_TOP DAY_GLASS_CHROME_LENS_RIM_MID DAY_GLASS_CHROME_LENS_RIM_BOTTOM DAY_GLASS_CHROME_LENS_RIM_WIDTH DAY_GLASS_CHROME_LENS_SHADOW_COLOR DAY_GLASS_CHROME_LENS_SHADOW_Y DAY_GLASS_CHROME_LENS_SHADOW_BLUR DAY_GLASS_CHROME_LENS_HAIRLINE)
+        }
         (Material::Chrome, Tier::Live) => {
             recipe!(DAY_GLASS_CHROME_LIVE_BRIGHTNESS DAY_GLASS_CHROME_LIVE_FILL DAY_GLASS_CHROME_LIVE_SHEEN_TOP DAY_GLASS_CHROME_LIVE_SHEEN_END DAY_GLASS_CHROME_LIVE_RIM_TOP DAY_GLASS_CHROME_LIVE_RIM_MID DAY_GLASS_CHROME_LIVE_RIM_BOTTOM DAY_GLASS_CHROME_LIVE_RIM_WIDTH DAY_GLASS_CHROME_LIVE_SHADOW_COLOR DAY_GLASS_CHROME_LIVE_SHADOW_Y DAY_GLASS_CHROME_LIVE_SHADOW_BLUR DAY_GLASS_CHROME_LIVE_HAIRLINE)
         }
         (Material::Chrome, _) => {
             recipe!(DAY_GLASS_CHROME_BAKED_BRIGHTNESS DAY_GLASS_CHROME_BAKED_FILL DAY_GLASS_CHROME_BAKED_SHEEN_TOP DAY_GLASS_CHROME_BAKED_SHEEN_END DAY_GLASS_CHROME_BAKED_RIM_TOP DAY_GLASS_CHROME_BAKED_RIM_MID DAY_GLASS_CHROME_BAKED_RIM_BOTTOM DAY_GLASS_CHROME_BAKED_RIM_WIDTH DAY_GLASS_CHROME_BAKED_SHADOW_COLOR DAY_GLASS_CHROME_BAKED_SHADOW_Y DAY_GLASS_CHROME_BAKED_SHADOW_BLUR DAY_GLASS_CHROME_BAKED_HAIRLINE)
         }
+        (Material::Panel | Material::Menu, Tier::Lens) => {
+            recipe!(DAY_GLASS_PANEL_LENS_BRIGHTNESS DAY_GLASS_PANEL_LENS_FILL DAY_GLASS_PANEL_LENS_SHEEN_TOP DAY_GLASS_PANEL_LENS_SHEEN_END DAY_GLASS_PANEL_LENS_RIM_TOP DAY_GLASS_PANEL_LENS_RIM_MID DAY_GLASS_PANEL_LENS_RIM_BOTTOM DAY_GLASS_PANEL_LENS_RIM_WIDTH DAY_GLASS_PANEL_LENS_SHADOW_COLOR DAY_GLASS_PANEL_LENS_SHADOW_Y DAY_GLASS_PANEL_LENS_SHADOW_BLUR DAY_GLASS_PANEL_LENS_HAIRLINE)
+        }
         (Material::Panel | Material::Menu, Tier::Live) => {
             recipe!(DAY_GLASS_PANEL_LIVE_BRIGHTNESS DAY_GLASS_PANEL_LIVE_FILL DAY_GLASS_PANEL_LIVE_SHEEN_TOP DAY_GLASS_PANEL_LIVE_SHEEN_END DAY_GLASS_PANEL_LIVE_RIM_TOP DAY_GLASS_PANEL_LIVE_RIM_MID DAY_GLASS_PANEL_LIVE_RIM_BOTTOM DAY_GLASS_PANEL_LIVE_RIM_WIDTH DAY_GLASS_PANEL_LIVE_SHADOW_COLOR DAY_GLASS_PANEL_LIVE_SHADOW_Y DAY_GLASS_PANEL_LIVE_SHADOW_BLUR DAY_GLASS_PANEL_LIVE_HAIRLINE)
         }
         (Material::Panel | Material::Menu, _) => {
             recipe!(DAY_GLASS_PANEL_BAKED_BRIGHTNESS DAY_GLASS_PANEL_BAKED_FILL DAY_GLASS_PANEL_BAKED_SHEEN_TOP DAY_GLASS_PANEL_BAKED_SHEEN_END DAY_GLASS_PANEL_BAKED_RIM_TOP DAY_GLASS_PANEL_BAKED_RIM_MID DAY_GLASS_PANEL_BAKED_RIM_BOTTOM DAY_GLASS_PANEL_BAKED_RIM_WIDTH DAY_GLASS_PANEL_BAKED_SHADOW_COLOR DAY_GLASS_PANEL_BAKED_SHADOW_Y DAY_GLASS_PANEL_BAKED_SHADOW_BLUR DAY_GLASS_PANEL_BAKED_HAIRLINE)
+        }
+        (Material::Chip, Tier::Lens) => {
+            recipe!(DAY_GLASS_CHIP_LENS_BRIGHTNESS DAY_GLASS_CHIP_LENS_FILL DAY_GLASS_CHIP_LENS_SHEEN_TOP DAY_GLASS_CHIP_LENS_SHEEN_END DAY_GLASS_CHIP_LENS_RIM_TOP DAY_GLASS_CHIP_LENS_RIM_MID DAY_GLASS_CHIP_LENS_RIM_BOTTOM DAY_GLASS_CHIP_LENS_RIM_WIDTH DAY_GLASS_CHIP_LENS_SHADOW_COLOR DAY_GLASS_CHIP_LENS_SHADOW_Y DAY_GLASS_CHIP_LENS_SHADOW_BLUR DAY_GLASS_CHIP_LENS_HAIRLINE)
         }
         (Material::Chip, Tier::Live) => {
             recipe!(DAY_GLASS_CHIP_LIVE_BRIGHTNESS DAY_GLASS_CHIP_LIVE_FILL DAY_GLASS_CHIP_LIVE_SHEEN_TOP DAY_GLASS_CHIP_LIVE_SHEEN_END DAY_GLASS_CHIP_LIVE_RIM_TOP DAY_GLASS_CHIP_LIVE_RIM_MID DAY_GLASS_CHIP_LIVE_RIM_BOTTOM DAY_GLASS_CHIP_LIVE_RIM_WIDTH DAY_GLASS_CHIP_LIVE_SHADOW_COLOR DAY_GLASS_CHIP_LIVE_SHADOW_Y DAY_GLASS_CHIP_LIVE_SHADOW_BLUR DAY_GLASS_CHIP_LIVE_HAIRLINE)
@@ -101,6 +110,9 @@ fn day_recipe(material: Material, tier: Tier) -> Recipe {
 
 fn night_recipe(material: Material, tier: Tier) -> Recipe {
     match (material, tier) {
+        (Material::Chrome, Tier::Lens) => {
+            recipe!(GLASS_CHROME_LENS_BRIGHTNESS GLASS_CHROME_LENS_FILL GLASS_CHROME_LENS_SHEEN_TOP GLASS_CHROME_LENS_SHEEN_END GLASS_CHROME_LENS_RIM_TOP GLASS_CHROME_LENS_RIM_MID GLASS_CHROME_LENS_RIM_BOTTOM GLASS_CHROME_LENS_RIM_WIDTH GLASS_CHROME_LENS_SHADOW_COLOR GLASS_CHROME_LENS_SHADOW_Y GLASS_CHROME_LENS_SHADOW_BLUR)
+        }
         (Material::Chrome, Tier::Live) => {
             recipe!(GLASS_CHROME_LIVE_BRIGHTNESS GLASS_CHROME_LIVE_FILL GLASS_CHROME_LIVE_SHEEN_TOP GLASS_CHROME_LIVE_SHEEN_END GLASS_CHROME_LIVE_RIM_TOP GLASS_CHROME_LIVE_RIM_MID GLASS_CHROME_LIVE_RIM_BOTTOM GLASS_CHROME_LIVE_RIM_WIDTH GLASS_CHROME_LIVE_SHADOW_COLOR GLASS_CHROME_LIVE_SHADOW_Y GLASS_CHROME_LIVE_SHADOW_BLUR)
         }
@@ -109,6 +121,9 @@ fn night_recipe(material: Material, tier: Tier) -> Recipe {
         }
         (Material::Chrome, Tier::Solid) => {
             recipe!(GLASS_CHROME_SOLID_BRIGHTNESS GLASS_CHROME_SOLID_FILL GLASS_CHROME_SOLID_SHEEN_TOP GLASS_CHROME_SOLID_SHEEN_END GLASS_CHROME_SOLID_RIM_TOP GLASS_CHROME_SOLID_RIM_MID GLASS_CHROME_SOLID_RIM_BOTTOM GLASS_CHROME_SOLID_RIM_WIDTH GLASS_CHROME_SOLID_SHADOW_COLOR GLASS_CHROME_SOLID_SHADOW_Y GLASS_CHROME_SOLID_SHADOW_BLUR)
+        }
+        (Material::Panel, Tier::Lens) => {
+            recipe!(GLASS_PANEL_LENS_BRIGHTNESS GLASS_PANEL_LENS_FILL GLASS_PANEL_LENS_SHEEN_TOP GLASS_PANEL_LENS_SHEEN_END GLASS_PANEL_LENS_RIM_TOP GLASS_PANEL_LENS_RIM_MID GLASS_PANEL_LENS_RIM_BOTTOM GLASS_PANEL_LENS_RIM_WIDTH GLASS_PANEL_LENS_SHADOW_COLOR GLASS_PANEL_LENS_SHADOW_Y GLASS_PANEL_LENS_SHADOW_BLUR)
         }
         (Material::Panel, Tier::Live) => {
             recipe!(GLASS_PANEL_LIVE_BRIGHTNESS GLASS_PANEL_LIVE_FILL GLASS_PANEL_LIVE_SHEEN_TOP GLASS_PANEL_LIVE_SHEEN_END GLASS_PANEL_LIVE_RIM_TOP GLASS_PANEL_LIVE_RIM_MID GLASS_PANEL_LIVE_RIM_BOTTOM GLASS_PANEL_LIVE_RIM_WIDTH GLASS_PANEL_LIVE_SHADOW_COLOR GLASS_PANEL_LIVE_SHADOW_Y GLASS_PANEL_LIVE_SHADOW_BLUR)
@@ -119,6 +134,9 @@ fn night_recipe(material: Material, tier: Tier) -> Recipe {
         (Material::Panel, Tier::Solid) => {
             recipe!(GLASS_PANEL_SOLID_BRIGHTNESS GLASS_PANEL_SOLID_FILL GLASS_PANEL_SOLID_SHEEN_TOP GLASS_PANEL_SOLID_SHEEN_END GLASS_PANEL_SOLID_RIM_TOP GLASS_PANEL_SOLID_RIM_MID GLASS_PANEL_SOLID_RIM_BOTTOM GLASS_PANEL_SOLID_RIM_WIDTH GLASS_PANEL_SOLID_SHADOW_COLOR GLASS_PANEL_SOLID_SHADOW_Y GLASS_PANEL_SOLID_SHADOW_BLUR)
         }
+        (Material::Menu, Tier::Lens) => {
+            recipe!(GLASS_MENU_LENS_BRIGHTNESS GLASS_MENU_LENS_FILL GLASS_MENU_LENS_SHEEN_TOP GLASS_MENU_LENS_SHEEN_END GLASS_MENU_LENS_RIM_TOP GLASS_MENU_LENS_RIM_MID GLASS_MENU_LENS_RIM_BOTTOM GLASS_MENU_LENS_RIM_WIDTH GLASS_MENU_LENS_SHADOW_COLOR GLASS_MENU_LENS_SHADOW_Y GLASS_MENU_LENS_SHADOW_BLUR)
+        }
         (Material::Menu, Tier::Live) => {
             recipe!(GLASS_MENU_LIVE_BRIGHTNESS GLASS_MENU_LIVE_FILL GLASS_MENU_LIVE_SHEEN_TOP GLASS_MENU_LIVE_SHEEN_END GLASS_MENU_LIVE_RIM_TOP GLASS_MENU_LIVE_RIM_MID GLASS_MENU_LIVE_RIM_BOTTOM GLASS_MENU_LIVE_RIM_WIDTH GLASS_MENU_LIVE_SHADOW_COLOR GLASS_MENU_LIVE_SHADOW_Y GLASS_MENU_LIVE_SHADOW_BLUR)
         }
@@ -127,6 +145,9 @@ fn night_recipe(material: Material, tier: Tier) -> Recipe {
         }
         (Material::Menu, Tier::Solid) => {
             recipe!(GLASS_MENU_SOLID_BRIGHTNESS GLASS_MENU_SOLID_FILL GLASS_MENU_SOLID_SHEEN_TOP GLASS_MENU_SOLID_SHEEN_END GLASS_MENU_SOLID_RIM_TOP GLASS_MENU_SOLID_RIM_MID GLASS_MENU_SOLID_RIM_BOTTOM GLASS_MENU_SOLID_RIM_WIDTH GLASS_MENU_SOLID_SHADOW_COLOR GLASS_MENU_SOLID_SHADOW_Y GLASS_MENU_SOLID_SHADOW_BLUR)
+        }
+        (Material::Chip, Tier::Lens) => {
+            recipe!(GLASS_CHIP_LENS_BRIGHTNESS GLASS_CHIP_LENS_FILL GLASS_CHIP_LENS_SHEEN_TOP GLASS_CHIP_LENS_SHEEN_END GLASS_CHIP_LENS_RIM_TOP GLASS_CHIP_LENS_RIM_MID GLASS_CHIP_LENS_RIM_BOTTOM GLASS_CHIP_LENS_RIM_WIDTH GLASS_CHIP_LENS_SHADOW_COLOR GLASS_CHIP_LENS_SHADOW_Y GLASS_CHIP_LENS_SHADOW_BLUR)
         }
         (Material::Chip, Tier::Live) => {
             recipe!(GLASS_CHIP_LIVE_BRIGHTNESS GLASS_CHIP_LIVE_FILL GLASS_CHIP_LIVE_SHEEN_TOP GLASS_CHIP_LIVE_SHEEN_END GLASS_CHIP_LIVE_RIM_TOP GLASS_CHIP_LIVE_RIM_MID GLASS_CHIP_LIVE_RIM_BOTTOM GLASS_CHIP_LIVE_RIM_WIDTH GLASS_CHIP_LIVE_SHADOW_COLOR GLASS_CHIP_LIVE_SHADOW_Y GLASS_CHIP_LIVE_SHADOW_BLUR)
@@ -261,10 +282,10 @@ fn backdrop(ctx: &Context) -> Backdrop {
     ctx.data(|d| d.get_temp(backdrop_id())).unwrap_or_default()
 }
 
-/// The boundary between content and chrome, on the live tier: everything painted before it is what
-/// the chain blurs. No shape at all on the other tiers.
+/// The boundary between content and chrome, on the lens and live tiers: everything painted before
+/// it is what the chain blurs. No shape at all on the other tiers.
 pub fn boundary(painter: &Painter, regions: Vec<Rect>) {
-    if tier(painter.ctx()) == Tier::Live {
+    if tier(painter.ctx()).probed() {
         let screen = painter.ctx().content_rect();
         painter.add(Shape::Callback(PaintCallback {
             rect: screen,
@@ -284,7 +305,8 @@ type PageSlot = Option<(u64, egui::LayerId, egui::layers::ShapeIdx)>;
 /// blurred page a dialog asks for ([`page_behind`]). Only on the live tier; for this pass only.
 pub fn keep_page_slot(painter: &Painter) {
     let ctx = painter.ctx();
-    let slot: PageSlot = (tier(ctx) == Tier::Live)
+    let slot: PageSlot = tier(ctx)
+        .probed()
         .then(|| (ctx.cumulative_pass_nr(), painter.layer_id(), painter.add(Shape::Noop)));
     ctx.data_mut(|d| d.insert_temp(page_slot_id(), slot));
 }
@@ -297,7 +319,7 @@ pub fn keep_page_slot(painter: &Painter) {
 /// dialog's dim. `opacity`: the dialog's own fade. Only on the live tier, which is never over a
 /// stream's video, and only in a pass that kept the place. True when it drew.
 pub fn page_behind(ctx: &Context, opacity: f32) -> bool {
-    if tier(ctx) != Tier::Live {
+    if !tier(ctx).probed() {
         return false;
     }
     let slot = ctx
@@ -321,7 +343,7 @@ pub fn page_behind(ctx: &Context, opacity: f32) -> bool {
     true
 }
 
-fn ppp(ctx: &Context) -> f32 {
+pub(super) fn ppp(ctx: &Context) -> f32 {
     ctx.pixels_per_point().max(0.25)
 }
 
@@ -369,16 +391,16 @@ pub fn gradient(rect: Rect, degrees: f32, stops: &[(f32, Color32)]) -> impl Fn(P
 /// A point of a rounded outline: the corner's centre (or a place on a straight edge's inner line)
 /// and the outward direction. The outline at offset `d` is `c + n * (r + d)`.
 #[derive(Clone, Copy)]
-struct Node {
-    c: Pos2,
-    n: Vec2,
+pub(super) struct Node {
+    pub(super) c: Pos2,
+    pub(super) n: Vec2,
 }
 
 fn corner_steps(r: f32, ppp: f32) -> usize {
     ((r * ppp).sqrt() * 1.8).ceil().clamp(2.0, 28.0) as usize
 }
 
-fn fit_radius(rect: Rect, r: f32) -> f32 {
+pub(super) fn fit_radius(rect: Rect, r: f32) -> f32 {
     r.min(rect.width() / 2.0).min(rect.height() / 2.0).max(0.0)
 }
 
@@ -486,7 +508,7 @@ fn fill_mesh(
 
 /// The whole outline clockwise; the long straight edges are divided so a slanted gradient bends
 /// where it should along them.
-fn outline(rect: Rect, r: f32, ppp: f32) -> Vec<Node> {
+pub(super) fn outline(rect: Rect, r: f32, ppp: f32) -> Vec<Node> {
     let steps = corner_steps(r, ppp);
     let inner = rect.shrink(r);
     let mut nodes = Vec::new();

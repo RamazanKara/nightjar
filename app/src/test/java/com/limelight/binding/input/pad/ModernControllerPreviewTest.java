@@ -140,17 +140,41 @@ public class ModernControllerPreviewTest {
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         layout(frame, width, height);
         PadEditor editor = (PadEditor) frame.getChildAt(frame.getChildCount() - 1);
+        // The dock is its bar alone until there is something to show.
         touchTargets(editor, metrics.density, problems);
         write(frame, width, height, new File(directory, name + "-3-editor-all.png"));
         panelInside(editor, "all", problems);
+        // More: every control's size and opacity, the glyphs and where Done saves.
+        editor.findViewById(com.limelight.R.id.pad_studio_more).performClick();
+        layout(frame, width, height);
+        touchTargets(editor, metrics.density, problems);
+        panelInside(editor, "more", problems);
+        write(frame, width, height, new File(directory, name + "-9-editor-more.png"));
+        // A control picked, with the mirror lock on: its tool is lit.
         editor.select(PadLayout.Control.FACE);
         editor.toggleHidden();
         editor.select(PadLayout.Control.DPAD);
+        editor.findViewById(com.limelight.R.id.pad_studio_mirror).performClick();
+        layout(frame, width, height);
+        touchTargets(editor, metrics.density, problems);
         write(frame, width, height, new File(directory, name + "-4-editor-picked.png"));
         panelInside(editor, "picked", problems);
         controller.finishEditing(false);
 
-        // What the look adds beyond the default layout: PlayStation's coloured glyphs on a split face cluster and the
+        // Stealth: at 0 % the pad draws nothing, and the microphone button is all that stands on the video, muted
+        // and live.
+        prefs.oscOpacity = 0;
+        controller.refreshLayout();
+        layout(frame, width, height);
+        write(frame, width, height, new File(directory, name + "-0-stealth-muted.png"));
+        button.performClick();
+        assertFalse(mic.muted);
+        write(frame, width, height, new File(directory, name + "-0-stealth-live.png"));
+        button.performClick();
+        assertTrue(mic.muted);
+        prefs.oscOpacity = 90;
+
+        // What the look adds beyond the default layout: PlayStation's glyphs on a split face cluster and the
         // pointer touchpad in Camera mode, pressed: the circle button, the D-pad up and right, a shoulder, each with its
         // halo, and the pad with its trail. The split members and the pad at its default overlap nothing, the
         // microphone button included.
@@ -172,8 +196,6 @@ public class ModernControllerPreviewTest {
         dpad.down(1, dpad.getWidth() * .8f, dpad.getHeight() * .2f, 100);
         PadControlView lb = controller.view(PadLayout.Control.LB);
         lb.down(2, lb.getWidth() / 2f, lb.getHeight() / 2f, 100);
-        // Held past the ring that runs out on the press: the steady halos.
-        Shadows.shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(PadPainter.RIPPLE_MS + 20));
         PadControlView pad = controller.view(PadLayout.Control.POINTER_PAD);
         float padWidth = pad.getWidth(), padHeight = pad.getHeight();
         pad.down(3, padWidth * .2f, padHeight * .75f, 100);
@@ -195,6 +217,7 @@ public class ModernControllerPreviewTest {
         editor.select(PadLayout.Control.HOME);
         editor.toggleHidden();
         editor.select(null);
+        editor.findViewById(com.limelight.R.id.pad_studio_add).performClick();
         layout(frame, width, height);
         touchTargets(editor, metrics.density, problems);
         tiles(editor, metrics.density, problems);

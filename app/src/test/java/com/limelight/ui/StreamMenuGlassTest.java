@@ -99,6 +99,8 @@ public class StreamMenuGlassTest {
             assertFalse(menu.sheet().isShowing());
             if (blur != null) assertFalse("the blur window is removed, not hidden", blur.isShowing());
             assertNull("and forgotten", menu.sheet().blurWindow());
+            assertNull(menu.sheet().surface().kind());
+            assertFalse(menu.sheet().surface().listening());
             assertEquals("no view left on the stream's window", before, walk(activity.getWindow().getDecorView()).size());
             assertEquals("no flag left on the stream's window", flagsBefore, activity.getWindow().getAttributes().flags);
         }
@@ -110,7 +112,11 @@ public class StreamMenuGlassTest {
             MenuBlurWindow.enabledForTest = false;
             StreamMenu menu = open(controller.get(), null);
             assertNull(menu.sheet().blurWindow());
-            assertEquals("opaque enough to read over any game", 0xFA, Color.alpha(menu.sheet().menuGlass().fillColor()));
+            assertEquals(ControlCenterModel.BAKED, menu.sheet().surface().kind());
+            assertFalse("without a blur there is nothing to listen for", menu.sheet().surface().listening());
+            int fill = menu.sheet().surface().glass().fillColor();
+            assertEquals(androidx.core.content.ContextCompat.getColor(controller.get(), R.color.nj_surface_control_center_baked_fill), fill);
+            assertTrue("opaque enough to read over any game", Color.alpha(fill) >= 0xE0);
             menu.sheet().dismiss();
         }
     }
@@ -144,7 +150,7 @@ public class StreamMenuGlassTest {
     }
 
     @Test
-    public void theHeaderCarriesTheCoverAndTheXClosesTheMenu() {
+    public void theHeaderCarriesTheCoverAndReturnToStreamClosesTheMenu() {
         try (var controller = Robolectric.buildActivity(Activity.class).setup().visible()) {
             Bitmap art = Bitmap.createBitmap(4, 6, Bitmap.Config.ARGB_8888);
             StreamMenu menu = open(controller.get(), o -> o.cover = art);
@@ -176,26 +182,33 @@ public class StreamMenuGlassTest {
             List<StreamMenu.Item> chosen = new ArrayList<>();
             StreamMenu menu = new StreamMenu(activity, () -> state, chosen::add, null, null);
             menu.show();
-            StreamMenuModel.Layout layout = menu.layout();
-            for (int at = 0; at < layout.grid.size(); at++) {
-                View view = menu.cell(at);
-                assertNotNull("every cell of the model has its view: " + layout.grid.get(at).id, view);
-                if (view instanceof MenuRow) {
-                    MenuRow row = (MenuRow) view;
-                    if ("rate_change".equals(layout.grid.get(at).id)) {
-                        assertEquals("120 FPS", row.value());
-                        assertTrue(row.getContentDescription().toString().endsWith(", 120 FPS"));
-                    }
-                    if ("bitrate".equals(layout.grid.get(at).id)) {
-                        String bitrate = BitrateSlider.text(activity, 80000);
-                        assertEquals(bitrate, row.value());
-                        assertTrue(row.getContentDescription().toString().endsWith(", " + bitrate));
+            int rows = 0;
+            for (String module : menu.modules()) {
+                menu.select(module);
+                List<StreamMenuModel.Cell> cards = menu.dock().page(module).cards;
+                for (int at = 0; at < cards.size(); at++) {
+                    View view = menu.cell(at);
+                    assertNotNull("every card of the model has its view: " + cards.get(at).id, view);
+                    if (view instanceof MenuRow) {
+                        MenuRow row = (MenuRow) view;
+                        rows++;
+                        assertTrue("a finger's reach", row.getMinimumHeight() >= 48 * activity.getResources().getDisplayMetrics().density);
+                        if ("rate_change".equals(cards.get(at).id)) {
+                            assertEquals("120 FPS", row.value());
+                            assertTrue(row.getContentDescription().toString().endsWith(", 120 FPS"));
+                        }
+                        if ("bitrate".equals(cards.get(at).id)) {
+                            String bitrate = BitrateSlider.text(activity, 80000);
+                            assertEquals(bitrate, row.value());
+                            assertTrue(row.getContentDescription().toString().endsWith(", " + bitrate));
+                        }
                     }
                 }
             }
+            assertTrue("the bitrate and the overlay's page are rows with their values", rows >= 2);
             // A page row opens its page; one that reports says so once.
-            menu.row(RATE_CHANGE != null && menu.row(RATE_CHANGE) != null ? RATE_CHANGE : BITRATE).performClick();
-            assertEquals(1, chosen.size());
+            menu.reveal(BITRATE).performClick();
+            assertEquals(java.util.Arrays.asList(BITRATE), chosen);
             menu.sheet().dismiss();
         }
     }
@@ -211,6 +224,9 @@ public class StreamMenuGlassTest {
                     return kbps;
                 };
             });
+            assertNull("the slider stands on Picture, with the bitrate", menu.bitrateSlider());
+            assertNotNull(menu.reveal(BITRATE));
+            assertEquals(ControlCenterModel.PICTURE, menu.module());
             StepSlider slider = menu.bitrateSlider();
             assertNotNull(slider);
             assertTrue("nothing goes out before the slider moves", sent.isEmpty());
@@ -234,6 +250,7 @@ public class StreamMenuGlassTest {
                 o.bitrateKbps = 40000;
                 o.bitrateChange = kbps -> 40000;
             });
+            menu.reveal(BITRATE);
             StepSlider slider = menu.bitrateSlider();
             int at = slider.getPosition();
             long now = android.os.SystemClock.uptimeMillis();
@@ -251,6 +268,7 @@ public class StreamMenuGlassTest {
     public void noBitrateCallbackNoSlider() {
         try (var controller = Robolectric.buildActivity(Activity.class).setup().visible()) {
             StreamMenu menu = open(controller.get(), o -> o.bitrateKbps = 40000);
+            assertNotNull(menu.reveal(BITRATE));
             assertNull(menu.bitrateSlider());
             menu.sheet().dismiss();
         }

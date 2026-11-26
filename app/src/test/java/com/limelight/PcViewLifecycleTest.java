@@ -410,8 +410,6 @@ public class PcViewLifecycleTest {
         try {
             Library screen = controller.get();
             assertEquals(android.view.View.VISIBLE, screen.findViewById(R.id.no_pc_found_layout).getVisibility());
-            assertTrue("the moon's dot goes round while discovery runs",
-                    screen.<com.limelight.ui.OrbitView>findViewById(R.id.first_run_orbit).isTurning() || !screen.findViewById(R.id.first_run_orbit).isShown());
             screen.findViewById(R.id.discovery_add).performClick();
             Shadows.shadowOf(Looper.getMainLooper()).idle();
             android.app.Dialog sheet = ShadowDialog.getLatestDialog();

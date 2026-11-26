@@ -24,7 +24,7 @@ import androidx.core.graphics.ColorUtils;
 
 import com.limelight.R;
 import com.limelight.ui.NavigationDialogBuilder;
-import com.limelight.ui.NightSkyView;
+import com.limelight.ui.StageView;
 import com.limelight.ui.NightjarActivity;
 import com.limelight.utils.UiHelper;
 
@@ -90,7 +90,7 @@ public class UpdateDownloadDialogTest {
             View page = content.getChildAt(0);
             UpdateFlow.DownloadDialog download = show(screen, () -> { });
             assertEquals("the sky covers Settings", 2, content.getChildCount());
-            assertTrue(content.getChildAt(1) instanceof NightSkyView);
+            assertTrue(content.getChildAt(1) instanceof StageView);
             assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, page.getImportantForAccessibility());
             assertEquals("no dim over the sky", 0,
                     download.dialog.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_DIM_BEHIND);

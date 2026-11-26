@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The handheld's hero: the game in focus, large, with what can be done with it, and the games to continue beside it. -->
+<!-- The handheld's hero: the game in focus, large, with what can be done with it, and the games to continue beside it.
+     Its art lies on the stage behind all of it (HomeHeroStage). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal"
@@ -29,6 +30,9 @@
         <TextView android:id="@+id/hero_title" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="6dp" android:maxLines="1" android:ellipsize="end"
             android:textAppearance="@style/TextAppearance.Nightjar.Glass.Hero" android:textColor="?attr/colorOnSurface" />
+        <TextView android:id="@+id/hero_line" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="2dp" android:maxLines="1" android:ellipsize="end" android:visibility="gone"
+            android:textAppearance="@style/TextAppearance.Nightjar.Body" android:textColor="?attr/colorOnSurfaceVariant" />
         <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal"
             android:layout_marginTop="10dp" android:clipChildren="false" android:clipToPadding="false">
             <com.limelight.ui.GlassButton android:id="@+id/hero_play" style="@style/Widget.Nightjar.Glass.Play"

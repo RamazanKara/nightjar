@@ -52,7 +52,18 @@ final class MenuBlurWindow {
     static MenuBlurWindow openIfAllowed(Activity owner, int radius, Consumer<Boolean> onSwitch) {
         if (owner.isFinishing() || owner.isDestroyed()) return null;
         if (!allowed(Build.VERSION.SDK_INT, GlassTier.land(owner), systemSwitch(owner))) return null;
-        return new MenuBlurWindow(owner, radius, onSwitch);
+        return new MenuBlurWindow(owner, radius, onSwitch, null);
+    }
+
+    /**
+     * The Control Center's window: nightjar-policy ({@code control_center::surface}) has already said the panel stands on
+     * a blur now, so only what no policy can change is asked here, an Android that has the call and a stream that still
+     * takes a window. {@code radii} are the panel's corners ({@link android.graphics.Path#addRoundRect}), which the system
+     * clips the blur to. It listens to nothing itself: {@link ControlCenterSurface} hears the system's switch.
+     */
+    static MenuBlurWindow open(Activity owner, int radius, float[] radii) {
+        if (owner.isFinishing() || owner.isDestroyed() || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null;
+        return new MenuBlurWindow(owner, radius, null, radii);
     }
 
     /**
@@ -63,7 +74,7 @@ final class MenuBlurWindow {
     static MenuBlurWindow flash(Activity owner, long durationMs) {
         if (owner.isFinishing() || owner.isDestroyed()) return null;
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || !systemSwitch(owner)) return null;
-        MenuBlurWindow blur = new MenuBlurWindow(owner, 1, null);
+        MenuBlurWindow blur = new MenuBlurWindow(owner, 1, null, null);
         blur.closeAfter(owner.getWindow().getDecorView(), durationMs);
         return blur;
     }
@@ -81,11 +92,18 @@ final class MenuBlurWindow {
         host.postDelayed(autoClose, durationMs);
     }
 
-    private MenuBlurWindow(Activity owner, int radius, Consumer<Boolean> onSwitch) {
+    private MenuBlurWindow(Activity owner, int radius, Consumer<Boolean> onSwitch, float[] radii) {
         manager = owner.getWindowManager();
         window = new Dialog(owner, R.style.StreamMenuBlurWindow);
         window.setCancelable(false);
         Window w = window.getWindow();
+        if (radii != null) {
+            // See-through, as the style's own: its only job is the outline the system clips the blur to.
+            android.graphics.drawable.GradientDrawable outline = new android.graphics.drawable.GradientDrawable();
+            outline.setCornerRadii(radii);
+            outline.setColor(0x01000000);
+            w.setBackgroundDrawable(outline);
+        }
         w.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                 | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
         w.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
@@ -164,6 +182,11 @@ final class MenuBlurWindow {
     /** The window's animations: for a test. */
     int windowAnimations() {
         return window.getWindow().getAttributes().windowAnimations;
+    }
+
+    /** Where the window lies and what it takes from the screen: for a test. */
+    WindowManager.LayoutParams attributes() {
+        return window.getWindow().getAttributes();
     }
 
     /** Removes the window, not hides it, and stops listening. */

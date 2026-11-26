@@ -101,6 +101,10 @@ public class PadPainterTest {
         Bitmap held = halo(painter, state, 1, size, margin);
         assertTrue("A halo 6 dp past the button's box", Color.alpha(held.getPixel(outside, middle)) > 0);
         assertEquals("but not far off", 0, Color.alpha(held.getPixel(margin + size + Math.round(30 * density), middle)));
+        // Its view is the box grown by the reach, so nothing of it may lie farther out.
+        int reach = painter.haloReach();
+        assertEquals("nor past its view", 0, Color.alpha(held.getPixel(margin + size + reach + 1, middle)));
+        assertEquals(0, Color.alpha(held.getPixel(middle, margin - reach - 2)));
 
         state.press[0] = 0;
         state.pressed = false;
@@ -110,22 +114,25 @@ public class PadPainterTest {
     }
 
     /**
-     * PlayStation's face shapes are drawn in the labels' one neutral colour, never green, red, blue or pink, so the
-     * cluster at rest has no coloured pixel; Xbox's letters keep their colours.
+     * Every family's face glyphs are drawn in the labels' one neutral colour: the skin has no coloured glyphs, and
+     * PlayStation's shapes never take on green, red, blue or pink. Amber shows only where a button is pressed.
      */
-    @Test public void playStationShapesAreNeutralAndXboxLettersKeepTheirColours() {
+    @Test public void everyFamilysGlyphsAreNeutralAndOnlyAPressIsAmber() {
         PadPainter painter = new PadPainter(RuntimeEnvironment.getApplication());
-        painter.setGlyph(PadLayout.Glyph.PLAYSTATION);
-        assertEquals("PlayStation", 0, coloured(painter));
-        painter.setGlyph(PadLayout.Glyph.XBOX);
-        assertTrue("Xbox", coloured(painter) > 0);
+        PadPainter.State rest = new PadPainter.State(), held = new PadPainter.State();
+        held.press[0] = 1;
+        for (PadLayout.Glyph glyph : PadLayout.Glyph.values()) {
+            painter.setGlyph(glyph);
+            assertEquals(glyph + " at rest", 0, coloured(painter, rest));
+            assertTrue(glyph + " pressed", coloured(painter, held) > 0);
+        }
     }
 
-    /** How many pixels of a face cluster at rest are clearly coloured rather than grey. */
-    private static int coloured(PadPainter painter) {
+    /** How many pixels of a face cluster are clearly coloured rather than grey. */
+    private static int coloured(PadPainter painter, PadPainter.State state) {
         int size = 300;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-        painter.draw(new Canvas(bitmap), PadLayout.Control.FACE, 0, 0, size, size, new PadPainter.State());
+        painter.draw(new Canvas(bitmap), PadLayout.Control.FACE, 0, 0, size, size, state);
         int[] pixels = new int[size * size];
         bitmap.getPixels(pixels, 0, size, 0, 0, size, size);
         int count = 0;
@@ -139,7 +146,9 @@ public class PadPainterTest {
 
     private static Bitmap halo(PadPainter painter, PadPainter.State state, float alpha, int size, int margin) {
         Bitmap bitmap = Bitmap.createBitmap(size + 2 * margin, size + 2 * margin, Bitmap.Config.ARGB_8888);
-        painter.drawHalo(new Canvas(bitmap), PadLayout.Control.START, margin, margin, size, size, state, alpha, 0);
+        painter.setOpacity(alpha);
+        painter.drawHalo(new Canvas(bitmap), PadLayout.Control.START, margin, margin, size, size, state);
+        painter.setOpacity(1);
         return bitmap;
     }
 }

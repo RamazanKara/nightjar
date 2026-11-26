@@ -6,6 +6,8 @@ use super::*;
 pub(in crate::ui) fn preset_label(preset: Preset) -> &'static str {
     match preset {
         Preset::Native => en("Native (recommended)"),
+        Preset::SmoothTv => en("Smooth TV"),
+        Preset::WifiAway => en("Wi-Fi / Away"),
         Preset::BatterySaver => en("Battery saver"),
     }
 }
@@ -23,18 +25,23 @@ pub(in crate::ui) fn preset_value(preset: Preset) -> String {
 pub(super) fn preset_key(preset: Preset) -> &'static str {
     match preset {
         Preset::Native => "preset-native",
+        Preset::SmoothTv => "preset-smooth-tv",
+        Preset::WifiAway => "preset-wifi-away",
         Preset::BatterySaver => "preset-battery-saver",
     }
 }
 
-/// The settings a preset is compared with (`nightjar_policy::presets`). Resolution, bitrate, VRR
-/// and upscaling read as the preset's at their defaults: Native, Automatic, VRR where the display
-/// has it, bilinear. The latency switches are the three the desktop has of Android's.
+/// The settings a preset is compared with (`nightjar_policy::presets`). Bitrate, VRR and upscaling
+/// read as the preset's at their defaults: Automatic, VRR where the display has it, bilinear; the
+/// resolution as a Native step (100 % or Wi-Fi / Away's two thirds). The latency switches are the
+/// three the desktop has of Android's. The page doesn't know the display's rate, so Wi-Fi / Away's
+/// 60 fps is not capped by it here.
 pub(in crate::ui) fn preset_current(s: &Settings, vrr_offered: bool) -> presets::Current {
     let defaults = Settings::default();
+    let scale = crate::stream_types::normalize_native_scale(s.native_scale);
     presets::Current {
-        native_resolution: (s.width == 0 || s.height == 0)
-            && crate::stream_types::normalize_native_scale(s.native_scale) == 100,
+        resolution_scale: (s.width == 0 || s.height == 0).then_some(scale).filter(|scale| *scale == 100 || *scale == presets::WIFI_AWAY_SCALE),
+        screen_fps: None,
         fps_follows_screen: s.fps == 0,
         fps: s.fps,
         default_bitrate: s.bitrate_kbps == 0,
@@ -45,7 +52,8 @@ pub(in crate::ui) fn preset_current(s: &Settings, vrr_offered: bool) -> presets:
             _ if s.host_frame_times => None,
             FramePacing::Latency => Some(presets::Pacing::Latency),
             FramePacing::CapFps => Some(presets::Pacing::CapFps),
-            FramePacing::Balanced | FramePacing::Smoothness => None,
+            FramePacing::Balanced => Some(presets::Pacing::Balanced),
+            FramePacing::Smoothness => Some(presets::Pacing::Smoothness),
         },
         latency_switches_on: s.drop_late_frames && s.unbatched_input && s.network_priority,
         power: None,
@@ -65,14 +73,16 @@ pub(in crate::ui) fn preset_section(section: &str) -> bool {
 /// and 4:4:4 choices stay as they are.
 pub(in crate::ui) fn apply_preset(s: &mut Settings, preset: Preset) {
     let defaults = Settings::default();
-    (s.width, s.height, s.native_scale) = (0, 0, 100);
-    s.fps = preset.fps().unwrap_or(0);
+    (s.width, s.height, s.native_scale) = (0, 0, preset.resolution_scale());
+    s.fps = preset.fps(None).unwrap_or(0);
     s.bitrate_kbps = 0;
     s.vrr = defaults.vrr;
     s.upscaling = defaults.upscaling;
     s.frame_pacing = match preset.pacing() {
         presets::Pacing::Latency => FramePacing::Latency,
         presets::Pacing::CapFps => FramePacing::CapFps,
+        presets::Pacing::Balanced => FramePacing::Balanced,
+        presets::Pacing::Smoothness => FramePacing::Smoothness,
     };
     s.host_frame_times = false;
     if preset.sets_latency_switches() {
@@ -554,4 +564,70 @@ pub(super) fn video_position_name(top: bool) -> &'static str {
 /// A Minimum resolution choice by its shorter side, as Android lists it: 720p.
 pub(super) fn short_edge_name(edge: u32) -> String {
     format!("{edge}p")
+}
+
+/// The rows that show a preview card under their control (`settings_previews`): the settings whose
+/// words nobody can picture. The setting, its keys and its values are the row's own; the card
+/// only draws the value chosen.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(in crate::ui) enum Preview {
+    FramePacing,
+    Hdr,
+    Upscaling,
+    VideoSize,
+}
+
+const FRAME_PACING_LEGEND: &[(Mark, &str)] = &[(Mark::Bar, en("Frames shown")), (Mark::Dot, en("Frames arrive")), (Mark::Tick, en("Screen refresh"))];
+const HDR_LEGEND: &[(Mark, &str)] = &[(Mark::Line, en("What you see")), (Mark::Dashed, en("What the game draws"))];
+const UPSCALING_LEGEND: &[(Mark, &str)] = &[(Mark::Bar, en("What you see")), (Mark::Grid, en("Stream pixels"))];
+const VIDEO_SIZE_LEGEND: &[(Mark, &str)] = &[(Mark::Box, en("Video")), (Mark::Outline, en("Screen"))];
+
+impl Preview {
+    #[cfg(test)]
+    pub(in crate::ui) const ALL: [Preview; 4] = [Preview::FramePacing, Preview::Hdr, Preview::Upscaling, Preview::VideoSize];
+
+    /// The picture of the value `s` holds.
+    pub(in crate::ui) fn picture(self, s: &Settings) -> Picture {
+        match self {
+            Preview::FramePacing => Picture::Pacing(frame_pacing_choice(s)),
+            Preview::Hdr => Picture::Tone { hdr: s.hdr },
+            Preview::Upscaling => Picture::Edge { upscaling: s.upscaling, sharpness: s.upscale_sharpness as f32 / 100.0 },
+            Preview::VideoSize => Picture::Screen { scaling: s.video_scaling, top: s.align_video_top },
+        }
+    }
+
+    /// The name of the value `s` holds, as the row's control says it.
+    pub(in crate::ui) fn caption(self, s: &Settings) -> &'static str {
+        match self {
+            Preview::FramePacing => frame_pacing_choice_name(frame_pacing_choice(s)),
+            Preview::Hdr => if s.hdr { tr("On") } else { tr("Off") },
+            Preview::Upscaling => tr(s.upscaling.label()),
+            Preview::VideoSize => tr(s.video_scaling.label()),
+        }
+    }
+
+    /// What the picture's marks mean, in English: amber, what the player gets, first.
+    pub(in crate::ui) fn legend(self) -> &'static [(Mark, &'static str)] {
+        match self {
+            Preview::FramePacing => FRAME_PACING_LEGEND,
+            Preview::Hdr => HDR_LEGEND,
+            Preview::Upscaling => UPSCALING_LEGEND,
+            Preview::VideoSize => VIDEO_SIZE_LEGEND,
+        }
+    }
+
+    /// The card's words a search finds its row by: the legend, and the names of the values it can
+    /// show that every device offers.
+    pub(in crate::ui) fn search_words(self) -> Vec<&'static str> {
+        use crate::config::{Upscaling, VideoScaling};
+        let mut words: Vec<&'static str> = self.legend().iter().map(|(_, meaning)| tr(meaning)).collect();
+        match self {
+            Preview::FramePacing => words.extend(FramePacingChoice::ALL.map(frame_pacing_choice_name)),
+            // On and Off name no setting.
+            Preview::Hdr => {}
+            Preview::Upscaling => words.extend([Upscaling::Bilinear, Upscaling::Fsr1, Upscaling::Sgsr1].map(|mode| tr(mode.label()))),
+            Preview::VideoSize => words.extend([VideoScaling::Fit, VideoScaling::Fill, VideoScaling::Stretch, VideoScaling::Native].map(|mode| tr(mode.label()))),
+        }
+        words
+    }
 }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A dock tool's icon: faint while it has nothing to do (Undo with nothing to take back, Add with nothing left out). -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false" android:alpha="0.38" android:color="@color/night_on_surface" />
+    <item android:color="@color/night_on_surface" />
+</selector>

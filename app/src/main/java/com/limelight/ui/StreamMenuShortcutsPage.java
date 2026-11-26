@@ -21,7 +21,8 @@ import java.util.Set;
  */
 final class StreamMenuShortcutsPage {
     private final Activity activity;
-    private final ActionSheet sheet;
+    // The Control Center's page: the rows go where the module's cards were.
+    private final ControlCenterPage sheet;
     private final StreamMenu.Shortcuts shortcuts;
     private final Runnable onBack;
     private final Runnable onOpenShortcuts;
@@ -34,7 +35,7 @@ final class StreamMenuShortcutsPage {
     private TextView draftChord, draftError;
     private final Map<String, MaterialButton> keyCaps = new HashMap<>();
 
-    StreamMenuShortcutsPage(Activity activity, ActionSheet sheet, StreamMenu.Shortcuts shortcuts,
+    StreamMenuShortcutsPage(Activity activity, ControlCenterPage sheet, StreamMenu.Shortcuts shortcuts,
                             Runnable onBack, Runnable onOpenShortcuts, Runnable onOpenEditor) {
         this.activity = activity;
         this.sheet = sheet;

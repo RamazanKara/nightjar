@@ -462,12 +462,22 @@ public class GameRateChangeBitratePolicyTest {
         assertEquals(30_000, h.sent.get(0)[1]);
     }
 
+    // The open Control Center on Picture, where the bitrate's slider stands.
+    private Object pictureModule() {
+        com.limelight.ui.StreamMenu menu = ReflectionHelpers.getField(h.game.menuActions, "streamMenuSheet");
+        if (menu.reveal(com.limelight.ui.StreamMenu.Item.BITRATE) == null) {
+            assertNotNull(menu.reveal(com.limelight.ui.StreamMenu.Item.RATE_CHANGE));
+        }
+        assertEquals(com.limelight.ui.ControlCenterModel.PICTURE, menu.module());
+        return menu;
+    }
+
     @Test
     public void anOpenMenusSliderWaitsForTheAnswerAndShowsTheStreamsNumber() {
         // A clean answer: usable at the PC's number.
         h.startStreamAsking(h.recording());
         h.game.showStreamMenu();
-        Object sheet = ReflectionHelpers.getField(h.game.menuActions, "streamMenuSheet");
+        Object sheet = pictureModule();
         com.limelight.ui.StepSlider slider = ReflectionHelpers.callInstanceMethod(sheet, "bitrateSlider");
         assertFalse("disabled while the query waits", slider.isEnabled());
         assertEquals(com.limelight.ui.BitrateSlider.progress(50_000), slider.getPosition());
@@ -507,7 +517,7 @@ public class GameRateChangeBitratePolicyTest {
         h.prefs.rateChangeBitrate = true;
         h.startStream(h.recording());
         h.game.showStreamMenu();
-        Object sheet = ReflectionHelpers.getField(h.game.menuActions, "streamMenuSheet");
+        Object sheet = pictureModule();
         com.limelight.ui.StepSlider slider = ReflectionHelpers.callInstanceMethod(sheet, "bitrateSlider");
         // A D-pad step: the settle goes out SETTLE_MS later.
         slider.setPosition(com.limelight.ui.BitrateSlider.progress(30_000));

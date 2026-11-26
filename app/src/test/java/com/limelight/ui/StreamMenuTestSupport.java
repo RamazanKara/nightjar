@@ -83,6 +83,17 @@ final class StreamMenuTestSupport {
         return false;
     }
 
+    /** The views of Quick's cards of one kind, in the model's order: the user's shortcuts, or Add. Shows Quick. */
+    static List<View> cards(StreamMenu menu, StreamMenuModel.Cell.Kind kind) {
+        menu.select(ControlCenterModel.QUICK);
+        List<View> views = new ArrayList<>();
+        List<StreamMenuModel.Cell> cards = menu.dock().page(ControlCenterModel.QUICK).cards;
+        for (int at = 0; at < cards.size(); at++) {
+            if (cards.get(at).kind == kind) views.add(menu.cell(at));
+        }
+        return views;
+    }
+
     static void press(StreamMenu menu, int key) {
         menu.sheet().dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, key));
         menu.sheet().dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, key));

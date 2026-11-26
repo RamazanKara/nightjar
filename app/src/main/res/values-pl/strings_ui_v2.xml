@@ -15,6 +15,8 @@
     <string name="stream_bitrate_manual">Ustaw szybkość transmisji</string>
     <string-array name="stream_preset_names">
         <item>Natywny (zalecany)</item>
+        <item>Płynny TV</item>
+        <item>Wi-Fi / Poza domem</item>
         <item>Oszczędzanie baterii</item>
     </string-array>
     <string name="applist_menu_show_app">Pokaż grę</string>

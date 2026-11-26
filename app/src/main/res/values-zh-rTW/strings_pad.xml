@@ -62,4 +62,5 @@
     <string name="pad_dpad_down">方向鍵下</string>
     <string name="pad_dpad_left">方向鍵左</string>
     <string name="pad_dpad_right">方向鍵右</string>
+    <string name="pad_edit_mirror">左右鏡像</string>
 </resources>

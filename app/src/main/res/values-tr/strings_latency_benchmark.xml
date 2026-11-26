@@ -21,4 +21,5 @@
     <string name="latency_benchmark_copied">Sonuçlar kopyalandı</string>
     <string name="latency_benchmark_report_form">Formu aç</string>
     <string name="latency_benchmark_paste_hint">Sonuçlar kopyalandı. Forma yapıştırın.</string>
+    <string name="latency_benchmark_audio_unavailable">Bildirilen ses: bu cihazda kullanılamıyor</string>
 </resources>

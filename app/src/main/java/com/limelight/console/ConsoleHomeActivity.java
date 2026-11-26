@@ -338,7 +338,7 @@ public class ConsoleHomeActivity extends NightjarActivity implements HostFeed.Li
             @Override public void onHeroPlay(HomeModel.GameCard card) { playHero(card); }
             @Override public void onHeroQuit(HomeModel.GameCard card) { gameActions.quitHero(card); }
             @Override public void onHeroShown(HomeModel.GameCard card) {
-                if (ambience != null) ambience.refresh(new ShelfAdapter.Item(card.key, card, null));
+                if (ambience != null) ambience.heroShown(card);
             }
             @Override public void onHeroFocus(CharSequence go) {
                 if (go != null && hints != null) hints.onFocus(go, getString(R.string.console_hint_options));

@@ -47,8 +47,6 @@ public final class ModernController {
     private final PadPainter painter;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Map<PadLayout.Control, PadControlView> views = new EnumMap<>(PadLayout.Control.class);
-    /** The press halos past the controls' edges, under every control; null while there are no controls. */
-    private PadControlView.HaloLayer halo;
     private final Runnable resend;
     private final View.OnLayoutChangeListener resize;
     private PadLayout layout;
@@ -156,14 +154,7 @@ public final class ModernController {
         String curve = prefs.trackpadAcceleration ? prefs.trackpadAccelerationCurve : PointerAcceleration.LINEAR;
         for (PadLayout.Control control : PadLayout.Control.values()) {
             if (forcedHidden(control)) continue;
-            if (halo == null) {
-                // Under the controls, so a halo never covers a neighbour's glyph.
-                halo = new PadControlView.HaloLayer(context, painter, views.values());
-                frame.addView(halo, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT));
-            }
             PadControlView view = new PadControlView(context, control, painter, gamepad, this::changed, keys);
-            view.setHaloLayer(halo);
             view.configureStick(prefs.oscFloatingSticks, prefs.oscStickDeadzone / 100f);
             view.setHaptics(prefs.vibrateOsc);
             view.setStickTouch(prefs.oscSteamControls);
@@ -173,6 +164,12 @@ public final class ModernController {
                 view.configurePointer(layout.pointerMode() == PadLayout.PointerMode.CAMERA, curve, prefs.trackpadSpeed);
             }
             views.put(control, view);
+        }
+        // Each control's glow under every control, so one never covers a neighbour's glyph; then the controls.
+        for (PadControlView view : views.values()) {
+            frame.addView(view.haloLayer(), new FrameLayout.LayoutParams(0, 0, Gravity.TOP | Gravity.START));
+        }
+        for (PadControlView view : views.values()) {
             frame.addView(view, new FrameLayout.LayoutParams(0, 0, Gravity.TOP | Gravity.START));
         }
         // A split cluster's members slide into each other: a finger that lands on one holds whichever it is over.
@@ -209,19 +206,25 @@ public final class ModernController {
             params.leftMargin = Math.round(box[0]);
             params.topMargin = Math.round(box[1]);
             view.setLayoutParams(params);
+            // Its glow's view: the box grown by the glow's reach on every side.
+            around(view.haloLayer(), params, view.haloReach());
             View knob = view.knobLayer();
             if (knob != null) {
                 // The control's box grown by the knob's overhang on every side; the control keeps the box.
-                int overhang = view.knobOverhang(params.width, params.height);
-                FrameLayout.LayoutParams knobParams = (FrameLayout.LayoutParams) knob.getLayoutParams();
-                knobParams.width = params.width + 2 * overhang;
-                knobParams.height = params.height + 2 * overhang;
-                knobParams.leftMargin = params.leftMargin - overhang;
-                knobParams.topMargin = params.topMargin - overhang;
-                knob.setLayoutParams(knobParams);
+                around(knob, params, view.knobOverhang(params.width, params.height));
             }
             view.setRestingAlpha(prefs.oscOpacity / 100f * layout.spec(control).opacity / 100f);
         }
+    }
+
+    /** Lays {@code layer} out as the box of {@code control} grown by {@code reach} pixels on every side. */
+    private static void around(View layer, FrameLayout.LayoutParams control, int reach) {
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) layer.getLayoutParams();
+        params.width = control.width + 2 * reach;
+        params.height = control.height + 2 * reach;
+        params.leftMargin = control.leftMargin - reach;
+        params.topMargin = control.topMargin - reach;
+        layer.setLayoutParams(params);
     }
 
     private void changed() {
@@ -283,11 +286,10 @@ public final class ModernController {
         frame.removeOnLayoutChangeListener(resize);
         for (PadControlView view : views.values()) {
             frame.removeView(view);
+            frame.removeView(view.haloLayer());
             if (view.knobLayer() != null) frame.removeView(view.knobLayer());
         }
         views.clear();
-        if (halo != null) frame.removeView(halo);
-        halo = null;
     }
 
     /** Removes the controls and any open editor for good. */

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="control_center_quick">Hızlı</string>
+    <string name="control_center_picture">Görüntü</string>
+    <string name="control_center_audio">Ses</string>
+    <string name="control_center_clips">Klipler</string>
+    <string name="control_center_pc">Bilgisayar</string>
+    <string name="control_center_controller">Kumanda</string>
+    <string name="control_center_guests">Konuklar</string>
+    <string name="control_center_power">Güç</string>
+</resources>

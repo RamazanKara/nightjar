@@ -14,13 +14,20 @@ import com.limelight.ui.InputSource;
 import com.limelight.ui.ShellBar;
 
 /**
- * Glass chrome, first-run orbit sizing, edge-to-edge inset layout, list footer placement,
- * selection/key-hint bar, empty-state switching, and post-resume focus recovery for {@link PcView}.
+ * Glass chrome, the stage behind it, edge-to-edge inset layout, list footer placement,
+ * selection/key-hint bar, empty-state switching with first run's scan pulse, and post-resume focus recovery for {@link PcView}.
  */
 final class PcViewChrome {
     private final PcView view;
 
+    /** The scan pulse is this large where there is room, and is left out where less than its smallest is free. */
+    private static final int PULSE_MOST_DP = 232;
+    private static final int PULSE_LEAST_DP = 96;
+
     private View noPcFoundLayout;
+    private com.limelight.ui.ScanPulseView pulse;
+    /** PCs are being looked for: the poller runs. */
+    private boolean discovering;
     private AbsListView pcList;
     private boolean listWasEmpty = true;
     /** Resumed and not yet back in the window's focus: the first focus after a stream or another screen. */
@@ -49,6 +56,50 @@ final class PcViewChrome {
 
     void bindViews() {
         noPcFoundLayout = view.findViewById(R.id.no_pc_found_layout);
+        pulse = view.findViewById(R.id.first_run_pulse);
+        noPcFoundLayout.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> fitPulse());
+        showScan();
+    }
+
+    /** Discovery started or stopped. */
+    void setDiscovering(boolean discovering) {
+        this.discovering = discovering;
+        showScan();
+    }
+
+    /** The pulse runs while PCs are looked for and none is listed; the view itself rests while it is not on screen. */
+    private void showScan() {
+        if (pulse != null) pulse.setScanning(discovering && view.pcGridAdapter != null && view.pcGridAdapter.getCount() == 0);
+    }
+
+    /**
+     * Gives the pulse the room first run's words and actions leave in the window, up to its size. Their column wraps its
+     * content inside a scroller, so it cannot hand out that room itself; a window too short for the pulse goes without.
+     */
+    private void fitPulse() {
+        android.view.ViewGroup column = view.findViewById(R.id.first_run);
+        if (pulse == null || column == null || noPcFoundLayout.getHeight() == 0) return;
+        float density = view.getResources().getDisplayMetrics().density;
+        android.view.ViewGroup.MarginLayoutParams at = (android.view.ViewGroup.MarginLayoutParams) pulse.getLayoutParams();
+        int others = column.getPaddingTop() + column.getPaddingBottom() + at.topMargin + at.bottomMargin;
+        for (int i = 0; i < column.getChildCount(); i++) {
+            View child = column.getChildAt(i);
+            if (child == pulse || child.getVisibility() == View.GONE) continue;
+            android.view.ViewGroup.MarginLayoutParams margins = (android.view.ViewGroup.MarginLayoutParams) child.getLayoutParams();
+            others += child.getHeight() + margins.topMargin + margins.bottomMargin;
+        }
+        int side = com.limelight.ui.ScanPulseView.side(column.getWidth() - column.getPaddingLeft() - column.getPaddingRight(),
+                noPcFoundLayout.getHeight() - noPcFoundLayout.getPaddingTop() - noPcFoundLayout.getPaddingBottom() - others,
+                Math.round(PULSE_MOST_DP * density), Math.round(PULSE_LEAST_DP * density));
+        int visibility = side == 0 ? View.GONE : View.VISIBLE;
+        if (at.width == side && at.height == side && pulse.getVisibility() == visibility) return;
+        // Not from inside this layout pass, whose views would not be measured again.
+        pulse.post(() -> {
+            at.width = side;
+            at.height = side;
+            pulse.setLayoutParams(at);
+            pulse.setVisibility(visibility);
+        });
     }
 
     void onResume() {
@@ -59,7 +110,7 @@ final class PcViewChrome {
         if (chrome != null) chrome.stop();
     }
 
-    /** The sky, the glass and where everything goes on this form factor: the list stands under the chrome and over the tab bar. */
+    /** The stage, the glass and where everything goes on this form factor: the list stands under the chrome and over the tab bar. */
     void setUpGlass() {
         com.limelight.ui.GlassHost host = view.findViewById(R.id.glass_host);
         GlassForm form = GlassForm.of(view);
@@ -85,32 +136,11 @@ final class PcViewChrome {
         ((android.widget.LinearLayout.LayoutParams) add.getLayoutParams()).setMarginStart(view.getResources().getDimensionPixelSize(R.dimen.space_s));
         hintSource = InputSource.last() != null ? InputSource.last() : com.limelight.ui.StreamMenuHint.hasGamepad() ? InputSource.PAD : InputSource.REMOTE;
         keysAreLastInput = form == GlassForm.TELEVISION;
-        fitFirstRun();
-        com.limelight.ui.NightSkyView sky = view.findViewById(R.id.pc_sky);
+        com.limelight.ui.StageView stage = view.findViewById(R.id.pc_stage);
         host.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-            if (r - l != or - ol || b - t != ob - ot) host.setAmbient(sky.bake(r - l, b - t), false, 0);
+            if (r - l != or - ol || b - t != ob - ot) host.setAmbient(stage.bake(r - l, b - t), false, 0);
         });
         chrome = new com.limelight.console.PageChrome(view, host, R.id.pc_tabs, R.id.pc_top_row, R.id.pc_bottom_row, R.id.pc_foot_fade, this::layOutUnderChrome);
-    }
-
-    /** The orbit takes what the page has: wide on a phone, and over the word and the action on a short screen. */
-    private void fitFirstRun() {
-        View page = view.findViewById(R.id.no_pc_found_layout);
-        View orbit = view.findViewById(R.id.first_run_orbit);
-        android.view.ViewGroup column = view.findViewById(R.id.first_run);
-        page.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-            if (column.getHeight() == 0) return;
-            int width = v.getWidth() - v.getPaddingLeft() - v.getPaddingRight();
-            int height = v.getHeight() - v.getPaddingTop() - v.getPaddingBottom();
-            int others = column.getChildAt(1).getHeight() + column.getChildAt(2).getHeight() + column.getChildAt(3).getHeight()
-                    + 2 * view.getResources().getDimensionPixelSize(R.dimen.space_l) + column.getPaddingBottom();
-            int size = Math.max(0, Math.min(width, height - others));
-            if (size != orbit.getLayoutParams().height) {
-                orbit.getLayoutParams().width = size;
-                orbit.getLayoutParams().height = size;
-                v.post(orbit::requestLayout);
-            }
-        });
     }
 
     /** Lays the content out edge to edge, inside what the chrome and the window leave. */
@@ -118,7 +148,6 @@ final class PcViewChrome {
         GlassForm form = chrome != null ? chrome.form() : GlassForm.of(view);
         android.content.res.Resources res = view.getResources();
         float density = res.getDisplayMetrics().density;
-        ((com.limelight.ui.NightSkyView) view.findViewById(R.id.pc_sky)).setSafeTop(top);
         View row = view.findViewById(R.id.pc_top_row);
         View frame = view.findViewById(R.id.pc_list_frame);
         android.widget.FrameLayout.LayoutParams params = (android.widget.FrameLayout.LayoutParams) frame.getLayoutParams();
@@ -241,17 +270,11 @@ final class PcViewChrome {
         GlassForm form = chrome != null ? chrome.form() : GlassForm.of(view);
         updateOptionsHint();
         noPcFoundLayout.setVisibility(empty ? View.VISIBLE : View.GONE);
+        showScan();
         // With no PC there is no selection to name, and the selected tab already names the page.
         if (form != GlassForm.PHONE) {
             view.findViewById(R.id.pc_focus_title).setVisibility(empty ? View.GONE : View.VISIBLE);
             showSelection();
-        }
-        ((com.limelight.ui.OrbitView) view.findViewById(R.id.first_run_orbit)).setMoving(empty);
-        com.limelight.ui.NightSkyView sky = view.findViewById(R.id.pc_sky);
-        if (sky.isMoonShown() == empty) {
-            sky.setMoonShown(!empty);
-            com.limelight.ui.GlassHost host = view.findViewById(R.id.glass_host);
-            if (host.getWidth() > 0) host.setAmbient(sky.bake(host.getWidth(), host.getHeight()), false, 0);
         }
         view.findViewById(R.id.pcFragmentContainer).setVisibility(empty ? View.GONE : View.VISIBLE);
         view.findViewById(R.id.manuallyAddPc).setVisibility(empty ? View.GONE : View.VISIBLE);

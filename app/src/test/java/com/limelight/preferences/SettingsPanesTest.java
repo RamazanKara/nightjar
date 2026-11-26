@@ -541,6 +541,45 @@ public class SettingsPanesTest {
         } finally { controller.pause().stop().destroy(); }
     }
 
+    /** Review, TV preview: "Search results" stood beside the bar's back arrow and again over the pane. Once, on every form. */
+    @Test @Config(qualifiers = WIDE)
+    public void searchResultsAreNamedOnceBesideTwoPanes() {
+        searchResultsAreNamedOnce();
+    }
+
+    @Test @Config(qualifiers = TV)
+    public void searchResultsAreNamedOnceOnATv() {
+        searchResultsAreNamedOnce();
+    }
+
+    @Test @Config(qualifiers = PHONE)
+    public void searchResultsAreNamedOnceOnAPhone() {
+        searchResultsAreNamedOnce();
+    }
+
+    private static void searchResultsAreNamedOnce() {
+        ActivityController<StreamSettings> controller = open();
+        try {
+            StreamSettings screen = controller.get();
+            screen.openSearch();
+            SearchView view = screen.findViewById(R.id.settings_search);
+            view.setQuery("controller", true);
+            settle(screen);
+            String title = screen.getString(R.string.settings_search_results);
+            java.util.List<View> named = new java.util.ArrayList<>();
+            collectShown(screen.getWindow().getDecorView(), title, named);
+            assertEquals("named once: " + named, 1, named.size());
+        } finally { controller.pause().stop().destroy(); }
+    }
+
+    private static void collectShown(View view, String text, java.util.List<View> found) {
+        if (view instanceof android.widget.TextView && view.isShown()
+                && text.contentEquals(((android.widget.TextView) view).getText())) found.add(view);
+        if (!(view instanceof android.view.ViewGroup)) return;
+        android.view.ViewGroup group = (android.view.ViewGroup) view;
+        for (int i = 0; i < group.getChildCount(); i++) collectShown(group.getChildAt(i), text, found);
+    }
+
     @Test @Config(qualifiers = WIDE)
     public void clickingThePresetRowKeepsTheShownSectionMarked() {
         ActivityController<StreamSettings> controller = open();

@@ -520,7 +520,7 @@ fn polish_screenshots() {
         f.waking = Some("Office PC".into());
         shoot(&mut f, "waking");
         f.waking = None;
-        // The launch scene: the game's cover in its ambient with the orbit, then the card of a
+        // The launch scene: the game's cover in its ambient with its ring, then the card of a
         // start that failed; then the stream menu over a game, with More open.
         let launch = ConnectingView { app: apps[0].name.clone(), host: "Living Room PC".into(), stage: "Checking network profile".into(), host_id: pc, app_id: apps[0].id };
         f.connecting = Some(launch.clone());

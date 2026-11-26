@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="control_center_quick">Nhanh</string>
+    <string name="control_center_picture">Hình ảnh</string>
+    <string name="control_center_audio">Âm thanh</string>
+    <string name="control_center_clips">Clip</string>
+    <string name="control_center_pc">PC</string>
+    <string name="control_center_controller">Tay cầm</string>
+    <string name="control_center_guests">Khách</string>
+    <string name="control_center_power">Nguồn</string>
+</resources>

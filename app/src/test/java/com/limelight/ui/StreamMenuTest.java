@@ -462,9 +462,9 @@ public class StreamMenuTest {
             options.rateChange = true;
             reachable.addAll(items(StreamMenu.mainPage(options)));
         }
-        // The menu adds the Shortcuts and More tiles and Return to stream itself (see the grid test), and asks before
+        // The menu adds the Shortcuts card and Return to stream itself (see the grid test), and asks before
         // Disconnect run from a controller button (see the buttons test).
-        reachable.addAll(EnumSet.of(SHORTCUTS, MORE, CLOSE, StreamMenu.Item.CONFIRM_DISCONNECT));
+        reachable.addAll(EnumSet.of(SHORTCUTS, CLOSE, StreamMenu.Item.CONFIRM_DISCONNECT));
         assertEquals(EnumSet.allOf(StreamMenu.Item.class), reachable);
     }
 
@@ -579,9 +579,9 @@ public class StreamMenuTest {
         assertFalse(items(StreamMenu.mainPage(monitor)).contains(HEADPHONE_SURROUND));
     }
 
-    /** T9-18: non-QUICK boolean switches on Page.MORE keep their feature icon visible when OFF and refresh on toggle. */
+    /** T9-18: a switch among a module's rows keeps its feature icon visible when OFF and refreshes on toggle. */
     @Test
-    public void morePageBooleanSwitchKeepsFeatureIconVisibleAndRefreshesState() {
+    public void aSwitchAmongAModulesRowsKeepsItsFeatureIconVisibleAndRefreshesState() {
         try (var controller = org.robolectric.Robolectric.buildActivity(StreamGlassTest.Stream.class).setup().visible()) {
             android.app.Activity activity = controller.get();
             activity.setTheme(com.limelight.R.style.StreamTheme);
@@ -593,22 +593,21 @@ public class StreamMenuTest {
                 if (item == AUTOMATIC_BITRATE) opts.automaticBitrateOn = !opts.automaticBitrateOn;
             });
             menu.show();
-            com.google.android.material.button.MaterialButton more = menu.row(MORE);
-            if (more != null) more.performClick();
-            com.google.android.material.button.MaterialButton autoBitrate = menu.row(AUTOMATIC_BITRATE);
-            assertNotNull("Automatic bitrate row shown on More", autoBitrate);
+            com.google.android.material.button.MaterialButton autoBitrate = menu.reveal(AUTOMATIC_BITRATE);
+            assertNotNull("Automatic bitrate row shown on its module", autoBitrate);
+            assertEquals(ControlCenterModel.PICTURE, menu.module());
             assertFalse("starts unselected", autoBitrate.isSelected());
             android.content.res.ColorStateList tint = autoBitrate.getIconTint();
             assertNotEquals("feature icon must not be tinted transparent when OFF",
                     android.graphics.Color.TRANSPARENT, tint == null ? -1 : tint.getDefaultColor());
             opts.automaticBitrateOn = true;
             menu.refresh();
-            assertTrue("refresh() updates Page.MORE switch to ON in place", autoBitrate.isSelected());
+            assertTrue("refresh() updates the switch to ON in place", autoBitrate.isSelected());
             assertEquals(activity.getString(com.limelight.R.string.stream_choice_selected),
                     androidx.core.view.ViewCompat.getStateDescription(autoBitrate));
             opts.automaticBitrateOn = false;
             menu.refresh();
-            assertFalse("refresh() updates Page.MORE switch back to OFF in place", autoBitrate.isSelected());
+            assertFalse("refresh() updates the switch back to OFF in place", autoBitrate.isSelected());
             assertEquals(activity.getString(com.limelight.R.string.stream_choice_not_selected),
                     androidx.core.view.ViewCompat.getStateDescription(autoBitrate));
             android.app.Dialog shown = org.robolectric.shadows.ShadowDialog.getLatestDialog();

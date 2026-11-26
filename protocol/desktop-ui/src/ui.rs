@@ -4,6 +4,8 @@ mod about;
 mod backdrop;
 mod cards;
 mod chrome;
+pub mod control_center;
+pub mod control_center_cards;
 #[allow(dead_code, reason = "generated: every token is listed, the pages use them as they are redesigned")]
 pub(crate) mod design_tokens;
 #[cfg(any(feature = "demo-library", test))]
@@ -11,9 +13,13 @@ pub mod demo;
 mod dialogs;
 pub mod files;
 pub mod glass;
+mod glass_lens;
+pub mod viewport_scale;
+pub mod feedback_hook;
 mod first_run;
 mod game;
 mod help;
+mod hero_stage;
 mod home;
 mod host_details_limiter;
 mod icons;
@@ -24,7 +30,9 @@ mod navigation;
 mod pages;
 pub(crate) mod pcs;
 mod settings;
+mod settings_previews;
 mod spring;
+pub mod stream_hud;
 mod types;
 mod widgets;
 
@@ -264,7 +272,7 @@ fn auto_zoom_now(ctx: &egui::Context) -> u32 {
         let height = viewport.monitor_size.or_else(|| viewport.outer_rect.map(|rect| rect.size())).map(|size| size.y);
         (height, viewport.native_pixels_per_point.unwrap_or(1.0))
     });
-    crate::config::auto_zoom(height, os_scale)
+    viewport_scale::auto_percent(height, os_scale)
 }
 
 impl Launcher {
@@ -410,10 +418,9 @@ impl Launcher {
         // above run under them, so a check, transfer or join in flight still ends or is cancelled.
         if let Some(pin) = &mut self.pin {
             let pcs: Vec<(String, String)> = view.hosts.list.iter().map(|h| (h.record.unique_id.clone(), h.display_name().to_owned())).collect();
-            // Its sky goes under it as the launcher's does, painted once it is drawn.
+            // The stage goes under it as under the launcher's pages, painted once it is drawn.
             let slot = pin.up().then(|| {
-                self.ambient.set_page(&ctx, "pin");
-                self.ambient.prepare(&ctx, backdrop::Want::Sky(backdrop::Moon::High));
+                self.ambient.prepare(&ctx, backdrop::Want::Stage);
                 let under = ui.painter().clone();
                 let slot = under.add(egui::Shape::Noop);
                 (under, slot)
@@ -467,10 +474,8 @@ impl Launcher {
             self.go(Screen::Hosts);
         }
         let want = self.page_backdrop(&view, &sources);
-        // The backdrop goes under the page but is painted once the page is drawn: its moon stands
-        // clear of what this page holds, in the same frame.
-        self.ambient.set_page(&ctx, self.screen);
-        self.ambient.set_orbit(self.screen == Screen::Hosts && first_run::first_run_of(view.hosts).is_some() && view.hosts.discovering);
+        // The backdrop goes under the page: glass samples it while the page is drawn, and it is
+        // painted into its place once that is done.
         self.ambient.prepare(&ctx, want);
         let under = ui.painter().clone();
         let backdrop_slot = under.add(egui::Shape::Noop);
@@ -582,14 +587,14 @@ impl Launcher {
         }
     }
 
-    /// What the page wants behind it: its game's ambient, the sky with its moon on a page of cards or
-    /// rows. A page that belongs to what came before it keeps what shows.
+    /// What the page wants behind it: its game's ambient, the stage on a page of cards or rows. A
+    /// page that belongs to what came before it keeps what shows.
     fn page_backdrop(&self, view: &View<'_>, sources: &[Source<'_>]) -> backdrop::Want {
-        use backdrop::{Moon, Want};
+        use backdrop::Want;
         match self.screen {
             Screen::Home => match &self.hero {
                 Some(hero) => home::ambient_for(view, hero.host, hero.app, &hero.title),
-                None => Want::Sky(Moon::High),
+                None => Want::Stage,
             },
             Screen::Game { host, app } => {
                 let game = sources.iter().find(|s| s.id == host).and_then(|s| s.library).and_then(|l| l.games.iter().find(|g| g.app_id == app));
@@ -604,8 +609,7 @@ impl Launcher {
                 None => Want::Keep,
             },
             Screen::AllGames => Want::Keep,
-            Screen::Hosts => Want::Sky(first_run::first_run_of(view.hosts).map_or(Moon::Low, first_run::FirstRun::moon)),
-            _ => Want::Sky(Moon::High),
+            _ => Want::Stage,
         }
     }
 

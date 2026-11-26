@@ -27,6 +27,23 @@ public class LatencyBenchmarkActivityTest {
         }
     }
 
+    /** Review, TV preview: a device without audio properties read "no data yet Hz · no data yet frames per buffer". */
+    @Test public void unreportedAudioIsSaidInWordsNotAsANumber() {
+        try (ActivityController<LatencyBenchmarkActivity> controller =
+                     Robolectric.buildActivity(LatencyBenchmarkActivity.class).setup()) {
+            LatencyBenchmarkActivity activity = controller.get();
+            String unavailable = activity.getString(R.string.latency_benchmark_audio_unavailable);
+            assertEquals(unavailable, LatencyBenchmarkActivity.audioLine(activity, null, null));
+            assertEquals("half a report is no report", unavailable, LatencyBenchmarkActivity.audioLine(activity, "48000", null));
+            assertEquals(activity.getString(R.string.latency_benchmark_audio, "48000", "192"),
+                    LatencyBenchmarkActivity.audioLine(activity, "48000", "192"));
+            String shown = ((TextView) activity.findViewById(R.id.benchmark_results)).getText().toString();
+            String unknown = activity.getString(R.string.latency_unavailable);
+            assertFalse(shown, shown.contains(unknown + " Hz"));
+            assertFalse(shown, shown.contains(unknown + " " + "frames"));
+        }
+    }
+
     @Test public void finishesAfterTenSecondsWithoutInput() {
         try (ActivityController<LatencyBenchmarkActivity> controller =
                      Robolectric.buildActivity(LatencyBenchmarkActivity.class).setup()) {

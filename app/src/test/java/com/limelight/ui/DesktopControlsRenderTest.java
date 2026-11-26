@@ -7,7 +7,6 @@ import android.graphics.Canvas;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
 
 import com.limelight.demo.DemoInputWorkspaceActivity;
 
@@ -46,9 +45,8 @@ public class DesktopControlsRenderTest {
                         "native-landscape-" + mode.name().toLowerCase(java.util.Locale.ROOT) + ".png"));
             }
             activity.controls().setMode(DesktopControlsPanel.Mode.KEYBOARD);
-            View function = labeled(activity.controls(), "Function");
-            assertNotNull(function);
-            function.performClick();
+            // The key banks moved behind the toolbar's bank picker, so the preview picks Function the way a player does.
+            DesktopControlsPanelTest.selectBank(activity.controls(), "Function");
             capture(root, 960, 600, new File(directory, "native-landscape-function.png"));
             activity.controls().setMode(DesktopControlsPanel.Mode.COMBINED);
             activity.controls().showCustomization();
@@ -83,18 +81,6 @@ public class DesktopControlsRenderTest {
         File directory = new File(output);
         assertTrue(directory.isDirectory() || directory.mkdirs());
         return directory;
-    }
-
-    private static View labeled(View view, String text) {
-        if (view instanceof TextView && text.contentEquals(((TextView) view).getText())) return view;
-        if (view instanceof ViewGroup) {
-            ViewGroup group = (ViewGroup) view;
-            for (int i = 0; i < group.getChildCount(); i++) {
-                View found = labeled(group.getChildAt(i), text);
-                if (found != null) return found;
-            }
-        }
-        return null;
     }
 
     private static void capture(View view, int width, int height, File destination) throws IOException {

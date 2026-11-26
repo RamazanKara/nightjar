@@ -15,7 +15,7 @@ import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.limelight.nativeapi.StreamMoveFixtures;
 import com.limelight.nvstream.http.ComputerDetails;
-import com.limelight.ui.NightSkyView;
+import com.limelight.ui.StageView;
 import com.limelight.ui.ToolbarIconTintTest;
 
 import org.junit.Test;
@@ -73,7 +73,7 @@ public class ContinueHerePromptTest {
             dialog.show();
             frame();
             assertEquals("the sky covers the page", 2, content.getChildCount());
-            assertTrue(content.getChildAt(1) instanceof NightSkyView);
+            assertTrue(content.getChildAt(1) instanceof StageView);
             assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, page.getImportantForAccessibility());
             assertEquals("no dim over the sky", 0,
                     dialog.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_DIM_BEHIND);

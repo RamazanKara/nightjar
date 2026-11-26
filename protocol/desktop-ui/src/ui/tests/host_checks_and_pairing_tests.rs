@@ -197,7 +197,8 @@ fn cover_art_fills_its_box_cropped_never_squashed() {
     assert!(close(cover_uv(vec2(300.0, 400.0), poster), (0.0, 1.0), (0.0, 1.0)), "3:4 art shows whole");
     assert!(close(cover_uv(vec2(600.0, 400.0), poster), (0.25, 0.75), (0.0, 1.0)), "wide art loses its sides");
     assert!(close(cover_uv(vec2(300.0, 800.0), poster), (0.0, 1.0), (0.25, 0.75)), "tall art loses top and bottom");
-    // And Home draws it that way: the art's texture is sampled from its middle half only.
+    // And Home draws it that way: the art's texture is sampled from its middle half only, on the hero's
+    // cover and the shelf's. The stage's art behind the hero covers its own wide box (`hero_stage::art`).
     let mut f = home_with_games(1);
     let texture = f.ctx.load_texture("wide", egui::ColorImage::new([6, 4], vec![Color32::GRAY; 24]), egui::TextureOptions::LINEAR);
     let pc = &mut f.hosts.list[0];
@@ -212,7 +213,9 @@ fn cover_art_fills_its_box_cropped_never_squashed() {
     let us: Vec<f32> = primitives
         .iter()
         .filter_map(|p| match &p.primitive {
-            egui::epaint::Primitive::Mesh(mesh) if mesh.texture_id == texture.id() => Some(mesh.vertices.iter().map(|v| v.uv.x)),
+            egui::epaint::Primitive::Mesh(mesh) if mesh.texture_id == texture.id() && mesh.calc_bounds().aspect_ratio() < 1.0 => {
+                Some(mesh.vertices.iter().map(|v| v.uv.x))
+            }
             _ => None,
         })
         .flatten()
@@ -480,10 +483,10 @@ fn settings_over_the_newest_game_page_keeps_that_pages_neural_panel() {
     assert!(f.l.neural.state_for(pc, 1001).is_some_and(|open| open.state.is_some()), "Settings closed game B's panel");
 }
 
-/// A window that changes size on a game page moves its moon: no ghost of the old place fades
-/// behind the settings card, at any frame.
+/// A window that changes size on a game page keeps its one ambient: nothing fades behind the
+/// settings card for it, at any frame.
 #[test]
-fn a_game_page_that_changes_size_paints_one_moon() {
+fn a_game_page_that_changes_size_keeps_its_one_ambient() {
     let mut f = home_with_games(1);
     let pc = f.hosts.list[0].id;
     f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
@@ -495,8 +498,8 @@ fn a_game_page_that_changes_size_paints_one_moon() {
     f.size = vec2(1280.0, 1000.0);
     for n in 0..24 {
         f.frame(Vec::new());
-        let moons = backdrop::painted(&f.ctx).moons;
-        assert!(moons.len() <= 1, "frame {n}: {moons:?}");
+        assert!(f.l.ambient.shows_art(), "frame {n}");
+        assert_eq!(backdrop::painted(&f.ctx), backdrop::Painted { along: 1.0, fading: false }, "frame {n}");
     }
 }
 

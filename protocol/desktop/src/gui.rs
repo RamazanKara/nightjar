@@ -257,7 +257,7 @@ impl Gui {
         }
         let scale = Scale::of(window);
         let height = monitor_size(window, &scale).map(|size| size.y);
-        let zoom = crate::config::auto_zoom(height, scale.pixels_per_point) as f32 / 100.0;
+        let zoom = nightjar_desktop_ui::ui::viewport_scale::auto_percent(height, scale.pixels_per_point) as f32 / 100.0;
         if (self.ctx.zoom_factor() - zoom).abs() > f32::EPSILON {
             self.ctx.set_zoom_factor(zoom);
         }
@@ -285,7 +285,13 @@ impl Gui {
             readable: true,
             ran: Instant::now(),
             repaint_delay: Duration::MAX,
-            glass: Glass::new(live_glass::forced_by(std::env::var("NIGHTJAR_GLASS").ok().as_deref())),
+            glass: {
+                let glass = Glass::new(live_glass::forced_by(std::env::var("NIGHTJAR_GLASS").ok().as_deref()));
+                // The probe's result and crash guard live beside the settings; tests keep theirs in memory.
+                #[cfg(not(test))]
+                let glass = glass.remembering(nightjar_desktop_ui::live_glass::Memory::in_config_dir());
+                glass
+            },
             chain: Chain::default(),
             tier_set: None,
             no_output_said: false,
@@ -335,6 +341,8 @@ impl Gui {
         }
         // The stream menu and overlay keep the night look in every theme.
         crate::theme::set_over_video(&self.ctx, over_video);
+        // The motors and the speakers belong to the game while it is on screen.
+        nightjar_desktop_ui::ui::feedback_hook::set_stream_active(&self.ctx, over_video);
     }
 
     /// Tells this pass's glass its tier.

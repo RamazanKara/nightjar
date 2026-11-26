@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-        Nightjar palette: blue-black night surfaces and the amber of the brand moon, from the design tokens
+        Nightjar palette: obsidian night surfaces and cinema amber, from the design tokens
         (design_tokens.xml) where a token exists.
         Amber marks primary actions and selection only. The themes read these through the role aliases
         in colors.xml, except Theme.Nightjar.Stream, which always uses the night set.
@@ -15,7 +15,7 @@
     <color name="night_on_primary">@color/nj_color_on_moon</color>
     <color name="night_primary_container">#5C3E00</color>
     <color name="night_on_primary_container">#FFDDB0</color>
-    <color name="night_inverse_primary">#845500</color>
+    <color name="night_inverse_primary">@color/nj_day_color_moon_ink</color>
     <color name="night_secondary">#C2C6D6</color>
     <color name="night_on_secondary">#2B303F</color>
     <color name="night_secondary_container">#343A4B</color>
@@ -39,9 +39,9 @@
     <color name="night_on_surface">@color/nj_color_label</color>
     <color name="night_on_surface_variant">@color/nj_color_label_secondary</color>
     <color name="night_outline">#8B8E9C</color>
-    <color name="night_outline_variant">#3F4250</color>
+    <color name="night_outline_variant">#333847</color>
     <color name="night_inverse_surface">@color/nj_color_label</color>
-    <color name="night_inverse_on_surface">#2B2D38</color>
+    <color name="night_inverse_on_surface">#181B24</color>
     <!-- Status roles shared with the Rubylight console (ok = live or ready, warn = a problem worth a look).
          Warn is never a filled shape: it is an icon plus a word, or text on its container, so it never reads
          as the amber action colour. -->
@@ -57,7 +57,7 @@
     <color name="day_on_primary">#FFFFFF</color>
     <color name="day_primary_container">#FFDDB3</color>
     <color name="day_on_primary_container">#2A1800</color>
-    <color name="day_inverse_primary">@color/brand_moon</color>
+    <color name="day_inverse_primary">@color/nj_color_moon</color>
     <color name="day_secondary">#565E71</color>
     <color name="day_on_secondary">#FFFFFF</color>
     <color name="day_secondary_container">#DDE2F4</color>
@@ -71,13 +71,13 @@
     <color name="day_error_container">#FFDAD6</color>
     <color name="day_on_error_container">#410002</color>
     <color name="day_surface">@color/nj_day_color_canvas</color>
-    <color name="day_surface_dim">#D8D9DF</color>
+    <color name="day_surface_dim">#D5DAE2</color>
     <color name="day_surface_bright">@color/nj_day_color_canvas</color>
     <color name="day_surface_container_lowest">#FFFFFF</color>
-    <color name="day_surface_container_low">#F2F3F8</color>
-    <color name="day_surface_container">#ECEDF2</color>
-    <color name="day_surface_container_high">#E6E7EC</color>
-    <color name="day_surface_container_highest">#E1E2E8</color>
+    <color name="day_surface_container_low">#EFF2F6</color>
+    <color name="day_surface_container">#E9EDF2</color>
+    <color name="day_surface_container_high">#E3E7EE</color>
+    <color name="day_surface_container_highest">#DDE2EA</color>
     <color name="day_on_surface">@color/nj_day_color_label</color>
     <color name="day_on_surface_variant">@color/nj_day_color_label_secondary</color>
     <color name="day_outline">#757887</color>
@@ -93,7 +93,7 @@
 
     <!-- Fixed roles keep the same tone in both themes. -->
     <color name="primary_fixed">#FFDDB3</color>
-    <color name="primary_fixed_dim">@color/brand_moon</color>
+    <color name="primary_fixed_dim">@color/nj_color_moon</color>
     <color name="on_primary_fixed">#2A1800</color>
     <color name="on_primary_fixed_variant">#643F00</color>
     <color name="secondary_fixed">#DDE2F4</color>

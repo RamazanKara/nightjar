@@ -62,4 +62,5 @@
     <string name="pad_dpad_down">Хрестовина вниз</string>
     <string name="pad_dpad_left">Хрестовина вліво</string>
     <string name="pad_dpad_right">Хрестовина вправо</string>
+    <string name="pad_edit_mirror">Дзеркально ліворуч і праворуч</string>
 </resources>

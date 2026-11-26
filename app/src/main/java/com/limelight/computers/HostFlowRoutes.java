@@ -458,29 +458,6 @@ final class HostFlowRoutes {
         });
     }
 
-    static AlertDialog showPairingDialog(
-            Activity activity, String oneTimePin, String pin, Runnable onCancel) {
-        android.text.SpannableStringBuilder pairingText = new android.text.SpannableStringBuilder();
-        if (oneTimePin == null) {
-            pairingText.append(activity.getString(R.string.pair_pairing_help)).append("\n\n");
-            int pinStart = pairingText.length();
-            pairingText.append(pin);
-            pairingText.setSpan(new android.text.style.RelativeSizeSpan(2.25f), pinStart, pairingText.length(), 0);
-            pairingText.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), pinStart, pairingText.length(), 0);
-            pairingText.setSpan(new android.text.style.ForegroundColorSpan(com.google.android.material.color.MaterialColors
-                    .getColor(activity, androidx.appcompat.R.attr.colorPrimary, android.graphics.Color.WHITE)),
-                    pinStart, pairingText.length(), 0);
-        } else {
-            pairingText.append(activity.getString(R.string.pairing));
-        }
-        AlertDialog dialog = new NavigationDialogBuilder(activity).ownSurface()
-                .setTitle(R.string.pair_pairing_title).setMessage(pairingText)
-                .setNegativeButton(android.R.string.cancel, (d, which) -> onCancel.run())
-                .setOnCancelListener(d -> onCancel.run()).create();
-        dialog.show();
-        return dialog;
-    }
-
     static void runPairWorker(
             Activity activity, HostActions actions, ComputerManagerService.ComputerManagerBinder binder,
             ComputerDetails computer, PairingLink link, String pin, String oneTimePin,

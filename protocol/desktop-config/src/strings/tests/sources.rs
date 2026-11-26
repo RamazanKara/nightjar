@@ -1,7 +1,7 @@
 //! Source inventories for the desktop localization table tests (`SOURCES` and `MARKED_ONLY`).
 
 /// The UI sources, up to their test modules.
-pub(super) const SOURCES: [(&str, &str); 79] = [
+pub(super) const SOURCES: [(&str, &str); 86] = [
     ("strings.rs", include_str!("../../strings.rs")),
     ("app_types.rs", include_str!("../../app_types.rs")),
     ("gamepad_types.rs", include_str!("../../gamepad_types.rs")),
@@ -16,6 +16,8 @@ pub(super) const SOURCES: [(&str, &str); 79] = [
     ("ui/chrome/capsules.rs", include_str!("../../../../desktop-ui/src/ui/chrome/capsules.rs")),
     ("ui/home.rs", include_str!("../../../../desktop-ui/src/ui/home.rs")),
     ("ui/home/actions.rs", include_str!("../../../../desktop-ui/src/ui/home/actions.rs")),
+    ("ui/hero_stage.rs", include_str!("../../../../desktop-ui/src/ui/hero_stage.rs")),
+    ("ui/hero_stage/rail.rs", include_str!("../../../../desktop-ui/src/ui/hero_stage/rail.rs")),
     ("ui/demo.rs", include_str!("../../../../desktop-ui/src/ui/demo.rs")),
     ("ui/library.rs", include_str!("../../../../desktop-ui/src/ui/library.rs")),
     ("ui/library/helpers.rs", include_str!("../../../../desktop-ui/src/ui/library/helpers.rs")),
@@ -37,6 +39,7 @@ pub(super) const SOURCES: [(&str, &str); 79] = [
     ("ui/dialogs/host_dialogs.rs", include_str!("../../../../desktop-ui/src/ui/dialogs/host_dialogs.rs")),
     ("ui/dialogs/menus.rs", include_str!("../../../../desktop-ui/src/ui/dialogs/menus.rs")),
     ("ui/dialogs/pair_dialogs.rs", include_str!("../../../../desktop-ui/src/ui/dialogs/pair_dialogs.rs")),
+    ("ui/dialogs/pairing_panel.rs", include_str!("../../../../desktop-ui/src/ui/dialogs/pairing_panel.rs")),
     ("ui/dialogs/session_dialogs.rs", include_str!("../../../../desktop-ui/src/ui/dialogs/session_dialogs.rs")),
     ("ui/launch_scene.rs", include_str!("../../../../desktop-ui/src/ui/launch_scene.rs")),
     ("host_page.rs", include_str!("../../../../desktop-ui/src/host_page.rs")),
@@ -54,6 +57,8 @@ pub(super) const SOURCES: [(&str, &str); 79] = [
     ("app/launch.rs", include_str!("../../../../desktop/src/app/launch.rs")),
     ("app/session.rs", include_str!("../../../../desktop/src/app/session.rs")),
     ("app/overlay.rs", include_str!("../../../../desktop/src/app/overlay.rs")),
+    ("app/control_center.rs", include_str!("../../../../desktop/src/app/control_center.rs")),
+    ("app/control_center/pages.rs", include_str!("../../../../desktop/src/app/control_center/pages.rs")),
     ("stream_overlay_widgets.rs", include_str!("../../../../desktop-ui/src/stream_overlay_widgets.rs")),
     ("console.rs", include_str!("../../../../desktop-ui/src/console.rs")),
     ("hosts_model.rs", include_str!("../../../../desktop-ui/src/hosts_model.rs")),
@@ -81,6 +86,8 @@ pub(super) const SOURCES: [(&str, &str); 79] = [
     ("stream_menu.rs", include_str!("../../../../desktop-ui/src/stream_menu.rs")),
     ("ui/about.rs", include_str!("../../../../desktop-ui/src/ui/about.rs")),
     ("ui/latency_bench.rs", include_str!("../../../../desktop-ui/src/ui/latency_bench.rs")),
+    ("ui/control_center.rs", include_str!("../../../../desktop-ui/src/ui/control_center.rs")),
+    ("ui/stream_hud.rs", include_str!("../../../../desktop-ui/src/ui/stream_hud.rs")),
 ];
 
 /// Read for its marked texts and its toasts only: the stream code keeps its own overlay lines.

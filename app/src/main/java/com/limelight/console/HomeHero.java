@@ -27,9 +27,19 @@ final class HomeHero {
     static final String SHELF = "shelf:hero";
     /** How many games a hero holds when it borrows them from the library. */
     private static final int FROM_LIBRARY = 5;
-    /** The middle cover's share of the width and the height it may take of the window (the design's 290 of 412 by 915). */
+    /** The middle cover's share of the width where the window is high enough for it (the design's 290 of 412). */
     private static final float COVER_OF_WIDTH = 290f / 412f;
-    private static final float COVER_OF_HEIGHT = 435f / 915f;
+    /**
+     * What a phone's hero takes of the window's height besides its cover, in dp, as it is laid out: the top row over it (64),
+     * its name and line (82), Play under the cover with the gaps around it (80) and the tab bar (74).
+     */
+    static final int AROUND_COVER_DP = 300;
+    /** What still shows of the first shelf under the hero: its heading, and the upper half of its covers. */
+    static final int SHELF_HEADING_DP = 56;
+    static final int SHELF_HALF_DP = 132;
+    /** The cover is not lower than a shelf's own while any of the shelf's covers shows, and never lower than this share of the window. */
+    static final int COVER_USUAL_DP = 264;
+    private static final float COVER_OF_HEIGHT_LEAST = .36f;
     /** A neighbour against the middle cover, how far its centre is, and where it scales from so its top sits 30 lower. */
     static final float NEIGHBOUR_SCALE = 232f / 290f;
     private static final float PITCH_OF_COVER = 258f / 290f;
@@ -110,15 +120,24 @@ final class HomeHero {
         return card.badge == HomeModel.Badge.NONE ? R.string.library_play : R.string.applist_menu_resume;
     }
 
-    /** The middle cover's width in this window; its height is 3/2 of it. */
-    static int coverWidth(int windowWidthPx, int windowHeightPx) {
-        return Math.round(Math.min(windowWidthPx * COVER_OF_WIDTH, windowHeightPx * COVER_OF_HEIGHT / 1.5f));
+    /**
+     * The middle cover's width in this window; its height is 3/2 of it. It has the design's share of the width where the window
+     * is high enough, and in a lower one is as high as leaves the name, Play and, under them, the first shelf's heading and the
+     * upper half of its covers above the tab bar. A window too low for that gives up the shelf's covers before the hero's cover
+     * gets lower than theirs; a lower one still keeps the heading and shrinks the cover.
+     */
+    static int coverWidth(int windowWidthPx, int windowHeightPx, float density) {
+        float window = windowHeightPx / density;
+        float left = window - AROUND_COVER_DP - SHELF_HEADING_DP - SHELF_HALF_DP;
+        float height = Math.max(left, Math.min(COVER_USUAL_DP, left + SHELF_HALF_DP));
+        height = Math.max(window * COVER_OF_HEIGHT_LEAST, height);
+        return Math.round(Math.min(windowWidthPx * COVER_OF_WIDTH, height * density / 1.5f));
     }
 
     static int coverWidth(Context context) {
         Configuration config = context.getResources().getConfiguration();
         float density = context.getResources().getDisplayMetrics().density;
-        return coverWidth(Math.round(config.screenWidthDp * density), Math.round(config.screenHeightDp * density));
+        return coverWidth(Math.round(config.screenWidthDp * density), Math.round(config.screenHeightDp * density), density);
     }
 
     /**

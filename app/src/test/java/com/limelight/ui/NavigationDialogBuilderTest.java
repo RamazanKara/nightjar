@@ -184,7 +184,7 @@ public class NavigationDialogBuilderTest {
             dialog.show();
             frame();
             assertEquals("the sky covers the page", 2, content.getChildCount());
-            assertTrue(content.getChildAt(1) instanceof NightSkyView);
+            assertTrue(content.getChildAt(1) instanceof StageView);
             assertEquals(android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, page.getImportantForAccessibility());
             assertEquals("no dim over the sky", 0, dialog.getWindow().getAttributes().flags
                     & android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);

@@ -1,32 +1,16 @@
-//! Home: the hero with the running or last game, the Continue panel beside it, then the shelves of
-//! favourites, recents, the library's rows and the PCs. All of it scrolls beneath the chrome.
+//! Home: the hero stage with the running or last game and Continue beside it (`hero_stage.rs`),
+//! then the shelves of favourites, recents, the library's rows and the PCs. All of it scrolls
+//! beneath the chrome.
 
 use super::backdrop::Want;
-use super::chrome::{capsule_width, control_capsule, icon_capsule, info_chip, play_button, play_width};
 use super::design_tokens as t;
-use super::glass;
+use super::hero_stage::{RailLine, Under};
 use super::*;
 
-const HERO_COVER: Vec2 = vec2(160.0, 240.0);
-/// How wide the colour of the ambient glows around the hero's cover.
-const HERO_GLOW_BLUR: f32 = 70.0;
-const HERO_GAP: f32 = 28.0;
-const TITLE_SIZE: f32 = 50.0;
-const TITLE_LINE: f32 = 54.0;
-const CHIP_H: f32 = 32.0;
-const BUTTON_H: f32 = 52.0;
-/// From the line that says what stops Play to the buttons.
-const PROBLEM_GAP: f32 = 10.0;
-const PANEL_W: f32 = 280.0;
-const PANEL_HEAD: f32 = 38.0;
-const PANEL_ROW: f32 = 73.0;
-/// At most this many lines in the Continue panel; the rest of the recents go to their own shelf.
-const PANEL_LINES: usize = 3;
-/// Below this content width the panel moves under the hero.
-const PANEL_BESIDE_FROM: f32 = 820.0;
+/// At most this many lines in the Continue rail; the rest of the recents go to their own shelf.
+const RAIL_LINES: usize = 3;
 /// Above a shelf's heading, and under the hero before the first one.
 const SHELF_GAP: f32 = 10.0;
-const HERO_FOOT: f32 = 12.0;
 
 /// The game Home is about: running, else the last played, else the library's first.
 #[derive(Clone, Debug, PartialEq)]
@@ -100,27 +84,6 @@ impl HomeData {
             hero,
         }
     }
-}
-
-/// Where the hero's chips, title and buttons go.
-struct HeroFoot {
-    left: f32,
-    right: f32,
-    chips_y: f32,
-    title_y: f32,
-    buttons_y: f32,
-}
-
-/// One line of the Continue panel.
-struct PanelLine {
-    key: String,
-    game: Option<String>,
-    host: u64,
-    app: u32,
-    title: String,
-    line: String,
-    /// Its game has a cover to ask the PC for.
-    has_cover: bool,
 }
 
 /// What a page about game `app` wants behind it.
@@ -210,7 +173,7 @@ impl Launcher {
         let played = console::Played { sources, recents: &self.recents };
         let rows = console::home_rows(entries, group, console::Sort::shown(&self.settings, entries), played);
         let loading = library_loading(view);
-        // The rest of the running games and recents: the panel first, a shelf for what it cannot hold.
+        // The rest of the running games and recents: the rail first, a shelf for what it cannot hold.
         let entry_index = index_entries_by_copy(entries);
         let entry_for = |host: u64, app: u32| entry_index.get(&(host, app)).map(|&idx| &entries[idx]);
         let has_cover = |host: u64, app: u32| entry_for(host, app).is_some_and(|e| e.cover().is_some());
@@ -218,13 +181,13 @@ impl Launcher {
             hero.as_ref()
                 .is_some_and(|h| h.host == host && h.app == app)
         };
-        let mut lines: Vec<PanelLine> = Vec::new();
+        let mut lines: Vec<RailLine> = Vec::new();
         for item in playing.iter().filter(|p| !is_hero(p.host, p.app_id)) {
             let line = match item.playing {
                 Playing::Running => trf("Running on {}", &[&item.host_name]),
                 Playing::Suspended => trf("Suspended on {}", &[&item.host_name]),
             };
-            lines.push(PanelLine {
+            lines.push(RailLine {
                 key: format!("continue:{}:{}", item.host, item.app_id),
                 game: None,
                 host: item.host,
@@ -239,7 +202,7 @@ impl Launcher {
             let line = recent_line(entry, sources, &self.recents, item);
             let key = format!("recent:{}:{}", item.host, item.app_id);
             let game = entry.map(|e| e.key.clone());
-            lines.push(PanelLine {
+            lines.push(RailLine {
                 key,
                 game,
                 host: item.host,
@@ -249,7 +212,7 @@ impl Launcher {
                 has_cover: entry.is_some_and(|e| e.cover().is_some()),
             });
         }
-        let spill = lines.split_off(lines.len().min(PANEL_LINES));
+        let spill = lines.split_off(lines.len().min(RAIL_LINES));
 
         let to_top = self.chrome_to_top();
         let this = &mut *self;
@@ -257,6 +220,8 @@ impl Launcher {
         let scrolled = page_scroll(ui, "home", to_top, |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     let mut first = true;
+                    // The hero's art lies under everything on the page, from its top.
+                    let under = Under { slot: ui.painter().add(egui::Shape::Noop), page_top: ui.cursor().top() - chrome::PAGE_TOP };
                     // A failed read stays on screen beside the last good data.
                     for host in &view.hosts.list {
                         if let Some(error) = &host.native.error {
@@ -269,8 +234,14 @@ impl Launcher {
                         commands.push(Command::SaveSettings);
                     }
                     let width = ui.available_width();
-                    if let Some(hero) = &hero {
-                        this.hero_block(ui, view, sources, hero, &lines, width, &mut first, commands);
+                    match &hero {
+                        Some(hero) => {
+                            let entry = entry_for(hero.host, hero.app);
+                            this.hero_stage(ui, view, sources, hero, entry, &lines, under, &mut first, commands);
+                        }
+                        // No games at all: the dark stage and its one line, once the library has been read.
+                        None if entries.is_empty() && !loading => this.empty_stage(ui, view, commands),
+                        None => {}
                     }
                     let (columns, cover_w) = grid_up_to(width, POSTER_MAX_W * this.settings.home_card_size.scale());
                     let (_, card_w) = card_grid(width, CARD_GAP);
@@ -344,7 +315,7 @@ impl Launcher {
                             }
                         });
                     }
-                    if entries.is_empty() {
+                    if entries.is_empty() && (loading || hero.is_some()) {
                         this.shelf_head(ui, tr("Library"), None, &mut actions_shown);
                         if loading {
                             ui.add_space(space::S);
@@ -503,8 +474,6 @@ impl Launcher {
             }
             if with_actions {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    // The links sit at the right, where the moon may be once the page scrolls.
-                    let scrim = ui.painter().add(egui::Shape::Noop);
                     let view = text_button(ui, "View");
                     self.focus_item(&view, "home-view", false);
                     if view.clicked() {
@@ -515,7 +484,6 @@ impl Launcher {
                         );
                     }
                     let all = text_button(ui, "All games");
-                    super::pcs::scrim_on_moon(ui, scrim, view.rect.union(all.rect).expand(space::XS));
                     if all.clicked() {
                         self.library_filter = console::LibraryFilter::All;
                         self.open(Screen::AllGames);
@@ -524,144 +492,6 @@ impl Launcher {
             }
         });
         ui.add_space(space::M);
-    }
-
-    /// The hero: the cover, the state and store chips, the huge title and the actions; the Continue
-    /// panel beside it, or under it in a narrow window.
-    #[allow(clippy::too_many_arguments)]
-    fn hero_block(
-        &mut self,
-        ui: &mut Ui,
-        view: &View<'_>,
-        sources: &[Source],
-        hero: &Hero,
-        lines: &[PanelLine],
-        width: f32,
-        first: &mut bool,
-        commands: &mut Vec<Command>,
-    ) {
-        let beside = !lines.is_empty() && width >= PANEL_BESIDE_FROM;
-        let panel_h = if lines.is_empty() {
-            0.0
-        } else {
-            PANEL_HEAD + PANEL_ROW * lines.len() as f32
-        };
-        let height = (HERO_COVER.y + HERO_FOOT).max(if beside {
-            panel_h - HERO_FOOT / 2.0
-        } else {
-            0.0
-        });
-        let (block, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
-        let ctx = ui.ctx().clone();
-        let cover_rect = Rect::from_min_size(block.left_top(), HERO_COVER);
-        let cover = ui.interact(cover_rect, Id::unique("hero-cover"), Sense::click());
-        cover.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::Role::Button, true, hero.title.clone())
-        });
-        let art = shown_art(view, hero.host, hero.app);
-        let feel = glass::feel(&ctx, &cover, t::FOCUS_SCALE_CONTROL, t::HOVER_SCALE_COVER);
-        let shown = glass::scaled_rect(cover_rect, feel.scale);
-        let mut out = Vec::new();
-        glass::cover_glow(
-            &mut out,
-            &ctx,
-            shown,
-            t::RADIUS_COVER,
-            self.ambient.glow(),
-            HERO_GLOW_BLUR,
-            18.0,
-            44.0,
-        );
-        let boost = if feel.hovered || feel.focused {
-            t::HOVER_RIM_BOOST
-        } else {
-            1.0
-        };
-        cover_shapes(
-            ui,
-            &mut out,
-            shown,
-            HERO_COVER.x,
-            t::RADIUS_COVER,
-            Id::unique(("cover-in", hero.host, hero.app)),
-            &hero.title,
-            art,
-            boost,
-        );
-        if feel.focused {
-            glass::focus(&mut out, &ctx, shown, t::RADIUS_COVER, false);
-        }
-        ui.painter().extend(out);
-        self.focus_item(&cover, "hero-cover", false);
-        if cover.clicked() {
-            self.open(Screen::Game {
-                host: hero.host,
-                app: hero.app,
-            });
-        }
-        if let Some(anchor) = menu_request(ui, &cover, None) {
-            self.open_menu(
-                Dialog::GameMenu {
-                    host: hero.host,
-                    game: GameTarget::Library {
-                        app: hero.app,
-                        favourite: false,
-                    },
-                },
-                anchor,
-                "hero-cover".into(),
-            );
-        }
-        let source = sources.iter().find(|s| s.id == hero.host);
-        let game = source
-            .and_then(|s| s.library)
-            .and_then(|l| l.games.iter().find(|g| g.app_id == hero.app));
-        if game.is_some() {
-            request_cover(ui, view, hero.host, hero.app, &cover, commands);
-        }
-        // The words and buttons sit on the cover's foot, between it and the panel.
-        let right = if beside {
-            block.right() - PANEL_W - HERO_GAP
-        } else {
-            block.right()
-        };
-        let left = cover_rect.right() + HERO_GAP;
-        let foot = cover_rect.bottom();
-        let buttons_y = foot - BUTTON_H;
-        let title_y = buttons_y - 18.0 - TITLE_LINE;
-        let chips_y = title_y - 10.0 - CHIP_H;
-        match (view.hosts.get(hero.host), source, game) {
-            (Some(host), Some(source), Some(game)) => self.hero_actions(
-                ui,
-                host,
-                source,
-                game,
-                HeroFoot {
-                    left,
-                    right,
-                    chips_y,
-                    title_y,
-                    buttons_y,
-                },
-                first,
-                commands,
-            ),
-            // A game the library no longer lists: its title, and its page says the rest.
-            _ => hero_title(ui, left, title_y, right - left, &hero.title),
-        }
-        if !lines.is_empty() {
-            let panel_rect = if beside {
-                Rect::from_min_size(
-                    pos2(block.right() - PANEL_W, block.top()),
-                    vec2(PANEL_W, panel_h),
-                )
-            } else {
-                let (rect, _) =
-                    ui.allocate_exact_size(vec2(width, panel_h + space::M), Sense::hover());
-                Rect::from_min_size(rect.left_top() + vec2(0.0, space::M), vec2(width, panel_h))
-            };
-            self.continue_panel(ui, view, panel_rect, lines, first, commands);
-        }
     }
 }
 
@@ -673,4 +503,3 @@ fn shelf_image(cover: &Response) -> Rect {
 mod actions;
 #[cfg(test)]
 pub(super) use actions::setup_line;
-use actions::hero_title;

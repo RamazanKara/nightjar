@@ -37,6 +37,7 @@ final class HomeAmbience implements ShelfAdapter.FocusListener, Choreographer.Fr
     private boolean queued;
     private InputSource input = InputSource.NONE;
     private int vendor;
+    private HomeHeroStage stage;
 
     /** Either part may be missing (a layout without the backdrop or the hero, as on a phone). */
     HomeAmbience(Context context, BackdropView backdrop, View hero, Function<String, ComputerDetails> hosts,
@@ -50,6 +51,17 @@ final class HomeAmbience implements ShelfAdapter.FocusListener, Choreographer.Fr
         this.hosts = hosts;
         this.covers = covers;
         this.fast = fast;
+    }
+
+    /** The hero of a phone or a handheld is about this game now: the ambient is that game's, and so is the art. */
+    void heroShown(HomeModel.GameCard card) {
+        refresh(new ShelfAdapter.Item(card.key, card, null));
+        if (stage != null) stage.hero(card);
+    }
+
+    /** The hero's art: it is told the covers that arrive and the words this writes. */
+    void setStage(HomeHeroStage stage) {
+        this.stage = stage;
     }
 
     @Override
@@ -89,6 +101,7 @@ final class HomeAmbience implements ShelfAdapter.FocusListener, Choreographer.Fr
     void onArt(com.limelight.nvstream.http.NvApp app) {
         ShelfAdapter.Item item = pending;
         if (item != null && item.game != null && item.game.appId == app.getAppId()) askBackdrop(item);
+        if (stage != null) stage.onArt(app);
     }
 
     private void askBackdrop(ShelfAdapter.Item item) {
@@ -204,6 +217,7 @@ final class HomeAmbience implements ShelfAdapter.FocusListener, Choreographer.Fr
         queued = false;
         pending = null;
         if (hero != null) hero.animate().cancel();
+        if (stage != null) stage.destroy();
     }
 
     private static void setText(TextView view, CharSequence text) {

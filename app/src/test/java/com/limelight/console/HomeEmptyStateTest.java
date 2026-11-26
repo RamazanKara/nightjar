@@ -147,6 +147,69 @@ public class HomeEmptyStateTest {
         assertFalse(shows(home, R.id.console_loading));
     }
 
+    /**
+     * Review, TV preview: the focused Open PCs button showed only its ring's corners, with dark squares at them: the empty
+     * state clipped the ring and halo the button draws outside its bounds. Nothing between it and the screen cuts them now.
+     */
+    @Test
+    @Config(qualifiers = "w960dp-h540dp-land-television-xhdpi")
+    public void onATvTheOpenPcsButtonsRingAndHaloAreDrawnWhole() throws Exception {
+        ringAndHaloDrawnWhole();
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-port-xxhdpi")
+    public void onAPhoneTooTheOpenPcsButtonsRingAndHaloAreDrawnWhole() throws Exception {
+        ringAndHaloDrawnWhole();
+    }
+
+    private void ringAndHaloDrawnWhole() throws Exception {
+        Home home = open();
+        settle(home);
+        assertTrue(shows(home, R.id.console_empty));
+        View root = home.getWindow().getDecorView();
+        android.util.DisplayMetrics metrics = home.getResources().getDisplayMetrics();
+        root.measure(View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.EXACTLY));
+        root.layout(0, 0, metrics.widthPixels, metrics.heightPixels);
+        View button = home.findViewById(R.id.console_empty_hosts);
+        assertTrue("laid out", button.getWidth() > 0);
+        android.content.res.Resources res = home.getResources();
+        float reach = res.getDimension(R.dimen.glass_ring_gap) + res.getDimension(R.dimen.glass_ring_width)
+                + res.getDimension(R.dimen.glass_halo_blur);
+        android.graphics.RectF drawn = new android.graphics.RectF(-reach, -reach, button.getWidth() + reach, button.getHeight() + reach);
+        // Focused, the button grows about its centre, and the ring and halo with it.
+        float grown = androidx.core.content.res.ResourcesCompat.getFloat(res, R.dimen.nj_focus_scale_control);
+        android.graphics.Matrix transform = new android.graphics.Matrix();
+        transform.setScale(grown, grown, button.getWidth() / 2f, button.getHeight() / 2f);
+        View child = button;
+        for (android.view.ViewParent p = button.getParent(); p instanceof android.view.ViewGroup; p = p.getParent()) {
+            android.view.ViewGroup parent = (android.view.ViewGroup) p;
+            String where = parent.getClass().getSimpleName() + " " + idOf(parent) + " cuts " + drawn.toShortString();
+            if (parent.getClipChildren()) {
+                assertTrue(where + " at its child's bounds",
+                        drawn.left >= 0 && drawn.top >= 0 && drawn.right <= child.getWidth() && drawn.bottom <= child.getHeight());
+            }
+            (child == button ? transform : child.getMatrix()).mapRect(drawn);
+            drawn.offset(child.getLeft(), child.getTop());
+            boolean padded = parent.getPaddingLeft() > 0 || parent.getPaddingTop() > 0 || parent.getPaddingRight() > 0
+                    || parent.getPaddingBottom() > 0;
+            if (parent.getClipToPadding() && padded) {
+                int x = parent.getScrollX(), y = parent.getScrollY();
+                assertTrue(where + " at its padding", drawn.left >= x + parent.getPaddingLeft()
+                        && drawn.top >= y + parent.getPaddingTop()
+                        && drawn.right <= x + parent.getWidth() - parent.getPaddingRight()
+                        && drawn.bottom <= y + parent.getHeight() - parent.getPaddingBottom());
+            }
+            drawn.offset(-parent.getScrollX(), -parent.getScrollY());
+            child = parent;
+        }
+    }
+
+    private static String idOf(View view) {
+        return view.getId() == View.NO_ID || view.getId() < 0x01000000 ? "" : view.getResources().getResourceEntryName(view.getId());
+    }
+
     @Test
     public void aSavedPcThatHasNotAnsweredKeepsHomeLoadingNotEmpty() throws Exception {
         Home home = open(savedTower());

@@ -76,7 +76,7 @@ fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
 
 /// The glass's shapes behind `content`, through the boundary as a page would.
 fn with_glass(ctx: &Context, mut content: Vec<Shape>, chrome: &[(Rect, f32, Material)]) -> Vec<Shape> {
-    if glass::tier(ctx) == Tier::Live {
+    if glass::tier(ctx).probed() {
         let screen = ctx.content_rect();
         let regions = chrome.iter().map(|(r, _, _)| *r).collect();
         content.push(Shape::Callback(egui::epaint::PaintCallback {
@@ -104,7 +104,8 @@ fn split(screen: Rect, edge: f32) -> Vec<Shape> {
 fn crossing(canvas: &Canvas, y: usize, from: usize, to: usize, fraction: f32) -> f32 {
     let value = |x: usize| canvas.pixel(x, y)[1];
     let (low, high) = (value(from), value(to - 1));
-    assert!(high > low + 0.1, "a step to measure: {low} to {high}");
+    // Baked chrome is nearly opaque: what is left of the ambient's step is small, and still a step.
+    assert!(high > low + 0.04, "a step to measure: {low} to {high}");
     let level = low + (high - low) * fraction;
     for x in from..to - 1 {
         let (a, b) = (value(x), value(x + 1));
@@ -303,6 +304,7 @@ fn glass_fixture_screenshots() {
     };
     std::fs::create_dir_all(&dir).expect("the folder for the screenshots");
     for (tier, name) in [
+        (Tier::Lens, "lens"),
         (Tier::Live, "live"),
         (Tier::Baked, "baked"),
         (Tier::Solid, "solid"),

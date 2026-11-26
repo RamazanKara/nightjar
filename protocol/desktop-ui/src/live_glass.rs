@@ -2,28 +2,26 @@
 //! through a linear down and up chain, and sampled by the chrome's meshes in screen space.
 //!
 //! The chain runs only when a `Boundary` is in the frame, so a playing stream (which has none) pays
-//! nothing, and only when what lies under the chrome changed. The first runs are timed; a chain
-//! that does not fit the frame budget, or targets that cannot be made, step down to the baked tier
-//! and say so in the log.
+//! nothing, and only when what lies under the chrome changed. The tiers, their landing and the probe
+//! of the chain's runs are `nightjar_policy::glass_probe`'s, shared with Android: lens (the live
+//! chain plus the edge band of `ui/glass_lens.rs`), live, baked and, in high contrast, solid. A
+//! chain that does not fit the frame budget steps down a tier, and targets that cannot be made step
+//! down to baked; both say so in the log.
 
 use std::any::Any;
 use std::hash::Hasher;
+use std::time::Instant;
 
 use egui::epaint::{ClippedPrimitive, Mesh, Primitive, TextureId};
 use egui::{Context, Id, Rect};
 
-use crate::ui::design_tokens as t;
+use nightjar_policy::glass_probe::{self as probe, Device, Guard, Probe, Verdict};
 
-/// How glass is drawn on this machine.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Tier {
-    /// Live blur of what is really behind the chrome.
-    Live,
-    /// The static ambient sampled in screen space: a complete design of its own.
-    Baked,
-    /// Opaque surfaces with a light rim: high contrast.
-    Solid,
-}
+/// How glass is drawn on this machine: lens, live, baked or solid (`glass_probe::Tier`).
+pub use nightjar_policy::glass_probe::Tier;
+
+mod memory;
+pub use memory::{Memory, Stored};
 
 /// The texture chrome samples on the live tier; [`Chain`] (or the screenshot canvas) provides it.
 pub const LIVE_BACKDROP: TextureId = TextureId::User(0x676C_6173);
@@ -206,55 +204,6 @@ pub fn frame_differs(on_screen: Option<u64>, print: u64, must_draw: bool, textur
     must_draw || textures || on_screen != Some(print)
 }
 
-/// What the probe of the first chain runs decided.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Verdict {
-    Holds { p90_ms: f32 },
-    TooSlow { p90_ms: f32 },
-}
-
-/// Times the chain over its first runs; its p90 against the frame budget lands the tier.
-#[derive(Clone, Debug)]
-pub struct Probe {
-    budget_ms: f32,
-    samples: Vec<f32>,
-    verdict: Option<Verdict>,
-}
-
-impl Probe {
-    pub fn new(budget_ms: f32) -> Self {
-        Self {
-            budget_ms,
-            samples: Vec::with_capacity(t::TIER_PROBE_FRAMES as usize),
-            verdict: None,
-        }
-    }
-
-    pub fn running(&self) -> bool {
-        self.verdict.is_none()
-    }
-
-    /// One run's time. The run that completes the probe returns its verdict.
-    pub fn push(&mut self, ms: f32) -> Option<Verdict> {
-        if self.verdict.is_some() {
-            return None;
-        }
-        self.samples.push(ms);
-        if self.samples.len() < t::TIER_PROBE_FRAMES as usize {
-            return None;
-        }
-        self.samples.sort_by(f32::total_cmp);
-        let p90_ms = self.samples[self.samples.len() * 9 / 10];
-        let verdict = if p90_ms > self.budget_ms * t::TIER_PROBE_P90_BUDGET_FRACTION {
-            Verdict::TooSlow { p90_ms }
-        } else {
-            Verdict::Holds { p90_ms }
-        };
-        self.verdict = Some(verdict);
-        Some(verdict)
-    }
-}
-
 /// Where a frame is painted: SDL in `gui.rs`, the CPU canvas in `shot.rs`. [`Glass`] decides what
 /// goes on it, so the app and the screenshots walk a frame alike.
 pub trait Stage {
@@ -271,44 +220,56 @@ pub trait Stage {
     fn end_scene(&mut self, timed: bool) -> Result<Option<f32>, String>;
     /// Frees the chain's targets.
     fn release(&mut self);
+    /// The renderer and driver as the crash guard's fingerprint names them, beside the app's build.
+    fn driver(&self) -> String {
+        String::new()
+    }
 }
 
-/// Where the machine's glass landed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Landing {
-    /// Baked, until the first launcher frame tried the render targets.
-    Untried,
-    Live,
-    Baked,
-}
-
-/// What the chain may take on a screen of this rate: a frame, but never less than one at 120 Hz. A
-/// fast screen losing a frame now and then while the launcher scrolls is not seen; live glass going
-/// for good is.
-fn chain_budget_ms(hz: f32) -> f32 {
-    (1000.0 / hz).max(1000.0 / 120.0)
-}
-
-/// `NIGHTJAR_GLASS=baked|live`: holds the tier for an A/B run. `live` keeps a chain over budget.
+/// `NIGHTJAR_GLASS=baked|live|lens`: holds the tier for an A/B run. `live` and `lens` keep a chain
+/// over budget, and nothing is remembered.
 pub fn forced_by(value: Option<&str>) -> Option<Tier> {
     match value? {
         "baked" => Some(Tier::Baked),
         "live" => Some(Tier::Live),
+        "lens" => Some(Tier::Lens),
         other => {
-            eprintln!("nightjar: NIGHTJAR_GLASS is {other:?}, not baked or live: ignored");
+            eprintln!("nightjar: NIGHTJAR_GLASS is {other:?}, not baked, live or lens: ignored");
             None
         }
     }
 }
 
+/// The crash guard's fingerprint: this build on this OS, and the stage's renderer and driver.
+fn fingerprint_of<S: Stage>(stage: &S) -> String {
+    format!("{} {} {}", crate::VERSION, std::env::consts::OS, stage.driver()).trim_end().to_owned()
+}
+
 /// The tier's landing and when the chain runs. No SDL in here: a frame without a boundary reaches
 /// the stage as its meshes alone, and a frame whose print did not change runs no chain.
+///
+/// Landing and the probe are `nightjar_policy::glass_probe`, as on Android: the first launcher
+/// frame tries the render targets and lands on the best tier (lens, the live chain with its edge
+/// band), unless a probe stored for this build and driver stepped it down. Once the screen has
+/// settled, the chain's runs are timed against the display's frame (never shorter than a 120 Hz
+/// one); a tier that does not hold it steps down once (lens to live, live to baked) and that is
+/// stored. The crash guard is armed before the first probed frame and cleared when the probe ends.
 pub struct Glass {
     forced: Option<Tier>,
-    landing: Landing,
+    /// `None` until the first launcher frame tried the render targets: baked meanwhile.
+    landing: Option<Tier>,
     over_video: bool,
-    budget_ms: f32,
+    refresh_hz: f32,
     probe: Option<Probe>,
+    /// The tier whose probe decided against this budget: its runs are not timed any more.
+    decided: Option<Tier>,
+    /// When the landed screen opened, for the probe's settle time.
+    opened: Option<Instant>,
+    /// Added to the time since `opened`: the screenshot canvas and tests start settled.
+    head_start_ms: u64,
+    memory: Memory,
+    /// The guard in `memory` is armed by this glass.
+    armed: Option<String>,
     /// What the chain's output shows; `None` when it must run.
     print: Option<(u64, (i32, i32))>,
     /// Whether the stage holds targets.
@@ -321,48 +282,67 @@ impl Glass {
     pub fn new(forced: Option<Tier>) -> Self {
         Self {
             forced,
-            landing: if forced == Some(Tier::Baked) {
-                Landing::Baked
-            } else {
-                Landing::Untried
-            },
+            landing: (forced == Some(Tier::Baked)).then_some(Tier::Baked),
             over_video: false,
-            budget_ms: 1000.0 / 60.0,
+            refresh_hz: 60.0,
             probe: None,
+            decided: None,
+            opened: None,
+            head_start_ms: 0,
+            memory: Memory::default(),
+            armed: None,
             print: None,
             held: false,
             changed: false,
         }
     }
 
-    /// A glass already live, for the screenshot canvas.
+    /// Remembers the probe's result and its crash guard in `memory` (the app's settings folder).
+    pub fn remembering(mut self, memory: Memory) -> Self {
+        self.memory = memory;
+        self
+    }
+
+    /// What is remembered, for tests.
+    pub fn memory(&self) -> &Memory {
+        &self.memory
+    }
+
+    /// A glass already landed on `tier` and settled, for the screenshot canvas and tests.
     #[cfg(any(test, feature = "test-support"))]
-    pub fn live() -> Self {
+    pub fn landed(tier: Tier) -> Self {
         let mut glass = Self::new(None);
-        glass.landing = Landing::Live;
+        glass.landing = Some(tier);
+        glass.opened = Some(Instant::now());
+        glass.head_start_ms = probe::SETTLE_MS;
         glass
     }
 
-    /// One display refresh, what the probe measures the chain against.
+    /// A glass already live, for the screenshot canvas.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn live() -> Self {
+        Self::landed(Tier::Live)
+    }
+
+    /// One display refresh, what the probe measures the chain against. Another frame budget
+    /// (`glass_probe::budget_ns`) judges the tier again.
     pub fn set_refresh(&mut self, hz: f32) {
         if hz <= 0.0 {
             return;
         }
-        let budget_ms = chain_budget_ms(hz);
-        // A verdict holds for the budget it was against: another frame time is judged again.
-        if budget_ms != self.budget_ms {
-            self.budget_ms = budget_ms;
+        if probe::budget_ns(hz) != probe::budget_ns(self.refresh_hz) {
             self.probe = None;
+            self.decided = None;
         }
+        self.refresh_hz = hz;
     }
 
-    /// The tier this pass lays out with: never live over a stream's video, which is not repainted
-    /// into a scene (the chain would blur an empty target and clear the picture).
+    /// The tier this pass lays out with: never lens or live over a stream's video, which is not
+    /// repainted into a scene (the chain would blur an empty target and clear the picture).
     pub fn pass_tier(&self) -> Tier {
-        if self.landing == Landing::Live && !self.over_video {
-            Tier::Live
-        } else {
-            Tier::Baked
+        match self.landing {
+            Some(tier) if tier.probed() && !self.over_video => tier,
+            _ => Tier::Baked,
         }
     }
 
@@ -371,6 +351,10 @@ impl Glass {
     #[must_use]
     pub fn set_over_video(&mut self, over_video: bool) -> bool {
         self.over_video = over_video;
+        if over_video {
+            // No chain runs over a stream, so whatever ends the app from here is not the glass.
+            self.disarm();
+        }
         if over_video && self.held {
             self.held = false;
             self.print = None;
@@ -388,14 +372,26 @@ impl Glass {
     /// the tier is tried and measured again on this one, as at start.
     #[cfg_attr(windows, allow(dead_code))]
     pub fn renderer_changed(&mut self) {
-        *self = Self { over_video: self.over_video, budget_ms: self.budget_ms, changed: true, ..Self::new(self.forced) };
+        // The guard stays as it is: the new landing arms it again.
+        self.armed = None;
+        let mut fresh = Self::new(self.forced);
+        fresh.over_video = self.over_video;
+        fresh.refresh_hz = self.refresh_hz;
+        fresh.changed = true;
+        fresh.memory = std::mem::take(&mut self.memory);
+        *self = fresh;
     }
 
-    /// Whether the chain's next run may be timed: live, and its probe has no verdict yet. A timed
-    /// run reads a pixel back, which the GPU renderer allows only for a frame kept in its back
-    /// buffer (`sdl::read_back_frames`), so the frame asks for that before it draws.
+    fn elapsed_ms(&self) -> u64 {
+        self.opened.map_or(0, |at| at.elapsed().as_millis() as u64) + self.head_start_ms
+    }
+
+    /// Whether the chain's next run may be timed: lens or live, settled, and its probe has no
+    /// verdict yet. A timed run reads a pixel back, which the GPU renderer allows only for a frame
+    /// kept in its back buffer (`sdl::read_back_frames`), so the frame asks for that before it draws.
     pub fn timing(&self) -> bool {
-        self.pass_tier() == Tier::Live && self.probe.as_ref().is_none_or(Probe::running)
+        let tier = self.pass_tier();
+        tier.probed() && self.decided != Some(tier) && Probe::settled(self.elapsed_ms())
     }
 
     /// Whether the tier changed since last asked.
@@ -403,11 +399,36 @@ impl Glass {
         std::mem::take(&mut self.changed)
     }
 
+    /// Commits the end of a probe: the tier it settled on (unless held by `NIGHTJAR_GLASS`) and
+    /// the guard cleared.
+    fn finish(&mut self, tier: Option<Tier>) {
+        let armed = self.armed.take();
+        let mut stored = self.memory.stored().clone();
+        if let Some(tier) = tier {
+            stored.tier = Some(tier);
+        }
+        if let Some(fingerprint) = armed {
+            stored.guard = Guard::clear(&fingerprint);
+        }
+        self.memory.save(stored);
+    }
+
+    /// Clears a guard still armed and keeps what is stored, so a crash later in the session (a
+    /// stream's, an abort) is not taken for the glass's.
+    fn disarm(&mut self) {
+        if let Some(fingerprint) = self.armed.take() {
+            self.memory.save(Stored { guard: Guard::clear(&fingerprint), ..self.memory.stored().clone() });
+        }
+    }
+
     fn step_down(&mut self, why: &str) {
         eprintln!("nightjar: live glass off, baked glass from here on: {why}");
-        self.landing = Landing::Baked;
+        self.landing = Some(Tier::Baked);
+        self.probe = None;
         self.print = None;
         self.changed = true;
+        // A failure is no measurement: nothing new is stored, the guard is cleared.
+        self.finish(None);
     }
 
     /// Puts a frame on the stage. `textures_changed`: a texture was uploaded for this frame.
@@ -417,9 +438,7 @@ impl Glass {
         primitives: &[ClippedPrimitive],
         textures_changed: bool,
     ) {
-        let found = (self.pass_tier() == Tier::Live)
-            .then(|| find_boundary(primitives))
-            .flatten();
+        let found = self.pass_tier().probed().then(|| find_boundary(primitives)).flatten();
         let Some((at, boundary)) = found else {
             if self.held {
                 self.held = false;
@@ -458,42 +477,124 @@ impl Glass {
         }
         self.held = true;
         draw(stage, content);
-        let budget_ms = self.budget_ms;
-        let probe = self.probe.get_or_insert_with(|| Probe::new(budget_ms));
-        match stage.end_scene(probe.running()) {
+        let timed = self.timing();
+        match stage.end_scene(timed) {
             Err(why) => self.step_down(&why),
             Ok(ms) => {
                 self.print = Some(print);
-                match ms.and_then(|ms| probe.push(ms)) {
-                    Some(Verdict::TooSlow { p90_ms }) if self.forced != Some(Tier::Live) => {
-                        self.step_down(&format!(
-                            "the chain's p90 is {p90_ms:.1} ms against a {budget_ms:.1} ms frame"
-                        ));
-                    }
-                    Some(Verdict::TooSlow { p90_ms }) => eprintln!("nightjar: live glass held by NIGHTJAR_GLASS, p90 {p90_ms:.1} ms against a {budget_ms:.1} ms frame"),
-                    Some(Verdict::Holds { p90_ms }) => eprintln!("nightjar: live glass holds, p90 {p90_ms:.1} ms against a {budget_ms:.1} ms frame"),
-                    None => {}
+                // The chain ran a frame cleanly: the guard has done its work (design spec 4.3, step 2).
+                self.disarm();
+                if let Some(ms) = ms.filter(|_| timed) {
+                    self.measure(ms);
                 }
             }
         }
     }
 
+    /// One timed run of the chain, as the probe's frame: the work is the chain's own time; when it
+    /// landed on screen is not known here, so the work alone decides (`Probe::slow`).
+    fn measure(&mut self, ms: f32) {
+        let tier = self.pass_tier();
+        let (hz, elapsed) = (self.refresh_hz, self.elapsed_ms());
+        if self.probe.as_ref().is_none_or(|probe| probe.tier() != tier) {
+            self.probe = Probe::new(tier, hz);
+        }
+        let Some(probe) = self.probe.as_mut() else { return };
+        let work_ns = (f64::from(ms.max(0.0)) * 1e6) as u64;
+        let Some(verdict) = probe.frame(elapsed, work_ns, None) else { return };
+        let (frames, slow) = probe.counts();
+        self.probe = None;
+        self.decided = Some(tier);
+        let budget_ms = probe::budget_ns(hz) as f64 / 1e6;
+        let measured = format!("{slow} of {frames} runs over {:.0} % of a {budget_ms:.1} ms frame", probe::P90_BUDGET_FRACTION * 100.0);
+        match verdict {
+            Verdict::StepDown(_) if self.forced.is_some() => {
+                eprintln!("nightjar: {} glass held by NIGHTJAR_GLASS, {measured}", tier.key());
+            }
+            Verdict::StepDown(next) => {
+                eprintln!("nightjar: {} glass steps down to {}: {measured}", tier.key(), next.key());
+                self.landing = Some(next);
+                self.decided = None;
+                self.changed = true;
+                if next.probed() {
+                    // Lens to live keeps the chain and its output; live is probed in turn.
+                    self.memory.save(Stored { tier: Some(next), ..self.memory.stored().clone() });
+                } else {
+                    self.print = None;
+                    self.finish(Some(next));
+                }
+            }
+            Verdict::Keep(kept) => {
+                eprintln!("nightjar: {} glass holds, {measured}", kept.key());
+                if self.forced.is_none() {
+                    self.finish(Some(kept));
+                }
+            }
+        }
+    }
+
+    /// The first launcher frame: lands the tier. A guard still armed for this build and driver
+    /// lands on baked and stores that; otherwise the guard is armed before the targets are tried.
+    fn land<S: Stage>(&mut self, stage: &mut S) {
+        if let Some(forced) = self.forced {
+            match stage.targets_work() {
+                Ok(()) => self.landed_on(forced),
+                Err(why) => self.step_down(&why),
+            }
+            return;
+        }
+        let fingerprint = fingerprint_of(stage);
+        let stored = self.memory.stored().clone();
+        if stored.guard.tripped(&fingerprint) {
+            eprintln!("nightjar: {}", probe::GUARD_WARNING);
+            self.landing = Some(Tier::Baked);
+            self.changed = true;
+            self.memory.save(Stored { tier: Some(Tier::Baked), guard: Guard::clear(&fingerprint) });
+            return;
+        }
+        let stored_tier = stored.tier.filter(|_| stored.guard.fingerprint == fingerprint);
+        if stored_tier == Some(Tier::Baked) {
+            // A probe on this build and driver already stepped down to baked: no target is made.
+            self.landing = Some(Tier::Baked);
+            self.changed = true;
+            return;
+        }
+        self.memory.save(Stored { tier: stored_tier, guard: Guard::arm(&fingerprint) });
+        self.armed = Some(fingerprint);
+        match stage.targets_work() {
+            Ok(()) => {
+                // Targets are all lens and live need on the desktop; high contrast is applied per
+                // frame (`tier`), so leaving it brings the landed tier back.
+                let device = Device { lens: true, live: true, ..Device::default() };
+                self.landed_on(probe::land(&device, stored_tier));
+            }
+            Err(why) => self.step_down(&why),
+        }
+    }
+
+    fn landed_on(&mut self, tier: Tier) {
+        self.landing = Some(tier);
+        self.opened = Some(Instant::now());
+        self.changed = true;
+    }
+
     /// After a frame's meshes: tries the targets on the first launcher frame, and frees them once
     /// the frame that stepped down no longer samples them.
     pub fn settle<S: Stage>(&mut self, stage: &mut S) {
-        if self.landing == Landing::Untried && !self.over_video {
-            match stage.targets_work() {
-                Ok(()) => {
-                    self.landing = Landing::Live;
-                    self.changed = true;
-                }
-                Err(why) => self.step_down(&why),
-            }
+        if self.landing.is_none() && !self.over_video {
+            self.land(stage);
         }
-        if self.landing == Landing::Baked && self.held {
+        if self.landing == Some(Tier::Baked) && self.held {
             self.held = false;
             stage.release();
         }
+    }
+}
+
+impl Drop for Glass {
+    /// A clean exit is no crash: a probe still running leaves no armed guard behind.
+    fn drop(&mut self) {
+        self.finish(None);
     }
 }
 
@@ -514,7 +615,6 @@ pub const LEVELS: [i32; 6] = [2, 4, 8, 16, 8, 4];
 pub fn level_size((w, h): (i32, i32), div: i32) -> (i32, i32) {
     ((w / div).max(1), (h / div).max(1))
 }
-
 
 #[cfg(test)]
 mod tests;

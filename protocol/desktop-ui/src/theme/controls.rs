@@ -6,45 +6,6 @@ use super::*;
 /// adaptive icon: moon radius 27 around (54, 54)).
 const BIRD: &str = "M 51.75,41.24 C 53.31,40.96 54.50,41.92 54.89,43.31 C 55.16,44.00 55.33,44.55 55.55,44.95 C 58.63,42.95 61.40,40.41 64.45,38.63 C 68.66,39.72 73.12,42.22 78.13,45.72 C 72.88,44.97 68.19,45.36 64.07,46.82 C 60.97,47.94 58.40,49.93 56.11,51.87 L 56.49,56.49 L 59.86,66.49 C 58.86,67.47 57.71,67.97 56.50,68.18 C 55.30,68.39 54.04,68.32 52.77,67.74 L 52.51,57.19 L 51.29,52.72 C 48.47,51.68 45.38,50.70 42.08,50.69 C 37.70,50.73 33.17,51.97 28.50,54.48 C 32.00,49.47 35.34,45.59 38.92,43.13 C 42.40,43.76 45.87,45.20 49.45,46.03 C 49.52,45.58 49.49,45.00 49.51,44.26 C 49.40,42.82 50.19,41.51 51.75,41.24 Z";
 
-/// The bird alone over the moon's box (27 to 81 units), white with coverage as its alpha, to tint.
-pub fn bird_mask(size: usize) -> egui::ColorImage {
-    const SUB: usize = 4;
-    const LEFT: f32 = 27.0;
-    const SPAN: f32 = 54.0;
-    let polygon = bird_polygon();
-    let mut coverage = vec![0.0f32; size * size];
-    let mut crossings = Vec::new();
-    for row in 0..size * SUB {
-        let y = LEFT + (row as f32 + 0.5) / (size * SUB) as f32 * SPAN;
-        crossings.clear();
-        for (i, a) in polygon.iter().enumerate() {
-            let b = polygon[(i + 1) % polygon.len()];
-            if (a.1 > y) != (b.1 > y) {
-                let x = a.0 + (y - a.1) / (b.1 - a.1) * (b.0 - a.0);
-                crossings.push((x - LEFT) / SPAN * size as f32);
-            }
-        }
-        crossings.sort_by(f32::total_cmp);
-        for span in crossings.as_chunks::<2>().0 {
-            let (from, to) = (span[0].clamp(0.0, size as f32), span[1].clamp(0.0, size as f32));
-            let line = row / SUB;
-            for x in from as usize..(to.ceil() as usize).min(size) {
-                let over = (to.min(x as f32 + 1.0) - from.max(x as f32)).max(0.0);
-                coverage[line * size + x] += over / SUB as f32;
-            }
-        }
-    }
-    let pixels = coverage
-        .iter()
-        .map(|c| egui::Color32::from_white_alpha((c.min(1.0) * 255.0).round() as u8))
-        .collect();
-    egui::ColorImage {
-        size: [size, size],
-        source_size: egui::vec2(size as f32, size as f32),
-        pixels,
-    }
-}
-
 /// The bird outline flattened to a polygon in icon units.
 pub(super) fn bird_polygon() -> Vec<(f32, f32)> {
     let mut points = Vec::new();

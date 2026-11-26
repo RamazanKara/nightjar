@@ -328,11 +328,11 @@ fn live_glass_leaves_an_idle_launcher_idle() {
     gui.glass = Glass::new(None);
     let mut stage = Counted::default();
     gui.glass.settle(&mut stage);
-    assert!(gui.glass.take_changed(), "the targets work: live from the next pass");
+    assert!(gui.glass.take_changed(), "the targets work: lens from the next pass");
     for n in 0..6 {
         glass_pass(&mut gui, n);
     }
-    assert_eq!(live_glass::tier(&gui.ctx), Tier::Live);
+    assert_eq!(live_glass::tier(&gui.ctx), Tier::Lens, "the live chain with its band");
     assert_eq!(gui.repaint_in(Duration::ZERO), None, "the boundary and the glass ask for no frames");
     let frame = glass_pass(&mut gui, 6);
     assert!(has_boundary(&frame));

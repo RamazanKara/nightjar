@@ -61,6 +61,14 @@ public class MaterialSwitchPreference extends SwitchPreference {
         if (view != null && isChecked() != before) Haptics.toggle(view, isChecked());
     }
 
+    /** A switch with a preview card shows the picture of its state under its title (SettingsPreviews). */
+    @Override
+    public View getView(View convertView, android.view.ViewGroup parent) {
+        View view = super.getView(convertView, parent);
+        SettingsPreviews.bind(this, view, parent);
+        return view;
+    }
+
     @Override
     protected void onBindView(View view) {
         super.onBindView(view);

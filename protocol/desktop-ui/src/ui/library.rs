@@ -33,7 +33,8 @@ impl Launcher {
             None if !view.hosts.list.is_empty() => (en("Go to PCs").to_owned(), "empty-library-pcs"),
             None => (en("Add PC").to_owned(), "empty-library-add"),
         };
-        let r = ui.horizontal(|ui| quiet_button(ui, &words)).inner;
+        // Alone, so a centred page (Home's empty stage) centres it and a column keeps it at its start.
+        let r = quiet_button(ui, &words);
         self.focus_item(&r, key, true);
         if r.clicked() {
             match asleep {

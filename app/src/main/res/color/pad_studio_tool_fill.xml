@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A dock tool that is on (the mirror lock, an open tray) is lit amber like a pressed control; the others have no fill. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_checked="true" android:color="@color/nj_pad_skin_pressed_fill" />
+    <item android:color="@android:color/transparent" />
+</selector>

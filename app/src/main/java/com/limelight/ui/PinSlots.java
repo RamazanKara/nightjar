@@ -20,7 +20,9 @@ public final class PinSlots extends LinearLayout {
     private int gap;
     private int widest;
     private CharSequence digits = "";
-    private final float digitSize;
+    private float digitSize;
+    private int tall;
+    private boolean toRead;
 
     public PinSlots(Context context) {
         this(context, null);
@@ -35,6 +37,25 @@ public final class PinSlots extends LinearLayout {
         gap = getResources().getDimensionPixelSize(R.dimen.space_s);
         widest = getResources().getDimensionPixelSize(R.dimen.pin_slot_width);
         digitSize = getResources().getDimension(R.dimen.pin_key_text);
+        tall = getResources().getDimensionPixelSize(R.dimen.pin_slot_height);
+    }
+
+    /**
+     * Cells for a PIN that is shown to be read and typed elsewhere: this wide and tall at most, with digits of this size, and
+     * none of them ringed, since nothing is typed here.
+     */
+    public void setCells(int width, int height, float textSize) {
+        widest = width;
+        tall = height;
+        digitSize = textSize;
+        toRead = true;
+        removeAllViews();
+    }
+
+    /** A cell's width when {@code slots} of them share {@code room} with a gap between them: never wider than {@code widest}. */
+    static int cellWidth(int room, int slots, int widest, int gap) {
+        if (slots <= 0) return 0;
+        return Math.max(0, Math.min(widest, (room - gap * (slots - 1)) / slots));
     }
 
     /** How many slots stand empty at the start, and how many there can be. */
@@ -61,7 +82,7 @@ public final class PinSlots extends LinearLayout {
     }
 
     private void fill(int count, CharSequence entered) {
-        int slots = Math.max(least, Math.min(most, count + 1));
+        int slots = toRead ? Math.max(least, count) : Math.max(least, Math.min(most, count + 1));
         while (getChildCount() < slots) addView(newSlot());
         while (getChildCount() > slots) removeViewAt(getChildCount() - 1);
         for (int i = 0; i < slots; i++) {
@@ -69,7 +90,7 @@ public final class PinSlots extends LinearLayout {
             slot.setText(i >= count ? "" : entered == null ? DOT : String.valueOf(entered.charAt(i)));
             // A bullet is a small glyph at a digit's size.
             slot.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, entered == null ? digitSize * 1.6f : digitSize);
-            slot.setActivated(i == count);
+            slot.setActivated(!toRead && i == count);
         }
     }
 
@@ -77,9 +98,12 @@ public final class PinSlots extends LinearLayout {
         TextView slot = new TextView(getContext());
         slot.setTextAppearance(getContext(), R.style.TextAppearance_Nightjar_PinKey);
         slot.setGravity(Gravity.CENTER);
+        // Every digit takes the same room, so a 1 stands in the middle of its cell as an 8 does.
+        slot.setFontFeatureSettings("tnum");
+        slot.setIncludeFontPadding(false);
         slot.setBackgroundResource(R.drawable.pin_slot);
         slot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        LayoutParams params = new LayoutParams(widest, getResources().getDimensionPixelSize(R.dimen.pin_slot_height));
+        LayoutParams params = new LayoutParams(widest, tall);
         slot.setLayoutParams(params);
         return slot;
     }
@@ -91,7 +115,7 @@ public final class PinSlots extends LinearLayout {
         int width = widest;
         // Eight slots share the room four had.
         if (slots > 0 && MeasureSpec.getMode(widthSpec) != MeasureSpec.UNSPECIFIED) {
-            width = Math.min(widest, (room - gap * (slots - 1)) / slots);
+            width = cellWidth(room - getPaddingLeft() - getPaddingRight(), slots, widest, gap);
         }
         for (int i = 0; i < slots; i++) {
             LayoutParams params = (LayoutParams) getChildAt(i).getLayoutParams();

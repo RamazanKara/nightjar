@@ -43,6 +43,7 @@ pub mod policy_input;
 pub mod policy_quality;
 pub mod policy_recovery;
 pub mod policy_roaming;
+pub mod policy_ui_70;
 pub mod policy_video_codec;
 pub mod policy_video_pacing;
 pub mod policy_video_queue;

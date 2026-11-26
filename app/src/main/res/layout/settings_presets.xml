@@ -1,5 +1,4 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content"
     android:orientation="vertical" android:descendantFocusability="blocksDescendants"
     android:paddingStart="@dimen/screen_gutter" android:paddingEnd="@dimen/screen_gutter"
@@ -16,8 +15,8 @@
             android:layout_marginEnd="-12dp"
             android:src="@drawable/ic_info" android:contentDescription="@string/stream_presets_help_title" />
     </LinearLayout>
-    <com.google.android.material.chip.ChipGroup android:id="@+id/preset_chips"
+    <!-- PresetChips fills it: two lines of two on a phone held upright, one line where there is room. -->
+    <LinearLayout android:id="@+id/preset_chips"
         android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/space_s"
-        app:singleSelection="true" app:selectionRequired="true" app:chipSpacingHorizontal="@dimen/space_s" />
+        android:layout_marginTop="@dimen/space_s" android:orientation="vertical" />
 </LinearLayout>

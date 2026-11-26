@@ -240,13 +240,14 @@ public class AppGridAdapterTest {
         try (var controller = Robolectric.buildActivity(com.limelight.ui.UiNavigationTest.Screen.class).setup().visible()) {
             com.limelight.ui.AdaptiveGridView grid = posterGrid(controller.get(), 20, 700);
             android.view.View first = grid.getSelectedView();
+            float lift = androidx.core.content.res.ResourcesCompat.getFloat(controller.get().getResources(), R.dimen.nj_focus_scale_cover_tv);
             key(grid, android.view.KeyEvent.KEYCODE_DPAD_RIGHT, 1);
             assertEquals(1, grid.getSelectedItemPosition());
-            assertEquals("the new card is already scaled", 1.12f, grid.getSelectedView().getScaleX(), 0.001f);
+            assertEquals("the new card is already scaled", lift, grid.getSelectedView().getScaleX(), 0.001f);
             assertEquals("the old card is already at rest", 1f, first.getScaleX(), 0.001f);
             key(grid, android.view.KeyEvent.KEYCODE_DPAD_RIGHT, 2);
             assertEquals(2, grid.getSelectedItemPosition());
-            assertEquals(1.12f, grid.getSelectedView().getScaleX(), 0.001f);
+            assertEquals(lift, grid.getSelectedView().getScaleX(), 0.001f);
             assertEquals(1f, grid.getChildAt(1).getScaleX(), 0.001f);
         }
     }

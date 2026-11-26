@@ -206,13 +206,23 @@ fn the_sheet_lists_select_for_the_controls_when_back_opens_them() {
     }
 }
 
-/// Every action the stream menu had is still in it (app/overlay.rs draws it with these pieces), and
-/// the menu lists the sheet of shortcuts.
+/// What `app/overlay.rs` draws over the stream: `draw_overlay` with the sheet and the Session
+/// page, and the Control Center its host (`app/control_center.rs`) draws with its pages.
+fn stream_overlay_source() -> (&'static str, String) {
+    let source = include_str!("../../../desktop/src/app/overlay.rs");
+    let start = source.find("pub(crate) fn draw_overlay(").expect("draw_overlay");
+    let overlay = &source[start..start + source[start..].find("
+fn ").unwrap_or(source.len() - start)];
+    let center = [include_str!("../../../desktop/src/app/control_center.rs"), include_str!("../../../desktop/src/app/control_center/pages.rs")].concat();
+    (overlay, center)
+}
+
+/// Every action the 6.x stream menu had is still in the Control Center (its host and pages run it
+/// with these pieces), and the menu lists the sheet of shortcuts.
 #[test]
 fn the_stream_menu_keeps_every_action() {
-    let source = include_str!("../../../desktop/src/app/overlay.rs");
-    let start = source.find("fn draw_overlay(").expect("draw_overlay");
-    let menu = &source[start..start + source[start..].find("\nfn ").unwrap_or(source.len() - start)];
+    let (overlay, center) = stream_overlay_source();
+    let menu = format!("{overlay}{center}");
     for action in [
         "s.toggle_menu(window, pads)",
         "s.overlay_visible = false",
@@ -230,6 +240,7 @@ fn the_stream_menu_keeps_every_action() {
         "s.send_shortcut(",
         "s.enable_adaptive_bitrate(",
         "s.set_bitrate()",
+        "s.set_bitrate_kept(",
         "s.change_rates()",
         "s.health_trial(",
         "s.copy_health()",
@@ -240,7 +251,7 @@ fn the_stream_menu_keeps_every_action() {
         "show_usb_section(",
         "usb_show_refusal(",
         "s.server_command(",
-        "overlay.session_page_requested = true",
+        "session_page_requested = true",
         "Exit::Reconnect",
         "s.exit = Some(Exit::User)",
         "Some(stream::Sheet::FromMenu)",
@@ -254,24 +265,31 @@ fn the_stream_menu_keeps_every_action() {
     assert!(!menu.contains("Align video to top"), "the stream menu has no Align video to top");
 }
 
-/// nightjar#52 and #63: the grid comes first with the focus on its first tile, so A right after
-/// opening never leaves; Return to stream and then Disconnect sit right under it, a step or two
-/// down for a controller or remote. Reconnect is one level down, behind More.
+/// nightjar#52 and #63, and the Control Center's promise to the stream: with nothing to show the
+/// overlay runs no pass at all; the Control Center and the pages in its place draw only inside the
+/// open menu's check; the HUD stands on its own surface; nothing samples the video. Opened, the
+/// first card takes the focus, so A right after opening never leaves.
 #[test]
 fn a_closed_menu_adds_nothing_to_the_stream() {
-    let source = include_str!("../../../desktop/src/app/overlay.rs");
-    let start = source.find("fn draw_overlay(").expect("draw_overlay");
-    let overlay = &source[start..start + source[start..].find("\nfn ").unwrap_or(source.len() - start)];
+    let (overlay, center) = stream_overlay_source();
     let run = overlay.find("gui.run(").expect("the pass");
     assert!(overlay[..run].contains("!s.overlay_visible && toast.is_none() && !input_only && !s.menu_visible"), "no pass at all with nothing to show");
-    // The menu's glass is menu_style's; the statistics and the toast stand on the HUD's, which reads nothing behind it.
-    assert_eq!(overlay.matches("glass::").count(), overlay.matches("glass::hud_surface(").count(), "the glass is menu_style's");
-    assert!(!overlay.contains("LIVE_BACKDROP"), "nothing reads the stream");
-    assert_eq!(overlay.matches("menu_style::show(").count(), 3);
-    for at in overlay.match_indices("menu_style::show(").map(|(at, _)| at) {
-        let opened = overlay[..at].rfind("if s.menu_visible").expect("under the open menu's check");
-        assert!(!overlay[opened..at].contains("\n        }\n"), "the panel stands inside that check");
+    let hud = include_str!("../ui/stream_hud.rs");
+    assert!(!hud.contains("glass::") && hud.contains("tokens::SURFACE_HUD_FILL"), "the HUD stands on its own surface, not on glass");
+    assert!(!overlay.contains("glass::"), "the overlay paints through the HUD and the Control Center");
+    for source in [overlay, center.as_str(), hud] {
+        assert!(!source.contains("LIVE_BACKDROP"), "nothing reads the stream");
     }
+    assert!(center.contains("blur_available: false"), "no blur pass samples the video");
+    let drawn: Vec<usize> = ["menu_style::show(", "control_center::show("].iter().flat_map(|needle| overlay.match_indices(needle).map(|(at, _)| at)).collect();
+    assert_eq!(drawn.len(), 3, "the Session page, the sheet and the Control Center");
+    for at in drawn {
+        let opened = overlay[..at].rfind("if s.menu_visible").expect("under the open menu's check");
+        assert!(!overlay[opened..at].contains("
+        }
+"), "the panel stands inside that check");
+    }
+    assert!(center.contains("let focus_first = ctx.memory(|m| m.focused().is_none());"), "the first card takes the focus");
 }
 
 #[test]
@@ -314,28 +332,29 @@ fn the_heads_close_is_named_and_closes() {
     assert!(closed);
 }
 
+/// The ways out sit under every page: the module's page, then the footer with Return to stream
+/// and Disconnect, each drawn once. Reconnect is a row on Power.
 #[test]
 fn leaving_sits_right_under_the_grid() {
-    let source = include_str!("../../../desktop/src/app/overlay.rs");
-    let start = source.find("fn draw_overlay(").expect("draw_overlay");
-    let overlay = &source[start..start + source[start..].find("
-fn ").unwrap_or(source.len() - start)];
-    let at = |needle: &str| overlay.find(needle).unwrap_or_else(|| panic!("{needle} in the stream controls"));
-    assert!(at("stream_menu::grid(") < at("stream_menu::footer("), "the grid, then the footer");
-    assert_eq!(overlay.matches("Exit::Reconnect").count(), 1, "Reconnect is drawn once");
+    let (overlay, center) = stream_overlay_source();
+    let at = |needle: &str| center.find(needle).unwrap_or_else(|| panic!("{needle} in the Control Center"));
+    assert!(at("host.page(") < at("stream_menu::dock_footer("), "the page, then the footer");
+    assert_eq!(center.matches("Exit::Reconnect").count(), 1, "Reconnect is drawn once");
     let menu = include_str!("../stream_menu.rs");
-    let footer = &menu[menu.find("pub fn footer(").expect("the footer")..];
+    let footer = &menu[menu.find("pub fn dock_footer(").expect("the footer")..];
+    let footer = &footer[..footer.find("
+}
+").unwrap()];
     let at = |needle: &str| footer.find(needle).unwrap_or_else(|| panic!("{needle} in the footer"));
-    assert!(!footer[..at("tr(\"Disconnect\")")].contains("Return to stream"), "closing is the head's");
-    // Once in the footer; the button's question page names it too.
-    assert_eq!(footer[..footer.find("
+    assert!(at("tr(\"Return to stream\")") < at("tr(\"Disconnect\")"), "Return to stream, then Disconnect");
+    assert_eq!(footer.matches("tr(\"Disconnect\")").count(), 1, "Disconnect is drawn once");
+    for source in [overlay, center.as_str()] {
+        assert!(!source.contains("tr(\"Disconnect\")"), "Disconnect is the footer's");
+    }
+    let cards = &menu[menu.find("pub fn cards(").expect("the cards")..];
+    assert!(cards[..cards.find("
 }
-").unwrap()].matches("tr(\"Disconnect\")").count(), 1, "Disconnect is drawn once");
-    assert!(!overlay.contains("tr(\"Disconnect\")"), "Disconnect is the footer's");
-    let grid = &menu[menu.find("pub fn grid(").expect("the grid")..];
-    assert!(grid[..grid.find("
-}
-").unwrap()].contains("focus_first && index == 0"), "the first tile takes the focus");
+").unwrap()].contains("focus_first && index == 0"), "the first card takes the focus");
 }
 
 fn shoot(dir: &std::path::Path, name: &str, width: f32, height: f32, ppp: f32, high_contrast: bool, what: &str) {

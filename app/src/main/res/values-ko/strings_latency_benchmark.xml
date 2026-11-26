@@ -21,4 +21,5 @@
     <string name="latency_benchmark_copied">결과를 복사했습니다</string>
     <string name="latency_benchmark_report_form">양식 열기</string>
     <string name="latency_benchmark_paste_hint">결과를 복사했습니다. 양식에 붙여넣으세요.</string>
+    <string name="latency_benchmark_audio_unavailable">보고된 오디오: 이 기기에서는 사용할 수 없음</string>
 </resources>

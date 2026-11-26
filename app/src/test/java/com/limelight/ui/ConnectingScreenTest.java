@@ -51,7 +51,7 @@ public class ConnectingScreenTest {
         assertEquals("Living-room PC", text(dialog, R.id.conn_pc));
         assertEquals("Connecting", text(dialog, R.id.conn_word));
         assertEquals("Starting connection", text(dialog, R.id.conn_line));
-        assertTrue("the orbit moves while it connects", screen.isOrbitMoving());
+        assertTrue("the ring turns while it connects", screen.isRingTurning());
 
         screen.setStage("Starting");
         ShadowLooper.idleMainLooper();
@@ -61,7 +61,7 @@ public class ConnectingScreenTest {
         screen.dismiss();
         ShadowLooper.idleMainLooper();
         assertFalse("the window is removed, not hidden, so the stream has nothing over it", dialog.isShowing());
-        assertFalse(screen.isOrbitMoving());
+        assertFalse(screen.isRingTurning());
         assertEquals(0, cancelled.get());
         controller.pause().stop().destroy();
     }
@@ -155,7 +155,7 @@ public class ConnectingScreenTest {
         assertEquals("the app's real message, unshortened", message, text(dialog, R.id.conn_error_message));
         assertEquals("Racing Game, Living-room PC", text(dialog, R.id.conn_error_what));
         assertEquals(View.GONE, dialog.findViewById(R.id.conn_cancel).getVisibility());
-        assertFalse("nothing is under way", screen.isOrbitMoving());
+        assertFalse("nothing is under way", screen.isRingTurning());
         assertEquals(dialog.getContext().getString(R.string.pair_try_again), text(dialog, R.id.conn_retry));
         assertEquals("Test the network", text(dialog, R.id.conn_test));
 

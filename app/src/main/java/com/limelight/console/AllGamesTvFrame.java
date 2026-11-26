@@ -13,7 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.limelight.R;
 import com.limelight.ui.AppTheme;
-import com.limelight.ui.NightSkyView;
+import com.limelight.ui.StageView;
 
 /**
  * TV overscan framing, glow-room padding/decorations, safe-edge sizing and responsive column fitting for
@@ -51,7 +51,7 @@ final class AllGamesTvFrame {
         return roomAbove;
     }
 
-    /** Configures either the TV sky/glow frame or the non-TV gutter alignment, plus column sizing on layout. */
+    /** Configures either the TV stage and glow frame or the non-TV gutter alignment, plus column sizing on layout. */
     void install() {
         if (television) {
             installTelevisionFrame();
@@ -63,12 +63,11 @@ final class AllGamesTvFrame {
 
     private void installTelevisionFrame() {
         activity.getWindow().setBackgroundDrawable(new ColorDrawable(AppTheme.tvCanvas(activity)));
-        // The sky of Home, PCs and Settings; the grid fills the screen, so no moon behind the posters.
-        NightSkyView sky = activity.findViewById(R.id.all_games_sky);
-        sky.setMoonShown(false);
-        sky.setVisibility(View.VISIBLE);
+        // The stage of PCs and Settings, behind the posters.
+        StageView stage = activity.findViewById(R.id.all_games_stage);
+        stage.setVisibility(View.VISIBLE);
         // Edge to edge, not inset by the TV margin as a lighter frame.
-        sky.bleedPastPadding();
+        stage.bleedPastPadding();
         // Rows scrolling up fade out under the heading and filters instead of stopping on a hard edge.
         list.setVerticalFadingEdgeEnabled(true);
         // The frame clips the grid. A focused poster's glow reaches past its 24 dp bleed and the row's top padding, and

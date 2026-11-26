@@ -16,7 +16,8 @@ import static org.junit.Assert.*;
 
 /**
  * {@link ModernController} layout editor tests: Add tiles, corner resize handles, Split/Join,
- * movable panel placement, alignment guides, and portrait/tallest-state panel bounds.
+ * movable dock placement, alignment guides, and portrait/tallest-state dock bounds. {@link PadStudioInspectorTest}
+ * has the dock's bar and its trays.
  */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 30, application = Application.class, qualifiers = "w800dp-h360dp-land-xhdpi")
@@ -26,6 +27,7 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         assertEquals(View.GONE, controller.view(PadLayout.Control.WASD).getVisibility());
         controller.startEditing();
         PadEditor editor = (PadEditor) frame.getChildAt(frame.getChildCount() - 1);
+        assertTrue("Add opens the tray of tiles", editor.findViewById(com.limelight.R.id.pad_studio_add).performClick());
         View tile = editor.tile(PadLayout.Control.WASD);
         assertNotNull("Left out, it has an Add tile", tile);
         assertEquals("Add WASD stick", tile.getContentDescription().toString());
@@ -86,7 +88,9 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         PadEditor editor = (PadEditor) frame.getChildAt(frame.getChildCount() - 1);
         View surface = editor.getChildAt(0);
         float density = frame.getContext().getResources().getDisplayMetrics().density;
-        float outline = PadPainter.OUTLINE_DP * density;
+        float outline = PadEditorSurface.OUTLINE_DP * density;
+        // A sized edge lands on the grid, or on a line worth sharing within the snap distance.
+        float snap = frame.getResources().getDimension(com.limelight.R.dimen.nj_pad_studio_snap_distance) + .5f;
         editor.select(PadLayout.Control.FACE);
         float[] before = editor.draft().bounds(PadLayout.Control.FACE, surface.getWidth(), surface.getHeight(), density,
                 new float[4]);
@@ -98,8 +102,8 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
                 new float[4]);
         assertEquals("The right edge stays", before[0] + before[2], wide[0] + wide[2], .5f);
         assertEquals("The bottom edge stays", before[1] + before[3], wide[1] + wide[3], .5f);
-        assertEquals("200 px wider, on the 8 dp grid", before[2] + 200, wide[2], PadEditor.GRID_DP * density / 2 + .5f);
-        assertEquals("As tall, give or take the grid", before[3], wide[3], PadEditor.GRID_DP * density / 2 + .5f);
+        assertEquals("200 px wider, give or take a snap", before[2] + 200, wide[2], snap);
+        assertEquals("As tall to the pixel: the finger never moved up or down", before[3], wide[3], .05f);
         PadLayout.Spec spec = editor.draft().spec(PadLayout.Control.FACE);
         assertTrue(spec.widthScale + " x " + spec.heightScale, spec.widthScale > spec.heightScale + .5f);
 
@@ -109,7 +113,7 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         float[] low = editor.draft().bounds(PadLayout.Control.FACE, surface.getWidth(), surface.getHeight(), density,
                 new float[4]);
         assertEquals(widthScale, spec.widthScale, 1e-4);
-        assertEquals(wide[3] - 100, low[3], PadEditor.GRID_DP * density / 2 + .5f);
+        assertEquals(wide[3] - 100, low[3], snap);
         assertEquals("The bottom edge still stays", before[1] + before[3], low[1] + low[3], .5f);
 
         // A handle cannot shrink a control below a full touch, nor drag it past the surface.
@@ -197,17 +201,20 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         float x = panel.getX(), y = panel.getY();
         assertTrue("The panel laid out in the middle", panel.getWidth() > 0 && x >= 300);
 
-        drag(grip, 100, 10, 100 - 300, 10 + 20);
+        drag(grip, 100, 10, 100 - 300, 10 - 200);
         assertEquals(x - 300, panel.getX(), 1);
-        assertEquals(y + 20, panel.getY(), 1);
+        assertEquals(y - 200, panel.getY(), 1);
         settle();
         assertEquals("Laid out again, it stays", x - 300, panel.getX(), 1);
-        assertEquals(y + 20, panel.getY(), 1);
-        // The left stick sits under it now; picking it leaves the placed panel alone.
+        assertEquals(y - 200, panel.getY(), 1);
+        // Picked, the left stick shows in the dock's tray, which reaches over it now; the placed panel is left alone.
         editor.select(PadLayout.Control.LEFT_STICK);
         settle();
         assertEquals(x - 300, panel.getX(), 1);
-        assertEquals(y + 20, panel.getY(), 1);
+        assertEquals(y - 200, panel.getY(), 1);
+        float[] stick = editor.draft().bounds(PadLayout.Control.LEFT_STICK, frame.getWidth(), frame.getHeight(),
+                frame.getResources().getDisplayMetrics().density, new float[4]);
+        assertTrue("over the stick", panel.getY() + panel.getHeight() > stick[1] && panel.getX() < stick[0] + stick[2]);
 
         // Dragged far past an edge, it stops there, whole.
         drag(grip, 100, 10, 100 - 5000, 10 - 5000);
@@ -227,6 +234,21 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         assertNotSame(editor, again);
         assertEquals(leftX, again.panel().getX(), 1);
         assertEquals(leftY, again.panel().getY(), 1);
+
+        // Put at the bottom edge, the dock is shown whole while a picked control makes it taller, and stands where
+        // it was put again once the control is let go.
+        View dock = again.panel();
+        drag(again.findViewById(com.limelight.R.id.pad_editor_grip), 100, 10, 100, 10 + 5000);
+        settle();
+        float low = dock.getY();
+        assertEquals(frame.getHeight() - dock.getHeight(), low, 1);
+        again.select(PadLayout.Control.RB);
+        settle();
+        assertTrue("Taller, it moves up", dock.getY() < low - 48);
+        assertEquals("as far as it takes", frame.getHeight(), dock.getY() + dock.getHeight(), 1);
+        again.select(null);
+        settle();
+        assertEquals(low, dock.getY(), 1);
         controller.finishEditing(true);
     }
 
@@ -303,7 +325,7 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         assertEquals("Nothing to close, nothing reported", 2, runs[0]);
     }
 
-    /** A portrait phone: Hide and Reset turn into 48 dp icons so Cancel and Done stay whole on the row. */
+    /** A portrait phone: Reset and Cancel are 48 dp icons beside Done, whole on their row under the tools. */
     @Test @Config(qualifiers = "w360dp-h800dp-port-xhdpi")
     public void aNarrowEditorKeepsEveryButtonWholeAndTouchable() {
         frame.getLayoutParams().width = 720;
@@ -319,7 +341,13 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         }
         PadEditor editor = (PadEditor) frame.getChildAt(frame.getChildCount() - 1);
         editor.select(PadLayout.Control.DPAD);
-        ShadowLooper.idleMainLooper();
+        // The picked control's tray opens: laid out once more.
+        for (int pass = 0; pass < 2; pass++) {
+            ShadowLooper.idleMainLooper();
+            frame.measure(View.MeasureSpec.makeMeasureSpec(720, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.EXACTLY));
+            frame.layout(0, 0, 720, 1600);
+        }
         float density = frame.getResources().getDisplayMetrics().density;
         View row = (View) editor.findViewById(com.limelight.R.id.pad_editor_done).getParent();
         assertTrue("The editor laid out", row.getWidth() > 0);
@@ -332,7 +360,7 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
             assertTrue(name + " is " + button.getHeight() / density + " dp tall", button.getHeight() >= 48 * density - 1);
             assertTrue(name + " ends inside the panel", button.getRight() <= row.getWidth());
         }
-        // Reset, Cancel and Done share the bottom row, Reset as its icon; Hide keeps its name in the picked control's row.
+        // Reset, Cancel and Done share the bar's second row, Reset as its icon; Hide keeps its name in the picked control's row.
         for (int id : new int[] {com.limelight.R.id.pad_editor_reset, com.limelight.R.id.pad_editor_cancel}) {
             assertSame(row, editor.findViewById(id).getParent());
         }
@@ -442,21 +470,10 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         controller.finishEditing(false);
     }
 
-    @Test public void alignmentLinesUpCentresAndEdgesWithinHalfAGridStep() {
-        float[] other = {0, 50, 100};
-        assertEquals("Every line 3 px off: one nudge", -3, PadEditor.alignNudge(3, 53, 103, other, 3, 4), 0);
-        assertTrue("Too far", Float.isNaN(PadEditor.alignNudge(10, 60, 110, other, 3, 4)));
-        assertEquals("An edge meets the other side's", -2, PadEditor.alignNudge(102, 152, 202, other, 3, 4), 0);
-        assertEquals("The nearest wins", .5f, PadEditor.alignNudge(-1, 49, 99, new float[] {0, 50, 100, 99.5f, 100, 100.5f}, 6, 4), 0);
-        float[] guides = new float[3];
-        assertEquals("Edge on edge", 1, PadEditor.alignedLines(100, 150, 200, other, 3, guides));
-        assertEquals(100, guides[0], 0);
-        assertEquals("A centre never lines up with an edge", 0, PadEditor.alignedLines(25, 50.4f, 75.6f, new float[] {
-                10, 20, 50}, 3, guides));
-        assertEquals("All three", 3, PadEditor.alignedLines(0, 50, 100, other, 3, guides));
-    }
-
-    /** A control dragged near another's centre line lands on it and shows a guide until the finger lifts. */
+    /**
+     * A control dragged near another's centre line lands on it and shows a guide until the finger lifts.
+     * {@link PadSnapGridTest} has the geometry, {@link PadEditorStudioTest} the other lines.
+     */
     @Test public void aDraggedControlLinesUpWithAnotherAndShowsAGuide() {
         ModernController controller = controller(GAME);
         controller.startEditing();
@@ -488,9 +505,9 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
     }
 
     /**
-     * On a phone held sideways the panel stays whole on the surface, its Done in reach, in its tallest states: many
-     * controls left out with the Steam Controller's on, and the pointer touchpad picked with its mode cards; the tiles
-     * and cards take a full touch.
+     * On a phone held sideways the dock stays whole on the surface, its Done in reach, in its tallest states: the Add
+     * tray with many controls left out and the Steam Controller's on, the More tray, and the pointer touchpad picked
+     * with its mode cards; the tiles and cards take a full touch.
      */
     @Test public void thePanelStaysOnTheSurfaceInItsTallestStates() {
         prefs.oscSteamControls = true;
@@ -508,6 +525,13 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         editor.select(null);
         settle();
         float density = frame.getResources().getDisplayMetrics().density;
+        assertWhole(editor, "the bar alone");
+        assertTrue(editor.findViewById(com.limelight.R.id.pad_studio_more).performClick());
+        settle();
+        assertWhole(editor, "more");
+        assertTrue(editor.findViewById(com.limelight.R.id.pad_studio_add).performClick());
+        settle();
+        assertEquals(View.VISIBLE, editor.findViewById(com.limelight.R.id.pad_editor_add).getVisibility());
         assertWhole(editor, "many left out");
         for (PadLayout.Control control : new PadLayout.Control[] {PadLayout.Control.L3, PadLayout.Control.LEFT_PAD,
                 PadLayout.Control.WASD}) {

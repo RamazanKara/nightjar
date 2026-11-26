@@ -62,4 +62,5 @@
     <string name="pad_dpad_down">Croix directionnelle bas</string>
     <string name="pad_dpad_left">Croix directionnelle gauche</string>
     <string name="pad_dpad_right">Croix directionnelle droite</string>
+    <string name="pad_edit_mirror">Symétrie gauche/droite</string>
 </resources>

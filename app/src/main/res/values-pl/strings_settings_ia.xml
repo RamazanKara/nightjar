@@ -28,4 +28,5 @@
     <string name="resolution_screen_portrait">Rozmiar ekranu, pionowo (%1$s)</string>
     <string name="resolution_screen_cutout_portrait">Rozmiar ekranu, pionowo, z pominięciem wycięcia aparatu (%1$s)</string>
     <string name="fps_screen">Częstotliwość odświeżania ekranu (%1$d FPS)</string>
+    <string name="resolution_screen_percent">%1$s rozmiaru ekranu (%2$s)</string>
 </resources>

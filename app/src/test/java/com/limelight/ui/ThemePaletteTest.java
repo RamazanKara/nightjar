@@ -89,8 +89,8 @@ public class ThemePaletteTest {
     @Config(qualifiers = "night")
     public void nightThemeIsAmberOnNightAndReadable() {
         Context app = themed(R.style.AppTheme);
-        assertEquals(0xFF14161F, color(app, com.google.android.material.R.attr.colorSurface));
-        assertEquals(0xFFF2A93B, color(app, androidx.appcompat.R.attr.colorPrimary));
+        assertEquals(0xFF090A0D, color(app, com.google.android.material.R.attr.colorSurface));
+        assertEquals(0xFFF5B041, color(app, androidx.appcompat.R.attr.colorPrimary));
         assertReadable(app);
     }
 
@@ -98,7 +98,7 @@ public class ThemePaletteTest {
     @Config(qualifiers = "notnight")
     public void dayThemeUsesADarkerBronzeThatStaysReadable() {
         Context app = themed(R.style.AppTheme);
-        assertEquals(0xFF845500, color(app, androidx.appcompat.R.attr.colorPrimary));
+        assertEquals(0xFF8A5000, color(app, androidx.appcompat.R.attr.colorPrimary));
         assertReadable(app);
     }
 
@@ -107,8 +107,8 @@ public class ThemePaletteTest {
     public void streamThemeStaysDarkWhenTheSystemThemeIsLight() {
         Context stream = themed(R.style.StreamTheme);
         Context app = themed(R.style.AppTheme);
-        assertEquals(0xFF14161F, color(stream, com.google.android.material.R.attr.colorSurface));
-        assertEquals(0xFFF2A93B, color(stream, androidx.appcompat.R.attr.colorPrimary));
+        assertEquals(0xFF090A0D, color(stream, com.google.android.material.R.attr.colorSurface));
+        assertEquals(0xFFF5B041, color(stream, androidx.appcompat.R.attr.colorPrimary));
         assertNotEquals(color(app, com.google.android.material.R.attr.colorSurface),
                 color(stream, com.google.android.material.R.attr.colorSurface));
         TypedValue light = new TypedValue();

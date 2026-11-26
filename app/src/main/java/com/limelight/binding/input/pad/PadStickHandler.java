@@ -29,8 +29,11 @@ final class PadStickHandler {
         configure(true, .08f);
     }
 
-    void configure(boolean floating, float deadzone) {
-        stick = new LayoutStick(floating, Math.max(0, Math.min(.9f, deadzone)));
+    /** Sets how the stick works and returns the deadzone it uses, a share of its travel, for the guide it draws. */
+    float configure(boolean floating, float deadzone) {
+        float used = Math.max(0, Math.min(.9f, deadzone));
+        stick = new LayoutStick(floating, used);
+        return used;
     }
 
     /** With the Steam Controller controls, a finger on an analog stick also touches that controller's stick. */
@@ -119,12 +122,15 @@ final class PadStickHandler {
      */
     private void stickMoved(boolean flagsChanged, boolean arcWasDrawn) {
         view.applyAlpha();
-        PadPainter.State state = view.state();
-        if (PadControlView.baseNeedsRedraw(flagsChanged, arcWasDrawn, state.stickX != 0 || state.stickY != 0)) {
-            view.invalidate();
+        // At opacity 0 neither is drawn, so neither is drawn again.
+        if (view.drawn()) {
+            PadPainter.State state = view.state();
+            if (PadControlView.baseNeedsRedraw(flagsChanged, arcWasDrawn, state.stickX != 0 || state.stickY != 0)) {
+                view.invalidate();
+            }
+            View knobLayer = view.knobLayer();
+            if (knobLayer != null) knobLayer.invalidate();
         }
-        View knobLayer = view.knobLayer();
-        if (knobLayer != null) knobLayer.invalidate();
         view.notifyGamepadChanged();
     }
 }

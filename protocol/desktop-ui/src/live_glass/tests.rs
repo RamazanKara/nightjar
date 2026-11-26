@@ -298,7 +298,8 @@ fn a_chain_over_budget_steps_down_once_keeping_the_frame_it_decided_on() {
     let mut glass = Glass::live();
     let mut stage = stage();
     stage.ms = 30.0;
-    for n in 0..t::TIER_PROBE_FRAMES {
+    // Seven slow runs of sixty decide the p90 at once (`glass_probe::slow_frames_to_fail`).
+    for n in 0..probe::slow_frames_to_fail(probe::PROBE_FRAMES) {
         assert_eq!(glass.pass_tier(), Tier::Live, "run {n}");
         let color = Color32::from_gray(n as u8);
         stage.calls.clear();
@@ -325,7 +326,7 @@ fn a_chain_over_budget_steps_down_once_keeping_the_frame_it_decided_on() {
 fn a_chain_within_budget_stays_live_and_stops_timing() {
     let mut glass = Glass::live();
     let mut stage = stage();
-    for n in 0..t::TIER_PROBE_FRAMES {
+    for n in 0..probe::PROBE_FRAMES {
         // Asked before the frame draws, so the GPU renderer keeps it readable.
         assert!(glass.timing(), "run {n}");
         stage.calls.clear();
@@ -364,7 +365,7 @@ fn another_refresh_rate_judges_the_chain_against_its_own_budget() {
     let mut stage = stage();
     stage.ms = 10.0;
     glass.set_refresh(60.0);
-    for n in 0..t::TIER_PROBE_FRAMES {
+    for n in 0..probe::PROBE_FRAMES {
         glass.paint(&mut stage, &chrome_frame(Color32::from_gray(n as u8)), false);
     }
     assert_eq!(glass.pass_tier(), Tier::Live, "10 ms holds at 60 Hz");
@@ -374,7 +375,7 @@ fn another_refresh_rate_judges_the_chain_against_its_own_budget() {
     glass.paint(&mut stage, &chrome_frame(Color32::GREEN), false);
     assert!(stage.calls.contains(&Call::End { timed: false }), "{:?}", stage.calls);
     glass.set_refresh(120.0);
-    for n in 0..t::TIER_PROBE_FRAMES {
+    for n in 0..probe::PROBE_FRAMES {
         glass.paint(&mut stage, &chrome_frame(Color32::from_rgb(n as u8, 1, 2)), false);
     }
     assert_eq!(glass.pass_tier(), Tier::Baked, "10 ms is over budget at 120 Hz");
@@ -430,8 +431,8 @@ fn the_targets_are_tried_once_on_the_first_launcher_frame() {
     assert!(!glass.set_over_video(false));
     glass.settle(&mut stage);
     assert_eq!(stage.calls, [Call::Try]);
-    assert_eq!(glass.pass_tier(), Tier::Live);
-    assert!(glass.take_changed(), "the next pass lays out live");
+    assert_eq!(glass.pass_tier(), Tier::Lens, "the best tier: the live chain with its band");
+    assert!(glass.take_changed(), "the next pass lays out lens");
     glass.settle(&mut stage);
     assert_eq!(stage.calls, [Call::Try], "once");
     assert!(!glass.take_changed(), "and idle stays idle");
@@ -457,8 +458,9 @@ fn nightjar_glass_holds_the_tier_for_an_a_b_run() {
 
     let mut live = Glass::new(forced_by(Some("live")));
     live.settle(&mut stage);
+    live.head_start_ms = probe::SETTLE_MS;
     stage.ms = 30.0;
-    for n in 0..t::TIER_PROBE_FRAMES {
+    for n in 0..probe::PROBE_FRAMES {
         live.paint(&mut stage, &chrome_frame(Color32::from_gray(n as u8)), false);
     }
     assert_eq!(live.pass_tier(), Tier::Live, "over budget and held");
@@ -493,40 +495,144 @@ fn the_boundary_is_found_at_its_place() {
 }
 
 #[test]
-fn a_chain_over_its_budget_steps_down_and_one_within_it_stays() {
-    let run = |ms: f32| {
-        let mut probe = Probe::new(16.6);
-        let mut verdict = None;
-        for _ in 0..t::TIER_PROBE_FRAMES {
-            assert!(verdict.is_none(), "one verdict, at the last sample");
-            verdict = probe.push(ms);
-        }
-        assert!(!probe.running());
-        verdict.expect("the last sample decides")
+fn lens_steps_down_to_live_then_to_baked_and_stores_each() {
+    let mut glass = Glass::landed(Tier::Lens);
+    let mut stage = stage();
+    stage.ms = 30.0;
+    let mut n = 0u8;
+    let mut run = |glass: &mut Glass, stage: &mut Recorder| {
+        n = n.wrapping_add(1);
+        glass.paint(stage, &chrome_frame(Color32::from_gray(n)), false);
     };
-    assert_eq!(run(2.0), Verdict::Holds { p90_ms: 2.0 });
-    assert_eq!(run(14.0), Verdict::TooSlow { p90_ms: 14.0 });
-}
-
-#[test]
-fn a_few_slow_runs_do_not_decide_the_tier() {
-    let mut probe = Probe::new(16.6);
-    let mut verdict = None;
-    for n in 0..t::TIER_PROBE_FRAMES {
-        verdict = probe.push(if n % 20 == 0 { 40.0 } else { 2.0 });
+    let slow = probe::slow_frames_to_fail(probe::PROBE_FRAMES);
+    for _ in 0..slow {
+        assert_eq!(glass.pass_tier(), Tier::Lens);
+        run(&mut glass, &mut stage);
     }
-    assert!(
-        matches!(verdict, Some(Verdict::Holds { .. })),
-        "{verdict:?}"
-    );
+    assert_eq!(glass.pass_tier(), Tier::Live, "one tier down");
+    assert!(glass.take_changed(), "the next pass drops the band");
+    assert_eq!(glass.memory().stored().tier, Some(Tier::Live));
+    assert!(glass.timing(), "live is probed in turn");
+    for _ in 0..slow {
+        run(&mut glass, &mut stage);
+    }
+    assert_eq!(glass.pass_tier(), Tier::Baked);
+    assert_eq!(glass.memory().stored().tier, Some(Tier::Baked));
+    stage.calls.clear();
+    glass.settle(&mut stage);
+    assert_eq!(stage.calls, [Call::Release], "baked holds no targets");
 }
 
 #[test]
-fn a_fast_screen_keeps_live_glass_for_a_chain_at_120_hz() {
-    assert!((chain_budget_ms(60.0) - 16.67).abs() < 0.01);
-    assert!((chain_budget_ms(120.0) - 8.33).abs() < 0.01);
-    assert!((chain_budget_ms(240.0) - 8.33).abs() < 0.01);
-    assert!((chain_budget_ms(540.0) - 8.33).abs() < 0.01);
+fn over_video_with_the_menu_closed_nothing_is_held_and_no_pass_runs() {
+    for tier in [Tier::Lens, Tier::Live] {
+        let mut glass = Glass::landed(tier);
+        let mut stage = stage();
+        glass.paint(&mut stage, &chrome_frame(Color32::RED), true);
+        assert!(stage.calls.contains(&Call::Begin), "{tier:?}: the launcher ran its chain");
+        assert!(glass.set_over_video(true), "{tier:?}: its targets go with the stream");
+        stage.calls.clear();
+        // The stream's frames: its overlay's meshes, and none at all with the menu closed.
+        glass.paint(&mut stage, &[], false);
+        glass.paint(&mut stage, &chrome_frame(Color32::RED), false);
+        glass.settle(&mut stage);
+        assert!(!stage.calls.iter().any(|c| matches!(c, Call::Begin | Call::End { .. } | Call::Release | Call::Try)), "{tier:?}: {:?}", stage.calls);
+        assert_eq!(glass.pass_tier(), Tier::Baked);
+        assert!(!glass.timing());
+    }
+}
+
+#[test]
+fn a_probe_that_never_finished_trips_the_guard_once() {
+    let fingerprint = fingerprint_of(&stage());
+    assert!(fingerprint.starts_with(crate::VERSION));
+    // The last start armed the guard on this build and driver and never cleared it.
+    let crashed = Stored { tier: None, guard: Guard::arm(&fingerprint) };
+    let mut glass = Glass::new(None).remembering(Memory::in_memory(crashed));
+    let mut stage = stage();
+    glass.settle(&mut stage);
+    assert!(stage.calls.is_empty(), "no target is made: {:?}", stage.calls);
+    assert_eq!(glass.pass_tier(), Tier::Baked);
+    let stored = glass.memory().stored().clone();
+    assert_eq!(stored, Stored { tier: Some(Tier::Baked), guard: Guard::clear(&fingerprint) }, "baked stored, the guard cleared");
+
+    // The next start finds baked stored for this build: baked, and no guard armed again.
+    let mut next = Glass::new(None).remembering(Memory::in_memory(stored.clone()));
+    next.settle(&mut stage);
+    assert!(stage.calls.is_empty());
+    assert_eq!(next.pass_tier(), Tier::Baked);
+    assert!(!next.memory().stored().guard.in_flight);
+
+    // An update of the build or the driver gets a fresh try.
+    let other = Stored { tier: Some(Tier::Baked), guard: Guard::arm("another build") };
+    let mut updated = Glass::new(None).remembering(Memory::in_memory(other));
+    updated.settle(&mut stage);
+    assert_eq!(stage.calls, [Call::Try]);
+    assert_eq!(updated.pass_tier(), Tier::Lens);
+}
+
+#[test]
+fn the_guard_is_armed_before_the_first_probed_frame_and_cleared_when_the_probe_ends() {
+    let mut glass = Glass::new(None).remembering(Memory::in_memory(Stored::default()));
+    let mut stage = stage();
+    glass.settle(&mut stage);
+    let fingerprint = fingerprint_of(&stage);
+    assert!(glass.memory().stored().guard.tripped(&fingerprint), "armed before the probe");
+    assert_eq!(glass.pass_tier(), Tier::Lens);
+    assert!(!glass.timing(), "the screen settles first");
+    glass.head_start_ms = probe::SETTLE_MS;
+    for n in 0..probe::PROBE_FRAMES {
+        glass.paint(&mut stage, &chrome_frame(Color32::from_gray(n as u8)), false);
+    }
+    assert_eq!(glass.pass_tier(), Tier::Lens, "a fast chain keeps the lens");
+    assert_eq!(glass.memory().stored(), &Stored { tier: Some(Tier::Lens), guard: Guard::clear(&fingerprint) });
+
+    // A failing chain ends the probe too: the guard clears, nothing new is stored.
+    let mut failing = Glass::new(None).remembering(Memory::in_memory(Stored::default()));
+    let mut stage = Recorder { end_fails: true, ..self::stage() };
+    failing.settle(&mut stage);
+    failing.paint(&mut stage, &chrome_frame(Color32::RED), false);
+    assert_eq!(failing.pass_tier(), Tier::Baked);
+    assert!(!failing.memory().stored().guard.in_flight);
+    assert_eq!(failing.memory().stored().tier, None);
+}
+
+/// The guard covers the chain's first frame only: an app that crashes later, in a stream or before
+/// the probe's verdict, keeps its glass on the next start.
+#[test]
+fn the_guard_clears_after_the_first_clean_frame_and_when_a_stream_starts() {
+    let mut glass = Glass::new(None).remembering(Memory::in_memory(Stored::default()));
+    let mut stage = stage();
+    glass.settle(&mut stage);
+    let fingerprint = fingerprint_of(&stage);
+    assert!(glass.memory().stored().guard.tripped(&fingerprint));
+    glass.paint(&mut stage, &chrome_frame(Color32::RED), false);
+    assert!(!glass.memory().stored().guard.in_flight, "one clean frame clears it");
+    assert_eq!(glass.memory().stored().tier, None, "the probe has no verdict yet");
+    assert_eq!(glass.pass_tier(), Tier::Lens);
+
+    // A stream that starts before the chain ever ran draws no chain either.
+    let mut streaming = Glass::new(None).remembering(Memory::in_memory(Stored::default()));
+    let mut stage = self::stage();
+    streaming.settle(&mut stage);
+    assert!(streaming.memory().stored().guard.in_flight);
+    let _ = streaming.set_over_video(true);
+    assert!(!streaming.memory().stored().guard.in_flight);
+}
+
+#[test]
+fn a_fast_screen_is_judged_against_a_120_hz_frame() {
+    let mut glass = Glass::live();
+    let mut stage = stage();
+    // 5.5 ms: over 70 % of a 240 Hz frame, within 70 % of a 120 Hz one.
+    stage.ms = 5.5;
+    glass.set_refresh(240.0);
+    for n in 0..probe::PROBE_FRAMES {
+        glass.paint(&mut stage, &chrome_frame(Color32::from_gray(n as u8)), false);
+    }
+    assert_eq!(glass.pass_tier(), Tier::Live);
+    assert!(!glass.timing(), "decided");
+    assert_eq!(probe::budget_ns(240.0), probe::budget_ns(120.0));
 }
 
 #[test]

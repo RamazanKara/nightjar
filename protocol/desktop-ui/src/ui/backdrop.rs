@@ -1,54 +1,18 @@
-//! What lies behind every page: a game's ambient, or on a page without art the night sky with its
-//! moon. Whatever shows cross-fades to the next. Chrome samples the same textures in screen space.
+//! What lies behind every page: a game's ambient, or on a page without art the stage, the page's
+//! canvas under one wide, soft light from the top. Whatever shows cross-fades to the next. Chrome
+//! samples the same textures in screen space.
 
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
 
 use egui::epaint::{Mesh, Vertex, WHITE_UV};
 use egui::{
-    pos2, vec2, Color32, Context, Pos2, Rect, Shape, Stroke, TextureHandle, TextureId,
-    TextureOptions, Vec2,
+    pos2, vec2, Color32, Context, Pos2, Rect, Shape, TextureHandle, TextureId, TextureOptions,
 };
 
-use super::design_tokens as t;
-use super::{glass, spring};
+use super::glass;
 use crate::ambient;
 use crate::theme::{look, shade, Look};
-
-/// Where a page's moon hangs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Moon {
-    /// High on the right, clear of a column of rows.
-    High,
-    /// Large and low on the right, behind a page of cards.
-    Low,
-    /// The first run with nothing found: the page's middle, large, the bird on it.
-    Searching,
-    /// The first run with a PC found: the moon steps up and in for its card.
-    Found,
-}
-
-impl Moon {
-    fn index(self) -> usize {
-        self as usize
-    }
-
-    /// The first run's moon, which carries the bird and moves between its places.
-    fn first_run(self) -> bool {
-        matches!(self, Moon::Searching | Moon::Found)
-    }
-
-    /// Its middle as fractions of the window, and its radius at the prototype's 800 high.
-    fn place(self) -> ([f32; 2], f32) {
-        match self {
-            Moon::High => ([0.911, 0.335], 80.0),
-            Moon::Low => ([0.8125, 0.65], 118.0),
-            Moon::Searching => ([0.5, 0.395], 104.0),
-            Moon::Found => ([0.5, 0.245], 72.0),
-        }
-    }
-}
 
 /// What the page wants behind it.
 pub(super) enum Want {
@@ -65,12 +29,13 @@ pub(super) enum Want {
     },
     /// A cover still on its way, or a page that belongs to the last: what shows now stays.
     Keep,
-    Sky(Moon),
+    /// A page without art: the stage.
+    Stage,
 }
 
 /// The ambient shows past the window's edges, so its soft edge is never seen.
 const OVERSCAN: f32 = 0.14;
-/// Where the page's own colour starts to rise over the ambient, and where it nearly covers it.
+/// Where the page's own colour starts to rise over the backdrop, and where it nearly covers it.
 const FADE_FROM: f32 = 0.30;
 const FADE_NEAR: f32 = 0.58;
 const FADE_NEAR_ALPHA: f32 = 0.95;
@@ -78,40 +43,17 @@ const FADE_NEAR_ALPHA: f32 = 0.95;
 /// for white text, and dark text by day needs it light (with it its luminance is 0.5 or more,
 /// Android's `MIN_LUMA_DAY`), the cover's colour still showing through as a tint.
 const DAY_WASH: f32 = 0.65;
-/// How far the moon's glow reaches, in moon radii.
-const MOON_GLOW: f32 = 6.0;
-const RING_FACTORS: [f32; 4] = [ORBIT, 2.5, 3.3, 4.1];
-/// The first ring, in moon radii: where the orbit dot runs while discovery does.
-pub(super) const ORBIT: f32 = 1.7;
-const ORBIT_SECONDS: f64 = 11.0;
-/// Where the dot rests with reduced motion, as in the design: just below the right.
-const ORBIT_REST: f32 = 0.2;
-const ORBIT_DOT_R: f32 = 5.0;
-const ORBIT_FRAME_SECONDS: f32 = 1.0 / 60.0;
-const BIRD_SIZE: usize = 512;
-/// How far a placed moon keeps from what the page holds, in its radii, and at least, in points: open
-/// sky, not a gap between rows.
-const SKY_GAP: f32 = 0.45;
-const SKY_GAP_LEAST: f32 = 24.0;
-/// Where the moon's middle may start, across the window: it hangs on the right.
-const SKY_FROM: f32 = 0.62;
-/// The smallest a moon gets for open sky, of its own size, before it steps back, and the sizes it
-/// tries on the way.
-const SKY_SMALLEST: f32 = 0.6;
-const SKY_SIZES: usize = 5;
-/// A placed moon's glow is baked in steps of the window this fine, and this many bakes are kept.
-const SKY_BAKE_STEPS: f32 = 40.0;
-const SKY_BAKES_KEPT: usize = 24;
+/// The stage light, in fractions of the window: its middle hangs above the top edge, so its
+/// brightest part is never in view to read as a lamp, and it reaches wider than the window and
+/// most of the way down it, so its end is never in view to read as a cone.
+const LIGHT_AT: [f32; 2] = [0.5, -0.16];
+const LIGHT_REACH: [f32; 2] = [0.78, 0.92];
+/// How much of the token's glow the light has at its middle; on black it is fainter still, so the
+/// page stays black.
+const LIGHT_STRENGTH: f32 = 0.62;
+const LIGHT_STRENGTH_OLED: f32 = 0.34;
 /// How many fallback gradient tile textures are kept in memory at once.
 const TILES_KEPT: usize = 32;
-/// How many places, by page and window, are kept for the moon.
-const PLACEMENTS_KEPT: usize = 64;
-/// A moon's place is kept by page, window and moon.
-type PlaceKey = (u64, [u32; 4], usize);
-const MOVE_TUNE: spring::Tune = spring::Tune {
-    stiffness: t::MOTION_SHEET_STIFFNESS,
-    ratio: t::MOTION_SHEET_RATIO,
-};
 /// The veil where the page passes beneath the chrome: how far it reaches down the window, how far
 /// below the capsules it stays whole (the frosted band), how much of the backdrop it brings behind
 /// the brand, how far past the brand its pool goes and how far the page has scrolled when it is
@@ -127,48 +69,26 @@ const VEIL_WHOLE_AT: f32 = 40.0;
 const VEIL_ROWS: u32 = 24;
 const VEIL_COLUMNS: u32 = 24;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Shows {
     Art,
-    Sky(Moon),
+    Stage,
 }
 
 #[derive(Default)]
 pub(super) struct Ambient {
     fade: glass::CrossFade,
     shows: Option<Shows>,
-    /// What showed before the fade now running, for the page colour over art to fade with it.
+    /// What showed before the fade now running, for the day's wash over art to fade with it.
     before: Option<Shows>,
     key: u64,
     /// When the fade now running was asked for: a second change in that frame changes its mind, it
     /// does not fade from what never showed.
     shown_at: Option<f64>,
-    /// The page about to be drawn: the moon is placed against what it holds.
-    page: u64,
-    /// The sky whose moon waits for this frame's page to say what it holds (see [`Self::finish`]).
-    pending: Option<Moon>,
-    /// The first run's moon, flat, in high contrast.
-    flat: Option<Moon>,
     tiles: HashMap<String, (TextureHandle, Color32)>,
     tile_order: VecDeque<String>,
-    /// Skies baked with their moon's glow where it stood, by moon and place.
-    skies: HashMap<u64, TextureHandle>,
-    /// Where each page's moon stands in each window, None where it stepped back.
-    placements: HashMap<PlaceKey, Option<(Pos2, f32)>>,
-    /// The sky's moon this frame, None where it stepped back, and the page and window it is for.
-    sky_disc: Option<(Pos2, f32)>,
-    sky_at: Option<(u64, Rect)>,
-    /// Until which frame the page and window just come into settle: a page's first frames may lay
-    /// out a little differently, and a window being dragged changes every frame. Its moon moves then.
-    settle_until: u64,
-    /// The placed moon, fading in or standing, and those fading out where they stood.
-    moon_now: Option<MoonFade>,
-    moons_leaving: Vec<MoonFade>,
-    bird: Option<TextureHandle>,
-    /// Whether discovery runs behind the first run's moon, for its orbit dot.
-    orbit: bool,
-    /// The moon where it is this frame, for the veil.
-    disc: Option<(Pos2, f32)>,
+    /// The stage, baked once for the look it shows in.
+    stage: Option<(Look, TextureHandle)>,
     /// The cover's glow this frame, the one it fades to with what shows, and the one it fades from.
     glow: Color32,
     glow_to: Color32,
@@ -183,6 +103,19 @@ fn hash_of(value: impl Hash) -> u64 {
 
 fn full_uv() -> Rect {
     Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))
+}
+
+/// The stage in `look`'s colours, for the overscanned area every backdrop layer covers.
+fn stage_bake(look: Look) -> egui::ColorImage {
+    let span = 1.0 + 2.0 * OVERSCAN;
+    let light = LIGHT_AT.map(|at| (at + OVERSCAN) / span);
+    let reach = LIGHT_REACH.map(|reach| reach / span);
+    let strength = if look == Look::Oled {
+        LIGHT_STRENGTH_OLED
+    } else {
+        LIGHT_STRENGTH
+    };
+    ambient::bake_stage(light, reach, strength)
 }
 
 fn layer_mesh(texture: TextureId, area: Rect, alpha: f32) -> Shape {
@@ -220,8 +153,7 @@ impl Ambient {
     pub(super) fn renderer_changed(&mut self) {
         self.tiles.clear();
         self.tile_order.clear();
-        self.skies.clear();
-        self.bird = None;
+        self.stage = None;
         self.fade = glass::CrossFade::default();
         self.shows = None;
         self.before = None;
@@ -233,7 +165,8 @@ impl Ambient {
         self.shows == Some(Shows::Art)
     }
 
-    /// The cover's glow this frame, fading as the ambient does. Nothing on the sky and in high contrast.
+    /// The cover's glow this frame, fading as the ambient does. Nothing on the stage and in high
+    /// contrast.
     pub(super) fn glow(&self) -> Color32 {
         self.glow
     }
@@ -259,298 +192,37 @@ impl Ambient {
         entry
     }
 
-    /// The sky, baked for the same overscanned area as an ambient, so one fades into the other, with
-    /// the glow around where its moon stands, as much smaller as the moon is. Where the moon stepped
-    /// back the glow stays at its own place. Also the key it shows by.
-    fn sky(
-        &mut self,
-        ctx: &Context,
-        screen: Rect,
-        moon: Moon,
-        disc: Option<(Pos2, f32)>,
-    ) -> (u64, TextureHandle) {
-        let ([x, y], r) = moon.place();
-        let (at, scale) = match disc {
-            Some((center, placed_r)) if !moon.first_run() => {
-                let own = moon_disc(screen, moon).1;
-                let at = (center - screen.min) / screen.size();
-                // Whole steps of the window, so a window being dragged bakes a few, not one a frame.
-                let step = |v: f32| (v * SKY_BAKE_STEPS).round() / SKY_BAKE_STEPS;
-                ([step(at.x), step(at.y)], step(placed_r / own))
-            }
-            _ => ([x, y], 1.0),
-        };
-        let key = hash_of(("sky", look(), moon.index(), at.map(f32::to_bits), scale.to_bits()));
-        if self.skies.len() > SKY_BAKES_KEPT {
-            self.skies.clear();
-        }
-        let texture = self
-            .skies
-            .entry(key)
-            .or_insert_with(|| {
-                let span = 1.0 + 2.0 * OVERSCAN;
-                let centre = [(at[0] + OVERSCAN) / span, (at[1] + OVERSCAN) / span];
-                let r = r * scale;
-                let glow = [r * MOON_GLOW / 1280.0 / span, r * MOON_GLOW / 800.0 / span];
-                ctx.load_texture(
-                    "sky",
-                    ambient::bake_sky(centre, glow),
-                    TextureOptions::LINEAR,
-                )
-            })
-            .clone();
-        (key, texture)
-    }
-
-    /// Names the page about to be drawn (see [`hold_page`]).
-    pub(super) fn set_page(&mut self, ctx: &Context, page: impl Hash) {
-        self.page = hash_of(page);
-        ctx.data_mut(|d| d.insert_temp(page_id(), self.page));
-    }
-
-    /// The sky with its moon. The first run's moon stands at its place; a page's moon at the place it
-    /// took on this page in this window, or, the first time, wherever [`Self::finish`] finds open sky
-    /// once the page has said what it holds. Until then what shows stays and no moon shows.
-    fn show_sky(&mut self, ctx: &Context, screen: Rect, moon: Moon) {
-        if moon.first_run() {
-            let disc = Some(moon_disc(screen, moon));
-            let (key, texture) = self.sky(ctx, screen, moon, disc);
-            self.show(ctx, key, texture, Shows::Sky(moon), Color32::TRANSPARENT);
-            self.sky_disc = disc;
-            self.sky_at = Some((self.page, screen));
-            return;
-        }
-        self.pending = Some(moon);
-        if let Some(&disc) = self.placements.get(&self.placement_key(screen, moon)) {
-            self.show_placed(ctx, screen, moon, disc);
-        }
-    }
-
-    fn placement_key(&self, screen: Rect, moon: Moon) -> PlaceKey {
-        let bits = [screen.min.x, screen.min.y, screen.max.x, screen.max.y].map(f32::to_bits);
-        (self.page, bits, moon.index())
-    }
-
-    /// Shows the sky for a placed moon. On the page it stood on, in a window that changed size, the
-    /// moon moves (see [`Self::fade_moons`]). A sky still fading in on its page takes the new glow and
-    /// goes on fading.
-    fn show_placed(&mut self, ctx: &Context, screen: Rect, moon: Moon, disc: Option<(Pos2, f32)>) {
-        let (key, texture) = self.sky(ctx, screen, moon, disc);
-        let on_page = self.shows == Some(Shows::Sky(moon))
-            && self.sky_at.is_some_and(|(page, _)| page == self.page);
-        if self.sky_at != Some((self.page, screen)) {
-            // The page may take a few passes to lay out at the new size and hold what it holds
-            // there; a moon placed again meanwhile moves, never a ghost of its old place fading
-            // behind the page's cards.
-            self.settle_until = ctx.cumulative_pass_nr() + SETTLE_PASSES;
-        }
-        if on_page && self.key != key && self.fade.running(ctx) {
-            self.key = key;
-            self.fade.swap(key, texture);
-        } else {
-            self.show(ctx, key, texture, Shows::Sky(moon), Color32::TRANSPARENT);
-        }
-        self.sky_disc = disc;
-        self.sky_at = Some((self.page, screen));
-    }
-
-    /// The placed moons to paint this frame, with their alphas. The one that stands fades in as the
-    /// ambient does, from when it came; one that leaves fades out from where it was, so neither ever
-    /// shows or goes at once. While its page and window settle it moves as it is.
-    fn fade_moons(&mut self, ctx: &Context, placed: Option<(Pos2, f32)>) -> Vec<(Pos2, f32, f32)> {
-        let now = ctx.input(|i| i.time);
-        let ms = glass::ambient_ms(ctx);
-        if self.moon_now.map(|m| m.disc) != placed {
-            match (self.moon_now.as_mut(), placed) {
-                (Some(moon), Some(disc))
-                    if moon.page == self.page && ctx.cumulative_pass_nr() <= self.settle_until =>
-                {
-                    moon.disc = disc
-                }
-                _ => {
-                    if let Some(moon) = self.moon_now.take() {
-                        let from = moon.alpha(now, ms);
-                        self.moons_leaving.push(MoonFade {
-                            from,
-                            to: 0.0,
-                            at: now,
-                            ..moon
-                        });
-                    }
-                    // One still fading out there comes back from where it is.
-                    self.moon_now = placed.map(|disc| {
-                        let back = self.moons_leaving.iter().position(|m| m.disc == disc);
-                        let from =
-                            back.map_or(0.0, |i| self.moons_leaving.remove(i).alpha(now, ms));
-                        MoonFade {
-                            disc,
-                            page: self.page,
-                            from,
-                            to: 1.0,
-                            at: now,
-                        }
-                    });
-                }
-            }
-        }
-        self.moons_leaving.retain(|m| m.alpha(now, ms) > 0.0);
-        let moons: Vec<(Pos2, f32, f32)> = self
-            .moons_leaving
-            .iter()
-            .chain(&self.moon_now)
-            .map(|m| (m.disc.0, m.disc.1, m.alpha(now, ms)))
-            .collect();
-        if !self.moons_leaving.is_empty() || self.moon_now.is_some_and(|m| m.alpha(now, ms) < 1.0) {
-            ctx.request_repaint();
-        }
-        moons
-    }
-
-    /// Places the waiting moon against what the page held this frame: where it stood, while the page
-    /// at its top leaves that clear (a card that lifts or a focus ring stays within the gap, so
-    /// neither moves it), else [`find_sky`]. A page first seen scrolled could not show what scrolled
-    /// away, so the first place keeps out of that part. A page drawn some other way holds nothing.
-    fn place_pending(&mut self, ctx: &Context, screen: Rect) {
-        let Some(moon) = self.pending else {
-            return;
-        };
-        let key = self.placement_key(screen, moon);
-        let pass = ctx.cumulative_pass_nr();
-        let held = ctx
-            .data(|d| d.get_temp::<Held>(held_id()))
-            .filter(|h| h.page == self.page && h.screen == screen && h.pass == pass);
-        let disc = match (self.placements.get(&key).copied(), &held) {
-            (Some(Some(disc)), Some(held))
-                if held.at_top() && !clear_of(&held.rects, disc, 0.0) =>
-            {
-                find_sky(screen, moon, &held.rects)
-            }
-            // Where it stepped back, room the page makes at its top brings it back: a shorter
-            // section, a cleared search, a page first seen scrolled seen at its top.
-            (Some(None), Some(held)) if held.at_top() => find_sky(screen, moon, &held.rects),
-            (Some(disc), _) => disc,
-            (None, Some(held)) => find_sky(screen, moon, &held.with_unseen()),
-            // Kept only once the page has said what it holds.
-            (None, None) => {
-                let disc = find_sky(screen, moon, &[]);
-                self.show_placed(ctx, screen, moon, disc);
-                return;
+    /// Shows the stage: baked for the same overscanned area as an ambient, so one fades into the
+    /// other, once for the look it shows in. It is the same on every page, so going from one page
+    /// without art to the next changes nothing behind them.
+    fn show_stage(&mut self, ctx: &Context) {
+        let look = look();
+        let texture = match &self.stage {
+            Some((baked, texture)) if *baked == look => texture.clone(),
+            _ => {
+                let texture = ctx.load_texture("stage", stage_bake(look), TextureOptions::LINEAR);
+                self.stage = Some((look, texture.clone()));
+                texture
             }
         };
-        if self.placements.len() >= PLACEMENTS_KEPT && !self.placements.contains_key(&key) {
-            self.placements.clear();
-        }
-        self.placements.insert(key, disc);
-        self.show_placed(ctx, screen, moon, disc);
+        self.show(ctx, hash_of(("stage", look)), texture, Shows::Stage, Color32::TRANSPARENT);
     }
 
-    /// Sets whether the orbit dot runs: the first run's moon, with discovery going. It alone asks for
-    /// frames while the page rests.
-    pub(super) fn set_orbit(&mut self, on: bool) {
-        self.orbit = on;
-    }
-
-    /// The bird to lay over the first run's moon, and the moon's disc there, carried by a spring
-    /// between its places. Elsewhere it stands where the page's moon stands.
-    fn disc_now(&mut self, ctx: &Context, screen: Rect, moon: Moon) -> (Pos2, f32) {
-        let (center, r) = moon_disc(screen, moon);
-        if !moon.first_run() {
-            return (center, r);
-        }
-        let y = spring::animate(
-            ctx,
-            egui::Id::unique("first-run-moon-y"),
-            center.y,
-            MOVE_TUNE,
-        );
-        let r = spring::animate(ctx, egui::Id::unique("first-run-moon-r"), r, MOVE_TUNE);
-        (pos2(center.x, y), r)
-    }
-
-    fn paint_bird(
-        &mut self,
-        out: &mut Vec<Shape>,
-        ctx: &Context,
-        center: Pos2,
-        r: f32,
-        alpha: f32,
-    ) {
-        let bird = self
-            .bird
-            .get_or_insert_with(|| {
-                ctx.load_texture(
-                    "moon-bird",
-                    crate::theme::bird_mask(BIRD_SIZE),
-                    TextureOptions::LINEAR,
-                )
-            })
-            .id();
-        let mut mesh = Mesh::with_texture(bird);
-        mesh.add_rect_with_uv(
-            Rect::from_center_size(center, Vec2::splat(r * 2.0)),
-            full_uv(),
-            t::COLOR_NIGHT.gamma_multiply(alpha),
-        );
-        out.push(Shape::mesh(mesh));
-    }
-
-    /// The dot on the first ring, while discovery runs; it holds still with reduced motion.
-    fn paint_orbit(&self, out: &mut Vec<Shape>, ctx: &Context, center: Pos2, r: f32, alpha: f32) {
-        if !self.orbit {
-            return;
-        }
-        let moving = spring::motion(ctx);
-        let turn = if moving {
-            let along = ctx.input(|i| i.time) / ORBIT_SECONDS;
-            along.fract() as f32 * std::f32::consts::TAU + ORBIT_REST
-        } else {
-            ORBIT_REST
-        };
-        let at = center + vec2(turn.cos(), turn.sin()) * r * ORBIT;
-        let moon = t::COLOR_MOON_HI.gamma_multiply(alpha);
-        if !crate::theme::high_contrast() {
-            glass::soft(
-                out,
-                ctx,
-                Rect::from_center_size(at, Vec2::splat(ORBIT_DOT_R * 2.0)),
-                ORBIT_DOT_R,
-                14.0,
-                moon.gamma_multiply(0.75),
-            );
-        }
-        out.push(Shape::circle_filled(at, ORBIT_DOT_R, moon));
-        if moving {
-            ctx.request_repaint_after(std::time::Duration::from_secs_f32(ORBIT_FRAME_SECONDS));
-        }
-    }
-
-    /// The backdrop's shapes this frame, all at once, for a test of a page that holds nothing (the
-    /// launcher goes through [`Self::prepare`] and [`Self::finish`]).
+    /// The backdrop's shapes this frame, all at once, for a test (the launcher goes through
+    /// [`Self::prepare`] and [`Self::finish`]).
     #[cfg(test)]
     pub(super) fn paint(&mut self, ctx: &Context, want: Want) -> Vec<Shape> {
         self.prepare(ctx, want);
         self.finish(ctx)
     }
 
-    /// Takes what the page wants behind it, before the page is drawn: tells glass what to sample, the
-    /// page whether to say what it holds and its cards where the moon is. [`Self::finish`] paints it
-    /// once the page is drawn, under it.
+    /// Takes what the page wants behind it, before the page is drawn, and tells glass what to
+    /// sample. [`Self::finish`] paints it once the page is drawn, under it.
     pub(super) fn prepare(&mut self, ctx: &Context, want: Want) {
-        let screen = ctx.content_rect();
-        self.pending = None;
-        self.flat = None;
         if crate::theme::high_contrast() {
-            // Ambient and sky are off: black, and solid glass needs no backdrop.
+            // Ambient and stage light are off: black, and solid glass needs no backdrop.
             glass::set_backdrop(ctx, glass::Backdrop::default());
             self.glow = Color32::TRANSPARENT;
-            self.disc = None;
-            self.moon_now = None;
-            self.moons_leaving.clear();
-            // The first run keeps its moon, flat, with one ring: it is all that page has.
-            if let Want::Sky(moon) = want {
-                self.flat = moon.first_run().then_some(moon);
-            }
-            publish(ctx, false, false, None);
             return;
         }
         match want {
@@ -561,27 +233,12 @@ impl Ambient {
                 let (texture, glow) = self.tile(ctx, &title);
                 self.show(ctx, hash_of(("tile", title)), texture, Shows::Art, glow);
             }
-            // Nothing to keep yet: the sky rather than a bare canvas. A sky that is kept still finds
-            // this page's open sky for its moon.
-            Want::Keep => match self.shows {
-                None => self.show_sky(ctx, screen, Moon::High),
-                Some(Shows::Sky(moon)) => self.show_sky(ctx, screen, moon),
-                Some(Shows::Art) => {}
-            },
-            Want::Sky(moon) => self.show_sky(ctx, screen, moon),
+            Want::Keep if self.shows == Some(Shows::Art) => {}
+            // Nothing to keep yet: the stage rather than a bare canvas. A stage that is kept is
+            // shown again, for the look may have changed under it.
+            Want::Keep | Want::Stage => self.show_stage(ctx),
         }
-        // A moon still to place has none yet for the cards.
-        let disc = match self.shows {
-            Some(Shows::Sky(moon)) if moon.first_run() => self.sky_disc,
-            Some(Shows::Sky(_)) if self.sky_at == Some((self.page, screen)) => self.sky_disc,
-            _ => None,
-        };
-        let placed = self.pending.is_some_and(|moon| {
-            self.placements.contains_key(&self.placement_key(screen, moon))
-                && ctx.cumulative_pass_nr() > self.settle_until
-        });
-        publish(ctx, self.pending.is_some(), placed, disc);
-        self.layers(ctx, screen);
+        self.layers(ctx, ctx.content_rect());
     }
 
     /// This frame's layers, handed to glass, with the cover's glow along them.
@@ -597,104 +254,46 @@ impl Ambient {
         backdrop
     }
 
-    /// The backdrop's shapes, once the page [`Self::prepare`] was for is drawn: a moon still to place
-    /// stands clear of what the page holds, in this same frame.
+    /// How much of what shows is a game's art, with `behind` cross-fading: the day's wash over art
+    /// comes and goes with it.
+    fn art_share(&self, behind: &glass::Backdrop) -> f32 {
+        let is_art = |shows: Option<Shows>| f32::from(u8::from(shows == Some(Shows::Art)));
+        match (behind.base, behind.top) {
+            (Some(_), Some(top)) => egui::lerp(is_art(self.before)..=is_art(self.shows), top.alpha),
+            _ => is_art(self.shows),
+        }
+    }
+
+    /// The backdrop's shapes, once the page [`Self::prepare`] was for is drawn. In high contrast
+    /// plain black: no ambient and no light.
     pub(super) fn finish(&mut self, ctx: &Context) -> Vec<Shape> {
         let screen = ctx.content_rect();
         let mut out = Vec::new();
         if crate::theme::high_contrast() {
             out.push(Shape::rect_filled(screen, 0.0, *crate::theme::NIGHT));
-            if let Some(moon) = self.flat {
-                let (center, r) = self.disc_now(ctx, screen, moon);
-                out.push(Shape::circle_stroke(
-                    center,
-                    r * ORBIT,
-                    Stroke::new(1.0, t::HC_COLOR_RIM),
-                ));
-                out.push(Shape::circle_filled(center, r, t::COLOR_MOON_HI));
-                self.paint_bird(&mut out, ctx, center, r, 1.0);
-                self.paint_orbit(&mut out, ctx, center, r, 1.0);
-            }
             return out;
         }
-        self.place_pending(ctx, screen);
         out.push(Shape::rect_filled(screen, 0.0, shade::COLOR_CANVAS.get()));
         let backdrop = self.layers(ctx, screen);
-        let along = backdrop.top.map_or(1.0, |top| top.alpha);
-        let fading = backdrop.base.is_some();
         if let Some(base) = backdrop.base {
             out.push(layer_mesh(base.texture, base.area, 1.0));
         }
         if let Some(top) = backdrop.top {
             out.push(layer_mesh(top.texture, top.area, top.alpha));
         }
-        // The page colour over art comes and goes with the art.
-        let is_art = |shows: Option<Shows>| f32::from(u8::from(shows == Some(Shows::Art)));
-        let art = if fading {
-            egui::lerp(is_art(self.before)..=is_art(self.shows), along)
-        } else {
-            is_art(self.shows)
-        };
-        if art > 0.0 {
-            if let Some(wash) = day_wash(screen, art) {
-                out.push(wash);
-            }
-            out.push(fade_over(screen, art));
+        if let Some(wash) = day_wash(screen, self.art_share(&backdrop)) {
+            out.push(wash);
         }
-        // The stars stay from sky to sky and come and go with the sky from and to art.
-        let sky = |shows: Option<Shows>| matches!(shows, Some(Shows::Sky(_)));
-        let stars_alpha = match (fading && sky(self.before), sky(self.shows)) {
-            (true, true) => 1.0,
-            (false, true) => along,
-            (true, false) => 1.0 - along,
-            (false, false) => 0.0,
-        };
-        if stars_alpha > 0.0 {
-            out.extend(clear_of_tints(stars(screen, stars_alpha), &glass::tinted(ctx)));
-        }
-        #[cfg(test)]
-        let mut moons = Vec::new();
-        self.disc = None;
-        let placed = match self.shows {
-            Some(Shows::Sky(moon)) if !moon.first_run() => self.sky_disc,
-            _ => None,
-        };
-        // The placed moons: the one that stands, fading in, and those fading out where they stood.
-        for (center, r, alpha) in self.fade_moons(ctx, placed) {
-            paint_moon(&mut out, ctx, center, r, alpha);
-            #[cfg(test)]
-            moons.push(((center, r), alpha));
-        }
-        if let Some(Shows::Sky(moon)) = self.shows {
-            if moon.first_run() {
-                // Between the first run's two places it is one moon that moves, not two that fade.
-                let same = matches!(self.before, Some(Shows::Sky(before)) if before.first_run());
-                let alpha = if same { 1.0 } else { along };
-                let (center, r) = self.disc_now(ctx, screen, moon);
-                paint_moon(&mut out, ctx, center, r, alpha);
-                #[cfg(test)]
-                moons.push(((center, r), alpha));
-                self.paint_bird(&mut out, ctx, center, r, alpha);
-                self.paint_orbit(&mut out, ctx, center, r, alpha);
-                self.disc = Some((center, r));
-            } else {
-                // Where it stepped back the stars stay.
-                self.disc = placed;
-            }
-        }
-        let placed_ready = self.pending.is_some_and(|moon| {
-            self.placements.contains_key(&self.placement_key(screen, moon))
-                && ctx.cumulative_pass_nr() > self.settle_until
-        });
-        publish(ctx, self.pending.is_some(), placed_ready, self.disc);
+        // The page's colour rises over art and stage alike, so it holds still through a fade
+        // between them.
+        out.push(fade_over(screen));
         #[cfg(test)]
         ctx.data_mut(|d| {
             d.insert_temp(
                 painted_id(),
                 Painted {
-                    moons,
-                    along,
-                    fading,
+                    along: backdrop.top.map_or(1.0, |top| top.alpha),
+                    fading: backdrop.base.is_some(),
                 },
             )
         });
@@ -702,67 +301,12 @@ impl Ambient {
     }
 }
 
-mod sky;
-pub(super) use sky::{disc_of, find_sky, moon_disc, placing, Held};
-use sky::{
-    clear_of, clear_of_tints, day_wash, fade_over, held_id, hold_page, laid_out, page, page_id,
-    paint_moon, placed, publish, stars, MoonFade, SETTLE_PASSES,
-};
-
-/// Holds what a scrolled page laid out for the moon to avoid, skipping the shape walk and
-/// deferred buffer clone when a settled placement exists and layout, scroll, focus, deferred lifts,
-/// and input events are unchanged.
-pub(super) fn hold_page_scroll(
-    ctx: &Context,
-    id: impl std::hash::Hash + std::fmt::Debug,
-    layer: egui::LayerId,
-    from: usize,
-    full: Rect,
-    page_top: f32,
-    content_rect: Rect,
-) {
-    #[derive(Clone, PartialEq)]
-    struct ScrollLayoutStamp {
-        page: u64,
-        full: Rect,
-        down_y: f32,
-        content: Rect,
-        shapes: usize,
-        focused: Option<egui::Id>,
-        deferred_sig: u64,
-    }
-    let down = Vec2::new(0.0, full.top() - page_top);
-    let to = ctx.graphics(|g| g.get(layer).map_or(0, |l| l.next_idx().0));
-    let stamp = ScrollLayoutStamp {
-        page: page(ctx),
-        full,
-        down_y: down.y,
-        content: content_rect,
-        shapes: to.saturating_sub(from),
-        focused: ctx.memory(|m| m.focused()),
-        deferred_sig: glass::deferred_sig(ctx),
-    };
-    let stamp_id = egui::Id::unique(("moon-scroll-stamp", id));
-    let unchanged = placed(ctx)
-        && !ctx.input(|i| !i.events.is_empty() || i.pointer.any_released())
-        && ctx.data(|d| d.get_temp::<ScrollLayoutStamp>(stamp_id)).as_ref() == Some(&stamp);
-    if !unchanged {
-        ctx.data_mut(|d| d.insert_temp(stamp_id, stamp));
-        let soft = glass::soft_textures(ctx);
-        let deferred = glass::deferred(ctx);
-        let mut rects = ctx.graphics(|g| {
-            g.get(layer).map_or_else(Vec::new, |l| {
-                laid_out(&soft, l.all_entries().skip(from).map(|c| &c.shape), down, full)
-            })
-        });
-        rects.extend(laid_out(&soft, deferred.iter().flat_map(|(_, shapes)| shapes), down, full));
-        hold_page(ctx, full, rects, down.y);
-    }
-}
+mod veil;
+use veil::{day_wash, fade_over};
 #[cfg(test)]
-pub(super) use sky::{band_foot, painted, Painted};
+pub(super) use veil::{band_foot, painted, Painted};
 #[cfg(test)]
-use sky::{painted_id, veil_at, veil_height};
+use veil::{painted_id, veil_at, veil_height};
 
 #[cfg(test)]
 mod tests;

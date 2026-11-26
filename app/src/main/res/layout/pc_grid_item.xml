@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A PC in a phone's grouped list: its monitor (or, while it plays, the game's cover), its name and state, one action and More.
-     Tapping the row does the state's main action; PcGridAdapter fills the row and PcView handles the tap. A running PC stands in
-     its own group with the action row under its name; PcGridAdapter moves grid_actions there. -->
+<!-- A PC on a phone, a card of its own: its display (or, while it plays, the game's cover), its name and state, one action and
+     More. Tapping the card does the state's main action; PcGridAdapter fills it and PcView handles the tap. A running PC has the
+     action row under its name; PcGridAdapter moves grid_actions there. The action is amber on the PC that leads the page. -->
 <com.limelight.ui.PcRow xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content" android:descendantFocusability="blocksDescendants">
     <LinearLayout android:id="@+id/grid_row" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:gravity="center_vertical" android:minHeight="84dp" android:orientation="horizontal" android:clipChildren="false" android:clipToPadding="false"
         android:paddingStart="14dp" android:paddingEnd="8dp" android:paddingTop="11dp" android:paddingBottom="11dp">
-        <FrameLayout android:id="@+id/grid_cover_frame" android:layout_width="92dp" android:layout_height="138dp"
+        <com.limelight.ui.RoundFrame android:id="@+id/grid_cover_frame" android:layout_width="92dp" android:layout_height="138dp"
             android:layout_marginEnd="14dp" android:foreground="@drawable/pc_cover_rim" android:visibility="gone" android:importantForAccessibility="noHideDescendants">
             <com.limelight.ui.NoArtTile android:id="@+id/grid_cover_text" android:layout_width="match_parent" android:layout_height="match_parent"
                 android:importantForAccessibility="no" />
             <ImageView android:id="@+id/grid_cover" android:layout_width="match_parent" android:layout_height="match_parent"
                 android:scaleType="centerCrop" android:importantForAccessibility="no" />
-        </FrameLayout>
+        </com.limelight.ui.RoundFrame>
         <com.limelight.ui.PcScreen android:id="@+id/grid_screen" android:layout_width="76dp" android:layout_height="wrap_content"
             android:layout_marginEnd="14dp" android:importantForAccessibility="noHideDescendants">
             <ImageView android:id="@+id/grid_backdrop" android:layout_width="match_parent" android:layout_height="match_parent"

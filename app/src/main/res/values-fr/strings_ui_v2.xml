@@ -15,6 +15,8 @@
     <string name="stream_bitrate_manual">Régler le débit</string>
     <string-array name="stream_preset_names">
         <item>Native (recommandé)</item>
+        <item>TV fluide</item>
+        <item>Wi-Fi / En déplacement</item>
         <item>Économie de batterie</item>
     </string-array>
     <string name="applist_menu_show_app">Afficher le jeu</string>

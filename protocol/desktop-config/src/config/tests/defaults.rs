@@ -30,6 +30,15 @@ fn native_scale_defaults_normalizes_and_scales_preserving_aspect() {
     let uw = Display { width: 3440, height: 1440, refresh_hz: 144.0, refresh_reported: true };
     assert_eq!(scaled_native_resolution(uw, 75), (2580, 1080));
     assert_eq!(scaled_native_resolution(uw, 50), (1720, 720));
+    // #137: the picker's steps, 67 % being exactly two thirds.
+    assert_eq!(crate::stream_types::NATIVE_SCALES, [85, 75, 67, 50]);
+    let p1080 = Display { width: 1920, height: 1080, refresh_hz: 60.0, refresh_reported: true };
+    assert_eq!(scaled_native_resolution(p1080, 67), (1280, 720));
+    assert_eq!(scaled_native_resolution(p1080, 85), (1632, 918));
+    assert_eq!(scaled_native_resolution(p1080, 75), (1440, 810));
+    assert_eq!(scaled_native_resolution(p1080, 50), (960, 540));
+    let k4 = Display { width: 3840, height: 2160, refresh_hz: 60.0, refresh_reported: true };
+    assert_eq!(scaled_native_resolution(k4, 67), (2560, 1440));
 
     let scaled = Settings { native_scale: 75, ..Settings::default() };
     let (w, h, _, _) = stream_mode(&scaled, uw);
@@ -150,18 +159,6 @@ fn zoom_steps_stay_inside_the_range_and_odd_values_snap() {
     assert_eq!(step_zoom(120, 1), 130);
     let set: Settings = serde_json::from_str("{\"ui_zoom\":250}").unwrap();
     assert_eq!(nearest_zoom(set.ui_zoom), 250, "a stored 250 % loads as it is");
-}
-
-#[test]
-fn auto_zoom_follows_the_screens_height_in_points() {
-    assert_eq!(auto_zoom(Some(800.0), 1.0), 100, "a Deck's 1280x800 panel stays at 100 %");
-    assert_eq!(auto_zoom(Some(1080.0), 1.0), 100, "1080p stays at 100 %");
-    assert_eq!(auto_zoom(Some(1440.0), 1.0), 100, "1440p unscaled keeps today's size");
-    assert_eq!(auto_zoom(Some(2160.0), 1.0), 200, "4K unscaled, a docked Deck on a TV");
-    assert_eq!(auto_zoom(Some(1440.0), 1.5), 100, "4K at OS scale 1.5: the OS already scales");
-    assert_eq!(auto_zoom(Some(1080.0), 2.0), 100, "4K at OS scale 2");
-    assert_eq!(auto_zoom(Some(4320.0), 1.0), 250, "clamped at 250 %");
-    assert_eq!(auto_zoom(None, 1.0), 100, "an unknown screen size stays at 100 %");
 }
 
 #[test]

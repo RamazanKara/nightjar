@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="control_center_quick">Quick</string>
+    <string name="control_center_picture">Picture</string>
+    <string name="control_center_audio">Audio</string>
+    <string name="control_center_clips">Clips</string>
+    <string name="control_center_pc">PC</string>
+    <string name="control_center_controller">Controller</string>
+    <string name="control_center_guests">Guests</string>
+    <string name="control_center_power">Power</string>
+</resources>
