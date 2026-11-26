@@ -116,6 +116,9 @@ pub fn toast(ctx: &Context, text_: &str) -> Rect {
         .rect
 }
 
+/// Between a prompt's edge and its lines.
+const PROMPT_MARGIN: Margin = Margin::symmetric(24, 20);
+
 /// A prompt in the middle of a stream without a picture: `add` lays out its lines and buttons.
 pub fn prompt<R>(ctx: &Context, id: &'static str, add: impl FnOnce(&mut Ui) -> R) -> R {
     egui::Area::new(Id::unique(id))
@@ -123,7 +126,7 @@ pub fn prompt<R>(ctx: &Context, id: &'static str, add: impl FnOnce(&mut Ui) -> R
         .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
         .show(ctx, |ui| {
             ui.set_max_width((ctx.content_rect().width() - 64.0).clamp(160.0, 560.0));
-            capsule(ui, Margin::symmetric(24, 20), CAPSULE_RADIUS, add)
+            capsule(ui, PROMPT_MARGIN, CAPSULE_RADIUS, add)
         })
         .inner
 }
@@ -167,7 +170,8 @@ mod tests {
                 prompt(&ctx, "prompt-test", |ui| {
                     heading(ui, "Remote Input connected");
                     line(ui, "Keyboard, mouse and controllers control the PC.");
-                    rects[2] = ui.min_rect();
+                    // The surface reaches the margin past its lines.
+                    rects[2] = ui.min_rect() + PROMPT_MARGIN;
                 });
             });
             textures.append(output.textures_delta);
