@@ -442,6 +442,11 @@ final class PadEditor extends FrameLayout {
         panel.keepClear();
     }
 
+    /** A finger is moving or sizing a control ({@code back}), or has lifted: the dock steps back meanwhile. */
+    void stepBack(boolean back) {
+        panel.stepBack(back);
+    }
+
     PadLayout.Spec reference() {
         if (selected != null) return draft.spec(selected);
         for (PadLayout.Control control : PadLayout.Control.values()) {

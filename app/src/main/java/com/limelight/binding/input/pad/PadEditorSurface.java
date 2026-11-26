@@ -289,6 +289,7 @@ final class PadEditorSurface extends View {
                 resizing = -1;
                 snap.release();
                 invalidate();
+                editor.stepBack(false);
                 editor.keepPanelClear();
                 editor.updatePanel();
                 break;
@@ -298,11 +299,15 @@ final class PadEditorSurface extends View {
         return true;
     }
 
-    /** The gesture is about to change {@code control} for the first time: Undo's step, and the twin a lock carries. */
+    /**
+     * The gesture is about to change {@code control} for the first time: Undo's step, the twin a lock carries, and
+     * the dock steps back until the finger lifts, so the control and its guides show through it.
+     */
     private void change(PadLayout.Control control) {
         if (changing) return;
         changing = true;
         editor.beginChange(control);
+        editor.stepBack(true);
     }
 
     /**

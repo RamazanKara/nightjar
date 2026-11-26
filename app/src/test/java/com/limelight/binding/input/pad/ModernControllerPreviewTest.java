@@ -161,6 +161,19 @@ public class ModernControllerPreviewTest {
         panelInside(editor, "picked", problems);
         controller.finishEditing(false);
 
+        // Stealth: at 0 % the pad draws nothing, and the microphone button is all that stands on the video, muted
+        // and live.
+        prefs.oscOpacity = 0;
+        controller.refreshLayout();
+        layout(frame, width, height);
+        write(frame, width, height, new File(directory, name + "-0-stealth-muted.png"));
+        button.performClick();
+        assertFalse(mic.muted);
+        write(frame, width, height, new File(directory, name + "-0-stealth-live.png"));
+        button.performClick();
+        assertTrue(mic.muted);
+        prefs.oscOpacity = 90;
+
         // What the look adds beyond the default layout: PlayStation's glyphs on a split face cluster and the
         // pointer touchpad in Camera mode, pressed: the circle button, the D-pad up and right, a shoulder, each with its
         // halo, and the pad with its trail. The split members and the pad at its default overlap nothing, the

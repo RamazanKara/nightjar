@@ -7,7 +7,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.app.Application;
-import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.TextView;
 
@@ -22,7 +23,7 @@ import org.robolectric.annotation.Config;
 /**
  * The layout editor's dock: it is its bar alone until a control is picked or a tray is opened, every tool on the bar
  * is named, focusable and a full touch, the Add and More trays hold what the old panel showed with nothing picked,
- * and the mirror lock and Undo are one tap away.
+ * the mirror lock and Undo are one tap away, and the dock steps back while a control is moved.
  */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 30, application = Application.class, qualifiers = "w800dp-h360dp-land-xhdpi")
@@ -64,7 +65,9 @@ public class PadStudioInspectorTest extends ModernControllerHarness {
         assertFalse("No tray at first", shows(R.id.pad_editor_scroll));
         int bar = dock.getHeight();
         assertTrue("A bar: " + bar / density + " dp high", bar <= 72 * density);
-        assertTrue("Baked: an opaque fill and a rim, no glass", dock.getBackground() instanceof GradientDrawable);
+        assertTrue("Baked: the fill and its rim on black, no glass and nothing reading through",
+                dock.getBackground() instanceof LayerDrawable);
+        assertEquals("whole until a control is moved", 1f, dock.getAlpha(), 0);
         assertEquals("and no shadow over the stream", 0, dock.getElevation(), 0);
         assertEquals(View.LAYER_TYPE_NONE, dock.getLayerType());
 
@@ -78,6 +81,18 @@ public class PadStudioInspectorTest extends ModernControllerHarness {
         assertFalse(shows(R.id.pad_editor_this_game));
         assertTrue(dock.getHeight() > bar);
         assertEquals("RB", ((TextView) view(R.id.pad_editor_selection)).getText().toString());
+        // The opacity slider is the app's: a thin track, a round thumb, and its value at the row's end.
+        com.google.android.material.slider.Slider opacity = (com.google.android.material.slider.Slider) view(R.id.pad_editor_opacity);
+        android.content.res.Resources res = editor.getResources();
+        assertEquals(res.getDimensionPixelSize(R.dimen.nj_size_slider_track), opacity.getTrackHeight());
+        assertEquals(res.getDimensionPixelSize(R.dimen.nj_size_slider_thumb) / 2, opacity.getThumbRadius());
+        assertTrue("A ring around the thumb for a controller's focus", opacity.getHaloRadius() > opacity.getThumbRadius());
+        TextView shown = (TextView) view(R.id.pad_studio_opacity_value);
+        assertTrue(shows(R.id.pad_studio_opacity_value));
+        assertEquals("100 %", shown.getText().toString());
+        opacity.setValue(60);
+        assertEquals("60 %", shown.getText().toString());
+        opacity.setValue(100);
         // Let go, the dock is its bar again.
         editor.select(null);
         settle();
@@ -197,6 +212,32 @@ public class PadStudioInspectorTest extends ModernControllerHarness {
         assertEquals(frame.getContext().getString(R.string.pad_edit_move_panel),
                 view(R.id.pad_editor_grip).getContentDescription());
         controller.finishEditing(false);
+    }
+
+    /** Wherever the dock stands, a control that is moved shows through it with its guides, until the finger lifts. */
+    @Test public void theDockStepsBackWhileAControlIsMoved() {
+        open();
+        View surface = editor.getChildAt(0), dock = editor.panel();
+        float[] box = editor.draft().bounds(PadLayout.Control.RB, surface.getWidth(), surface.getHeight(), density,
+                new float[4]);
+        float x = box[0] + box[2] / 2, y = box[1] + box[3] / 2;
+        touch(surface, MotionEvent.ACTION_DOWN, x, y);
+        assertEquals("Picking a control leaves the dock be", 1, dock.getAlpha(), 0);
+        touch(surface, MotionEvent.ACTION_MOVE, x - 80, y + 60);
+        assertEquals(PadEditorPanel.STEPPED_BACK, dock.getAlpha(), 0);
+        touch(surface, MotionEvent.ACTION_MOVE, x - 120, y + 90);
+        assertEquals(PadEditorPanel.STEPPED_BACK, dock.getAlpha(), 0);
+        touch(surface, MotionEvent.ACTION_UP, x - 120, y + 90);
+        assertEquals("Let go, it is back", 1, dock.getAlpha(), 0);
+        assertTrue("and the move is Undo's to take back", tool(R.id.pad_studio_undo).isEnabled());
+        controller.finishEditing(false);
+    }
+
+    private static void touch(View view, int action, float x, float y) {
+        long now = android.os.SystemClock.uptimeMillis();
+        MotionEvent event = MotionEvent.obtain(now, now, action, x, y, 0);
+        view.dispatchTouchEvent(event);
+        event.recycle();
     }
 
     /** A phone held upright: the tools stand above the actions, and both lie whole in the dock. */

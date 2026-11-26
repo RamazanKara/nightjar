@@ -1,6 +1,7 @@
 package com.limelight.binding.input.pad;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.RectF;
 import android.transition.ChangeBounds;
 import android.transition.Fade;
@@ -19,6 +20,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.ColorUtils;
 import androidx.core.widget.TextViewCompat;
 
 import com.google.android.material.button.MaterialButton;
@@ -33,8 +35,9 @@ import java.util.Locale;
 
 /**
  * Manages {@link PadEditor}'s floating dock under its bar ({@link PadStudioInspector}): where it stands on tall and
- * short surfaces, its grip drag and per-orientation saved placement, the tray with the picked control or one of the
- * layout's trays, smooth transitions between them, the grouped Add tiles and control/glyph labels.
+ * short surfaces, its grip drag and per-orientation saved placement, how it steps back while a control is moved, the
+ * tray with the picked control or one of the layout's trays, smooth transitions between them, the grouped Add tiles
+ * and control/glyph labels.
  */
 final class PadEditorPanel {
     /** A surface lower than this (a phone held sideways) gets the tray without the hint and its options in one row. */
@@ -42,6 +45,8 @@ final class PadEditorPanel {
     /** How long the panel takes to come in and to change between the picked control and the layout. */
     private static final long PANEL_MS = 200;
     private static final Interpolator EASE = new PathInterpolator(.2f, 0, 0, 1);
+    /** How much of the dock shows while a finger moves or sizes a control: that control and its guides show through. */
+    static final float STEPPED_BACK = .3f;
 
     private final Context context;
     private final PadEditor editor;
@@ -50,11 +55,11 @@ final class PadEditorPanel {
     private final PadStudioInspector inspector;
     private final View panel, tray, sizeRow, opacityRow, controlSection, pointerMode, mouseCard, cameraCard, thisGame;
     private final LinearLayout layoutSection, options, addSection;
-    private final TextView selection, sizeText, hint;
+    private final TextView selection, sizeText, opacityText, hint;
     private final MaterialButton hide, split, join;
     private final Chip glyphs;
     private final Slider opacity;
-    private boolean oneRow = true, shortSurface, settingOpacity;
+    private boolean oneRow = true, shortSurface, settingOpacity, steppedBack;
     /** The controls the Add tiles show, so they are built again only when that changes. */
     private String addShown = "";
     private final List<PadEditor.Tile> tiles = new ArrayList<>();
@@ -128,10 +133,24 @@ final class PadEditorPanel {
         gameSwitch.setVisibility(gameAvailable ? View.VISIBLE : View.GONE);
         gameSwitch.setChecked(perGame);
         gameSwitch.setOnCheckedChangeListener((button, checked) -> editor.setPerGame(checked));
-        com.limelight.ui.StepSlider.showValue(opacity, value -> String.format(Locale.getDefault(), "%d %%", value));
+        opacityText = panel.findViewById(R.id.pad_studio_opacity_value);
+        // The app's 7.0 slider: a round thumb on the thin track, and a ring around it while a controller or a
+        // keyboard has it, as wide as a finger's touch. Its value stands at the row's end, so none floats over it;
+        // TalkBack reads the same text.
+        int thumb = context.getResources().getDimensionPixelSize(R.dimen.nj_size_slider_thumb);
+        opacity.setThumbRadius(thumb / 2);
+        opacity.setHaloRadius(Math.round(PadLayout.MIN_TOUCH_DP / 2 * density));
+        opacity.setHaloTintList(ColorStateList.valueOf(ColorUtils.setAlphaComponent(
+                ContextCompat.getColor(context, R.color.night_primary), 0x55)));
+        opacity.setLabelFormatter(value -> percent(Math.round(value)));
         opacity.addOnChangeListener((slider, value, fromUser) -> {
+            opacityText.setText(percent(Math.round(value)));
             if (fromUser && !settingOpacity) editor.setOpacity(Math.round(value));
         });
+    }
+
+    private static String percent(int value) {
+        return String.format(Locale.getDefault(), "%d %%", value);
     }
 
     View view() {
@@ -147,6 +166,21 @@ final class PadEditorPanel {
         panel.setScaleX(.96f);
         panel.setScaleY(.96f);
         panel.animate().alpha(1).scaleX(1).scaleY(1).setDuration(PANEL_MS).setInterpolator(EASE).start();
+    }
+
+    /**
+     * The dock steps back while a finger moves or sizes a control, and comes forward again when it lifts: wherever
+     * the dock stands, the control under the finger and the lines it lands on are seen.
+     */
+    void stepBack(boolean back) {
+        if (back == steppedBack) return;
+        steppedBack = back;
+        float alpha = back ? STEPPED_BACK : 1;
+        if (!PadEditor.transitions) {
+            panel.setAlpha(alpha);
+            return;
+        }
+        panel.animate().alpha(alpha).setDuration(PANEL_MS / 2).setInterpolator(EASE).start();
     }
 
     /** The Add tile for {@code control}, or null when the layout shows it; for tests. */
@@ -315,6 +349,7 @@ final class PadEditorPanel {
         settingOpacity = true;
         opacity.setValue(Math.max(PadLayout.MIN_OPACITY, Math.min(PadLayout.MAX_OPACITY, Math.round(spec.opacity / 5f) * 5)));
         settingOpacity = false;
+        opacityText.setText(percent(Math.round(opacity.getValue())));
         // The tray shows the picked control, or with none one of the layout's trays: the Add tiles, or every
         // control's size and opacity with the glyphs and the game. With neither the dock is its bar alone.
         boolean picked = selected != null;
