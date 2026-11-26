@@ -121,6 +121,10 @@ final class GameOverlays {
         updateHardwareMetricsPolling();
     }
 
+    boolean isPerformanceOverlayVisible() {
+        return game.performanceOverlayScroll != null && game.performanceOverlayScroll.getVisibility() == View.VISIBLE;
+    }
+
     boolean isDebugOverlay() {
         return PerformanceOverlay.MODE_DEBUG.equals(game.overlayMode);
     }

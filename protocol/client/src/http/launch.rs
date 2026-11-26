@@ -86,6 +86,9 @@ pub struct LaunchRequest {
     pub rtx_hdr: Option<bool>,
     /// RTX Video enhancement for this stream (`rlRtxVideo`), as `rtx_hdr`.
     pub rtx_video: Option<bool>,
+    /// "HDR10 only": asks an HDR stream without HDR10+ and HDR Vivid (`rlHdrDynamic=0`). Sent
+    /// only to hosts with [`HostCapabilities::hdr_dynamic_control`].
+    pub hdr_static_only: bool,
 }
 
 impl Default for LaunchRequest {
@@ -124,6 +127,7 @@ impl Default for LaunchRequest {
             display_luminance: None,
             rtx_hdr: None,
             rtx_video: None,
+            hdr_static_only: false,
         }
     }
 }
@@ -469,6 +473,12 @@ impl LaunchRequest {
             ) {
                 q.push_str(&format!("&{name}={value}"));
             }
+        }
+        if self.hdr_static_only && self.hdr && !input_only && caps.hdr_dynamic_control() {
+            q.push_str(&format!(
+                "&{}=0",
+                rubylight_protocol::hdr::DYNAMIC_LAUNCH_PARAMETER
+            ));
         }
         q.push_str(CORE_LAUNCH_PARAMETERS);
         q

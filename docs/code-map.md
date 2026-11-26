@@ -68,7 +68,7 @@ A stream and the shared JSON models run on the Rust engine, `nightjar-core`, thr
 
 | Part | `app/src/main/java/com/limelight/` |
 | --- | --- |
-| Stream activity | `Game.java`, with `GameConnection.java`, `GameStreamUiSetup.java`, `GameMoveFlow.java`, `GameTerminationFlow.java`, `GameRecovery.java`, `GameVideoOutput.java`, `GameTouchInput.java`, `GameOverlays.java`, `StreamGuests.java` |
+| Stream activity | `Game.java`, with `GameConnection.java`, `GameStreamUiSetup.java`, `GameMoveFlow.java`, `GameTerminationFlow.java`, `GameRecovery.java`, `GameVideoOutput.java`, `GameVideoRefresh.java` (and [`CompositorWatch`](../app/src/main/java/com/limelight/binding/video/CompositorWatch.java) / [`CompositorHeartbeat`](../app/src/main/java/com/limelight/ui/CompositorHeartbeat.java)), `GameTouchInput.java`, `GameOverlays.java`, `StreamGuests.java` |
 | Connection | `nvstream/NvConnection.java`, `nvstream/NvConnectionAudio.java`, `nvstream/NvConnectionActions.java`, `nvstream/NvConnectionInput.java`, `nvstream/NvConnectionLaunch.java`, `nvstream/NvConnectionPreflight.java`, `nvstream/http/` (serverinfo, pairing, [`HostCapabilities`](../app/src/main/java/com/limelight/nvstream/http/HostCapabilities.java)), `nvstream/jni/` |
 | Video | `binding/video/`, led by `binding/video/MediaCodecDecoderRenderer.java` |
 | Input, audio | `binding/input/ControllerHandler.java`, `binding/input/driver/`, `binding/input/touch/`, `binding/input/pad/` (the on-screen controller and its layout editor), `binding/audio/` |

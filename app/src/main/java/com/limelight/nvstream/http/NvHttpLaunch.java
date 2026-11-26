@@ -103,6 +103,7 @@ final class NvHttpLaunch {
                 .put("persist_gamepads", sc.getPersistGamepadsAfterDisconnect())
                 .put("rate_change", ctx.rateChange).put("confirm_replace", ctx.confirmReplace)
                 .put("clipboard_sync", ctx.streamConfig.getClipboardSync());
+        j.put("hdr_static_only", sc.getHdrStaticOnly());
         if (ctx.fecChoice != null) j.put("fec", ctx.fecChoice.wireValue);
         if (sc.getDisplayLuminance() != null) {
             j.put("display_luminance", Json.obj()

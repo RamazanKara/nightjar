@@ -78,6 +78,7 @@ pub(crate) fn connect(
         display_luminance: plan.display_luminance,
         rtx_hdr: settings.rtx_hdr,
         rtx_video: settings.rtx_video,
+        hdr_static_only: settings.hdr_format.static_metadata_only(),
         ..Default::default()
     };
     if plan.record.server_certificate.is_none() {
@@ -376,14 +377,13 @@ pub(crate) fn connect(
         video_capabilities,
         audio_capabilities: CAPABILITY_DIRECT_SUBMIT,
         video_fec: settings.error_correction.into(),
-        hdr_format: asked_hdr_format(hdr_format(
-            settings.hdr,
+        hdr_format: asked_hdr_format(settings_hdr_format(
+            settings,
             plan.info
                 .capabilities
                 .evidence()
                 .map_or(-1, |evidence| evidence.hdr_formats),
             offer.formats,
-            settings.experimental_packed_444,
             reads_dolby_vision(),
         )),
         // The draw pass takes only peaks from the RPUs, so it takes 8.1 full range where the host

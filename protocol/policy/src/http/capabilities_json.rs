@@ -120,6 +120,10 @@ impl Evidence {
         );
         map.insert("maxVideoPacket".into(), Value::from(self.max_video_packet));
         map.insert(
+            "hdrDynamicControl".into(),
+            Value::from(self.hdr_dynamic_control),
+        );
+        map.insert(
             "internetPlayVersion".into(),
             Value::from(self.internet_play_version),
         );
@@ -272,6 +276,10 @@ impl Evidence {
             display_scale_version: opt_i32("displayScaleVersion", -1)?,
             second_screen_version: opt_i32("secondScreenVersion", -1)?,
             nvidia_enhancements,
+            hdr_dynamic_control: obj
+                .get("hdrDynamicControl")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             internet_play_version: opt_i32("internetPlayVersion", -1)?,
             usb_offered: opt_bool("usbOffered")?,
             usb_permission: opt_bool("usbPermission")?,

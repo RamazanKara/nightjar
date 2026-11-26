@@ -37,6 +37,7 @@ public class StreamConfiguration {
     private HostDisplayChoice hostDisplay;
     // The video FEC to ask a PC that lets the client choose; null sends nothing.
     private FecChoice fecChoice;
+    private boolean hdrStaticOnly;
     private boolean rateChange;
     private HdrBrightness displayLuminance;
     private int bitrate;
@@ -163,6 +164,12 @@ public class StreamConfiguration {
         /** This client's cap on the bitrate, 0 for none: PyroWave's default or floor never starts above it. */
         public StreamConfiguration.Builder setBitrateLimit(int kbps) {
             config.bitrateLimitKbps = kbps;
+            return this;
+        }
+
+        /** "HDR10 only": asks a PC that can for a stream without HDR10+ and HDR Vivid. */
+        public StreamConfiguration.Builder setHdrStaticOnly(boolean staticOnly) {
+            config.hdrStaticOnly = staticOnly;
             return this;
         }
 
@@ -361,6 +368,10 @@ public class StreamConfiguration {
 
     public int getBitrateLimitKbps() {
         return bitrateLimitKbps;
+    }
+
+    public boolean getHdrStaticOnly() {
+        return hdrStaticOnly;
     }
 
     public FecChoice getFecChoice() {

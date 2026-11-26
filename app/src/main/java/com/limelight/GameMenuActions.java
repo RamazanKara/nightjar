@@ -224,7 +224,7 @@ final class GameMenuActions {
         options.picturePositionAvailable = game.safeArea.applies();
         options.flipAvailable = game.safeArea.canFlip();
         options.zoomEnabled = game.desktopGestures != null && game.desktopGestures.enabled();
-        options.zoomed = game.desktopGestures != null && game.desktopGestures.viewport().scale() > 1.01f;
+        options.zoomed = game.desktopGestures != null && game.desktopGestures.viewport().isTransformed();
         options.pictureInPicture = game.videoOutput.canEnterPictureInPicture();
         options.externalDisplays = game.videoOutput.hasPresentationDisplays();
         options.automaticQuality = game.adaptation.showsAdaptiveQuality();
