@@ -345,7 +345,8 @@ fn try_again_on_a_failed_list_does_not_say_no_apps() {
     assert!(!shows(&f, "This PC lists no apps."), "the answer ended it: {:?}", f.drawn);
 }
 
-/// The smallest window holds the hero's whole row when Try again joins it.
+/// The smallest window holds the hero's whole row when Try again joins it: Play (or Resume) and
+/// Try again as its one quiet action.
 #[test]
 fn try_again_leaves_homes_row_in_the_smallest_window() {
     for running in [0, 1000] {
@@ -364,7 +365,7 @@ fn try_again_leaves_homes_row_in_the_smallest_window() {
             row
         };
         let row = words(&f);
-        assert!(row.len() >= 3, "{:?}", f.drawn);
+        assert_eq!(row.len(), 2, "running {running}: {:?}", f.drawn);
         assert!(row.iter().all(|r| r.right() <= f.size.x), "running {running}: {row:?} in {:?}", f.size);
         assert!(row.windows(2).all(|w| w[0].right() < w[1].left()), "running {running}: {row:?}");
     }

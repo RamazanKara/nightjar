@@ -19,6 +19,7 @@ pub mod feedback_hook;
 mod first_run;
 mod game;
 mod help;
+mod hero_stage;
 mod home;
 mod host_details_limiter;
 mod icons;
