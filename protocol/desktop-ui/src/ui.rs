@@ -27,6 +27,7 @@ mod navigation;
 mod pages;
 pub(crate) mod pcs;
 mod settings;
+mod settings_previews;
 mod spring;
 mod types;
 mod widgets;

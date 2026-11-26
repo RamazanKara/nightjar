@@ -7,4 +7,10 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Frame limit", "フレームレート上限"),
     ("Smooth TV", "なめらか TV"),
     ("Wi-Fi / Away", "Wi-Fi / 外出先"),
+    ("Frames shown", "表示されるフレーム"),
+    ("Frames arrive", "届いたフレーム"),
+    ("Screen refresh", "画面のリフレッシュ"),
+    ("What you see", "見える映像"),
+    ("What the game draws", "ゲームが描く映像"),
+    ("Stream pixels", "ストリームのピクセル"),
 ];

@@ -7,4 +7,10 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Frame limit", "Giới hạn khung hình"),
     ("Smooth TV", "TV mượt"),
     ("Wi-Fi / Away", "Wi-Fi / Đi xa"),
+    ("Frames shown", "Khung hình hiển thị"),
+    ("Frames arrive", "Khung hình nhận được"),
+    ("Screen refresh", "Lần quét của màn hình"),
+    ("What you see", "Những gì bạn thấy"),
+    ("What the game draws", "Những gì trò chơi vẽ"),
+    ("Stream pixels", "Điểm ảnh của luồng"),
 ];

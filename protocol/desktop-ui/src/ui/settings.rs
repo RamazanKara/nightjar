@@ -130,8 +130,9 @@ pub(super) use choices::{
     fractional_vsync_display_reason, frame_pacing_choice, frame_pacing_choice_name,
     host_display_name, preset_current, preset_label, preset_section, preset_value,
     reset_to_defaults, set_frame_pacing_choice, set_vrr_choice, sharp_color, video_driver,
-    vrr_choice, FramePacingChoice, VrrChoice,
+    vrr_choice, FramePacingChoice, Preview, VrrChoice,
 };
+use super::settings_previews::{self, Mark, Picture};
 #[cfg(test)]
 pub(super) use choices::{vrr_choice_where, vrr_tear_free_applies};
 pub(super) use rows::{
@@ -528,6 +529,7 @@ impl Launcher {
             defer_reset: false,
             reset_clicked: false,
             custom_reset: None,
+            preview: None,
         };
         let screen = self.screen;
         // Variable refresh rate needs tearing on Windows: where the swap chain can't, the row is not

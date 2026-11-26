@@ -301,6 +301,7 @@ pub(super) fn draw_video_sections(
             })
             .response
     });
+    rows.preview(Preview::Hdr);
     setting_row(ui, s, rows, &["hdr"], "HDR", "Brighter highlights and richer color on an HDR screen. Turn it on if this screen shows HDR and HDR is on for the PC’s display.", |ui, s| toggle(ui, &mut s.hdr));
     // PyroWave's 4:4:4 is a codec of its own.
     rows.when(!s.codec.is_pyrowave());
@@ -388,6 +389,7 @@ pub(super) fn draw_video_sections(
             })
             .response
     });
+    rows.preview(Preview::VideoSize);
     setting_row(ui, s, rows, &["video_scaling"], "Video size", "How the picture fits a screen of another shape: Fit shows all of it with bars, Fill crops the edges, Stretch distorts it, 1:1 pixels shows it at its own size.", |ui, s| {
         use crate::config::VideoScaling;
         Combo::from_id_salt("video-scaling").selected_text(tr(s.video_scaling.label())).show_ui(ui, |ui| {
@@ -441,6 +443,7 @@ pub(super) fn draw_video_sections(
     rows.when(!vrr);
     // A main row beside Variable refresh rate, as on Android. One choice over its three keys (`FramePacingChoice`, Android's own): Balanced's newest
     // frame or every frame, and the PC's frame times, which take over from the pacing.
+    rows.preview(Preview::FramePacing);
     setting_row(ui, s, rows, &["frame_pacing", "drop_late_frames", "host_frame_times"], "Frame pacing", "Lowest latency shows frames at once; the other choices wait for the screen’s refresh for steadier motion at more delay, keeping every frame adds more, and PC’s frame times shows each frame when the game drew it, a few milliseconds later. With V-Sync on, frames are timed to your screen where the PC supports it, sent to arrive just before each refresh; leave Lowest latency unless motion judders.", |ui, s| {
         let current = frame_pacing_choice(s);
         let mut choice = current;
@@ -489,6 +492,8 @@ pub(super) fn draw_video_sections(
     });
     rows.always();
     rows.group(en("Image"));
+    // The card follows the sharpness of the row under it too.
+    rows.preview(Preview::Upscaling);
     setting_row(ui, s, rows, &["upscaling"], "Upscaling", &if cfg!(target_os = "macos") { format!("{} {}", tr("How a stream smaller than the screen is enlarged. FSR and SGSR sharpen edges at some GPU time and battery. HDR streams are enlarged without them."), tr("MetalFX sharpens too and adds a few milliseconds of delay.")) } else { tr("How a stream smaller than the screen is enlarged. FSR and SGSR sharpen edges at some GPU time and battery. HDR streams are enlarged without them.").to_owned() }, |ui, s| {
         Combo::from_id_salt("upscaling").selected_text(tr(s.upscaling.label())).show_ui(ui, |ui| {
             // AI enhancement is offered only where the GPU's probe finds the vendor's super

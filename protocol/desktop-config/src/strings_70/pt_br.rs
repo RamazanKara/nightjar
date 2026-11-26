@@ -7,4 +7,10 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Frame limit", "Limite de quadros"),
     ("Smooth TV", "TV suave"),
     ("Wi-Fi / Away", "Wi-Fi / Fora de casa"),
+    ("Frames shown", "Quadros exibidos"),
+    ("Frames arrive", "Quadros que chegam"),
+    ("Screen refresh", "Atualização da tela"),
+    ("What you see", "O que você vê"),
+    ("What the game draws", "O que o jogo desenha"),
+    ("Stream pixels", "Pixels da transmissão"),
 ];

@@ -241,7 +241,13 @@ pub(in crate::ui) fn setting_row(
         && in_use_id.is_some_and(|c| ui.ctx().dragged_id() == Some(c) || ui.ctx().memory(|m| m.focused() == Some(c)));
     let has_reason = reason.is_some();
     let idle = has_reason && !changed && !kept;
-    if !rows.shows(ui, id, label, description, idle) {
+    let shows = rows.shows(ui, id, label, description, idle);
+    // The row's preview card: its picture and its value's name are read once the control has run,
+    // so the card shows the value chosen this frame.
+    let preview = rows.preview.take();
+    let card = std::cell::Cell::new(None);
+    let picture = |s: &Settings| card.set(preview.map(|kind| (kind, kind.picture(s), kind.caption(s))));
+    if !shows {
         if in_use_id.is_some() {
             ui.ctx().data_mut(|d| d.remove::<egui::Id>(kept_id));
         }
@@ -267,7 +273,7 @@ pub(in crate::ui) fn setting_row(
                 (from.unwrap_or(tr("From main settings")).to_owned(), *ON_SURFACE_VARIANT)
             };
             let box_label = rows.own;
-            settings_row(ui, label, description, note, Some(state), own, room, |ui| {
+            settings_row(ui, label, description, note, Some(state), own, room, &card, |ui| {
                 ui.with_layout(Layout::top_down(Align::Max), |ui| {
                     ui.set_width(CONTROL_W);
                     // Choosing another value ticks the box, opening a menu and leaving it changes
@@ -295,6 +301,7 @@ pub(in crate::ui) fn setting_row(
                         // Ticking the box takes the whole row; a chosen value, the keys it sets.
                         overrides.capture(settings, if boxed.changed() { keys } else { picked_keys(keys, settings) });
                     }
+                    picture(settings);
                     value.union(boxed)
                 }).inner
             })
@@ -310,9 +317,10 @@ pub(in crate::ui) fn setting_row(
             };
             let reset_w = ui.painter().layout_no_wrap(tr("Reset").to_owned(), semibold(text::LABEL), *ON_SURFACE).size().x + 24.0;
             let mut reset = false;
-            let response = settings_row(ui, label, description, note, None, false, reset_w + room, |ui| {
+            let response = settings_row(ui, label, description, note, None, false, reset_w + room, &card, |ui| {
                 let value = control(ui, settings);
                 name_for_readers(ui, &value, label, description);
+                picture(settings);
                 if differs {
                     let button = text_button(ui, "Reset").on_hover_text(trf("Default: {}", &[&default]));
                     let name = trf("Reset {} to its default, {}", &[&tr(label), &default]);
@@ -332,9 +340,10 @@ pub(in crate::ui) fn setting_row(
             }
             response
         }
-        _ => settings_row(ui, label, description, note, None, false, room, |ui| {
+        _ => settings_row(ui, label, description, note, None, false, room, &card, |ui| {
             let value = control(ui, settings);
             name_for_readers(ui, &value, label, description);
+            picture(settings);
             value
         }),
     };
@@ -367,7 +376,8 @@ pub(super) const KEYS_IN_HAND: &str = "settings-keys-in-hand";
 /// text as a tooltip, or wrapped whole (the row grows for it) for a row keys or a controller
 /// focused. A note shows always. A row a PC, game or profile sets has an amber bar at its left
 /// edge and, under its label, where its value comes from beside the layer's box. `reset_w` keeps
-/// room left of the control for a Reset, so the text never moves when it comes and goes.
+/// room left of the control for a Reset, so the text never moves when it comes and goes. A row
+/// whose control leaves a picture in `card` shows its preview card under the two, in the same row.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn settings_row(
     ui: &mut Ui,
@@ -377,6 +387,7 @@ pub(super) fn settings_row(
     state: Option<(String, Color32)>,
     own: bool,
     reset_w: f32,
+    card: &std::cell::Cell<Option<(Preview, Picture, &'static str)>>,
     control: impl FnOnce(&mut Ui) -> Response,
 ) -> Response {
     const GAP: f32 = 2.0;
@@ -452,6 +463,12 @@ pub(super) fn settings_row(
                 painter.galley(Pos2::new(text_rect.left(), content.top() + to_state), state_g, *color);
             }
         });
+        if let Some((kind, picture, caption)) = card.take() {
+            let legend: Vec<(Mark, &str)> = kind.legend().iter().map(|(mark, meaning)| (*mark, tr(meaning))).collect();
+            ui.add_space(space::XS);
+            settings_previews::card(ui, &settings_previews::Card { id: Id::unique(("settings-preview", label)), title: tr(label), caption, legend: &legend, picture });
+            ui.add_space(space::XS);
+        }
     });
     if own {
         let bar = Rect::from_min_size(Pos2::new(rect.left() + 6.0, rect.top() + 12.0), vec2(3.0, rect.height() - 24.0));

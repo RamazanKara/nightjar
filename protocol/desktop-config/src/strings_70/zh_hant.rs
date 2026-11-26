@@ -7,4 +7,10 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Frame limit", "影格率上限"),
     ("Smooth TV", "流暢電視"),
     ("Wi-Fi / Away", "Wi-Fi / 外出"),
+    ("Frames shown", "顯示的影格"),
+    ("Frames arrive", "到達的影格"),
+    ("Screen refresh", "螢幕更新"),
+    ("What you see", "你看到的畫面"),
+    ("What the game draws", "遊戲繪製的畫面"),
+    ("Stream pixels", "串流像素"),
 ];

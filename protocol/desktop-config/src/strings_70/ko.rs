@@ -7,4 +7,10 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Frame limit", "프레임 제한"),
     ("Smooth TV", "부드러운 TV"),
     ("Wi-Fi / Away", "Wi-Fi / 외부"),
+    ("Frames shown", "표시되는 프레임"),
+    ("Frames arrive", "도착하는 프레임"),
+    ("Screen refresh", "화면 갱신"),
+    ("What you see", "보이는 화면"),
+    ("What the game draws", "게임이 그리는 화면"),
+    ("Stream pixels", "스트림 픽셀"),
 ];

@@ -668,3 +668,5 @@ mod network_and_layout_tests;
 mod presets_and_display_tests;
 #[path = "settings_tests/simple_and_debug_tests.rs"]
 mod simple_and_debug_tests;
+#[path = "settings_tests/preview_tests.rs"]
+mod preview_tests;
