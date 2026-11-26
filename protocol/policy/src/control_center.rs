@@ -80,13 +80,15 @@ pub fn module_of(tile: &str) -> Option<Module> {
         | "clipboard_receive" | "mouse_cursor" | "keyboard_keys" | "zoom_reset" | "picture_in_picture" | "image_clipboard_send"
         | "image_clipboard_receive" | "help" => Module::Quick,
         "bitrate" | "rate_change" | "video_output" | "overlay_page" | "picture" | "video_scaling" | "automatic_quality"
-        | "automatic_bitrate" | "stream_size" | "stream_health" | "export_statistics" => Module::Picture,
+        | "automatic_bitrate" | "stream_size" | "stream_health" | "export_statistics" | "picture_position"
+        | "flip_screen" => Module::Picture,
         // The PC's night mode and headphone surround are sound, beside the microphone.
         "microphone" | "mic_button" | "night_mode" | "headphone_surround" | "controller_audio" => Module::Audio,
         "native_page" | "server_commands" | "host_menu" | "files" | "host_web_ui" | "host_status" => Module::Pc,
         "onscreen_controls" | "controls_layout" | "menu_button" | "game_controls" | "usb_devices" => Module::Controller,
         "guests" => Module::Guests,
-        "reconnect" | "end_host_session" | "end_session" => Module::Power,
+        // Quick Suspend: the host offers one of the two, as its game runs or waits paused.
+        "suspend_game" | "resume_game" | "reconnect" | "end_host_session" | "end_session" => Module::Power,
         _ => return None,
     })
 }

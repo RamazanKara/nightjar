@@ -210,7 +210,7 @@ pub struct Arbitrated {
 }
 
 impl Arbitrated {
-    pub fn new(device: Arc<dyn UsbDevice>, claim: Claim) -> Arc<dyn UsbDevice> {
+    pub fn wrap(device: Arc<dyn UsbDevice>, claim: Claim) -> Arc<dyn UsbDevice> {
         Arc::new(Self { device, claim })
     }
 }

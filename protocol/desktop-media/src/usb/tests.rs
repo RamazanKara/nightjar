@@ -82,7 +82,7 @@ fn a_cancelled_password_prompt_stops_the_automatic_attach_until_the_user_acts() 
     assert!(auto_due(&[plugged("4-2", 0x28de, 0x1205, None)], &auto, &hushed, |_| false, &mut HashMap::new(), Instant::now()).is_empty());
     // A user action (Attach, or Automatic ticked again) takes it off the list.
     quiet.lock().unwrap().retain(|k| *k != auto_key(deck.vid, deck.pid));
-    assert_eq!(auto_due(&[deck.clone()], &auto, &quiet.lock().unwrap(), |_| false, &mut HashMap::new(), Instant::now()), vec![deck]);
+    assert_eq!(auto_due(std::slice::from_ref(&deck), &auto, &quiet.lock().unwrap(), |_| false, &mut HashMap::new(), Instant::now()), vec![deck]);
 }
 
 /// The native answer with these features and the usb permission.

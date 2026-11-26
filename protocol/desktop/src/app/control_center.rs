@@ -95,6 +95,7 @@ pub(crate) fn show(ctx: &egui::Context, window: *mut SDL_Window, s: &mut Streami
         controller_audio: s.controller_audio_available(),
         usb: s.usb.is_some() || s.usb_refused.is_some(),
         guests: s.guests.shown(),
+        suspend: s.quick_suspend.tile(),
         exits: page_hosts::game_exits(s, overlay.hints),
     };
     // No gated extra is offered yet, so every gate stays shut.

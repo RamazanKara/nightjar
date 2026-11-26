@@ -9,8 +9,8 @@
 
 use crate::{
     clipboard_sync, control, controller_identity, cursor_shape, fec_report, frame_warp,
-    keyboard_layout, pen, phase_lock, pipeline_rates, rate_change, steam_controller, text_input,
-    transport_feedback, usb,
+    keyboard_layout, pen, phase_lock, pipeline_rates, ps_speaker_pcm, quick_suspend, rate_change,
+    steam_controller, text_input, transport_feedback, usb,
 };
 use core::ops::RangeInclusive;
 
@@ -100,7 +100,12 @@ pub const CONTROL_IDS: &[(u16, &str)] = &[
         frame_warp::FRAME_WARP_V2_META_MESSAGE_TYPE,
         "frame warp 2 meta",
     ),
+    (quick_suspend::QUICK_SUSPEND_MESSAGE_TYPE, "quick suspend"),
     (0x5601, "DualSense haptics"),
+    (
+        ps_speaker_pcm::PS_SPEAKER_PCM_MESSAGE_TYPE,
+        "PlayStation controller speaker PCM",
+    ),
 ];
 
 /// Control message types held back for a message that may be needed later.
@@ -152,11 +157,25 @@ pub const INPUT_MAGICS: &[(u32, &str)] = &[
         "Steam Controller attributes",
     ),
     (pen::PEN_BARREL_ROLL_MAGIC, "pen with barrel roll"),
-    (0x5500_0009, "touchpad contact"),
+    (
+        ps_speaker_pcm::BINDING_MAGIC,
+        "touchpad contact (40 bytes) or speaker binding (20 bytes)",
+    ),
     (0x5500_000A, "touchpad frame"),
     (
         controller_identity::CONTROLLER_IDENTITY_MAGIC,
         "controller identity",
+    ),
+];
+
+/// Input magics that carry two packets, told apart by their exact total length (length field
+/// included) alone; a packet of any other length is neither.
+pub const LENGTH_SHARED_INPUT_MAGICS: &[(u32, usize, &str)] = &[
+    (ps_speaker_pcm::BINDING_MAGIC, 40, "touchpad contact"),
+    (
+        ps_speaker_pcm::BINDING_MAGIC,
+        ps_speaker_pcm::BINDING_BYTES,
+        "speaker binding",
     ),
 ];
 
@@ -246,6 +265,7 @@ mod tests {
         // One line per id, so items that add one merge cleanly.
         let expected: &[u16] = &[
             0x5549, // frame warp 2 meta
+            0x554B, // quick suspend
         ];
         assert_eq!(new, expected);
     }
@@ -257,5 +277,20 @@ mod tests {
         magics.sort_unstable();
         magics.dedup();
         assert_eq!(magics.len(), count, "an input magic is listed twice");
+    }
+
+    #[test]
+    fn a_shared_magic_has_one_packet_per_length() {
+        for (magic, len, meaning) in LENGTH_SHARED_INPUT_MAGICS {
+            assert!(
+                INPUT_MAGICS.iter().any(|(listed, _)| listed == magic),
+                "{magic:#x} {meaning}"
+            );
+            let same_length = LENGTH_SHARED_INPUT_MAGICS
+                .iter()
+                .filter(|(other, other_len, _)| other == magic && other_len == len)
+                .count();
+            assert_eq!(same_length, 1, "{magic:#x} {len} {meaning}");
+        }
     }
 }

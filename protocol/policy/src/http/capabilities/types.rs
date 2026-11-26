@@ -115,10 +115,15 @@ pub enum Feature {
     HostUpdate,
     /// Devices waiting to pair, approved from here (`pairing.approve` in native features).
     PairingApprove,
+    /// Quick Suspend (`QuickSuspendVersion` and native `session.quick_suspend`): the host pauses
+    /// the running game's processes and resumes them later, from this or another device. Both
+    /// appear only while the host's `quick_suspend` setting is on; known only after
+    /// [`super::HostCapabilities::with_native`], and only with Launch or Host control.
+    QuickSuspend,
 }
 
 impl Feature {
-    pub const ALL: [Feature; 54] = [
+    pub const ALL: [Feature; 55] = [
         Feature::Permissions,
         Feature::OtpPairing,
         Feature::Clipboard,
@@ -173,6 +178,7 @@ impl Feature {
         Feature::PcShutdown,
         Feature::HostUpdate,
         Feature::PairingApprove,
+        Feature::QuickSuspend,
     ];
 }
 
@@ -307,6 +313,8 @@ pub struct Evidence {
     /// The image enhancements the host runs before encoding (`NvidiaEnhancements`,
     /// `rubylight_protocol::nvidia_enhance` bits); 0 for none.
     pub nvidia_enhancements: u8,
+    /// `HdrDynamicControl`: the host honours `rlHdrDynamic` (`rubylight_protocol::hdr`).
+    pub hdr_dynamic_control: bool,
     /// -1 without `RustHostInternetPlayVersion` (paired serverinfo only), 0 when the host has
     /// Play over the internet off.
     pub internet_play_version: i32,
@@ -335,6 +343,10 @@ pub struct Evidence {
     /// `pairing.approve` in native features, and `pairing_approve` or Host control grant.
     pub pairing_offered: bool,
     pub pairing_permission: bool,
+    /// -1 without `QuickSuspendVersion`: the host does not pause games (or has it off).
+    pub quick_suspend_version: i32,
+    /// `session.quick_suspend` in native features, with Launch or Host control.
+    pub quick_suspend_offered: bool,
     /// `MaxVideoPacket`: the largest video packet this host accepts, including a client's
     /// 32-byte encryption header. 0 when the host offers no more than stock Moonlight's 1400.
     pub max_video_packet: u16,

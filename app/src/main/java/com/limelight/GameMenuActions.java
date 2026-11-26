@@ -168,11 +168,13 @@ final class GameMenuActions {
         game.overlays.dismissStreamMenuHint(true);
         // The audio switches show the host's state as it is now, so they appear once it answers.
         hostActions.resetHostAudio();
+        hostActions.quickSuspend.forget();
         streamMenuSheet = new com.limelight.ui.StreamMenu(game, this::streamMenuOptions, this::onStreamMenuItem,
                 hostActions.nativeMenuController(), menuShortcuts, menuSession);
         showStreamDialog(streamMenuSheet.sheet());
         if (byController) streamMenuSheet.sheet().focusFirstActionFromController();
         hostActions.refreshHostAudio();
+        hostActions.quickSuspend.refresh();
     }
 
     // The stream's size or rate changed: a menu left open names the new ones in its header. UI thread.
@@ -200,6 +202,8 @@ final class GameMenuActions {
         options.headphoneSurroundOffered = game.conn.offersHostAudio(com.limelight.nativeapi.NativeCapabilities.HEADPHONE_SURROUND);
         options.hostAudio = hostActions.hostAudio();
         options.hostAudioUnread = hostActions.hostAudioUnread();
+        options.quickSuspendOffered = hostActions.quickSuspend.offered();
+        options.quickSuspendPaused = hostActions.quickSuspend.paused();
         options.micButtonAvailable = game.micButton != null;
         options.micButtonShown = game.micButton != null && game.prefConfig.micButton;
         options.menuButtonAvailable = game.menuButton != null;
@@ -223,8 +227,10 @@ final class GameMenuActions {
         options.gameControls = game.gameTouchControls != null;
         options.keyboardKeysShown = game.keyboardInput.isKeyboardOverlayVisible();
         options.scalingAvailable = game.videoOutput.canScaleLive();
+        options.picturePositionAvailable = game.safeArea.applies();
+        options.flipAvailable = game.safeArea.canFlip();
         options.zoomEnabled = game.desktopGestures != null && game.desktopGestures.enabled();
-        options.zoomed = game.desktopGestures != null && game.desktopGestures.viewport().scale() > 1.01f;
+        options.zoomed = game.desktopGestures != null && game.desktopGestures.viewport().isTransformed();
         options.pictureInPicture = game.videoOutput.canEnterPictureInPicture();
         options.externalDisplays = game.videoOutput.hasPresentationDisplays();
         options.automaticQuality = game.adaptation.showsAdaptiveQuality();
@@ -284,6 +290,8 @@ final class GameMenuActions {
             case GAME_CONTROLS: action = game.gameTouchControls == null ? null : game.gameTouchControls::showMenu; break;
             case KEYBOARD_KEYS: action = game.keyboardInput::toggleKeyboardOverlay; break;
             case VIDEO_SCALING: action = game.videoOutput::showVideoScalingDialog; break;
+            case PICTURE_POSITION: action = () -> showStreamDialog(game.safeArea.createPositionDialog()); break;
+            case FLIP_SCREEN: action = () -> game.safeArea.flip(game.externalPresentation != null); break;
             case ZOOM: action = game.videoOutput::toggleDesktopZoom; break;
             case ZOOM_RESET: action = () -> {
                 game.desktopGestures.reset();
@@ -306,6 +314,8 @@ final class GameMenuActions {
             case HOST_WEB_UI: action = hostActions::showHostWebUi; break;
             case HOST_STATUS: action = hostActions::refreshHostStatus; break;
             case HOST_MENU: action = hostActions::openHostMenu; break;
+            case SUSPEND_GAME:
+            case RESUME_GAME: action = () -> hostActions.quickSuspend.choose(item); break;
             case RECONNECT: action = game.streamRecovery::reconnectStream; break;
             case DISCONNECT: action = this::leaveStream; break;
             case CONFIRM_DISCONNECT: action = this::confirmDisconnect; break;

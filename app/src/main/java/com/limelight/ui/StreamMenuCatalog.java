@@ -113,6 +113,12 @@ final class StreamMenuCatalog {
             if (o.scalingAvailable && o.localOutput) {
                 entries.add(action(Section.DISPLAY, Item.VIDEO_SCALING, R.string.video_scaling_title, R.drawable.ic_stretch));
             }
+            if (o.picturePositionAvailable && o.localOutput) {
+                entries.add(action(Section.DISPLAY, Item.PICTURE_POSITION, R.string.picture_position_title, R.drawable.ic_picture_position));
+            }
+            if (o.flipAvailable && o.localOutput) {
+                entries.add(action(Section.DISPLAY, Item.FLIP_SCREEN, R.string.stream_flip_screen, R.drawable.ic_screen_rotation));
+            }
             if (o.localOutput) {
                 entries.add(entry(Section.DISPLAY, Item.ZOOM, o.zoomEnabled ?
                         R.string.desktop_zoom_disable : R.string.desktop_zoom_enable, R.drawable.ic_zoom_in, o.zoomEnabled));
@@ -152,6 +158,7 @@ final class StreamMenuCatalog {
         if (o.role == NvApp.Role.STREAM && caps.has(HostCapabilities.Feature.NATIVE_API)) {
             entries.add(action(Section.HOST, Item.NATIVE_PAGE, R.string.native_menu_row, R.drawable.ic_tune));
         }
+        StreamMenuSuspendSection.addTo(entries, o);
         // Only when the host's native capabilities offer it, whoever made the host.
         if (o.role == NvApp.Role.STREAM && o.hostMenu) {
             entries.add(action(Section.HOST, Item.HOST_MENU, R.string.stream_host_menu, R.drawable.ic_computer));
@@ -376,6 +383,8 @@ final class StreamMenuCatalog {
             case "pc_commands": return R.string.stream_tile_pc_commands;
             case "diagnostics": return R.string.stream_tile_diagnostics;
             case "session_graphics": return R.string.stream_tile_session_graphics;
+            case "suspend_game": return R.string.stream_tile_suspend_game;
+            case "resume_game": return R.string.stream_tile_resume_game;
             case "more": return R.string.stream_tile_more;
             case "return": return R.string.stream_tile_return;
             case "add_shortcut": return R.string.stream_tile_add_shortcut;

@@ -101,6 +101,7 @@ fn parse_launch_request(v: &Value) -> Result<LaunchRequest, Error> {
         display_luminance,
         rtx_hdr: v["rtx_hdr"].as_bool(),
         rtx_video: v["rtx_video"].as_bool(),
+        hdr_static_only: v["hdr_static_only"].as_bool().unwrap_or(false),
     })
 }
 

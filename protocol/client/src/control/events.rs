@@ -220,7 +220,8 @@ pub enum ControlEvent {
     },
     /// Actuator PCM for a controller (0x5601).
     ControllerHaptics(Pcm),
-    /// USB controller speaker PCM (0x5533).
+    /// USB controller speaker PCM (0x5533), or a bound PlayStation controller's speaker PCM
+    /// (0x5602) in the same blocks.
     ControllerSpeaker(Pcm),
     /// USB controller audio status from the host (0x5535), 8 to 972 bytes as sent.
     ControllerAudioControl(Vec<u8>),
@@ -270,6 +271,10 @@ pub enum ControlEvent {
     ClipboardSync(rubylight_protocol::clipboard_sync::Frame),
     /// A 0x5508 payload of this many bytes that is not a v1 frame.
     ClipboardSyncRejected(usize),
+    /// The host's Quick Suspend state (0x554B): the answer to a
+    /// [`ClientMessage::QuickSuspend`](super::messages::ClientMessage) with its request id, or a
+    /// change with id 0 (another device or the PC paused or resumed the game). Never coalesced.
+    QuickSuspend(rubylight_protocol::quick_suspend::HostState),
     ConnectionStatus(ConnectionStatus),
     /// Client roaming started, moved the stream, gave up, or was not needed.
     Roam(RoamEvent),
@@ -473,6 +478,19 @@ pub(crate) fn pipeline_rates(p: &[u8]) -> Option<ControlEvent> {
         return None;
     }
     PipelineRatesReport::decode(p).map(ControlEvent::PipelineRates)
+}
+
+/// A Quick Suspend state: 20 bytes, and a newer host may append fields. Anything over 256 bytes,
+/// a client's request or a frame of another version is not one.
+pub(crate) fn quick_suspend(p: &[u8]) -> Option<ControlEvent> {
+    use rubylight_protocol::quick_suspend::Message;
+    if p.len() > 256 {
+        return None;
+    }
+    match Message::decode(p)? {
+        Message::State(state) => Some(ControlEvent::QuickSuspend(state)),
+        Message::Request(_) => None,
+    }
 }
 
 /// A rate change result: 20 bytes, and a newer host may append fields. Anything over 256

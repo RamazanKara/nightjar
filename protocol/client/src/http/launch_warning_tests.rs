@@ -110,10 +110,8 @@ fn oversized_replies_and_dtds_carry_no_warning_but_still_launch() {
 
 #[test]
 fn failed_and_declined_replies_never_warn() {
-    let declined = format!(
-        r#"<root status_code="200"><gamesession>0</gamesession><clientWarning>virtual_display_unavailable</clientWarning></root>"#
-    );
-    assert_eq!(parse_launch_reply(&declined, false).unwrap(), None);
+    let declined = r#"<root status_code="200"><gamesession>0</gamesession><clientWarning>virtual_display_unavailable</clientWarning></root>"#;
+    assert_eq!(parse_launch_reply(declined, false).unwrap(), None);
     let failed = r#"<root status_code="503" status_message="no"><clientWarning>virtual_display_unavailable</clientWarning></root>"#;
     assert!(parse_launch_reply(failed, false).is_err());
     let resumed = r#"<root status_code="200"><resume>1</resume><clientWarning>display_scale</clientWarning></root>"#;

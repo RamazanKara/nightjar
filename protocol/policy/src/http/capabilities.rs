@@ -471,6 +471,16 @@ impl Evidence {
                 self.pairing_offered,
                 (!self.pairing_permission).then_some(Reason::PairingApprovePermission),
             ),
+            // Serverinfo first: a host with the setting off lists neither, and says so before
+            // its native capabilities are read.
+            Feature::QuickSuspend => {
+                let version = self.serverinfo_version(self.quick_suspend_version);
+                if version.is_supported() {
+                    self.native_feature(self.quick_suspend_offered, None)
+                } else {
+                    version
+                }
+            }
         }
     }
 
@@ -564,6 +574,9 @@ impl HostCapabilities {
         evidence.update_offered = listed("update") && permissions.host_control;
         evidence.pairing_offered = listed("pairing.approve");
         evidence.pairing_permission = native.files.pairing_approve || permissions.host_control;
+        // Pausing or resuming takes Launch or Host control.
+        evidence.quick_suspend_offered = listed(rubylight_native_api::feature::QUICK_SUSPEND)
+            && (permissions.launch || permissions.host_control);
         Self::from_evidence(evidence)
     }
 
@@ -644,6 +657,13 @@ impl HostCapabilities {
     /// (`rubylight_protocol::nvidia_enhance` bits), 0 for a host without any.
     pub fn nvidia_enhancements(&self) -> u8 {
         self.evidence.as_ref().map_or(0, |e| e.nvidia_enhancements)
+    }
+
+    /// Whether the host takes `rlHdrDynamic` to leave HDR10+ and HDR Vivid out of a stream.
+    pub fn hdr_dynamic_control(&self) -> bool {
+        self.evidence
+            .as_ref()
+            .is_some_and(|e| e.hdr_dynamic_control)
     }
 
     /// `MaxVideoPacket`: the largest video packet this host accepts, including a client's 32-byte

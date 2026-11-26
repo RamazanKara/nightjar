@@ -637,7 +637,7 @@ fn attach_now(forwarder: &Forwarder, owner: u64, route: Route, local: &Local) ->
         Route::Direct => open(local),
         Route::Usbipd => open_usbipd(local),
     };
-    let attached = opened.and_then(|device| forwarder.attach(Arbitrated::new(device, claim), &local.name).map_err(|e| attach_error(&e)));
+    let attached = opened.and_then(|device| forwarder.attach(Arbitrated::wrap(device, claim), &local.name).map_err(|e| attach_error(&e)));
     match &attached {
         Ok(request_id) => eprintln!("nightjar: USB {}: asked the PC to attach {} ({:04x}:{:04x}), request {request_id}", local.busid, local.name, local.vid, local.pid),
         Err(e) => eprintln!("nightjar: USB {}: attaching {} failed: {e}", local.busid, local.name),

@@ -85,7 +85,8 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     theme::fonts_for(&gui.ctx, strings::current());
     gui.follow_auto_zoom(window);
     let mut shortcuts_changed = false;
-    let toast = s.toast.as_ref().map(|(t, _)| t.clone());
+    // While the game is paused on the PC, its line shows where a toast does.
+    let toast = s.toast.as_ref().map(|(t, _)| t.clone()).or_else(|| s.quick_suspend.banner().map(str::to_owned));
     let input_only = s.facts.role == nightjar_core::http::AppRole::InputOnly;
     let small_stream = s.small_stream_input_only();
     let mic_only = s.mic_only();

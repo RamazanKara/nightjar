@@ -26,6 +26,7 @@ fn everything() -> Available {
         controller_audio: true,
         usb: true,
         guests: true,
+        suspend: Some(false),
         exits: vec![HostExit::End, HostExit::QuitApp],
     }
 }

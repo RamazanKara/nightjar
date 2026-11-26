@@ -83,7 +83,7 @@ impl UsbDevice for Counted {
 fn closing_or_dropping_a_forwarded_device_releases_its_claim() {
     let registry = Registry::new();
     let counted = Arc::new(Counted::default());
-    let device = Arbitrated::new(counted.clone(), registry.claim(1, self::device("1-2", 1, 2)));
+    let device = Arbitrated::wrap(counted.clone(), registry.claim(1, self::device("1-2", 1, 2)));
     assert_eq!(device.describe().busid, "1-2");
     device.close();
     assert_eq!(counted.closes.load(Ordering::SeqCst), 1, "the device let go");
@@ -91,7 +91,7 @@ fn closing_or_dropping_a_forwarded_device_releases_its_claim() {
     // The forwarder keeps ended attachments' devices: the claim is gone all the same.
     drop(device);
 
-    let held = Arbitrated::new(Arc::new(Counted::default()), registry.claim(1, self::device("1-3", 1, 2)));
+    let held = Arbitrated::wrap(Arc::new(Counted::default()), registry.claim(1, self::device("1-3", 1, 2)));
     assert_eq!(registry.forwarded().len(), 1);
     drop(held);
     assert!(registry.forwarded().is_empty(), "a device dropped without a close releases its claim too");

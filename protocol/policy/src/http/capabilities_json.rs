@@ -120,6 +120,10 @@ impl Evidence {
         );
         map.insert("maxVideoPacket".into(), Value::from(self.max_video_packet));
         map.insert(
+            "hdrDynamicControl".into(),
+            Value::from(self.hdr_dynamic_control),
+        );
+        map.insert(
             "internetPlayVersion".into(),
             Value::from(self.internet_play_version),
         );
@@ -153,6 +157,14 @@ impl Evidence {
         map.insert(
             "continueHereOffered".into(),
             Value::from(self.continue_here_offered),
+        );
+        map.insert(
+            "quickSuspendVersion".into(),
+            Value::from(self.quick_suspend_version),
+        );
+        map.insert(
+            "quickSuspendOffered".into(),
+            Value::from(self.quick_suspend_offered),
         );
         if let Some(version) = &self.rust_host_version {
             map.insert("rustHostVersion".into(), Value::from(version.as_str()));
@@ -272,6 +284,10 @@ impl Evidence {
             display_scale_version: opt_i32("displayScaleVersion", -1)?,
             second_screen_version: opt_i32("secondScreenVersion", -1)?,
             nvidia_enhancements,
+            hdr_dynamic_control: obj
+                .get("hdrDynamicControl")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             internet_play_version: opt_i32("internetPlayVersion", -1)?,
             usb_offered: opt_bool("usbOffered")?,
             usb_permission: opt_bool("usbPermission")?,
@@ -289,6 +305,8 @@ impl Evidence {
             pairing_offered: opt_bool("pairingOffered")?,
             pairing_permission: opt_bool("pairingPermission")?,
             continue_here_offered: opt_bool("continueHereOffered")?,
+            quick_suspend_version: opt_i32("quickSuspendVersion", -1)?,
+            quick_suspend_offered: opt_bool("quickSuspendOffered")?,
             max_video_packet,
         })
     }

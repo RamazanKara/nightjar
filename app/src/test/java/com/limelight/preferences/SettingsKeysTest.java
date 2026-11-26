@@ -95,6 +95,8 @@ public class SettingsKeysTest {
     // Stored settings that are read outside PreferenceConfiguration.
     private static final Set<String> READ_ELSEWHERE = new HashSet<>(Arrays.asList(
             "performance_overlay_mode",
+            // Picture position: StreamSafeAreaController reads it per screen.
+            com.limelight.ui.PicturePosition.PREF,
             "simple_smoothness", "simple_picture", "simple_hdr",
             "simple_vrr_opt_in", "simple_vrr_last",
             "list_stream_menu_button_y", "list_stream_menu_button_x", "list_stream_menu_button_lb", "list_stream_menu_button_rb",
@@ -363,6 +365,7 @@ public class SettingsKeysTest {
         reads.put("list_network_grace", new Read("0", "30", c -> c.networkGraceSeconds));
         reads.put("checkbox_tell_host_wireless", new Read(true, false, c -> c.tellHostWireless));
         reads.put("checkbox_tell_host_link_speed", new Read(true, false, c -> c.tellHostLinkSpeed));
+        reads.put("list_hdr_format", new Read("auto", "hdr10", c -> c.hdrFormat));
         reads.put("list_fec_choice", new Read("host", "20", c -> c.fecChoice));
         reads.put("checkbox_link_probe", new Read(false, true, c -> c.linkProbe));
         reads.put("checkbox_disable_warnings", new Read(false, true, c -> c.disableWarnings));

@@ -391,8 +391,9 @@ impl Streaming {
         }
         // One shift for all of a frame's slices and its own present (`Presenter::draw`).
         if let Some(warp) = self.frame_warp.as_mut() { self.texture.warp = warp.draw(Some(self.racer.seq())); }
+        let had_redraw = std::mem::replace(&mut self.needs_redraw, false);
         let flipped = self.render_flip(renderer, draw_overlay, true, false, None);
-        self.needs_redraw = false;
+        if flipped.refused && had_redraw { self.needs_redraw = true; }
         if flipped.device_lost { return true; }
         self.racer.presented(flipped.issued_us, &scan);
         for (band, _) in &batch {

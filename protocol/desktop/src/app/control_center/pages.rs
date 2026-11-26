@@ -167,6 +167,7 @@ impl Host<'_> {
                 "clipboard_receive" => s.clipboard(false),
                 "server_commands" => self.next = Some(stream_menu::Page::Commands),
                 "native_page" => *self.session_page_requested = true,
+                "suspend_game" | "resume_game" => s.quick_suspend_tile(id),
                 other => eprintln!("nightjar: the Control Center has no action for the card {other}"),
             },
             Some(stream_menu::Chosen::Shortcut(index)) => {
