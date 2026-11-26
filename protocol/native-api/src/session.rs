@@ -65,6 +65,9 @@ pub enum LauncherKind {
     /// A dialog the host cannot classify: a licence, a settings question, a dismissable
     /// notice. `window_title` names it.
     Prompt,
+    /// Windows asks for administrator permission on its secure desktop (UAC). Only in a
+    /// launch curtain's prompt ([`crate::curtain`]); a client without it shows a prompt.
+    Uac,
     /// A kind from a newer host: clients show it as `prompt`.
     #[serde(other)]
     Unknown,

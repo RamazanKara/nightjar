@@ -9,8 +9,8 @@
 
 use crate::{
     clipboard_sync, control, controller_identity, cursor_shape, fec_report, frame_warp,
-    keyboard_layout, pen, phase_lock, pipeline_rates, ps_speaker_pcm, quick_suspend, rate_change,
-    steam_controller, stream_dvr, text_input, transport_feedback, usb,
+    keyboard_layout, launch_curtain, pen, phase_lock, pipeline_rates, ps_speaker_pcm,
+    quick_suspend, rate_change, steam_controller, stream_dvr, text_input, transport_feedback, usb,
 };
 use core::ops::RangeInclusive;
 
@@ -99,6 +99,10 @@ pub const CONTROL_IDS: &[(u16, &str)] = &[
     (
         frame_warp::FRAME_WARP_V2_META_MESSAGE_TYPE,
         "frame warp 2 meta",
+    ),
+    (
+        launch_curtain::LAUNCH_CURTAIN_STATE_MESSAGE_TYPE,
+        "launch curtain",
     ),
     (stream_dvr::DVR_STATE_MESSAGE_TYPE, "stream DVR"),
     (quick_suspend::QUICK_SUSPEND_MESSAGE_TYPE, "quick suspend"),
@@ -265,6 +269,7 @@ mod tests {
         new.sort_unstable();
         // One line per id, so items that add one merge cleanly.
         let expected: &[u16] = &[
+            0x5548, // launch curtain
             0x5549, // frame warp 2 meta
             0x554A, // stream DVR
             0x554B, // quick suspend

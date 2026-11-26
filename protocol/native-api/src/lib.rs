@@ -10,6 +10,7 @@
 pub mod audio;
 pub mod capabilities;
 pub mod coop;
+pub mod curtain;
 pub mod doctor;
 pub mod dvr;
 pub mod error;
@@ -117,4 +118,7 @@ pub mod feature {
     /// [`crate::doctor`]: `GET /stream/doctor` reads which host stage lost the caller's stream
     /// time, and `POST /stream/doctor/apply` applies or undoes a session-only remedy.
     pub const STREAM_DOCTOR_V2: &str = "stream.doctor_v2";
+    /// [`crate::curtain`]: `GET /session/curtain` and `POST /session/curtain/dismiss` answer,
+    /// while the host follows a game's start for a launch curtain (`launch_curtain`).
+    pub const LAUNCH_CURTAIN: &str = "session.launch_curtain";
 }

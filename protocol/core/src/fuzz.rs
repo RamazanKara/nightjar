@@ -78,6 +78,7 @@ fn raw(len: usize) -> impl Strategy<Value = Vec<u8>> {
 
 
 mod extended;
+mod launch_curtain;
 mod stream_dvr;
 
 round_trip!(
