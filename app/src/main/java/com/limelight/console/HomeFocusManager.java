@@ -194,6 +194,7 @@ final class HomeFocusManager {
                 ? host.shelves().isFastTravel() : host.adapter().isFastTravel();
         HomeAmbience ambience = new HomeAmbience(activity, backdrop, hero, host.feed()::host, host::covers, fast);
         host.setAmbience(ambience);
+        ambience.setStage(new HomeHeroStage(activity, backdrop, list, hero, host.chrome().form(), canvas, host.feed()::host, host::covers));
         InputSource start = InputSource.last() != null ? InputSource.last() : host.isTelevision()
                 ? (StreamMenuHint.hasGamepad() ? InputSource.PAD : InputSource.REMOTE) : InputSource.NONE;
         ambience.setInput(start, 0);

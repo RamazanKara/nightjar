@@ -70,6 +70,7 @@ public class BackdropView extends FrameLayout {
     private int[] fadeColors;
     private float[] fadeStops;
     private AmbientListener ambientListener;
+    private CoverListener coverListener;
     private final android.view.ViewTreeObserver.OnGlobalLayoutListener aligner = this::align;
     private int request;
     private int changes;
@@ -225,6 +226,19 @@ public class BackdropView extends FrameLayout {
         if (listener != null && shown != null) listener.onAmbient(shown.raw, false);
     }
 
+    /** Told the cover each ambient is made of as its fade starts, for art that changes in the same step. */
+    public interface CoverListener {
+        /**
+         * {@code key} is what {@link #focus} was asked for. {@code cover} is null for the plain canvas, and for a game whose
+         * cover is still loading: the ambient stays as it is then, but no other game's picture should.
+         */
+        void onCover(String key, Bitmap cover, boolean animate);
+    }
+
+    public void setCoverListener(CoverListener listener) {
+        coverListener = listener;
+    }
+
     /** High contrast dims the backdrop further, as a multiply on the layers, not another layer on top. */
     public void setDim(float brightness) {
         LightingColorFilter filter = brightness >= 1f ? null : new LightingColorFilter(
@@ -318,17 +332,21 @@ public class BackdropView extends FrameLayout {
         if (wantedCover == null && !wantedNoArt) {
             // Still loading: keep what is shown rather than flashing the canvas, and drop a blur that is in flight.
             request++;
+            if (coverListener != null && wantedKey != null) {
+                coverListener.onCover(wantedKey, null, !Motion.reduced(getContext()) && getWindowToken() != null);
+            }
             return;
         }
         int w = getWidth();
         int h = getHeight();
-        String key = cacheKey(wantedKey, wantedCover);
+        String asked = wantedKey;
+        String key = cacheKey(asked, wantedCover);
         // Every call invalidates what is in flight, also when the wanted game is the one already shown.
         int id = ++request;
         if (key.equals(shownKey)) return;
         Baked cached = cache.get(key);
         if (cached != null && cached.forWidth == w && cached.forHeight == h) {
-            display(key, cached);
+            display(key, cached, asked, wantedCover);
             return;
         }
         Bitmap cover = wantedCover;
@@ -346,7 +364,7 @@ public class BackdropView extends FrameLayout {
                     cache.put(key, made);
                 }
                 // A newer request, even one still waiting out its settle time, has the say.
-                if (id == request) display(key, made);
+                if (id == request) display(key, made, asked, cover);
             });
         });
     }
@@ -355,7 +373,7 @@ public class BackdropView extends FrameLayout {
         return cover == null ? key + "@canvas" : key + "@" + System.identityHashCode(cover);
     }
 
-    private void display(String key, Baked baked) {
+    private void display(String key, Baked baked, String asked, Bitmap cover) {
         shownKey = key;
         handoffKey = key;
         handoffBitmap = baked.raw;
@@ -363,6 +381,7 @@ public class BackdropView extends FrameLayout {
         endTransition();
         boolean cut = Motion.reduced(getContext()) || getWindowToken() == null;
         if (ambientListener != null) ambientListener.onAmbient(baked.raw, !cut);
+        if (coverListener != null) coverListener.onCover(asked, cover, !cut);
         if (cut) {
             back.setImageBitmap(baked.show);
             shown = baked;
