@@ -212,7 +212,7 @@ final class GameHostActions {
         return nativeMenuController;
     }
 
-    private java.util.concurrent.ScheduledExecutorService nativeMenuThread() {
+    java.util.concurrent.ScheduledExecutorService nativeMenuThread() {
         if (game.nativeMenuThread == null) {
             game.nativeMenuThread = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(task -> {
                 Thread thread = new Thread(task, "Native menu");
@@ -307,26 +307,6 @@ final class GameHostActions {
         if (game.conn == null) return;
         game.conn.setMicrophoneMuted(!game.conn.isMicrophoneMuted());
         if (game.micButton != null) game.micButton.refresh();
-    }
-
-    void showStreamHealth() {
-        com.limelight.utils.StreamHealth.Report report = game.streamHealth.report(SystemClock.uptimeMillis());
-        StringBuilder text = Game.healthText(game, report, wifiText(0));
-        boolean manual = Game.healthTrialAllowed(game.adaptation.isAdaptiveBitrateEnabled(), game.adaptation.isRateChangeBitrateOn(), game.adaptiveQuality != null);
-        boolean undo = game.healthOriginalBitrate > 0 && game.currentBitrate == game.healthTrialBitrate && manual;
-        boolean suggest = report.canSuggestBitrate() && game.adaptation.supportsAdaptiveBitrate() && manual &&
-                game.currentBitrate > 500 && !game.hostActionInProgress && !undo;
-        if (undo || suggest) text.append("\n\n").append(game.getString(R.string.health_trial_help));
-        MaterialAlertDialogBuilder builder = new NavigationDialogBuilder(game).setTitle(R.string.health_title)
-                .setMessage(text).setNegativeButton(android.R.string.cancel, null)
-                .setNeutralButton(R.string.overlay_copy, (dialog, which) -> {
-                    ClipboardManager clipboard = (ClipboardManager) game.getSystemService(Context.CLIPBOARD_SERVICE);
-                    clipboard.setPrimaryClip(ClipData.newPlainText(game.getString(R.string.health_title), text));
-                });
-        if (undo || suggest) builder.setPositiveButton(undo ? R.string.health_undo : R.string.health_try,
-                (dialog, which) -> game.adaptation.applyHealthBitrate(undo));
-        else builder.setPositiveButton(android.R.string.ok, null);
-        menu.showStreamDialog(builder.create());
     }
 
     String wifiText(long stallPeriodMs) {

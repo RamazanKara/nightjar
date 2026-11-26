@@ -209,6 +209,27 @@ public final class NativeApiClient {
         }
     }
 
+    /** Stream Doctor 2.0's look at this device's stream. Only for a host that lists {@code stream.doctor_v2}. */
+    public NativeStreamDoctor streamDoctor() throws NativeApiException {
+        return streamDoctor("stream_doctor", "");
+    }
+
+    /**
+     * Applies the host's bitrate step-down to this stream, or undoes the trial {@code trialId}. A refusal (a guest, the
+     * floor, a bitrate changed since the trial) is a {@link NativeApiException} with the host's plain words.
+     */
+    public NativeStreamDoctor streamDoctorApply(boolean undo, String trialId) throws NativeApiException {
+        return streamDoctor("stream_doctor.apply", NativeStreamDoctor.applyJson(undo, trialId));
+    }
+
+    private NativeStreamDoctor streamDoctor(String op, String argument) throws NativeApiException {
+        try {
+            return NativeStreamDoctor.parse(call(op, argument));
+        } catch (Json.SyntaxException e) {
+            throw malformed("stream doctor", e);
+        }
+    }
+
     /** A game's Neural Rendering switches; {@code app} is the library's app id. */
     public NativeNeural neural(String app) throws NativeApiException {
         try {

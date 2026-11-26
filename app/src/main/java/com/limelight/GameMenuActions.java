@@ -25,10 +25,13 @@ import java.io.IOException;
 final class GameMenuActions {
     private final Game game;
     private final GameHostActions hostActions;
+    // Stream Doctor 2.0's card, opened by "Why did my stream stutter?".
+    private final GameStreamDoctor doctor;
 
     GameMenuActions(Game game) {
         this.game = game;
         this.hostActions = new GameHostActions(game, this);
+        this.doctor = new GameStreamDoctor(game, this, hostActions);
     }
 
     // The sectioned stream menu while it is open; streamMenu is its sheet or a dialog it opened.
@@ -337,7 +340,7 @@ final class GameMenuActions {
             case OVERLAY_STATISTICS: action = () -> game.overlays.showPerformanceOverlay(PerformanceOverlay.MODE_STATISTICS); break;
             case OVERLAY_DEBUG: action = () -> game.overlays.showPerformanceOverlay(PerformanceOverlay.MODE_DEBUG); break;
             case OVERLAY_COPY: action = game.overlays::copyPerformanceStats; break;
-            case STREAM_HEALTH: action = hostActions::showStreamHealth; break;
+            case STREAM_HEALTH: action = doctor::show; break;
             case LATENCY_TEST: action = hostActions::runLatencyTest; break;
             default: break;
         }

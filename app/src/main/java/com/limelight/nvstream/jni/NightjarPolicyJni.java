@@ -474,4 +474,11 @@ public final class NightjarPolicyJni {
      * or {@code {"profile":null}} when no profile is kept for the screen.
      */
     public static native String displayProfile(String request);
+
+    /**
+     * Stream Doctor 2.0's verdict ({@code protocol/android/src/doctor_v2.rs}, {@code nightjar_policy::doctor_v2}): a request
+     * {@code {"report", "host", "stream", "device", "abilities"}} answers {@code {"ok": <Diagnosis>}} or
+     * {@code {"error": "invalid", "detail"}}.
+     */
+    public static native String doctorDiagnose(String request);
 }

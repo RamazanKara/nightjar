@@ -3,7 +3,8 @@
 //! write_radeon, restore_radeon, wake, audio, write_audio}`) for the console screens and the
 //! stream menu, and Sleep PC (`power_capabilities`, `sleep`), Restart and Shut down PC
 //! (`pc_power`, `power_pc`), the host's update (`host_update`, `install_host_update`), the file
-//! transfer permissions (`files.capabilities`), and Nucleus Co-op (`coop`, `coop.join`).
+//! transfer permissions (`files.capabilities`), Nucleus Co-op (`coop`, `coop.join`), and Stream
+//! Doctor 2.0 (`stream_doctor`, `stream_doctor.apply`).
 //! Calls block on HTTPS, so Java runs them on worker threads, never on the UI thread.
 //!
 //! One entry point, `request`, takes the operation, the host endpoint and an optional JSON
@@ -463,9 +464,9 @@ pub fn request(endpoint: &Endpoint, op: &str, argument: &str) -> String {
     match client(endpoint) {
         // This device's away wake keys (`crate::wake_relay`); the app keeps them out of logs.
         Ok(client) if op == crate::wake_relay::KEYS_OP => ok(client.wake_relay()),
-        Ok(client) => {
-            quick_suspend::execute(&client, op).unwrap_or_else(|| execute(&client, op, argument))
-        }
+        Ok(client) => quick_suspend::execute(&client, op)
+            .or_else(|| stream_doctor::execute(&client, op, argument))
+            .unwrap_or_else(|| execute(&client, op, argument)),
         Err(error) => error_envelope(&error),
     }
 }
@@ -558,6 +559,7 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarJni_nativeApiRequ
 }
 
 mod quick_suspend;
+mod stream_doctor;
 
 #[cfg(test)]
 mod tests;

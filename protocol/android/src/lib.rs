@@ -12,6 +12,7 @@ pub mod capabilities;
 pub mod collections;
 pub mod connect;
 pub mod display_profile;
+pub mod doctor_v2;
 pub mod console;
 pub mod echo;
 mod engine;
