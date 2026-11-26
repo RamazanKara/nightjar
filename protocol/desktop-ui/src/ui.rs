@@ -12,6 +12,7 @@ mod dialogs;
 pub mod files;
 pub mod glass;
 mod glass_lens;
+pub mod viewport_scale;
 mod first_run;
 mod game;
 mod help;
@@ -265,7 +266,7 @@ fn auto_zoom_now(ctx: &egui::Context) -> u32 {
         let height = viewport.monitor_size.or_else(|| viewport.outer_rect.map(|rect| rect.size())).map(|size| size.y);
         (height, viewport.native_pixels_per_point.unwrap_or(1.0))
     });
-    crate::config::auto_zoom(height, os_scale)
+    viewport_scale::auto_percent(height, os_scale)
 }
 
 impl Launcher {

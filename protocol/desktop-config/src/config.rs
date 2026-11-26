@@ -402,7 +402,7 @@ pub struct Settings {
     /// The card was offered on this install: it never comes back, even after every PC is unpaired.
     pub setup_card_seen: bool,
     /// The launcher's size in percent: one of [`UI_ZOOM_STEPS`], or 0 for Auto, which follows the
-    /// screen's height ([`auto_zoom`]). Not a per-PC or per-game override.
+    /// screen's height (`nightjar-desktop-ui`'s `ui::viewport_scale`). Not a per-PC or per-game override.
     pub ui_zoom: u32,
     /// The once-only move of the old default 100 % to Auto has run ([`Settings::migrate`]).
     /// Present from new installs; missing from files written before Auto, so those move their old
@@ -444,21 +444,6 @@ pub fn nearest_zoom(percent: u32) -> u32 {
         .into_iter()
         .min_by_key(|step| step.abs_diff(percent))
         .unwrap_or(100)
-}
-
-/// Auto's size for a monitor `height` in egui points and the OS's display scale. Where the OS
-/// scales (above 1), it already sized everything for the screen and Auto stays at 100 %, so a
-/// scaled desktop looks as it did. Unscaled, a 4K-class screen (2000 points or taller, such as a
-/// TV under gamescope) gets its height over 1080, clamped to 250 %; smaller screens and a screen
-/// of unknown size stay at 100 %.
-pub fn auto_zoom(height_points: Option<f32>, os_scale: f32) -> u32 {
-    let Some(height) = height_points.filter(|h| h.is_finite()) else {
-        return 100;
-    };
-    if os_scale > 1.01 || height < 2000.0 {
-        return 100;
-    }
-    ((height / 1080.0).clamp(1.0, 2.5) * 100.0).round() as u32
 }
 
 /// The step after (`+1`) or before (`-1`) `percent`, kept inside the steps.

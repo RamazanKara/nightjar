@@ -495,7 +495,7 @@ pub(crate) fn open_window_and_renderer(
     };
     // Auto only enlarges unscaled screens, where SDL's window size is in pixels and points alike.
     let zoom = match settings.ui_zoom {
-        0 => config::auto_zoom(screen.map(|(_, h)| h as f32), os_scale),
+        0 => nightjar_desktop_ui::ui::viewport_scale::auto_percent(screen.map(|(_, h)| h as f32), os_scale),
         _ => 100,
     };
     let (width, height) = handheld::start_size(kms::active(), screen, zoom);

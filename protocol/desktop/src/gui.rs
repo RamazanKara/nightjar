@@ -257,7 +257,7 @@ impl Gui {
         }
         let scale = Scale::of(window);
         let height = monitor_size(window, &scale).map(|size| size.y);
-        let zoom = crate::config::auto_zoom(height, scale.pixels_per_point) as f32 / 100.0;
+        let zoom = nightjar_desktop_ui::ui::viewport_scale::auto_percent(height, scale.pixels_per_point) as f32 / 100.0;
         if (self.ctx.zoom_factor() - zoom).abs() > f32::EPSILON {
             self.ctx.set_zoom_factor(zoom);
         }
