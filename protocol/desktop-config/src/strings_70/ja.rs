@@ -31,4 +31,11 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Giving back…", "戻しています…"),
     ("Give back to Windows", "Windows に戻す"),
     ("Gamescope was holding frames back, so V-Sync now shows the newest frame at each refresh.", "gamescopeがフレームを保留していたため、V-Syncはリフレッシュごとに最新のフレームを表示するようになりました。"),
+    ("This screen", "この画面"),
+    ("Nightjar is on {}.", "Nightjar は {} に表示されています。"),
+    ("Profile for this screen", "この画面のプロファイル"),
+    ("A stream started on this screen uses this profile, ahead of the network choices.", "この画面で開始したストリームは、ネットワークの選択より優先してこのプロファイルを使います。"),
+    ("Follow the network choices", "ネットワークの選択に従う"),
+    ("Kept for {}", "{} 用"),
+    ("Forget screen", "画面の割り当てを解除"),
 ];

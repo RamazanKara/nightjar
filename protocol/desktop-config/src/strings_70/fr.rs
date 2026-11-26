@@ -31,4 +31,11 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Giving back…", "Restitution…"),
     ("Give back to Windows", "Rendre à Windows"),
     ("Gamescope was holding frames back, so V-Sync now shows the newest frame at each refresh.", "Gamescope retenait des images, donc la V-Sync affiche désormais l’image la plus récente à chaque rafraîchissement."),
+    ("This screen", "Cet écran"),
+    ("Nightjar is on {}.", "Nightjar est sur {}."),
+    ("Profile for this screen", "Profil pour cet écran"),
+    ("A stream started on this screen uses this profile, ahead of the network choices.", "Un stream lancé sur cet écran utilise ce profil, avant les choix du réseau."),
+    ("Follow the network choices", "Suivre les choix du réseau"),
+    ("Kept for {}", "Gardé pour {}"),
+    ("Forget screen", "Oublier l’écran"),
 ];

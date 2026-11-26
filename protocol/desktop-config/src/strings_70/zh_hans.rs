@@ -31,4 +31,11 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Giving back…", "正在归还…"),
     ("Give back to Windows", "还给 Windows"),
     ("Gamescope was holding frames back, so V-Sync now shows the newest frame at each refresh.", "gamescope 一直在扣留帧，因此 V-Sync 现在会在每次刷新时显示最新的帧。"),
+    ("This screen", "此屏幕"),
+    ("Nightjar is on {}.", "Nightjar 位于 {}。"),
+    ("Profile for this screen", "此屏幕的配置"),
+    ("A stream started on this screen uses this profile, ahead of the network choices.", "在此屏幕上开始的串流会使用此配置，优先于网络选择。"),
+    ("Follow the network choices", "跟随网络选择"),
+    ("Kept for {}", "用于 {}"),
+    ("Forget screen", "忘记屏幕"),
 ];
