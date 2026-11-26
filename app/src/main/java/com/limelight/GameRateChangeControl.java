@@ -39,14 +39,14 @@ final class GameRateChangeControl {
     }
 
     int applyBitrateFromMenu(int kbps) {
+        int fallback = game.currentBitrate == 0 ? game.prefConfig.bitrate : game.currentBitrate;
         if (askingStream == game.rateChanges) {
             // Its control is disabled until the PC said what it counts the stream's bitrate as; a settle left
             // from before a reconnect snaps back.
             LimeLog.warning("Rate change: " + kbps + " kbps not sent: the PC has not said yet what it counts this stream's bitrate as");
-            return game.currentBitrate == 0 ? game.prefConfig.bitrate : game.currentBitrate;
+            return fallback;
         }
-        sendRateChange(game.rateChanges, kbps, 0);
-        return kbps;
+        return sendRateChange(game.rateChanges, kbps, 0) ? kbps : fallback;
     }
 
     // Bitrate and frame rate in one 0x553C request; a field left as it is keeps its value.
@@ -129,23 +129,23 @@ final class GameRateChangeControl {
         });
     }
 
-    private void sendRateChange(StreamRateChanges stream, int kbps, int millihz) {
+    private boolean sendRateChange(StreamRateChanges stream, int kbps, int millihz) {
         if (!game.connected || game.streamConnection.streamEnding() || game.rateChanges != stream) {
             LimeLog.warning("Rate change: the stream ended before the request was sent");
             game.messages.alert(R.string.stream_rate_change_stream_ended, Toast.LENGTH_LONG);
-            return;
+            return false;
         }
         if (askingStream == stream && kbps != 0) {
             // The bitrate cannot change before the PC said what it counts the stream's as (its controls are disabled
             // meanwhile); a frame rate is no matter of that unit and goes out at once.
             LimeLog.warning("Rate change: " + kbps + " kbps not sent: the PC has not said yet what it counts this stream's bitrate as");
-            if (millihz == 0) return;
+            if (millihz == 0) return false;
             kbps = 0;
         }
         if (!stream.sendManual(kbps, millihz, SystemClock.uptimeMillis())) {
             LimeLog.warning("Rate change: request not sent");
             game.messages.alert(R.string.stream_rate_change_not_sent, Toast.LENGTH_LONG);
-            return;
+            return false;
         }
         scheduleRateChangeExpiry();
         LimeLog.info("Rate change: asking for " + kbps + " kbps, " + millihz + " mHz");
@@ -156,6 +156,7 @@ final class GameRateChangeControl {
             game.qualityAutoBitrate = false;
             game.healthOriginalBitrate = game.healthTrialBitrate = 0;
         }
+        return true;
     }
 
     private com.google.android.material.textfield.TextInputLayout rateChangeField(String hint, String text, float density) {

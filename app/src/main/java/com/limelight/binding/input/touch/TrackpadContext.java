@@ -28,6 +28,7 @@ public class TrackpadContext implements TouchContext {
     private double distanceMoved;
     private int pointerCount;
     private boolean clickedMiddle = false;
+    private boolean gestureNonTap = false;
     private int maxPointerCountInGesture;
     private boolean isClickPending;
     private byte pendingClickButton = MouseButtonPacket.BUTTON_LEFT;
@@ -298,7 +299,6 @@ public class TrackpadContext implements TouchContext {
         if (pointerCount == 2) {
             return MouseButtonPacket.BUTTON_RIGHT;
         } else if (pointerCount == 3) {
-            clickedMiddle = true;
             return MouseButtonPacket.BUTTON_MIDDLE;
         } else {
             return MouseButtonPacket.BUTTON_LEFT;
@@ -330,6 +330,7 @@ public class TrackpadContext implements TouchContext {
             // A completely new gesture has started.
             // Cancel any pending scroll->move transition.
             clickedMiddle = false;
+            gestureNonTap = false;
             handler.removeCallbacks(scrollTransitionRunnable);
             isScrollTransitioning = false;
             maxPointerCountInGesture = pointerCount;
@@ -353,7 +354,16 @@ public class TrackpadContext implements TouchContext {
                 activeDragButton = pendingClickButton;
             }
         } else {
-            if (pointerCount == 2 && !confirmedMove) {
+            long elapsed = eventTime - originalTouchTime;
+            boolean tapEligible = !gestureNonTap
+                    && !confirmedMove
+                    && !confirmedScroll
+                    && !confirmedDrag
+                    && !isDblClickPending
+                    && !isClickPending
+                    && elapsed >= 0
+                    && elapsed <= TAP_TIME_THRESHOLD;
+            if (pointerCount == 2 && maxPointerCountInGesture == 3 && !clickedMiddle && tapEligible) {
                 conn.sendMouseButtonDown(MouseButtonPacket.BUTTON_MIDDLE);
                 conn.sendMouseButtonUp(MouseButtonPacket.BUTTON_MIDDLE);
                 isClickPending = false;
@@ -361,7 +371,7 @@ public class TrackpadContext implements TouchContext {
                 confirmedDrag = false;
                 clickedMiddle = true;
             // Second finger released, should trigger right click immediately
-            } else if (pointerCount == 1 && !confirmedMove && !clickedMiddle) {
+            } else if (pointerCount == 1 && maxPointerCountInGesture == 2 && !clickedMiddle && tapEligible) {
                 conn.sendMouseButtonDown(MouseButtonPacket.BUTTON_RIGHT);
                 conn.sendMouseButtonUp(MouseButtonPacket.BUTTON_RIGHT);
                 isClickPending = false;
@@ -405,6 +415,7 @@ public class TrackpadContext implements TouchContext {
             isClickPending = false;
             isDblClickPending = false;
             confirmedDrag = false;
+            gestureNonTap = true;
         }
         else if (confirmedDrag) {
             handler.removeCallbacksAndMessages(null);
@@ -417,8 +428,12 @@ public class TrackpadContext implements TouchContext {
                 conn.sendMouseButtonUp(activeDragButton);
                 confirmedDrag = false;
             }
+            gestureNonTap = true;
         }
         else if (isTap(eventTime)) {
+            if (buttonIndex == MouseButtonPacket.BUTTON_MIDDLE) {
+                clickedMiddle = true;
+            }
             conn.sendMouseButtonDown(buttonIndex);
             isClickPending = true;
             pendingClickButton = buttonIndex;
@@ -614,6 +629,7 @@ public class TrackpadContext implements TouchContext {
             confirmedScroll = false;
             isClickPending = false;
             isDblClickPending = false;
+            gestureNonTap = true;
         }
 
         this.pointerCount = pointerCount;

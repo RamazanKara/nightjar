@@ -194,7 +194,8 @@ final class HomeGameActions {
         // A running game stays under Continue playing while hidden: its menu shows it again.
         boolean hide = !card.sourceHidden();
         CharSequence hiding = activity.getString(hide ? R.string.applist_menu_hide_app : R.string.applist_menu_show_app);
-        CharSequence openPlay = OpenPlay.menuLabel(activity, card.hostUuid, card.appId);
+        CharSequence openPlay = OpenPlay.menuLabel(activity, card.hostUuid, card.appId,
+                card.source != null ? card.source.stableId() : "");
         List<CharSequence> labels = new ArrayList<>();
         List<Runnable> actions = new ArrayList<>();
         // A phone's hero has room for one button, Play: Quit game is here, on Hold OK and Y too.

@@ -234,7 +234,9 @@ final class MediaCodecVsyncPacer {
                         r.framePresenter.dropForDisplayQueue(nextOutputBuffer, releaseNs);
                     } else {
                         long displayAtNs = planRefreshSlot(releaseNs, vsyncRefreshSlot, false);
-                        r.framePresenter.countRenderRelease(nextOutputBuffer, releaseNs, displayAtNs);
+                        long handoffAtNs = vsyncRefreshSlot.vsyncNs != 0 ?
+                                releaseNs + vsyncRefreshSlot.holdNs : displayAtNs;
+                        r.framePresenter.countRenderRelease(nextOutputBuffer, releaseNs, handoffAtNs);
                         r.framePresenter.releaseOutputFrame(nextOutputBuffer, displayAtNs);
                         r.activeWindowVideoStats.totalFramesRendered++;
                     }
@@ -425,6 +427,31 @@ final class MediaCodecVsyncPacer {
         return holdStamp.out[0];
     }
 
+    boolean keepsBurstForRefreshSlot(long nowNs) {
+        if (r.prefs.framePacing != PreferenceConfiguration.FRAME_PACING_BALANCED || r.hostFrameTimes) {
+            return false;
+        }
+        long vsyncNs, intervalNs, deadlineNs;
+        boolean grid;
+        synchronized (r.vsyncMonitor) {
+            grid = r.refreshSlotsEnabled && r.outputVsyncAvailable && r.upscaler == null && !r.prefs.vrr &&
+                    r.vsyncTimeNs != 0 && r.vsyncIntervalNs > 0;
+            vsyncNs = r.vsyncTimeNs;
+            intervalNs = r.vsyncIntervalNs;
+            deadlineNs = r.vsyncPresentationDeadlineNs;
+        }
+        int fpsMilliHz = r.streamFrameRateMilliHz;
+        if (!grid || fpsMilliHz < 1000 || fpsMilliHz > 1_000_000 ||
+                !RefreshSlots.applies(FramePacingPolicy.frameIntervalNs(fpsMilliHz), intervalNs)) {
+            return false;
+        }
+        return !r.refreshSlots.earliestClaimed(nowNs, vsyncNs, intervalNs, deadlineNs);
+    }
+
+    long refreshSlotHandoffNs(long releaseNs, long displayAtNs) {
+        return refreshSlot.vsyncNs != 0 ? releaseNs + refreshSlot.holdNs : displayAtNs;
+    }
+
     long planRefreshSlot(long releaseNs) {
         return planRefreshSlot(releaseNs, refreshSlot, true);
     }
@@ -446,6 +473,7 @@ final class MediaCodecVsyncPacer {
             r.refreshSlots.reset();
             slot.vsyncNs = 0;
             slot.shared = false;
+            slot.holdNs = 0;
             return allowHold ? heldDisplayNs(releaseNs) : releaseNs;
         }
         r.refreshSlots.plan(releaseNs, vsyncNs, intervalNs, deadlineNs, slot);

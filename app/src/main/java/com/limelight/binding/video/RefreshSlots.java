@@ -20,8 +20,10 @@ final class RefreshSlots implements AutoCloseable {
         long targetNs;
         /** The output takes a refresh already claimed: the compositor replaces the buffer there. */
         boolean shared;
-        /** Reusable JNI output buffer ({vsyncNs, targetNs, shared}) for zero-alloc planning. */
-        final long[] jniOut = new long[3];
+        /** Extra refresh hold beyond the earliest reachable refresh; 0 when shown at earliest or without a grid. */
+        long holdNs;
+        /** Reusable JNI output buffer ({vsyncNs, targetNs, shared, holdNs}) for zero-alloc planning. */
+        final long[] jniOut = new long[4];
     }
 
     private final long handle;
@@ -57,11 +59,17 @@ final class RefreshSlots implements AutoCloseable {
         out.vsyncNs = 0;
         out.targetNs = 0;
         out.shared = false;
+        out.holdNs = 0;
         if (NightjarPolicyJni.refreshSlotsPlan(handle, releaseNs, vsyncNs, intervalNs, leadNs, out.jniOut)) {
             out.vsyncNs = out.jniOut[0];
             out.targetNs = out.jniOut[1];
             out.shared = out.jniOut[2] != 0;
+            out.holdNs = out.jniOut[3];
         }
+    }
+
+    boolean earliestClaimed(long releaseNs, long vsyncNs, long intervalNs, long leadNs) {
+        return NightjarPolicyJni.refreshSlotsEarliestClaimed(handle, releaseNs, vsyncNs, intervalNs, leadNs);
     }
 
     /** Outputs given a refresh of their own and outputs sharing the previous one, for the report row. */

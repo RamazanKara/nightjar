@@ -19,6 +19,7 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.color.MaterialColors;
 import com.limelight.AppView;
 import com.limelight.Game;
+import com.limelight.LimeLog;
 import com.limelight.R;
 import com.limelight.ShortcutTrampoline;
 import com.limelight.nativeapi.ConsoleRepository;
@@ -430,12 +431,25 @@ public class PinLockActivity extends NightjarActivity {
         busy = true;
         setStatus(getString(R.string.pin_saving), false);
         executor().execute(() -> {
-            store.setPin(chosen);
-            Arrays.fill(chosen, (byte) 0);
-            Arrays.fill(again, (byte) 0);
+            boolean saved = false;
+            try {
+                store.setPin(chosen);
+                saved = true;
+            } catch (RuntimeException e) {
+                LimeLog.warning("PIN store write failed: " + e.getMessage());
+            } finally {
+                Arrays.fill(chosen, (byte) 0);
+                Arrays.fill(again, (byte) 0);
+            }
+            boolean ok = saved;
             runOnUiThread(() -> {
                 busy = false;
                 if (isDestroyed()) return;
+                if (!ok) {
+                    setStatus(getString(R.string.pin_save_failed), true);
+                    render();
+                    return;
+                }
                 PinGate.unlockApp();
                 Toast.makeText(this, R.string.pin_saved, Toast.LENGTH_SHORT).show();
                 setResult(RESULT_OK);

@@ -50,4 +50,5 @@
     <string name="gyro_diag_share_title">모션 값 공유</string>
     <string name="gyro_diag_hide">숨기기</string>
     <string name="gyro_diag_show">표시</string>
+    <string name="gyro_diag_cap_reached">%1$d 기록을 중지했습니다.</string>
 </resources>

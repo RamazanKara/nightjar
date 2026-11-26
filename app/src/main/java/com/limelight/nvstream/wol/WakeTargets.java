@@ -68,17 +68,18 @@ public final class WakeTargets {
     private static long openAndMigrate(Context app) {
         File dir = app.getFilesDir();
         long h = handleFor(dir);
-        if (MIGRATED_DIRS.add(dir.getAbsolutePath())) {
-            migrateLegacy(app, h);
+        String key = dir.getAbsolutePath();
+        if (!MIGRATED_DIRS.contains(key) && migrateLegacy(app, h)) {
+            MIGRATED_DIRS.add(key);
         }
         return h;
     }
 
-    private static void migrateLegacy(Context app, long handle) {
+    private static boolean migrateLegacy(Context app, long handle) {
         SharedPreferences prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         Map<String, ?> all = prefs.getAll();
         if (all.isEmpty()) {
-            return;
+            return true;
         }
         Json.Obj hosts = Json.obj();
         Json.Obj manual = Json.obj();
@@ -102,8 +103,12 @@ public final class WakeTargets {
             }
         }
         Json.Obj payload = Json.obj().put("hosts", hosts).put("manual", manual);
-        NightjarDiscoveryJni.wakeTargetsImportLegacy(handle, payload.toString());
+        if (!NightjarDiscoveryJni.wakeTargetsImportLegacy(handle, payload.toString())) {
+            com.limelight.LimeLog.warning("Wake targets legacy import failed; keeping SharedPreferences entries");
+            return false;
+        }
         prefs.edit().clear().commit();
+        return true;
     }
 
     @VisibleForTesting

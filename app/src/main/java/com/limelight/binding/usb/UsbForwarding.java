@@ -122,6 +122,7 @@ public final class UsbForwarding {
     }
 
     private static final class Forwarded {
+        final UsbDevice device;
         final String name;
         final Connection connection;
         int requestId = PENDING;
@@ -129,11 +130,15 @@ public final class UsbForwarding {
         boolean attaching = true;
         String announced = "";
 
-        Forwarded(String name, Connection connection) {
+        Forwarded(UsbDevice device, String name, Connection connection) {
+            this.device = device;
             this.name = name;
             this.connection = connection;
         }
     }
+
+    private static final java.util.concurrent.CopyOnWriteArraySet<UsbForwarding> activeInstances =
+            new java.util.concurrent.CopyOnWriteArraySet<>();
 
     private final Context context;
     private final UsbManager usbManager;
@@ -143,10 +148,11 @@ public final class UsbForwarding {
     private final ExecutorService worker;
     private final Messages messages;
     private DeviceReleaser deviceReleaser = UsbDriverService::releaseActiveDevice;
+    long releaseWaitMs = 4000L;
     private final Handler main = new Handler(Looper.getMainLooper());
     // By usbfs path, while it is forwarded or being attached.
-    private final Map<String, Forwarded> forwarded = new LinkedHashMap<>();
-    private final Set<String> asking = new HashSet<>();
+    private final Map<String, Forwarded> forwarded = Collections.synchronizedMap(new LinkedHashMap<>());
+    private final Set<String> asking = Collections.synchronizedSet(new HashSet<>());
     private final Set<String> auto;
     private boolean started;
     private boolean stopped;
@@ -166,6 +172,7 @@ public final class UsbForwarding {
                 if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                     open(device);
                 } else {
+                    UsbDriverService.onForwardingEnded(device);
                     say(R.string.usb_forwarding_permission_denied, name(device));
                 }
             }
@@ -175,7 +182,8 @@ public final class UsbForwarding {
     public UsbForwarding(Context context, PreferenceConfiguration prefConfig, NvConnection conn, Messages messages) {
         this(context, (UsbManager) context.getSystemService(Context.USB_SERVICE), prefConfig, new Bridge() {
             @Override public int attach(int fd, String path, String name) {
-                return MoonBridge.usbAttach(fd, path, name, conn.hostEndpoint());
+                return conn == null ? MoonBridge.USB_NO_STREAM
+                        : MoonBridge.usbAttach(fd, path, name, conn.hostEndpoint());
             }
             @Override public boolean detach(int requestId) {
                 return MoonBridge.usbDetach(requestId);
@@ -232,6 +240,20 @@ public final class UsbForwarding {
         boolean forwarding = android.preference.PreferenceManager.getDefaultSharedPreferences(context)
                 .getBoolean("checkbox_usb_forwarding", false);
         syncPersistentPermission(context, auto || forwarding);
+    }
+
+    /** True when any active forwarding session is started and currently handling or auto-forwarding {@code device}. */
+    public static boolean isForwardingDevice(UsbDevice device) {
+        if (device == null) return false;
+        String path = device.getDeviceName();
+        for (UsbForwarding instance : activeInstances) {
+            if (instance.stopped || !instance.started) continue;
+            if ((path != null && (instance.forwarded.containsKey(path) || instance.asking.contains(path)))
+                    || (instance.autoActive && instance.isAuto(device))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** What the automatic list remembers a device by: its vendor and product id, on any port (desktop's usb::auto_key). */
@@ -361,6 +383,7 @@ public final class UsbForwarding {
         } catch (SecurityException e) {
             // Samsung Knox policies throw this instead of denying.
             asking.remove(device.getDeviceName());
+            UsbDriverService.onForwardingEnded(device);
             LimeLog.severe("USB: no permission request for " + device.getDeviceName() + ": " + e);
             messages.show(context.getText(R.string.error_usb_prohibited));
         }
@@ -370,6 +393,7 @@ public final class UsbForwarding {
     public void stop() {
         if (stopped) return;
         stopped = true;
+        activeInstances.remove(this);
         if (started) {
             bridge.setListener(null);
             context.unregisterReceiver(receiver);
@@ -379,6 +403,9 @@ public final class UsbForwarding {
             end(e.getKey(), e.getValue());
         }
         asking.clear();
+        if (activeInstances.isEmpty()) {
+            UsbDriverService.clearForwardingHolds();
+        }
         // An attach still on its way finds its entry gone, detaches what it attached and closes. The detaches
         // queued above still run: the stream's stop waits for them (awaitDetaches) before the connection ends.
         worker.shutdown();
@@ -399,22 +426,25 @@ public final class UsbForwarding {
 
     /**
      * Detaches on the attach thread: the engine waits there for the device's outstanding transfers, up to seconds,
-     * which the main thread must not. {@code notAttached} runs on the main thread when it was not attached any more.
-     * Once stopped, the thread takes no more work and the detach runs here, as before.
+     * which the main thread must not. Once stopped, run on a daemon thread so main never blocks.
      */
     private void detach(int requestId, Runnable notAttached) {
+        Runnable task = () -> {
+            if (!bridge.detach(requestId) && notAttached != null) main.post(notAttached);
+        };
         try {
-            worker.execute(() -> {
-                if (!bridge.detach(requestId) && notAttached != null) main.post(notAttached);
-            });
+            worker.execute(task);
         } catch (RejectedExecutionException e) {
-            if (!bridge.detach(requestId) && notAttached != null) notAttached.run();
+            Thread fallback = new Thread(task, "USB detach");
+            fallback.setDaemon(true);
+            fallback.start();
         }
     }
 
     private void start() {
         if (started) return;
         started = true;
+        activeInstances.add(this);
         IntentFilter filter = new IntentFilter();
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
@@ -437,27 +467,38 @@ public final class UsbForwarding {
             connection = null;
         }
         if (connection == null) {
+            UsbDriverService.onForwardingEnded(device);
             say(R.string.usb_forwarding_failed, name, context.getString(R.string.usb_forwarding_code_device));
             return;
         }
-        Forwarded entry = new Forwarded(name, connection);
+        Forwarded entry = new Forwarded(device, name, connection);
         forwarded.put(path, entry);
         say(R.string.usb_forwarding_asking, name);
         int fd = connection.fd();
         worker.execute(() -> {
             // Wait off the main thread for any in-process USB input driver to finish closing its interfaces.
-            UsbDriverService.awaitDeviceRelease(device, 2000);
+            if (!UsbDriverService.awaitDeviceRelease(device, 4000)) {
+                LimeLog.warning("USB: timed out waiting for driver release on " + path);
+                main.post(() -> attached(path, entry, MoonBridge.USB_BUSY, false));
+                return;
+            }
             // Connects to the host's native API the first time, so not on the main thread.
             int result = bridge.attach(fd, path, name);
-            main.post(() -> attached(path, entry, result));
+            boolean alreadyDetached = false;
+            if (result >= 0 && forwarded.get(path) != entry) {
+                bridge.detach(result);
+                alreadyDetached = true;
+            }
+            boolean detachedOnWorker = alreadyDetached;
+            main.post(() -> attached(path, entry, result, detachedOnWorker));
         });
     }
 
-    private void attached(String path, Forwarded entry, int result) {
+    private void attached(String path, Forwarded entry, int result, boolean alreadyDetached) {
         entry.attaching = false;
         if (forwarded.get(path) != entry) {
             // Unplugged or stopped while it was being attached.
-            if (result >= 0) detach(result, null);
+            if (result >= 0 && !alreadyDetached) detach(result, null);
             entry.connection.close();
             return;
         }
@@ -475,7 +516,10 @@ public final class UsbForwarding {
         String path = device.getDeviceName();
         asking.remove(path);
         Forwarded entry = forwarded.get(path);
-        if (entry == null) return;
+        if (entry == null) {
+            UsbDriverService.onForwardingEnded(device);
+            return;
+        }
         if (entry.requestId != PENDING) detach(entry.requestId, null);
         end(path, entry);
         say(R.string.usb_forwarding_unplugged, entry.name);
@@ -522,6 +566,7 @@ public final class UsbForwarding {
         forwarded.remove(path);
         // The forwarder has its own copy of the descriptor; while it is attaching, attached() closes it.
         if (!entry.attaching) entry.connection.close();
+        UsbDriverService.onForwardingEnded(entry.device);
     }
 
     private String reasonText(String reason) {

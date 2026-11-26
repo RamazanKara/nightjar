@@ -405,7 +405,7 @@ fn a_present_without_waiting_is_refused_while_the_last_picture_waits() {
             match present_without_waiting(renderer, std::time::Duration::ZERO, 60.0) {
                 NoWait::Shown => shown += 1,
                 NoWait::Refused => refused += 1,
-                NoWait::Failed => panic!("the present failed"),
+                NoWait::Failed | NoWait::PresentFailed => panic!("the present failed"),
             }
             longest = longest.max(begun.elapsed());
             // A burst over several refreshes: some find the last picture gone, most do not.

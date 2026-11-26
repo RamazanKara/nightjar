@@ -35,6 +35,15 @@ fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Option<T> {
     }
 }
 
+/// Retains only valid array elements when reading partially damaged list files (such as `recent.json`).
+fn keep_readable_array<T: for<'de> Deserialize<'de>>(value: &mut serde_json::Value) {
+    let Some(items) = value.as_array_mut() else {
+        *value = serde_json::Value::Array(Vec::new());
+        return;
+    };
+    items.retain(|item| serde_json::from_value::<T>(item.clone()).is_ok());
+}
+
 /// Removes from a settings object the values this version can't read (one a newer version wrote,
 /// or a hand edit), so one of them doesn't cost the others. Anything but an object becomes empty.
 fn keep_readable_settings(values: &mut serde_json::Value) {
@@ -314,18 +323,53 @@ impl Store {
     }
 
     pub fn shortcuts(&self) -> crate::shortcuts::Shortcuts {
+        use std::io::Read as _;
         let path = self.dir.join("shortcuts.json");
-        if !path.exists() {
+        let file = match std::fs::File::open(&path) {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return crate::shortcuts::Shortcuts::default();
+            }
+            Err(e) => {
+                eprintln!(
+                    "nightjar: cannot read {} ({e}); it is left as it is",
+                    path.display()
+                );
+                self.leave_as_it_is(&path);
+                return crate::shortcuts::Shortcuts::default();
+            }
+        };
+        let mut text = String::new();
+        if let Err(e) = file
+            .take((crate::shortcuts::MAX_BYTES + 1) as u64)
+            .read_to_string(&mut text)
+        {
+            eprintln!(
+                "nightjar: cannot read {} ({e}); it is left as it is",
+                path.display()
+            );
+            self.leave_as_it_is(&path);
             return crate::shortcuts::Shortcuts::default();
         }
-        crate::shortcuts::read(&path).unwrap_or_else(|e| {
-            eprintln!("nightjar: ignoring {}: {e}", path.display());
-            crate::shortcuts::Shortcuts::default()
-        })
+        match crate::shortcuts::parse(&text) {
+            Ok(shortcuts) => shortcuts,
+            Err(e) => {
+                eprintln!("nightjar: {} can't be read whole: {e}", path.display());
+                if !self.read_only
+                    && let Err(copy_err) = back_up(&path, "bad")
+                {
+                    eprintln!(
+                        "nightjar: could not keep a copy of {}: {copy_err}",
+                        path.display()
+                    );
+                }
+                crate::shortcuts::Shortcuts::default()
+            }
+        }
     }
 
     pub fn window_placement(&self) -> Option<crate::window_place_types::Placement> {
-        read_json(&self.dir.join("window.json"))
+        self.read_or_keep_readable("window.json", |_| {})
     }
 
     pub fn save_window_placement(
@@ -447,7 +491,7 @@ impl Store {
     }
 
     pub fn recents(&self) -> Vec<Recent> {
-        read_json(&self.dir.join("recent.json")).unwrap_or_default()
+        self.read_or_keep_readable("recent.json", keep_readable_array::<Recent>)
     }
 
     pub fn save_recents(&self, recents: &[Recent]) -> std::io::Result<()> {
@@ -455,7 +499,7 @@ impl Store {
     }
 
     pub fn open_play(&self) -> OpenPlayState {
-        read_json(&self.dir.join("open_play.json")).unwrap_or_default()
+        self.read_or_keep_readable("open_play.json", |_| {})
     }
 
     pub fn save_open_play(&self, state: &OpenPlayState) -> std::io::Result<()> {
@@ -487,18 +531,32 @@ impl Store {
         self.save_scan_untrusted(&ScanUntrusted { displays })
     }
 
-    pub fn favourites(&self) -> Vec<Favourite> {
-        let path = self.dir.join("favourites.json");
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            return Vec::new();
+    fn read_favourites_file(&self, name: &str) -> Vec<Favourite> {
+        let path = self.dir.join(name);
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+            Err(e) => {
+                eprintln!("nightjar: cannot read {} ({e}); it is left as it is", path.display());
+                self.leave_as_it_is(&path);
+                return Vec::new();
+            }
         };
         let (list, damaged) = parse_favourites(&text);
         if damaged {
             // Keep the list as it was, so a bad entry (or a file the next save would replace) is not lost.
-            eprintln!("nightjar: favourites.json has entries that could not be read; kept as favourites.json.bak");
-            let _ = std::fs::copy(&path, path.with_extension("json.bak"));
+            eprintln!("nightjar: {name} has entries that could not be read; kept as {name}.bak");
+            if !self.read_only
+                && let Err(e) = back_up(&path, "bak")
+            {
+                eprintln!("nightjar: could not keep a copy of {}: {e}", path.display());
+            }
         }
         list
+    }
+
+    pub fn favourites(&self) -> Vec<Favourite> {
+        self.read_favourites_file("favourites.json")
     }
 
     pub fn save_favourites(&self, favourites: &[Favourite]) -> std::io::Result<()> {
@@ -507,16 +565,7 @@ impl Store {
 
     /// The games hidden on this device, like the favourites' file; no other device reads it.
     pub fn hidden_games(&self) -> Vec<Favourite> {
-        let path = self.dir.join("hidden-games.json");
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            return Vec::new();
-        };
-        let (list, damaged) = parse_favourites(&text);
-        if damaged {
-            eprintln!("nightjar: hidden-games.json has entries that could not be read; kept as hidden-games.json.bak");
-            let _ = std::fs::copy(&path, path.with_extension("json.bak"));
-        }
-        list
+        self.read_favourites_file("hidden-games.json")
     }
 
     pub fn save_hidden_games(&self, games: &[Favourite]) -> std::io::Result<()> {
@@ -635,14 +684,14 @@ fn sanitize(name: &str) -> String {
 }
 
 /// Non-empty, filesystem-safe cache key for `host`, or `None` when `host` is empty.
-/// Keeps the existing ASCII alphanumeric/hyphen name for standard UUIDs, and hashes non-empty IDs
-/// that contain only stripped characters so they never collapse to an empty path (`art/` or `.json`).
+/// Keeps the existing ASCII alphanumeric/hyphen name for clean UUIDs, and suffixes a stable hash
+/// whenever characters are stripped so distinct IDs differing only in stripped characters cannot collide.
 fn host_key(host: &str) -> Option<String> {
     if host.is_empty() {
         return None;
     }
     let clean = sanitize(host);
-    if !clean.is_empty() {
+    if clean.len() == host.len() {
         return Some(clean);
     }
     let mut hash: u64 = 0xcbf29ce484222325;
@@ -650,7 +699,11 @@ fn host_key(host: &str) -> Option<String> {
         hash ^= u64::from(b);
         hash = hash.wrapping_mul(0x100000001b3);
     }
-    Some(format!("h-{hash:016x}"))
+    Some(if clean.is_empty() {
+        format!("h-{hash:016x}")
+    } else {
+        format!("{clean}-h-{hash:016x}")
+    })
 }
 
 fn host_path_segment(host: &str) -> String {

@@ -9,9 +9,16 @@ import static org.junit.Assert.*;
 public class AddComputerManuallyTest {
     @Test
     public void hostInputAcceptsNamesAndIpv6ButRejectsIgnoredUrlPartsAndInvalidPorts() {
-        for (String value : new String[]{"gaming-pc", "pc.local", "192.168.1.10:47989", "[::1]:47989", "::1"}) {
+        for (String value : new String[]{"gaming-pc", "pc.local",
+                "192.168.1.10:47989", "[::1]:47989", "::1"}) {
             assertNotNull(value, AddComputerManually.parseRawUserInputToUri(value));
         }
+        assertEquals("my_pc", AddComputerManually.parseHostInput("my_pc:47989").host);
+        assertEquals(47989, AddComputerManually.parseHostInput("my_pc:47989").port);
+        assertEquals("my_pc.local", AddComputerManually.parseHostInput("my_pc.local").host);
+        assertEquals(-1, AddComputerManually.parseHostInput("my_pc.local").port);
+        assertEquals("gaming_pc", AddComputerManually.parseHostInput("gaming_pc").host);
+        assertEquals(-1, AddComputerManually.parseHostInput("gaming_pc").port);
         for (String value : new String[]{"", "bad host", "pc.local:0", "pc.local:65536", "pc.local/path",
                 "user@pc.local", "pc.local?port=10", "pc.local#anything", "https://pc.local"}) {
             assertNull(value, AddComputerManually.parseRawUserInputToUri(value));

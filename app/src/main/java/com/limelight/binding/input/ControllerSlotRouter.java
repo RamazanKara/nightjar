@@ -194,32 +194,13 @@ final class ControllerSlotRouter {
         if (context.assignedControllerNumber) {
             return;
         }
-        // Input on the main thread and launch preparation on the connection worker can both
-        // assign a pad. Without one lock a pad could take two slots, or two pads share one.
-        synchronized (handler) {
-            if (!context.assignedControllerNumber) {
-                assignControllerNumber(context);
-            }
-        }
-    }
-
-    private void assignControllerNumber(ControllerHandler.GenericControllerContext context) {
+        // Perform InputDevice/Binder queries before taking synchronized(handler).
+        boolean hasGamepadBtns = false;
+        ControllerHandler.InputDeviceContext associatedContext = null;
         if (context instanceof ControllerHandler.InputDeviceContext) {
             ControllerHandler.InputDeviceContext devContext = (ControllerHandler.InputDeviceContext) context;
-
-            LimeLog.info(devContext.name + " (" + context.id + ") needs a controller number assigned");
-            ControllerHandler.InputDeviceContext builtInPad = handler.onscreenOwnPlayerSession && !devContext.external && !devContext.hasJoystickAxes ?
-                    builtInPad(true) : null;
-            int builtInSlot = builtInPad != null ? builtInPad.controllerNumber : -1;
-            boolean hasGamepadBtns = devContext.inputDevice != null && ControllerDeviceClassifier.hasGamepadButtons(devContext.inputDevice);
-            boolean hasAdjacentAssoc = handler.prefConfig.multiController && !devContext.hasJoystickAxes && hasGamepadBtns &&
-                    (ControllerDeviceClassifier.isAssociatedJoystick(devContext.inputDevice, InputDevice.getDevice(devContext.id + 1)) ||
-                            ControllerDeviceClassifier.isAssociatedJoystick(devContext.inputDevice, InputDevice.getDevice(devContext.id - 1)));
-            int decision = NightjarInputJni.assignInputDeviceSlot(
-                    handler.slotStateHandle, devContext.external, devContext.hasJoystickAxes,
-                    hasGamepadBtns, hasAdjacentAssoc, handler.prefConfig.multiController, builtInSlot);
-            if ((decision & (1 << 10)) != 0) {
-                context.controllerNumber = 0;
+            hasGamepadBtns = devContext.inputDevice != null && ControllerDeviceClassifier.hasGamepadButtons(devContext.inputDevice);
+            if (!devContext.hasJoystickAxes && hasGamepadBtns && handler.prefConfig.multiController) {
                 InputDevice associatedDevice = InputDevice.getDevice(devContext.id + 1);
                 if (!ControllerDeviceClassifier.isAssociatedJoystick(devContext.inputDevice, associatedDevice)) {
                     associatedDevice = InputDevice.getDevice(devContext.id - 1);
@@ -229,16 +210,67 @@ final class ControllerSlotRouter {
                     }
                 }
                 if (associatedDevice != null) {
-                    ControllerHandler.InputDeviceContext associatedDeviceContext = handler.inputDeviceContexts.get(associatedDevice.getId());
-                    if (associatedDeviceContext == null) {
-                        associatedDeviceContext = handler.createInputDeviceContextForDevice(associatedDevice);
-                        handler.inputDeviceContexts.put(associatedDevice.getId(), associatedDeviceContext);
+                    associatedContext = handler.inputDeviceContexts.get(associatedDevice.getId());
+                    if (associatedContext == null) {
+                        ControllerHandler.InputDeviceContext created = handler.createInputDeviceContextForDevice(associatedDevice);
+                        ControllerHandler.InputDeviceContext raced = handler.inputDeviceContexts.putIfAbsent(associatedDevice.getId(), created);
+                        associatedContext = raced != null ? raced : created;
                     }
-                    if (!associatedDeviceContext.assignedControllerNumber) {
-                        handler.assignControllerNumberIfNeeded(associatedDeviceContext);
-                        if (!associatedDeviceContext.assignedControllerNumber) {
-                            return;
+                    if (!associatedContext.assignedControllerNumber) {
+                        assignControllerNumberIfNeeded(associatedContext);
+                    }
+                }
+            }
+        }
+        boolean notifyTypeChanged = false;
+        // Input on the main thread and launch preparation on the connection worker can both
+        // assign a pad. Without one lock a pad could take two slots, or two pads share one.
+        synchronized (handler) {
+            if (!context.assignedControllerNumber) {
+                if (assignControllerNumber(context, hasGamepadBtns, associatedContext)) {
+                    if (context instanceof ControllerHandler.UsbDeviceContext) {
+                        ControllerHandler.UsbDeviceContext usbContext = (ControllerHandler.UsbDeviceContext) context;
+                        if (handler.deviceSensorManager != null && !handler.motion.deviceSensorsInUse() &&
+                                ControllerHandler.takesDeviceMotion(handler.prefConfig.gamepadMotionSensorsFallbackToDevice,
+                                        (short) (context.controllerNumber - handler.deviceFallbackSlot),
+                                        usbContext.device.getCapabilities(), usbContext.buttonMap)) {
+                            usbContext.deviceSensors = handler.deviceSensorManager;
+                            notifyTypeChanged = ControllerHandler.motionOverridesType(usbContext.device.getType(), true, usbContext.buttonMap);
                         }
+                    }
+
+                    // Report attributes of this new controller to the host before releasing the lock
+                    // so concurrent arrival/input readers never observe half-assigned slot state.
+                    context.sendControllerArrival();
+                }
+            }
+        }
+        if (notifyTypeChanged) {
+            handler.mainThreadHandler.post(() -> Toast.makeText(handler.activityContext,
+                    R.string.toast_controller_type_changed, Toast.LENGTH_LONG).show());
+        }
+    }
+
+    private boolean assignControllerNumber(ControllerHandler.GenericControllerContext context,
+                                           boolean hasGamepadBtns,
+                                           ControllerHandler.InputDeviceContext associatedDeviceContext) {
+        if (context instanceof ControllerHandler.InputDeviceContext) {
+            ControllerHandler.InputDeviceContext devContext = (ControllerHandler.InputDeviceContext) context;
+
+            LimeLog.info(devContext.name + " (" + context.id + ") needs a controller number assigned");
+            ControllerHandler.InputDeviceContext builtInPad = handler.onscreenOwnPlayerSession && !devContext.external && !devContext.hasJoystickAxes ?
+                    builtInPad(true) : null;
+            int builtInSlot = builtInPad != null ? builtInPad.controllerNumber : -1;
+            boolean hasAdjacentAssoc = handler.prefConfig.multiController && !devContext.hasJoystickAxes && hasGamepadBtns &&
+                    associatedDeviceContext != null;
+            int decision = NightjarInputJni.assignInputDeviceSlot(
+                    handler.slotStateHandle, devContext.external, devContext.hasJoystickAxes,
+                    hasGamepadBtns, hasAdjacentAssoc, handler.prefConfig.multiController, builtInSlot);
+            if ((decision & (1 << 10)) != 0) {
+                context.controllerNumber = 0;
+                if (associatedDeviceContext != null) {
+                    if (!associatedDeviceContext.assignedControllerNumber) {
+                        return false;
                     }
                     context.controllerNumber = associatedDeviceContext.controllerNumber;
                     LimeLog.info("Propagated controller number from " + associatedDeviceContext.name);
@@ -246,7 +278,7 @@ final class ControllerSlotRouter {
                 else {
                     int fb = NightjarInputJni.resolveAssociatedFallbackSlot(handler.slotStateHandle);
                     if ((fb & (1 << 9)) == 0) {
-                        return;
+                        return false;
                     }
                     context.controllerNumber = (short) (fb & 0xFF);
                     if ((fb & (1 << 8)) != 0) {
@@ -257,7 +289,7 @@ final class ControllerSlotRouter {
                 }
             }
             else if ((decision & (1 << 9)) == 0) {
-                return;
+                return false;
             }
             else {
                 context.controllerNumber = (short) (decision & 0xFF);
@@ -277,7 +309,7 @@ final class ControllerSlotRouter {
         else {
             int decision = NightjarInputJni.assignUsbDeviceSlot(handler.slotStateHandle, handler.prefConfig.multiController);
             if ((decision & (1 << 9)) == 0) {
-                return;
+                return false;
             }
             context.controllerNumber = (short) (decision & 0xFF);
             if ((decision & (1 << 8)) != 0) {
@@ -289,23 +321,7 @@ final class ControllerSlotRouter {
 
         LimeLog.info("Assigned as controller " + context.controllerNumber);
         context.assignedControllerNumber = true;
-
-        if (context instanceof ControllerHandler.UsbDeviceContext) {
-            ControllerHandler.UsbDeviceContext usbContext = (ControllerHandler.UsbDeviceContext) context;
-            // A USB pad without motion sensors uses this device's for player 1, as an input device does
-            if (handler.deviceSensorManager != null && !handler.motion.deviceSensorsInUse() &&
-                    ControllerHandler.takesDeviceMotion(handler.prefConfig.gamepadMotionSensorsFallbackToDevice, (short) (context.controllerNumber - handler.deviceFallbackSlot),
-                            usbContext.device.getCapabilities(), usbContext.buttonMap)) {
-                usbContext.deviceSensors = handler.deviceSensorManager;
-                if (ControllerHandler.motionOverridesType(usbContext.device.getType(), true, usbContext.buttonMap)) {
-                    handler.mainThreadHandler.post(() -> Toast.makeText(handler.activityContext,
-                            R.string.toast_controller_type_changed, Toast.LENGTH_LONG).show());
-                }
-            }
-        }
-
-        // Report attributes of this new controller to the host
-        context.sendControllerArrival();
+        return true;
     }
 
     // Slot assignment changes both masks under this lock, on the main thread or the connection
@@ -420,9 +436,10 @@ final class ControllerSlotRouter {
             try { Thread.sleep(50); }
             catch (InterruptedException e) { Thread.currentThread().interrupt(); return ""; }
         } while (android.os.SystemClock.uptimeMillis() < deadline);
+        // Enumerate and prepare devices outside synchronized(handler) to avoid Binder calls under lock.
+        prepareInputDevices();
         synchronized (handler) {
             if (handler.stopped || !handler.conn.canSendControllerInput()) return "";
-            prepareInputDevices();
             String[] controllers = new String[ControllerHandler.MAX_GAMEPADS];
             // Controllers Off: no physical pad is announced, so the PC makes no pad that never sends.
             boolean physical = handler.prefConfig.sendControllers;

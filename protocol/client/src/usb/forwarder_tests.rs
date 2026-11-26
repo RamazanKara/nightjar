@@ -397,3 +397,16 @@ fn attach_errors_and_blocking_drop_always_close_the_device() {
     drop(blocking);
     assert_eq!(dropped.closes(), 1);
 }
+
+#[test]
+fn detach_waits_for_serving_device_close_before_returning() {
+    let rig = rig(None, false);
+    let dev = FakeDevice::new("2-1");
+    let (id, _driver) = rig.attach(&dev);
+    assert!(rig.forwarder.detach(id));
+    assert_eq!(
+        dev.closes(),
+        1,
+        "detach must wait for the serving thread to finish closing the device"
+    );
+}

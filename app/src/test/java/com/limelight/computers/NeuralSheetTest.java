@@ -284,4 +284,26 @@ public class NeuralSheetTest {
         assertFalse("child dialog closed on dismiss", notice.isShowing());
         assertFalse("sheet closed on dismiss", sheet.sheet().isShowing());
     }
+
+    @Test
+    public void pollingKeepsMovedFocusAndContinuesAfterTransientReadErrorWhileWorking() {
+        script("neural", COPYING, "{\"error\":{\"kind\":\"network\",\"message\":\"timeout\"}}");
+        NeuralSheet sheet = sheet();
+        android.view.View content = sheet.sheet().findViewById(android.R.id.content);
+        MaterialButton refresh = row(content, screen.getString(R.string.neural_refresh));
+        assertNotNull(refresh);
+        refresh.requestFocus();
+        assertTrue(refresh.hasFocus());
+
+        // Transient read failure keeps polling while the host job is working, and leaves focus intact.
+        assertEquals(1, later.size());
+        later.remove(0).run();
+        AlertDialog err = (AlertDialog) ShadowDialog.getLatestDialog();
+        if (err != null && err.isShowing()) err.dismiss();
+        assertEquals("transient read failure must keep polling while working", 1, later.size());
+        MaterialButton rebuiltRefresh = row(content, screen.getString(R.string.neural_refresh));
+        assertNotNull(rebuiltRefresh);
+        assertTrue("refresh focus preserved across poll render", rebuiltRefresh.hasFocus());
+        sheet.dismiss();
+    }
 }

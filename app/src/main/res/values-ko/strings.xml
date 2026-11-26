@@ -567,4 +567,6 @@
     <string name="home_setup_title">이 기기와 %1$s에 맞게 설정됨</string>
     <string name="home_setup_codec_auto">코덱은 스트림 시작 시 선택</string>
     <string name="home_setup_dismiss">닫기</string>
+    <string name="help_loading_error">WebView 또는 브라우저가 없어 도움말을 열 수 없습니다.</string>
+    <string name="summary_hdr_shield_firmware_update">HDR을 사용하려면 NVIDIA SHIELD Android TV의 펌웨어를 업데이트하세요</string>
 </resources>

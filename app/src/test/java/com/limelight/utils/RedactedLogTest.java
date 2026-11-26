@@ -29,8 +29,9 @@ public class RedactedLogTest {
         String diagnostic = new com.limelight.binding.video.DisplayRefreshDiagnostics().update(
                 36, 0, 2, false, true, false, 0, 0, 120f);
         log.add("INFO", diagnostic);
+        log.add("INFO", "Refresh drop recovery: re-applying pinned display mode for 144.0 Hz");
         for (int i = 0; i < 500; i++) log.add("INFO", "frame 12345 queued");
-        assertEquals("INFO " + diagnostic, log.snapshot());
+        assertEquals("INFO " + diagnostic + "\nINFO Refresh drop recovery: re-applying pinned display mode for 144.0 Hz", log.snapshot());
         assertTrue(log.snapshot().contains("arrSupported=false, selected=max Hz"));
     }
 
@@ -128,5 +129,12 @@ public class RedactedLogTest {
         log.add("PIN 1234", "Stream disconnected");
         assertTrue(log.snapshot().endsWith("INFO Stream disconnected"));
         assertFalse(log.snapshot().contains("1234"));
+    }
+
+    @Test
+    public void secretPatternsAreRedactedCaseInsensitively() {
+        assertEquals("PASSWORD=[omitted] Token=[omitted] Secret=[omitted]",
+                RedactedLog.redact("PASSWORD=hunter2 Token=abcdef12 Secret=xyz999"));
+        assertFalse(RedactedLog.redact("PassPhrase secretvalue").contains("secretvalue"));
     }
 }

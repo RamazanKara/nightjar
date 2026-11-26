@@ -16,8 +16,26 @@ pub const START_DOWN_TIME_MOUSE_MODE_MS: i64 = 750;
 /// Minimum press duration (ms) for short button/Guide taps so games observe them.
 pub const MINIMUM_BUTTON_DOWN_TIME_MS: i64 = 25;
 
-/// Period (ms) between stick mouse-emulation ticks.
-pub const MOUSE_EMULATION_REPORT_PERIOD_MS: i32 = 50;
+/// Period (ms) between stick mouse-emulation ticks (nominally 100 Hz).
+pub const MOUSE_EMULATION_REPORT_PERIOD_MS: i32 = 10;
+
+/// Ratio from the 50 ms base tick to [`MOUSE_EMULATION_REPORT_PERIOD_MS`] so travel speed stays constant.
+pub const MOUSE_EMULATION_TIME_COMPENSATION: f32 =
+    MOUSE_EMULATION_REPORT_PERIOD_MS as f32 / 50.0;
+
+/// Default controller mouse sensitivity percentage.
+pub const DEFAULT_MOUSE_SENSITIVITY_PERCENT: i32 = 100;
+
+/// Minimum controller mouse sensitivity percentage.
+pub const MIN_MOUSE_SENSITIVITY_PERCENT: i32 = 25;
+
+/// Maximum controller mouse sensitivity percentage.
+pub const MAX_MOUSE_SENSITIVITY_PERCENT: i32 = 200;
+
+/// Clamps controller mouse sensitivity percentage to `[MIN_MOUSE_SENSITIVITY_PERCENT, MAX_MOUSE_SENSITIVITY_PERCENT]`.
+pub fn clamp_mouse_sensitivity_percent(percent: i32) -> i32 {
+    percent.clamp(MIN_MOUSE_SENSITIVITY_PERCENT, MAX_MOUSE_SENSITIVITY_PERCENT)
+}
 
 /// Stream-menu combo (`Back | Start | LB | RB`), held back from Android's quit-combo list.
 pub const MENU_COMBO_MASK: u32 = button::BACK | button::PLAY | button::LB | button::RB;
@@ -429,45 +447,49 @@ pub fn mouse_packet_step(
     }
 }
 
-/// Pointer moves and high-res scroll deltas emitted on one 50 ms mouse-emulation tick.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Pointer moves and high-res scroll deltas emitted on one mouse-emulation tick.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MouseTickPlan {
     pub has_move1: bool,
-    pub move1_x: i16,
-    pub move1_y: i16,
+    pub move1_x: f32,
+    pub move1_y: f32,
     pub has_move2: bool,
-    pub move2_x: i16,
-    pub move2_y: i16,
+    pub move2_x: f32,
+    pub move2_y: f32,
     pub has_scroll: bool,
-    pub scroll_v: i16,
-    pub scroll_h: i16,
+    pub scroll_v: f32,
+    pub scroll_h: f32,
 }
 
-fn stick_move(x: i16, y: i16, fixed_step: i32) -> (bool, i16, i16) {
+fn stick_move(x: i16, y: i16, fixed_step: i32, sensitivity_percent: i32) -> (bool, f32, f32) {
     let (vx, vy) = mouse_stick_curve(x, y);
-    let mag = (f64::from(vx).powi(2) + f64::from(vy).powi(2)).sqrt();
-    if mag < 1.0 {
-        return (false, 0, 0);
+    if vx == 0.0 && vy == 0.0 {
+        return (false, 0.0, 0.0);
     }
+    let scale = f64::from(MOUSE_EMULATION_TIME_COMPENSATION)
+        * (f64::from(clamp_mouse_sensitivity_percent(sensitivity_percent)) / 100.0);
     if fixed_step > 0 {
-        let dx = fixed_step_delta(f64::from(vx), fixed_step) as i16;
-        let dy = fixed_step_delta(f64::from(-vy), fixed_step) as i16;
-        (dx != 0 || dy != 0, dx, dy)
+        let dx = (f64::from(fixed_step_delta(f64::from(vx), fixed_step)) * scale) as f32;
+        let dy = (f64::from(fixed_step_delta(f64::from(-vy), fixed_step)) * scale) as f32;
+        (dx != 0.0 || dy != 0.0, dx, dy)
     } else {
-        (true, (vx as i32) as i16, ((-vy) as i32) as i16)
+        let dx = (f64::from(vx) * scale) as f32;
+        let dy = (f64::from(-vy) * scale) as f32;
+        (dx != 0.0 || dy != 0.0, dx, dy)
     }
 }
 
-fn stick_scroll(x: i16, y: i16) -> (bool, i16, i16) {
+fn stick_scroll(x: i16, y: i16) -> (bool, f32, f32) {
     let (vx, vy) = mouse_stick_curve(x, y);
     let mag = (f64::from(vx).powi(2) + f64::from(vy).powi(2)).sqrt();
     if mag < 1.0 {
-        return (false, 0, 0);
+        return (false, 0.0, 0.0);
     }
-    (true, (vy as i32) as i16, (vx as i32) as i16)
+    let comp = f64::from(MOUSE_EMULATION_TIME_COMPENSATION);
+    (true, (f64::from(vy) * comp) as f32, (f64::from(vx) * comp) as f32)
 }
 
-/// Computes mouse move and high-res scroll deltas for both sticks on one 50 ms tick.
+/// Computes mouse move and high-res scroll deltas for both sticks on one 10 ms tick.
 pub fn mouse_tick_step(
     lx: i16,
     ly: i16,
@@ -475,10 +497,11 @@ pub fn mouse_tick_step(
     ry: i16,
     scroll_stick: ScrollStick,
     fixed_step: i32,
+    sensitivity_percent: i32,
 ) -> MouseTickPlan {
     match scroll_stick {
         ScrollStick::Right => {
-            let (has_move1, move1_x, move1_y) = stick_move(lx, ly, fixed_step);
+            let (has_move1, move1_x, move1_y) = stick_move(lx, ly, fixed_step, sensitivity_percent);
             let (has_scroll, scroll_v, scroll_h) = stick_scroll(rx, ry);
             MouseTickPlan {
                 has_move1,
@@ -491,7 +514,7 @@ pub fn mouse_tick_step(
             }
         }
         ScrollStick::Left => {
-            let (has_move1, move1_x, move1_y) = stick_move(rx, ry, fixed_step);
+            let (has_move1, move1_x, move1_y) = stick_move(rx, ry, fixed_step, sensitivity_percent);
             let (has_scroll, scroll_v, scroll_h) = stick_scroll(lx, ly);
             MouseTickPlan {
                 has_move1,
@@ -504,8 +527,8 @@ pub fn mouse_tick_step(
             }
         }
         ScrollStick::None => {
-            let (has_move1, move1_x, move1_y) = stick_move(lx, ly, fixed_step);
-            let (has_move2, move2_x, move2_y) = stick_move(rx, ry, fixed_step);
+            let (has_move1, move1_x, move1_y) = stick_move(lx, ly, fixed_step, sensitivity_percent);
+            let (has_move2, move2_x, move2_y) = stick_move(rx, ry, fixed_step, sensitivity_percent);
             MouseTickPlan {
                 has_move1,
                 move1_x,

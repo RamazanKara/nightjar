@@ -530,4 +530,34 @@ public class PcViewHostActionsTest {
             if (worker != null) worker.join(5000);
         }
     }
+
+    @Test
+    public void destroyDismissesTrackedHostActionDialogsAndErrorDialog() {
+        ActivityController<Library> controller = support.pairingScreen(new CountDownLatch(0), 47989);
+        try {
+            Library screen = controller.get();
+            com.limelight.computers.HostActions actions = screen.hostActions();
+            GridView grid = screen.findViewById(R.id.fragmentView);
+            ComputerDetails computer = ((PcView.ComputerObject) grid.getItemAtPosition(0)).details;
+
+            actions.confirmUnpair(computer);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            AlertDialog unpairDialog = (AlertDialog) ShadowDialog.getLatestDialog();
+            assertNotNull(unpairDialog);
+            assertTrue(unpairDialog.isShowing());
+
+            actions.showError("Title", "Boom", null);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            AlertDialog errDialog = (AlertDialog) ShadowDialog.getLatestDialog();
+            assertNotNull(errDialog);
+            assertTrue(errDialog.isShowing());
+
+            actions.destroy();
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertFalse(unpairDialog.isShowing());
+            assertFalse(errDialog.isShowing());
+        } finally {
+            controller.pause().stop().destroy();
+        }
+    }
 }

@@ -504,6 +504,7 @@ final class GameStreamUiSetup {
         }
         if ((game.prefConfig.usbDriver || game.prefConfig.usbDualSense || game.prefConfig.usbSwitchPro)
                 && game.app.getRole() != NvApp.Role.REMOTE_MONITOR) {
+            game.usbDriverReleased = false;
             game.usbDriverServiceBound = game.bindService(
                     new Intent(game, UsbDriverService.class), game.usbDriverServiceConnection, Service.BIND_AUTO_CREATE);
         }

@@ -505,7 +505,9 @@ fn complete<K: Kernel>(inner: &Inner<K>, urb: *mut Urb) {
         let Some(flight) = state.flights.remove(&id) else {
             return;
         };
-        state.seqnums.remove(&flight.seqnum);
+        if state.seqnums.get(&flight.seqnum) == Some(&id) {
+            state.seqnums.remove(&flight.seqnum);
+        }
         flight
     };
     let reply = flight.reply();
@@ -604,7 +606,9 @@ impl<K: Kernel> UsbDevice for UsbfsDevice<K> {
         // The flight owns the URB and its buffer until it is reaped, and closing frees them only
         // after the descriptor closed.
         if let Err(e) = unsafe { self.inner.kernel.submit(raw) } {
-            state.seqnums.remove(&transfer.seqnum);
+            if state.seqnums.get(&transfer.seqnum) == Some(&id) {
+                state.seqnums.remove(&transfer.seqnum);
+            }
             let flight = state.flights.remove(&id);
             drop(state);
             if let Some(flight) = flight {
@@ -614,19 +618,19 @@ impl<K: Kernel> UsbDevice for UsbfsDevice<K> {
     }
 
     fn unlink(&self, seqnum: u32) {
-        let state = self.inner.state();
-        let Some(flight) = state
-            .seqnums
-            .get(&seqnum)
-            .and_then(|id| state.flights.get(id))
-        else {
+        let mut state = self.inner.state();
+        let Some(id) = state.seqnums.remove(&seqnum) else {
+            return;
+        };
+        let Some(flight) = state.flights.get(&id) else {
             return;
         };
         // Still ours under the lock: the reaper removes it only after taking it. It comes back
         // with -ENOENT, which the server drops, or completed already (EINVAL here). The lock
         // stays held: the kernel finds the URB by its address, which a reaped and freed URB
         // could hand to the next submit, and DISCARDURB only starts the unlink
-        // (usb_unlink_urb), so the reaper waits no longer than the ioctl.
+        // (usb_unlink_urb), so the reaper waits no longer than the ioctl. Removing `seqnum`
+        // here prevents an immediately reused `seqnum` from colliding with the unlinked flight.
         let _ = self.inner.kernel.discard(flight.urb.as_ptr());
     }
 

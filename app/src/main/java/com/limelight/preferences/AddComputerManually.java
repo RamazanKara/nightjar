@@ -187,6 +187,66 @@ public class AddComputerManually extends NightjarActivity {
                 && (uri.getPort() == -1 || (uri.getPort() > 0 && uri.getPort() <= 65535));
     }
 
+    static final class HostPort {
+        final String host;
+        final int port;
+
+        HostPort(String host, int port) {
+            this.host = host;
+            this.port = port;
+        }
+    }
+
+    /**
+     * Parses user-entered host[:port] or raw IPv6 literals, including hostnames with underscores
+     * which {@link URI#getHost()} rejects per RFC 2396.
+     */
+    static HostPort parseHostInput(String rawUserInput) {
+        if (rawUserInput == null || rawUserInput.isEmpty()) {
+            return null;
+        }
+        URI uri = parseRawUserInputToUri(rawUserInput);
+        if (uri != null) {
+            return new HostPort(uri.getHost(), uri.getPort());
+        }
+        for (int i = 0; i < rawUserInput.length(); i++) {
+            char c = rawUserInput.charAt(i);
+            if (Character.isWhitespace(c) || c == '/' || c == '?' || c == '#' || c == '@') {
+                return null;
+            }
+        }
+        if (rawUserInput.startsWith("[")) {
+            int close = rawUserInput.indexOf(']');
+            if (close <= 1) return null;
+            String host = rawUserInput.substring(1, close);
+            if (close == rawUserInput.length() - 1) return new HostPort(host, -1);
+            if (rawUserInput.charAt(close + 1) != ':') return null;
+            return parsePortSuffix(host, rawUserInput.substring(close + 2));
+        }
+        int colon = rawUserInput.indexOf(':');
+        if (colon < 0) {
+            return rawUserInput.indexOf('_') >= 0 ? new HostPort(rawUserInput, -1) : null;
+        }
+        if (rawUserInput.indexOf(':', colon + 1) >= 0 || colon == 0) {
+            return null;
+        }
+        String host = rawUserInput.substring(0, colon);
+        if (host.indexOf('_') < 0) {
+            return null;
+        }
+        return parsePortSuffix(host, rawUserInput.substring(colon + 1));
+    }
+
+    private static HostPort parsePortSuffix(String host, String portText) {
+        if (portText.isEmpty()) return null;
+        try {
+            int port = Integer.parseInt(portText);
+            return port > 0 && port <= 65535 ? new HostPort(host, port) : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     /**
      * Opens an invite to play over the internet: the PC is looked for through the link's rendezvous (up to about a
      * minute), this device pairs as a guest with the link's secret, and the PC is kept with its internet details.
@@ -245,7 +305,7 @@ public class AddComputerManually extends NightjarActivity {
 
         try {
             // Check if we parsed a host address successfully
-            URI uri = link != null || invalidLink ? null : parseRawUserInputToUri(rawUserInput);
+            HostPort parsed = link != null || invalidLink ? null : parseHostInput(rawUserInput);
             if (link != null) {
                 details.manualAddress = new ComputerDetails.AddressTuple(link.host, link.port);
                 ComputerManagerService.LinkAdd added = binder.addComputerForLink(details, link);
@@ -254,9 +314,9 @@ public class AddComputerManually extends NightjarActivity {
                 if (added == ComputerManagerService.LinkAdd.UNREACHABLE) {
                     wrongSiteLocal = isWrongSubnetSiteLocalAddress(link.host);
                 }
-            } else if (uri != null && uri.getHost() != null && !uri.getHost().isEmpty()) {
-                String host = uri.getHost();
-                int port = uri.getPort();
+            } else if (parsed != null && parsed.host != null && !parsed.host.isEmpty()) {
+                String host = parsed.host;
+                int port = parsed.port;
 
                 // If a port was not specified, use the default
                 if (port == -1) {

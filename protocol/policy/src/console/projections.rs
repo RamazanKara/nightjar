@@ -166,7 +166,9 @@ pub fn recently_shown(
                 (!recent.install_id.is_empty()
                     && !g.install_id.is_empty()
                     && g.install_id.eq_ignore_ascii_case(&recent.install_id))
-                    || (recent.app_id != 0 && g.app_id == recent.app_id)
+                    || ((recent.install_id.is_empty() || g.install_id.is_empty())
+                        && recent.app_id != 0
+                        && g.app_id == recent.app_id)
             })
         }) else {
             continue;
@@ -271,7 +273,9 @@ pub fn favourite_games(sources: &[Source<'_>], favourites: &[Favourite]) -> Vec<
                 (!fav.install_id.is_empty()
                     && !g.install_id.is_empty()
                     && g.install_id.eq_ignore_ascii_case(&fav.install_id))
-                    || (fav.app_id != 0 && g.app_id == fav.app_id)
+                    || ((fav.install_id.is_empty() || g.install_id.is_empty())
+                        && fav.app_id != 0
+                        && g.app_id == fav.app_id)
             }) else {
                 continue;
             };
@@ -311,10 +315,7 @@ pub fn entry_key_of(entries: &[Entry], host: u64, app_id: u32) -> Option<&String
 
 /// Best known unix timestamp (seconds) when `entry` was last played across stores and local recents.
 pub fn last_played(entry: &Entry, sources: &[Source<'_>], recents: &[Recent]) -> Option<u64> {
-    if let Some(store_ts) = entry.last_played() {
-        return Some(store_ts);
-    }
-    recents
+    let recent_ts = recents
         .iter()
         .filter(|r| {
             entry.copies.iter().any(|c| {
@@ -327,11 +328,14 @@ pub fn last_played(entry: &Entry, sources: &[Source<'_>], recents: &[Recent]) ->
                     && ((!c.install_id.is_empty()
                         && !r.install_id.is_empty()
                         && c.install_id.eq_ignore_ascii_case(&r.install_id))
-                        || (r.app_id != 0 && c.app_id == r.app_id))
+                        || ((c.install_id.is_empty() || r.install_id.is_empty())
+                            && r.app_id != 0
+                            && c.app_id == r.app_id))
             })
         })
         .map(|r| r.at)
-        .max()
+        .max();
+    entry.last_played().into_iter().chain(recent_ts).max()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

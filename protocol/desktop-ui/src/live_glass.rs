@@ -67,11 +67,58 @@ pub fn find_boundary(primitives: &[ClippedPrimitive]) -> Option<(usize, &Boundar
 /// level is 16 pixels to the texel, and its bilinear passes spread one texel each way.
 const BLUR_REACH: f32 = 40.0;
 
+/// Non-cryptographic FxHash-style hasher for per-frame vertex fingerprints (avoids SipHash
+/// per-frame hashing overhead).
+struct FastHasher(u64);
+
+impl FastHasher {
+    const K: u64 = 0x517cc1b727220a95;
+
+    fn new() -> Self {
+        Self(0)
+    }
+
+    #[inline]
+    fn mix(&mut self, word: u64) {
+        self.0 = (self.0.rotate_left(5) ^ word).wrapping_mul(Self::K);
+    }
+}
+
+impl std::hash::Hasher for FastHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        let (chunks, tail) = bytes.as_chunks::<8>();
+        for chunk in chunks {
+            self.mix(u64::from_le_bytes(*chunk));
+        }
+        if !tail.is_empty() {
+            let mut last = [0u8; 8];
+            last[..tail.len()].copy_from_slice(tail);
+            self.mix(u64::from_le_bytes(last));
+        }
+    }
+
+    fn write_u32(&mut self, i: u32) {
+        self.mix(u64::from(i));
+    }
+
+    fn write_i32(&mut self, i: i32) {
+        self.mix(u64::from(i as u32));
+    }
+
+    fn write_u64(&mut self, i: u64) {
+        self.mix(i);
+    }
+}
+
 /// A hash of everything painted under `regions` or within the blur's reach of them: triangle by
 /// triangle, so a hover elsewhere in the same batched mesh leaves it alone. Equal hashes mean the
 /// chain's last output still holds.
 pub fn fingerprint(primitives: &[ClippedPrimitive], regions: &[Rect]) -> u64 {
-    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    let mut hash = FastHasher::new();
     for clipped in primitives {
         let Primitive::Mesh(mesh) = &clipped.primitive else {
             continue;
@@ -124,7 +171,7 @@ pub fn fingerprint(primitives: &[ClippedPrimitive], regions: &[Rect]) -> u64 {
 /// A hash of a whole frame at a scale and size: equal prints look the same on screen, as long as no
 /// texture changed under them.
 pub fn frame_print(primitives: &[ClippedPrimitive], ppp: f32, size: (i32, i32)) -> u64 {
-    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    let mut hash = FastHasher::new();
     hash.write_u32(ppp.to_bits());
     hash.write_i32(size.0);
     hash.write_i32(size.1);

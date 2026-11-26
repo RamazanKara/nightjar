@@ -169,6 +169,15 @@ impl Release {
         fallback
     }
 
+    /// Whether `asset.url` matches the pinned GitHub release download address for this release tag.
+    pub fn is_pinned_download_url(&self, asset: &ReleaseAsset) -> bool {
+        let expected_url = format!(
+            "https://github.com/RamazanKara/nightjar/releases/download/{}/{}",
+            self.tag, asset.name
+        );
+        asset.url == expected_url
+    }
+
     /// Validates and returns the named Desktop release asset.
     pub fn desktop_asset(&self, name: &str) -> Result<DesktopAsset, DesktopAssetError> {
         if !is_safe_asset_name(name) {

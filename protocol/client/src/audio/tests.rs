@@ -219,3 +219,84 @@ fn reordered_packets_drain_buffered_contiguous_packets_immediately() {
         vec![Some(data(11)[12..].to_vec()), Some(data(12)[12..].to_vec())]
     );
 }
+
+#[test]
+fn stray_malformed_fec_packets_do_not_latch_incompatible_server() {
+    let packets = stream(20, 60);
+    let fec = |seq_base: u16| {
+        let mut p = vec![0x80, 127];
+        p.extend_from_slice(&0x100u16.to_be_bytes());
+        p.extend_from_slice(&[0; 8]);
+        p.push(0);
+        p.push(97);
+        p.extend_from_slice(&seq_base.to_be_bytes());
+        p.extend_from_slice(&[0; 8]);
+        p.extend_from_slice(&[0; 60]);
+        p
+    };
+    let mut rx = AudioReceiver::new(config());
+    rx.packets_to_drop = 0;
+
+    // A single malformed base_seq does not turn off FEC; a valid packet resets the streak.
+    let _ = run(&mut rx, &[packets[0].clone()]);
+    for _ in 0..(queue::INCOMPATIBLE_STREAK - 1) {
+        let _ = run(&mut rx, &[fec(5)]);
+    }
+    // Block 1 (`seq 4..=7`) starts at `packets[6]` and resets the streak before block 2 (`seq 8..=11`).
+    let _ = run(&mut rx, &packets[6..12]);
+    // Another short burst stays below the streak threshold, so FEC still recovers block 2 (seq 8 & 10 lost).
+    for _ in 0..(queue::INCOMPATIBLE_STREAK - 1) {
+        let _ = run(&mut rx, &[fec(5)]);
+    }
+    let mut rest = packets[12..].to_vec();
+    rest.retain(|p| ![8u16, 10].contains(&u16::from_be_bytes([p[2], p[3]])) || p[1] != 97);
+    let played = run(&mut rx, &rest);
+    assert!(played.iter().all(Option::is_some));
+    assert_eq!(rx.stats().packet_count_fec_recovered, 2);
+
+    // Reaching INCOMPATIBLE_STREAK in a row latches incompatible_server so audio passes straight through.
+    let mut rx2 = AudioReceiver::new(config());
+    rx2.packets_to_drop = 0;
+    let _ = run(&mut rx2, &[packets[0].clone()]);
+    for _ in 0..queue::INCOMPATIBLE_STREAK {
+        let _ = run(&mut rx2, &[fec(5)]);
+    }
+    let single = run(&mut rx2, &[packets[7].clone()]);
+    assert_eq!(single, vec![Some(packets[7][12..].to_vec())]);
+}
+
+#[test]
+fn fec_blocks_stay_bounded_under_future_sequence_flood() {
+    let packets = stream(20, 40);
+    let mut rx = AudioReceiver::new(config());
+    rx.packets_to_drop = 0;
+    // Complete block 1 (`seq 4..=7`) so `synchronizing` clears, then send a late OOS packet (`seq 5`)
+    // so `received_oos_data` waits for the reordered head instead of advancing past block 2 immediately.
+    let _ = run(&mut rx, &packets[..1]);
+    let _ = run(&mut rx, &packets[6..12]);
+    let _ = run(&mut rx, &[packets[7].clone()]);
+
+    let mut block2: Vec<_> = packets
+        .iter()
+        .filter(|p| p[1] == 97 && (8..=11).contains(&u16::from_be_bytes([p[2], p[3]])))
+        .cloned()
+        .collect();
+    // Arrive out of order (`seq 9` before `seq 8`), keeping block 2 active at head.
+    let _ = run(&mut rx, &[block2[1].clone()]);
+    // Flood distinct future bases beyond MAX_FEC_BLOCKS within `wait_us`.
+    for i in 1..(queue::MAX_FEC_BLOCKS + 32) {
+        let seq = 12 + (i as u16) * 4;
+        let mut p = vec![0x80, 97];
+        p.extend_from_slice(&seq.to_be_bytes());
+        p.extend_from_slice(&(u32::from(seq) * 5).to_be_bytes());
+        p.extend_from_slice(&[0; 4]);
+        p.extend_from_slice(&[7; 40]);
+        let _ = run(&mut rx, &[p]);
+    }
+    // Active block 2 remained intact and drains in order once `seq 8, 10, 11` arrive.
+    let mut rest_packets = vec![block2.remove(0)];
+    rest_packets.extend(block2.into_iter().skip(1));
+    let rest = run(&mut rx, &rest_packets);
+    assert_eq!(rest.len(), 4);
+    assert!(rest.iter().all(Option::is_some));
+}

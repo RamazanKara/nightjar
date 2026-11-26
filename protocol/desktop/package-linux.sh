@@ -92,6 +92,14 @@ fi
 cp "$here/README.md" "$stage/"
 # sonora's BSD notice: the microphone's noise suppression and automatic gain are built in.
 install -Dm644 "$here/assets/NOTICE-SONORA.txt" "$stage/licenses-sonora/NOTICE-SONORA.txt"
+# Nightjar GPL-3.0 licence, contributors, Figtree OFL, and shader notices.
+client_root=$(cd "$here/../.." && pwd)
+install -Dm644 "$client_root/LICENSE.txt" "$stage/licenses-nightjar/Nightjar-GPL-3.0.txt"
+install -Dm644 "$client_root/CONTRIBUTORS.md" "$stage/licenses-nightjar/CONTRIBUTORS.md"
+install -Dm644 "$here/assets/Figtree-OFL.txt" "$stage/licenses-nightjar/Figtree-OFL.txt"
+for notice in pyrowave_notices.txt NOTICE-FSR1.txt NOTICE-SGSR1.txt; do
+	install -Dm644 "$client_root/app/src/main/assets/$notice" "$stage/licenses-nightjar/$notice"
+done
 # The desktop entry, the icon in the hicolor sizes and the AppStream data, laid out as under
 # /usr/share: packaging/linux/build-packages.sh makes the .deb, .rpm and AppImage from them, and
 # the AUR and Flatpak recipes install them from this archive.

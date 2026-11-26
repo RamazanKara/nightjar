@@ -26,10 +26,12 @@ impl MoonFade {
     }
 }
 
-/// Tells the page whether to say what it holds, and its cards where the moon is.
-pub(super) fn publish(ctx: &Context, placing: bool, disc: Option<(Pos2, f32)>) {
+/// Tells the page whether to say what it holds, whether a placement already exists for it, and its
+/// cards where the moon is.
+pub(super) fn publish(ctx: &Context, placing: bool, placed: bool, disc: Option<(Pos2, f32)>) {
     ctx.data_mut(|d| {
         d.insert_temp(placing_id(), placing);
+        d.insert_temp(placed_id(), placed);
         d.insert_temp(disc_id(), disc);
     });
 }
@@ -96,6 +98,10 @@ pub(in crate::ui) fn placing_id() -> egui::Id {
     egui::Id::unique("moon-placing")
 }
 
+pub(super) fn placed_id() -> egui::Id {
+    egui::Id::unique("moon-placed")
+}
+
 pub(super) fn disc_id() -> egui::Id {
     egui::Id::unique("moon-disc")
 }
@@ -108,6 +114,15 @@ pub(in crate::ui) fn disc_of(ctx: &Context) -> Option<(Pos2, f32)> {
 /// Whether the backdrop places a moon this frame and needs what the page holds.
 pub(in crate::ui) fn placing(ctx: &Context) -> bool {
     ctx.data(|d| d.get_temp(placing_id())).unwrap_or(false)
+}
+
+/// Whether a settled moon placement already exists for the active page and window size.
+pub(in crate::ui) fn placed(ctx: &Context) -> bool {
+    ctx.data(|d| d.get_temp(placed_id())).unwrap_or(false)
+}
+
+pub(in crate::ui) fn page(ctx: &Context) -> u64 {
+    ctx.data(|d| d.get_temp(page_id())).unwrap_or(0)
 }
 
 /// Where the page's shapes lie as laid out, moved by `down` to the page's top: cards, chips, rows,

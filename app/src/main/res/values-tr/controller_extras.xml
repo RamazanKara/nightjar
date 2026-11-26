@@ -56,4 +56,6 @@
     <string name="title_usb_switch_pro">USB Switch Pro sürücüsü</string>
     <string name="summary_usb_switch_pro">Nightjar kablolu bir Switch Pro Controller’ı kendisi okur; böylece jiroskop, titreşim, Home ve Capture çalışır. Android yayın sırasında USB erişimi ister; Bluetooth ve Joy-Con, Android’in girişinde kalır.</string>
     <string name="usb_switch_pro_denied">USB erişimi yok; Switch Pro Controller Android girişini kullanmaya devam ediyor.\nTekrar denemek için kabloyu yeniden takın.</string>
+    <string name="title_seekbar_mouse_emulation_sensitivity">Oyun kolu fare hassasiyeti</string>
+    <string name="summary_seekbar_mouse_emulation_sensitivity">Oyun kolu fare modunda analog çubukların imleci ne kadar hızlı hareket ettireceğini ayarlar. Düşük değerler hassas nişan almayı kolaylaştırır.</string>
 </resources>

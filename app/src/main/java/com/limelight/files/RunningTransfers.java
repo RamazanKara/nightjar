@@ -1,6 +1,7 @@
 package com.limelight.files;
 
 import android.app.Activity;
+import android.net.Uri;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -9,6 +10,8 @@ import android.widget.FrameLayout;
 import com.limelight.R;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -45,6 +48,17 @@ public final class RunningTransfers {
         if (held != work) return;
         held = null;
         changed();
+    }
+
+    /** SAF document URIs currently retained by held transfers so openers do not revoke them early. */
+    public static Collection<Uri> activeGrantUris() {
+        FileTransferActivity.TransferWork work = held;
+        if (work == null) return Collections.emptyList();
+        synchronized (work.persistedPermissions) {
+            return work.persistedPermissions.isEmpty()
+                    ? Collections.emptyList()
+                    : new ArrayList<>(work.persistedPermissions.keySet());
+        }
     }
 
     /** Unfinished transfers a closed Files page left running; 0 for none. */

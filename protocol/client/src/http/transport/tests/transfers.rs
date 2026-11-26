@@ -400,3 +400,89 @@ fn a_stopped_download_ends_mid_transfer() {
     assert!((1024 * 1024..1024 * 1024 + 16 * 1024).contains(&got), "{got}");
     server.join().unwrap();
 }
+
+#[test]
+fn late_1xx_responses_are_skipped_and_downloads_stop_at_content_length() {
+    let host_name = Host::parse("127.0.0.1").unwrap();
+
+    // Late 100 Continue arriving right before the final response after CONTINUE_WAIT elapsed.
+    let (port, server) = host(|mut socket| {
+        let head = read_head_of(&mut socket);
+        let length: usize = head
+            .lines()
+            .find_map(|l| l.strip_prefix("Content-Length: "))
+            .unwrap()
+            .parse()
+            .unwrap();
+        let mut body = vec![0; length];
+        socket.read_exact(&mut body).unwrap();
+        socket
+            .write_all(b"HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+            .unwrap();
+    });
+    let response = upload(
+        &transfer(&host_name, port, "files"),
+        &Cancel::default(),
+        Upload {
+            reader: &mut &b"hello"[..],
+            length: 5,
+            content_type: "application/octet-stream",
+            method: "POST",
+        },
+        &mut |_, _| {},
+        &Cancel::default(),
+    )
+    .unwrap();
+    assert_eq!((response.status, response.body.as_slice()), (200, &b"ok"[..]));
+    server.join().unwrap();
+
+    // Keep-alive download with Content-Length returns immediately without waiting for EOF.
+    let (port, server) = host(|mut socket| {
+        read_head_of(&mut socket);
+        socket
+            .write_all(b"HTTP/1.1 103 Early Hints\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello")
+            .unwrap();
+        std::thread::sleep(Duration::from_secs(2));
+    });
+    let start = std::time::Instant::now();
+    let mut sink = Vec::new();
+    let res = download_optional(
+        &transfer(&host_name, port, "opt"),
+        &Cancel::default(),
+        &mut sink,
+        &mut |_, _| {},
+        &Cancel::default(),
+    )
+    .unwrap();
+    assert_eq!((res.status, sink.as_slice()), (200, &b"hello"[..]));
+    assert!(start.elapsed() < Duration::from_secs(1));
+    let _ = server.join();
+}
+
+#[test]
+fn classic_http_send_enforces_overall_deadline_across_trickled_chunks() {
+    let host_name = Host::parse("127.0.0.1").unwrap();
+    let (port, server) = host(|mut socket| {
+        read_head_of(&mut socket);
+        let _ = socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n");
+        for _ in 0..30 {
+            if socket.write_all(b"a").is_err() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(80));
+        }
+    });
+    let mut req = transfer(&host_name, port, "slow");
+    req.timeouts = Timeouts {
+        connect: Duration::from_millis(100),
+        read: Some(Duration::from_millis(200)),
+    };
+    let started = std::time::Instant::now();
+    let err = send(&req, &Cancel::default(), None).unwrap_err();
+    assert!(
+        matches!(&err, Error::Io(e) if matches!(e.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock)),
+        "{err:?}"
+    );
+    assert!(started.elapsed() < Duration::from_secs(2));
+    let _ = server.join();
+}

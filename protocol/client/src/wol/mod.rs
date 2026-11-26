@@ -7,6 +7,7 @@ mod tests;
 
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV6, ToSocketAddrs, UdpSocket};
+use std::time::Duration;
 
 pub use nightjar_policy::wol::{
     Links, MAX_BROADCASTS, MAX_MACS, NO_MAC, Plan, WAKE_POLL_INTERVAL_MS, WakeLaunch, WakeStep,
@@ -103,12 +104,23 @@ pub fn plan(host: &WakeHost<'_>, links: &Links) -> Result<Plan, String> {
 /// succeeded (`best_effort` IPv6 all-nodes failures alone do not fail the wake).
 pub fn send(
     plan: &Plan,
+    send: impl FnMut(&[u8], SocketAddr) -> io::Result<()>,
+) -> Result<(), String> {
+    send_with_gap(plan, Duration::ZERO, send)
+}
+
+fn send_with_gap(
+    plan: &Plan,
+    burst_gap: std::time::Duration,
     mut send: impl FnMut(&[u8], SocketAddr) -> io::Result<()>,
 ) -> Result<(), String> {
     let mut sent = false;
     let mut error = String::from("No Wake-on-LAN destination could be reached.");
     let mut best_effort_failures = 0usize;
-    for _ in 0..3 {
+    for burst in 0..3 {
+        if burst > 0 && !burst_gap.is_zero() {
+            std::thread::sleep(burst_gap);
+        }
         for payload in &plan.payloads {
             for destination in &plan.destinations {
                 match send(payload, *destination) {
@@ -134,7 +146,7 @@ pub fn send_udp(plan: &Plan) -> Result<(), String> {
     let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).map_err(|e| e.to_string())?;
     socket.set_broadcast(true).map_err(|e| e.to_string())?;
     let ipv6 = UdpSocket::bind("[::]:0").ok();
-    send(plan, |payload, destination| {
+    send_with_gap(plan, std::time::Duration::from_millis(10), |payload, destination| {
         let sock = if destination.is_ipv4() {
             &socket
         } else {

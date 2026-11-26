@@ -7,6 +7,7 @@ mod defaults_gen;
 mod enums;
 mod host;
 mod migrate;
+mod override_fields;
 mod profiles;
 mod store;
 
@@ -133,6 +134,8 @@ pub struct Settings {
     pub overlay: bool,
     pub overlay_mode: OverlayMode,
     pub overlay_position: OverlayCorner,
+    /// Append this device's battery percentage and local clock time to the compact performance overlay.
+    pub compact_overlay_device_info: bool,
     pub mouse_mode: MouseMode,
     pub mouse_speed: u32,
     pub mouse_nav_buttons: bool,
@@ -489,6 +492,10 @@ impl Settings {
         ]
         .into_iter()
         .find_map(|(on, why)| on.then_some(why))
+    }
+    /// Whether setting key `key` differs between `self` and `other`, without JSON serialization.
+    pub fn field_differs(&self, other: &Self, key: &str) -> bool {
+        override_fields::field_differs(self, other, key).unwrap_or(false)
     }
 }
 

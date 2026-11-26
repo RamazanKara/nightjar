@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use nightjar_policy::console as policy;
 use nightjar_policy::http::native_api::library::{Game, Library};
@@ -41,17 +42,22 @@ pub struct Source<'a> {
     pub online: bool,
     pub paired: bool,
     pub library: Option<&'a Library>,
+    pub(crate) shared_library: Option<&'a Arc<Library>>,
     pub classic: bool,
     pub last_played: Option<&'a BTreeMap<String, u64>>,
+    pub(crate) shared_last_played: Option<&'a Arc<BTreeMap<String, u64>>>,
     pub playtime_minutes: Option<&'a BTreeMap<String, u64>>,
+    pub(crate) shared_playtime_minutes: Option<&'a Arc<BTreeMap<String, u64>>>,
     pub collections: Option<&'a BTreeMap<String, Vec<String>>>,
+    pub(crate) shared_collections: Option<&'a Arc<BTreeMap<String, Vec<String>>>>,
     pub session: Option<&'a Session>,
     pub host_control: bool,
 }
 
 impl<'a> Source<'a> {
     pub fn of(host: &'a Host) -> Self {
-        let library = host.native.library.as_ref().or(host.classic.as_ref());
+        let library_arc = host.library_arc();
+        let library = library_arc.map(Arc::as_ref);
         let classic = host.native.library.is_none() && host.classic.is_some();
         Self {
             id: host.id,
@@ -60,10 +66,14 @@ impl<'a> Source<'a> {
             online: host.reach == Reach::Online,
             paired: host.paired(),
             library,
+            shared_library: library_arc,
             classic,
-            last_played: (!host.native.last_played.is_empty()).then_some(&host.native.last_played),
-            playtime_minutes: (!host.native.playtime_minutes.is_empty()).then_some(&host.native.playtime_minutes),
-            collections: (!host.native.collections.is_empty()).then_some(&host.native.collections),
+            last_played: (!host.native.last_played.is_empty()).then_some(host.native.last_played.as_ref()),
+            shared_last_played: (!host.native.last_played.is_empty()).then_some(&host.native.last_played),
+            shared_playtime_minutes: (!host.native.playtime_minutes.is_empty()).then_some(&host.native.playtime_minutes),
+            shared_collections: (!host.native.collections.is_empty()).then_some(&host.native.collections),
+            playtime_minutes: (!host.native.playtime_minutes.is_empty()).then_some(host.native.playtime_minutes.as_ref()),
+            collections: (!host.native.collections.is_empty()).then_some(host.native.collections.as_ref()),
             session: host.native.session.as_ref(),
             host_control: host
                 .native
@@ -232,13 +242,13 @@ impl Merged {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 struct MemoKey {
     sources: Vec<SourceSig>,
     hidden: Vec<Favourite>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 struct SourceSig {
     id: u64,
     unique_id: String,
@@ -247,11 +257,36 @@ struct SourceSig {
     paired: bool,
     classic: bool,
     host_control: bool,
-    library: Option<Library>,
-    last_played: Option<BTreeMap<String, u64>>,
-    playtime_minutes: Option<BTreeMap<String, u64>>,
-    collections: Option<BTreeMap<String, Vec<String>>>,
+    library: Option<Arc<Library>>,
+    last_played: Option<Arc<BTreeMap<String, u64>>>,
+    playtime_minutes: Option<Arc<BTreeMap<String, u64>>>,
+    collections: Option<Arc<BTreeMap<String, Vec<String>>>>,
     session: Option<nightjar_policy::http::native_api::session::Session>,
+}
+
+fn arc_opt_eq<T: PartialEq>(cached: &Option<Arc<T>>, shared: Option<&Arc<T>>, borrowed: Option<&T>) -> bool {
+    match (cached, shared, borrowed) {
+        (Some(a), Some(b), _) => Arc::ptr_eq(a, b) || a.as_ref() == b.as_ref(),
+        (a, None, b) => a.as_deref() == b,
+        (None, Some(_), _) => false,
+    }
+}
+
+impl SourceSig {
+    fn matches(&self, s: &Source<'_>) -> bool {
+        self.id == s.id
+            && self.unique_id == s.unique_id
+            && self.name == s.name
+            && self.online == s.online
+            && self.paired == s.paired
+            && self.classic == s.classic
+            && self.host_control == s.host_control
+            && self.session.as_ref() == s.session
+            && arc_opt_eq(&self.library, s.shared_library, s.library)
+            && arc_opt_eq(&self.last_played, s.shared_last_played, s.last_played)
+            && arc_opt_eq(&self.playtime_minutes, s.shared_playtime_minutes, s.playtime_minutes)
+            && arc_opt_eq(&self.collections, s.shared_collections, s.collections)
+    }
 }
 
 #[derive(Default)]
@@ -262,6 +297,13 @@ pub struct LibraryMemo {
 
 impl LibraryMemo {
     pub fn get(&self, sources: &[Source<'_>], hidden: &[Favourite]) -> Rc<Merged> {
+        if let Some((prev_key, prev)) = self.cached.borrow().as_ref()
+            && prev_key.hidden == hidden
+            && prev_key.sources.len() == sources.len()
+            && prev_key.sources.iter().zip(sources).all(|(sig, s)| sig.matches(s))
+        {
+            return Rc::clone(prev);
+        }
         let key = MemoKey {
             sources: sources
                 .iter()
@@ -273,20 +315,15 @@ impl LibraryMemo {
                     paired: s.paired,
                     classic: s.classic,
                     host_control: s.host_control,
-                    library: s.library.cloned(),
-                    last_played: s.last_played.cloned(),
-                    playtime_minutes: s.playtime_minutes.cloned(),
-                    collections: s.collections.cloned(),
+                    library: s.shared_library.cloned().or_else(|| s.library.cloned().map(Arc::new)),
+                    last_played: s.shared_last_played.cloned().or_else(|| s.last_played.cloned().map(Arc::new)),
+                    playtime_minutes: s.shared_playtime_minutes.cloned().or_else(|| s.playtime_minutes.cloned().map(Arc::new)),
+                    collections: s.shared_collections.cloned().or_else(|| s.collections.cloned().map(Arc::new)),
                     session: s.session.cloned(),
                 })
                 .collect(),
             hidden: hidden.to_vec(),
         };
-        if let Some((prev_key, prev)) = self.cached.borrow().as_ref()
-            && prev_key == &key
-        {
-            return Rc::clone(prev);
-        }
         let merged = Rc::new(Merged::of(sources, hidden));
         *self.merges.borrow_mut() += 1;
         *self.cached.borrow_mut() = Some((key, Rc::clone(&merged)));
@@ -418,11 +455,15 @@ pub fn host_line(source: &Source<'_>) -> HostLine {
 }
 
 pub fn list_line(entry: &Entry, played: Option<u64>, now: u64) -> String {
+    list_line_with_day(entry, played, now, crate::platform_hooks::hooks().local_day)
+}
+
+pub(crate) fn list_line_with_day(entry: &Entry, played: Option<u64>, now: u64, local_day: fn(u64) -> i64) -> String {
     let when = played.map(|at| {
         if at == 0 {
             tr("Not played yet").to_owned()
         } else {
-            let days = now.saturating_sub(at) / 86_400;
+            let days = (local_day(now) - local_day(at)).max(0);
             match days {
                 0 => tr("Played today").to_owned(),
                 1 => tr("Played yesterday").to_owned(),

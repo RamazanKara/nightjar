@@ -144,3 +144,131 @@ fn exchange_rejects_https_downgrade_converts_post_302_and_parses_retry_after() {
     assert_eq!(bad_res.status, 429);
     assert_eq!(bad_res.retry_after, None);
 }
+
+#[test]
+fn url_strips_fragments_and_post_without_body_sets_content_length_zero() {
+    let fixture = TlsFixture::start(|path, port| match path {
+        "/items" => TlsReply::Raw(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok".to_vec()),
+        "/redir" => TlsReply::Raw(
+            format!("HTTP/1.1 302 Found\r\nLocation: https://127.0.0.1:{port}/items#done\r\nContent-Length: 0\r\n\r\n")
+                .into_bytes(),
+        ),
+        _ => TlsReply::Raw(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".to_vec()),
+    });
+    let parsed = Url::parse("https://Example.COM/path?a=1#frag").unwrap();
+    assert_eq!(parsed.host, "example.com");
+    assert_eq!(parsed.path, "/path?a=1");
+    let resolved = parsed.resolve("/rel?x=1#section").unwrap();
+    assert_eq!(resolved.path, "/rel?x=1");
+    assert!(Url::parse("https://example.com#only-frag").unwrap().path == "/");
+
+    let trusted =
+        WebPkiTransport::with_roots_for_test("Nightjar/test".into(), fixture.roots.clone());
+    let post_url = Url::parse(&fixture.url("/items#ignore")).unwrap();
+    let post_res = trusted.exchange("POST", &post_url, &[], None, false).unwrap();
+    assert_eq!(post_res.status, 200);
+    let redir_url = Url::parse(&fixture.url("/redir")).unwrap();
+    assert_eq!(
+        trusted.exchange("GET", &redir_url, &[], None, true).unwrap().status,
+        200
+    );
+
+    let seen = fixture.seen_requests.lock().unwrap();
+    assert!(seen[0].starts_with("POST /items HTTP/1.1\r\n"));
+    assert!(seen[0].contains("Content-Length: 0\r\n"));
+    assert!(!seen[0].contains("#ignore"));
+    assert!(seen[2].starts_with("GET /items HTTP/1.1\r\n"));
+    assert!(!seen[2].contains("#done"));
+}
+
+#[test]
+fn exchange_rejects_cross_origin_307_with_body_and_strips_unlisted_headers() {
+    let second = TlsFixture::start(|path, _| match path {
+        "/dest" => TlsReply::Raw(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok".to_vec()),
+        _ => TlsReply::Raw(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".to_vec()),
+    });
+    let dest_url = second.url("/dest");
+    let dest_302 = dest_url.clone();
+    let dest_307 = dest_url;
+    let first = TlsFixture::start(move |path, _| match path {
+        "/302" => TlsReply::Raw(
+            format!("HTTP/1.1 302 Found\r\nLocation: {dest_302}\r\nContent-Length: 0\r\n\r\n")
+                .into_bytes(),
+        ),
+        "/307" => TlsReply::Raw(
+            format!("HTTP/1.1 307 Temporary Redirect\r\nLocation: {dest_307}\r\nContent-Length: 0\r\n\r\n")
+                .into_bytes(),
+        ),
+        _ => TlsReply::Raw(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".to_vec()),
+    });
+    let mut roots = rustls::RootCertStore::empty();
+    roots.add(first.ca_cert.clone()).unwrap();
+    roots.add(second.ca_cert.clone()).unwrap();
+    let trusted = WebPkiTransport::with_roots_for_test("Nightjar/test".into(), roots);
+
+    let ok = trusted
+        .exchange(
+            "GET",
+            &Url::parse(&first.url("/302")).unwrap(),
+            &[
+                ("X-Api-Key".into(), "secret-unlisted".into()),
+                ("Cookie".into(), "session=xyz".into()),
+                ("Accept".into(), "application/json".into()),
+            ],
+            None,
+            true,
+        )
+        .unwrap();
+    assert_eq!(ok.status, 200);
+    let second_req = &second.seen_requests.lock().unwrap()[0];
+    assert!(!second_req.contains("secret-unlisted"));
+    assert!(!second_req.contains("session=xyz"));
+    assert!(second_req.contains("Accept: application/json\r\n"));
+
+    let err = trusted
+        .exchange(
+            "POST",
+            &Url::parse(&first.url("/307")).unwrap(),
+            &[],
+            Some(b"body"),
+            true,
+        )
+        .unwrap_err();
+    assert!(err.contains("307"), "unexpected 307 error: {err}");
+}
+
+#[test]
+fn download_to_path_uses_distinct_part_files_and_get_skips_100_continue() {
+    use super::net::Transport;
+
+    let fixture = TlsFixture::start(|path, _| match path {
+        "/a.png" => TlsReply::Raw(
+            b"HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\npng"
+                .to_vec(),
+        ),
+        "/a.jpg" => TlsReply::Raw(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\njpg".to_vec()),
+        _ => TlsReply::Raw(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".to_vec()),
+    });
+    let trusted =
+        WebPkiTransport::with_roots_for_test("Nightjar/test".into(), fixture.roots.clone());
+    let resp = trusted
+        .get(&Url::parse(&fixture.url("/a.png")).unwrap(), false)
+        .unwrap();
+    assert_eq!(resp.status, 200);
+
+    let dir = std::env::temp_dir().join("nightjar-update-part-ext-test");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // Pre-create `a.png.part` as a directory so `a.png` would fail if `.part` collides with `a.jpg`,
+    // proving `a.jpg` uses `a.jpg.part` instead of `a.part`.
+    std::fs::create_dir_all(dir.join("a.png.part")).unwrap();
+    let jpg = dir.join("a.jpg");
+    assert_eq!(
+        trusted
+            .download_to_path(&Url::parse(&fixture.url("/a.jpg")).unwrap(), &jpg, false)
+            .unwrap(),
+        200
+    );
+    assert_eq!(std::fs::read(&jpg).unwrap(), b"jpg");
+    let _ = std::fs::remove_dir_all(&dir);
+}

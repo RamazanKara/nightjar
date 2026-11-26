@@ -16,8 +16,16 @@ use serde_json::{Map, Value, json};
 
 use crate::native_api;
 
-fn family_name(family: Family) -> String {
-    format!("{family:?}").to_ascii_uppercase()
+fn family_name(family: Family) -> &'static str {
+    use Family::*;
+    match family {
+        GameStream => "GAMESTREAM",
+        Sunshine => "SUNSHINE",
+        Apollo => "APOLLO",
+        Vibepollo => "VIBEPOLLO",
+        Rubylight => "RUBYLIGHT",
+        Unknown => "UNKNOWN",
+    }
 }
 
 fn feature_key(feature: Feature) -> &'static str {
@@ -268,5 +276,15 @@ mod tests {
         )))
         .unwrap();
         assert_eq!(out["error"], "json");
+    }
+
+    #[test]
+    fn family_name_matches_expected_uppercase_variants() {
+        assert_eq!(family_name(Family::GameStream), "GAMESTREAM");
+        assert_eq!(family_name(Family::Sunshine), "SUNSHINE");
+        assert_eq!(family_name(Family::Apollo), "APOLLO");
+        assert_eq!(family_name(Family::Vibepollo), "VIBEPOLLO");
+        assert_eq!(family_name(Family::Rubylight), "RUBYLIGHT");
+        assert_eq!(family_name(Family::Unknown), "UNKNOWN");
     }
 }

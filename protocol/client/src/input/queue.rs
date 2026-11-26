@@ -102,7 +102,7 @@ enum Entry {
 
 /// Whether `entry` is something going up: a key or button release, a neutral controller, or a
 /// touch, pen or controller contact ending. A full queue keeps [`RELEASE_RESERVE`] for these.
-fn is_release(entry: &Entry) -> bool {
+fn is_release(entry: &Entry, touchpad_buttons: u8) -> bool {
     match entry {
         Entry::Event(Pending { event, .. }) => match event {
             InputEvent::Keyboard { down, .. } | InputEvent::MouseButton { down, .. } => !*down,
@@ -118,17 +118,17 @@ fn is_release(entry: &Entry) -> bool {
                 contacts,
                 ..
             } => {
-                *buttons == 0
-                    && (*count == 0
-                        || contacts[..usize::from(*count).min(contacts.len())].iter().any(|c| {
-                            matches!(
-                                c.event,
-                                touch_event::UP
-                                    | touch_event::CANCEL
-                                    | touch_event::CANCEL_ALL
-                                    | touch_event::HOVER_LEAVE
-                            )
-                        }))
+                (*buttons == 0 && touchpad_buttons != 0)
+                    || *count == 0
+                    || contacts[..usize::from(*count).min(contacts.len())].iter().any(|c| {
+                        matches!(
+                            c.event,
+                            touch_event::UP
+                                | touch_event::CANCEL
+                                | touch_event::CANCEL_ALL
+                                | touch_event::HOVER_LEAVE
+                        )
+                    })
             }
             _ => false,
         },
@@ -320,7 +320,10 @@ impl InputQueue {
     fn offer(&mut self, entry: Entry) -> Result<(), InputError> {
         if self.entries.len() >= MAX_QUEUED {
             let made_room = self.drop_unreliable();
-            if !made_room && (!is_release(&entry) || self.entries.len() >= MAX_QUEUED + RELEASE_RESERVE) {
+            if !made_room
+                && (!is_release(&entry, self.touchpad_buttons)
+                    || self.entries.len() >= MAX_QUEUED + RELEASE_RESERVE)
+            {
                 return Err(InputError::QueueFull);
             }
         }

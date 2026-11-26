@@ -326,9 +326,6 @@ final class GameFingerTouchHandler {
         int eventY = (int)(event.getY(actionIndex) + yOffset);
 
         TouchContext context = getTouchContext(actionIndex);
-        if (context == null) {
-            return false;
-        }
 
         switch (event.getActionMasked())
         {
@@ -337,19 +334,27 @@ final class GameFingerTouchHandler {
             for (TouchContext touchContext : touchContextMap) {
                 touchContext.setPointerCount(event.getPointerCount());
             }
+            if (context == null) {
+                return false;
+            }
             context.touchDownEvent(eventX, eventY, event.getEventTime(), true);
             break;
         case MotionEvent.ACTION_POINTER_UP:
         case MotionEvent.ACTION_UP:
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && (event.getFlags() & MotionEvent.FLAG_CANCELED) != 0) {
-                context.cancelTouch();
-            }
-            else {
-                context.touchUpEvent(eventX, eventY, event.getEventTime());
+            if (context != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && (event.getFlags() & MotionEvent.FLAG_CANCELED) != 0) {
+                    context.cancelTouch();
+                }
+                else {
+                    context.touchUpEvent(eventX, eventY, event.getEventTime());
+                }
             }
 
             for (TouchContext touchContext : touchContextMap) {
                 touchContext.setPointerCount(event.getPointerCount() - 1);
+            }
+            if (context == null) {
+                return false;
             }
             if (actionIndex == 0 && event.getPointerCount() > 1 && !context.isCancelled()) {
                 // The original secondary touch now becomes primary

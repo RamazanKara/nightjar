@@ -77,6 +77,7 @@ public final class HostActions {
     private HostWaker waker;
     private ComputerDetails wakeComputer;
     private AlertDialog errorDialog;
+    private final java.util.List<AlertDialog> trackedDialogs = new java.util.ArrayList<>();
 
     public HostActions(Activity activity, Callbacks callbacks) {
         this.activity = activity;
@@ -107,6 +108,21 @@ public final class HostActions {
         updateFlow = null;
         dismissUpdateDialog();
         closeCoop();
+        if (errorDialog != null) { errorDialog.dismiss(); errorDialog = null; }
+        for (AlertDialog dialog : new java.util.ArrayList<>(trackedDialogs)) {
+            if (dialog.isShowing()) {
+                dialog.dismiss();
+            }
+        }
+        trackedDialogs.clear();
+    }
+
+    private AlertDialog trackDialog(AlertDialog dialog) {
+        if (dialog != null) {
+            trackedDialogs.removeIf(existing -> !existing.isShowing());
+            trackedDialogs.add(dialog);
+        }
+        return dialog;
     }
 
     private ComputerManagerService.ComputerManagerBinder binderForOnline(
@@ -135,8 +151,8 @@ public final class HostActions {
     public void pairWithLink(ComputerDetails computer, PairingLink link) { pair(computer, link.otp, link.passphrase, link); }
 
     public void pairWithOneTimePin(final ComputerDetails computer) {
-        HostFlowRoutes.showPairOneTimePinDialog(activity, computer,
-                (pinValue, passphraseValue) -> pair(computer, pinValue, passphraseValue, null));
+        trackDialog(HostFlowRoutes.showPairOneTimePinDialog(activity, computer,
+                (pinValue, passphraseValue) -> pair(computer, pinValue, passphraseValue, null)));
     }
 
     public synchronized void cancelPairing() {
@@ -295,7 +311,8 @@ public final class HostActions {
 
     private PairingDialogs pairingDialogs() {
         return new PairingDialogs(activity, (title, message) -> showError(title, message, null),
-                task -> new Thread(task, "Approve device").start(), main::post, callbacks::pairingChanged);
+                task -> new Thread(task, "Approve device").start(), main::post, callbacks::pairingChanged,
+                this::trackDialog);
     }
 
     public void pairAnother(ComputerDetails computer) {
@@ -364,7 +381,7 @@ public final class HostActions {
 
     void showSleepConfirm(final ComputerDetails computer, final Runnable sleep) {
         if (gone()) return;
-        new NavigationDialogBuilder(activity).startOnCancel()
+        trackDialog(new NavigationDialogBuilder(activity).startOnCancel()
                 .setTitle(activity.getString(R.string.host_sleep_title, computer.displayName()))
                 .setMessage(R.string.host_sleep_message)
                 .setNegativeButton(android.R.string.cancel, null)
@@ -372,7 +389,7 @@ public final class HostActions {
                     showSleepProgress();
                     sleep.run();
                 })
-                .show();
+                .show());
     }
 
     @VisibleForTesting
@@ -431,6 +448,7 @@ public final class HostActions {
                 .create();
         dialog.setOnShowListener(shown -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
         dialog.show();
+        trackDialog(dialog);
     }
 
     @VisibleForTesting
@@ -532,12 +550,13 @@ public final class HostActions {
     }
 
     public void confirmUnpair(final ComputerDetails computer) {
-        new NavigationDialogBuilder(activity).startOnCancel()
+        if (gone()) return;
+        trackDialog(new NavigationDialogBuilder(activity).startOnCancel()
                 .setTitle(activity.getString(R.string.host_unpair_title, computer.displayName()))
                 .setMessage(R.string.host_unpair_message)
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(R.string.pcview_menu_unpair_pc, (dialog, which) -> unpair(computer))
-                .show();
+                .show());
     }
 
     @VisibleForTesting
@@ -549,11 +568,13 @@ public final class HostActions {
     }
 
     public void rename(final ComputerDetails computer) {
-        HostFlowRoutes.showRenameDialog(activity, computer, typed -> saveName(computer, typed));
+        if (gone()) return;
+        trackDialog(HostFlowRoutes.showRenameDialog(activity, computer, typed -> saveName(computer, typed)));
     }
 
     public void chooseAddress(final ComputerDetails computer) {
-        HostFlowRoutes.showChooseAddressDialog(activity, computer, address -> pinAddress(computer, address));
+        if (gone()) return;
+        trackDialog(HostFlowRoutes.showChooseAddressDialog(activity, computer, address -> pinAddress(computer, address)));
     }
 
     @VisibleForTesting

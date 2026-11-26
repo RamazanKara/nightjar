@@ -90,13 +90,31 @@ impl Launcher {
                 if let Some(app) = running_app_id(host) {
                     request_cover_unseen(ui, view, id, app as u32, commands);
                 }
-                for (row, chunk) in shown.chunks(columns).enumerate() {
+                let total_rows = shown.len().div_ceil(columns);
+                let mut pinned = Vec::with_capacity(3);
+                if self.focus_screen {
+                    let target = running
+                        .and_then(|r| shown.iter().position(|app| app.matches_running_app(r, None)))
+                        .unwrap_or(0);
+                    push_pinned_row(&mut pinned, (!shown.is_empty()).then_some(target / columns));
+                }
+                for wanted in [&self.restore_key, &self.focused_key].into_iter().flatten() {
+                    if let Some(raw) = wanted.strip_prefix("app:")
+                        && let Ok(app_id) = raw.parse::<i32>()
+                        && let Some(pos) = shown.iter().position(|app| app.id == app_id)
+                    {
+                        push_pinned_row(&mut pinned, Some(pos / columns));
+                    }
+                }
+                draw_culled_rows(ui, total_rows, cover_height(width), &pinned, |ui, row| {
+                    let start = row * columns;
+                    let chunk = &shown[start..(start + columns).min(shown.len())];
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = POSTER_GAP;
                         for (i, app) in chunk.iter().enumerate() {
                             let is_running = running.is_some_and(|r| app.matches_running_app(r, None));
                             let art = shown_art(view, id, app.id as u32);
-                            let response = bare_poster(ui, &app.name, art, if is_running { Badge::Running } else { Badge::None }, width);
+                            let response = bare_poster(ui, Id::unique(("cover-in", id, app.id)), &app.name, art, if is_running { Badge::Running } else { Badge::None }, width);
                             request_cover(ui, view, id, app.id as u32, &response, commands);
                             let first = if running.is_some() { is_running } else { row == 0 && i == 0 };
                             let key = format!("app:{}", app.id);
@@ -111,7 +129,7 @@ impl Launcher {
                             }
                         }
                     });
-                }
+                });
                 // A focused-but-unloaded first poster still gets focus next frame.
                 if self.focus_screen && running.is_some() {
                     self.focus_screen = false;
@@ -393,15 +411,30 @@ impl Launcher {
         // clear of the chips, with a gap.
         ui.add_space(ring_clearance(width).max(LIFT));
         ui.spacing_mut().item_spacing.y = GRID_ROW_GAP;
+        let total_rows = shown.len().div_ceil(columns);
+        let mut pinned = Vec::with_capacity(3);
+        if self.focus_screen && self.restore_key.is_none() {
+            push_pinned_row(&mut pinned, Some(0));
+        }
+        for wanted in [&self.restore_key, &self.focused_key].into_iter().flatten() {
+            if let Some(game_key) = wanted.strip_prefix("game:")
+                && let Some(pos) = shown.iter().position(|e| e.key == game_key)
+            {
+                push_pinned_row(&mut pinned, Some(pos / columns));
+            }
+        }
         let mut first = true;
-        for line in shown.chunks(columns) {
+        draw_culled_rows(ui, total_rows, cover_height(width) + POSTER_CAPTION, &pinned, |ui, row_idx| {
+            let start = row_idx * columns;
+            let line = &shown[start..(start + columns).min(shown.len())];
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = POSTER_GAP;
-                for entry in line {
-                    self.library_cover(ui, view, None, entry, width, std::mem::take(&mut first), commands);
+                for (col_idx, entry) in line.iter().enumerate() {
+                    let is_first = row_idx == 0 && col_idx == 0 && std::mem::take(&mut first);
+                    self.library_cover(ui, view, None, entry, width, is_first, commands);
                 }
             });
-        }
+        });
         ui.add_space(space::L);
     }
 
@@ -417,7 +450,8 @@ impl Launcher {
         } else {
             Badge::None
         };
-        let response = list_row(ui, &entry.title, line, art, badge, width);
+        let cover_id = cover.map_or_else(|| Id::unique(("cover-in", &entry.key)), |c| Id::unique(("cover-in", c.host, c.app_id)));
+        let response = list_row(ui, cover_id, &entry.title, line, art, badge, width);
         if let Some(c) = cover {
             request_cover(ui, view, c.host, c.app_id, &response, commands);
         }
@@ -446,7 +480,8 @@ impl Launcher {
             Badge::None
         };
         // Named under the cover, on Home's shelves and in the grid of all games alike.
-        let response = poster(ui, &entry.title, art, badge, width);
+        let cover_id = cover.map_or_else(|| Id::unique(("cover-in", &entry.key)), |c| Id::unique(("cover-in", c.host, c.app_id)));
+        let response = poster(ui, cover_id, &entry.title, art, badge, width);
         if let Some(c) = cover {
             request_cover(ui, view, c.host, c.app_id, &response, commands);
         }

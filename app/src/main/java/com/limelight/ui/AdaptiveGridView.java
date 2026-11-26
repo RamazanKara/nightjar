@@ -482,17 +482,33 @@ public class AdaptiveGridView extends GridView {
         return position == INVALID_POSITION || position % columns == columns - 1 || position == getCount() - 1;
     }
 
-    boolean isActionMarked() {
+    private Runnable onMarkChanged;
+
+    public void setOnMarkChanged(Runnable listener) {
+        onMarkChanged = listener;
+    }
+
+    public boolean isActionMarked() {
         return markedAction != null;
+    }
+
+    public boolean clearMarkedAction() {
+        if (markedAction == null) return false;
+        markAction(null);
+        return true;
     }
 
     private void markAction(View action) {
         if (markedAction == action) return;
+        boolean wasMarked = markedAction != null;
         // Hover is the one state a card does not pass down to its children, so it can mark the button
         // alone; the button's background draws the same ring as a focused icon button.
         if (markedAction != null) markedAction.setHovered(false);
         markedAction = action;
         if (action != null) action.setHovered(true);
+        if (wasMarked != (markedAction != null) && onMarkChanged != null) {
+            onMarkChanged.run();
+        }
     }
 
     /** The keys that move a grid's selection, which may leave the new card partly out of view. */

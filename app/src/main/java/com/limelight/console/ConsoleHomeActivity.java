@@ -145,7 +145,7 @@ public class ConsoleHomeActivity extends NightjarActivity implements HostFeed.Li
         scheduleReload();
         // A form change waited for the wake.
         followForm();
-    });
+    }, this::followFormSoon);
     /** Grid or rows, by store or not, the card size: the stored choice, else this device's look. */
     private HomeView view;
     private HomeModel model = HomeModel.empty();
@@ -230,6 +230,19 @@ public class ConsoleHomeActivity extends NightjarActivity implements HostFeed.Li
         reloadNow();
     };
     private final Runnable stopWaiting = () -> feed.stopWaiting();
+    private Object markedHostOwner;
+    private Runnable clearMarkedHost;
+    private final androidx.activity.OnBackPressedCallback unmarkBack =
+            new androidx.activity.OnBackPressedCallback(false) {
+                @Override
+                public void handleOnBackPressed() {
+                    Runnable clear = clearMarkedHost;
+                    clearMarkedHost = null;
+                    markedHostOwner = null;
+                    setEnabled(false);
+                    if (clear != null) clear.run();
+                }
+            };
 
     /** The data behind the screen; the debug demo overrides this with canned hosts. */
     protected ConsoleRepository createRepository(String uniqueId) {
@@ -252,6 +265,9 @@ public class ConsoleHomeActivity extends NightjarActivity implements HostFeed.Li
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        if (state == null) {
+            com.limelight.files.FileShareIntents.releaseStaleGrants(this, com.limelight.files.RunningTransfers.activeGrantUris());
+        }
         // Once per phone and app version; a task brought back with Home in front never creates the PC list, which asks too.
         DecoderBenchmark.runIfNeeded(this);
         setContentView(R.layout.activity_console_home);
@@ -260,6 +276,7 @@ public class ConsoleHomeActivity extends NightjarActivity implements HostFeed.Li
         TopAppBar.configure(this, R.id.console_toolbar, getString(R.string.console_title), 0);
         ShellBar.install(this, ShellBar.Destination.HOME);
         ShellBar.installBack(this, ShellBar.Destination.HOME);
+        getOnBackPressedDispatcher().addCallback(this, unmarkBack);
 
         loading = findViewById(R.id.console_loading);
         empty = findViewById(R.id.console_empty);
@@ -325,6 +342,16 @@ public class ConsoleHomeActivity extends NightjarActivity implements HostFeed.Li
             }
             @Override public void onHeroFocus(CharSequence go) {
                 if (go != null && hints != null) hints.onFocus(go, getString(R.string.console_hint_options));
+            }
+            @Override public void onHostMoreMark(Object owner, Runnable clear) {
+                if (clear != null) {
+                    markedHostOwner = owner;
+                    clearMarkedHost = clear;
+                } else if (markedHostOwner == owner) {
+                    markedHostOwner = null;
+                    clearMarkedHost = null;
+                }
+                unmarkBack.setEnabled(clearMarkedHost != null);
             }
         };
     }
@@ -623,11 +650,21 @@ public class ConsoleHomeActivity extends NightjarActivity implements HostFeed.Li
                     redrawAtNextPoll(mine);
                 }
             } catch (InterruptedException e) {
+                clearRefreshedSignature(mine);
                 Thread.currentThread().interrupt();
             } catch (RuntimeException e) {
+                clearRefreshedSignature(mine);
                 LimeLog.warning("Home could not load: " + e);
                 show(mine, ConsoleSnapshot.empty(), HomeModel.empty(), hosts.isEmpty(), true);
                 redrawAtNextPoll(mine);
+            }
+        });
+    }
+
+    private void clearRefreshedSignature(int mine) {
+        runOnUiThread(() -> {
+            if (mine == generation) {
+                refreshedSignature = null;
             }
         });
     }

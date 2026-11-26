@@ -179,7 +179,7 @@ fn offers() -> Vec<Offer> {
 #[cfg(target_os = "macos")]
 fn perform(offer: Offer) -> Result<(), String> {
     if offer.action != PowerAction::Sleep {
-        return Err("This Mac only offers sleep from Nightjar.".into());
+        return Err(crate::strings::tr("This Mac only offers sleep from Nightjar.").into());
     }
     let output = std::process::Command::new("/usr/bin/pmset")
         .arg("sleepnow")

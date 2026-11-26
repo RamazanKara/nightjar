@@ -155,20 +155,26 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
             } else if (held != null) {
                 held.end();
             }
-            if (keeper.work == null) keeper.work = new TransferWork(getApplication());
+            if (keeper.work == null) {
+                FileShareIntents.releaseStaleGrants(this, RunningTransfers.activeGrantUris());
+                keeper.work = new TransferWork(getApplication());
+            }
         }
         work = keeper.work;
         // Recreated after a configuration change, the screen goes on with what it had: a share is taken once.
         if (!work.opened) {
             work.opened = true;
+            work.shareConsumed = state != null && state.getBoolean("files_share_consumed", false);
             work.uuid = chosenPc(getIntent());
             int refused = 0;
             Uri report = forReport(getIntent()) ? ProblemReport.reportUri() : null;
-            for (Uri uri : sharedUris(getIntent())) {
-                if (sendable(uri, getPackageName(), FileShareIntents.providerPackage(this, uri), report)) {
-                    work.waiting.add(uri);
-                } else {
-                    refused++;
+            if (!work.shareConsumed) {
+                for (Uri uri : sharedUris(getIntent())) {
+                    if (sendable(uri, getPackageName(), FileShareIntents.providerPackage(this, uri), report)) {
+                        work.waiting.add(uri);
+                    } else {
+                        refused++;
+                    }
                 }
             }
             if (refused > 0) {
@@ -232,16 +238,21 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         if (isFinishing() || isDestroyed() || details.uuid == null) return;
         work.computers.put(details.uuid, details);
         if (work.uuid != null && work.uuid.equalsIgnoreCase(details.uuid)) {
-            boolean first = work.computer == null;
+            ComputerDetails previous = work.computer;
+            boolean first = previous == null;
             work.computer = details;
-            // The first time the PC is reachable: its endpoint and what this device may do there.
-            if (work.controller == null && details.state == ComputerDetails.State.ONLINE) {
+            // The first time the PC is reachable (or its endpoint changes while idle): refresh its controller.
+            if (details.state == ComputerDetails.State.ONLINE) {
                 HostEndpoint endpoint = manager == null ? null : HostEndpoint.of(details, manager.getUniqueId(),
                         PlatformBinding.getCryptoProvider(getApplicationContext()));
-                if (endpoint != null) {
+                if (endpoint != null && (work.controller == null
+                        || (!work.running() && !work.controller.host().sameAddress(endpoint)))) {
+                    if (work.controller != null) work.controller.close();
                     work.controller = new FileTransferController(work.engine, endpoint, work.workers,
                             work.handler::post, work);
                     loadAccess();
+                } else if (first) {
+                    render();
                 }
             } else if (first) {
                 render();
@@ -314,7 +325,10 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         if (uploadAccess != FileProblems.Access.READY || work.controller == null) return;
         List<Uri> now = new ArrayList<>(work.waiting);
         work.waiting.clear();
-        if (!now.isEmpty()) queueUploads(now);
+        if (!now.isEmpty()) {
+            work.shareConsumed = true;
+            queueUploads(now);
+        }
         render();
     }
 
@@ -361,6 +375,9 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
                     for (Uri uri : uris) {
                         SharedFile info = describe(resolver, uri);
                         queued.add(info);
+                        if (!owner.hasPersistedPermission(uri)) {
+                            owner.persistPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        }
                         // Non-persistable URIs (e.g. external shares) lose Activity-scoped grants on finish();
                         // capture a descriptor while the Activity is still alive so background uploads succeed.
                         preopened.add(info.size >= 0 && !owner.hasPersistedPermission(uri)
@@ -437,22 +454,23 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         work.pendingDownload = null;
         work.pendingRetry = -1;
         if (uri == null) return;
-        if (!work.persistPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION)) {
-            work.persistPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        }
         String name = FileShareIntents.displayName(getContentResolver(), uri,
                 entry != null ? entry.name : String.valueOf(uri.getLastPathSegment()));
-        Runnable discard = work.discard(uri, name);
+        ContentResolver resolver = getApplicationContext().getContentResolver();
+        boolean existedBefore = FileShareIntents.documentHasExistingContent(resolver, uri);
+        Runnable discard = work.discard(uri, name, !existedBefore);
         FileTransferController current = work.controller;
         if (current == null || (entry == null && retry < 0)) {
             // Android closed Nightjar while the save dialog was open: the download it was for is gone, and the
-            // document the dialog made would stay behind empty.
+            // document the dialog made would stay behind empty unless it held pre-existing content.
             Toast.makeText(this, R.string.files_save_lost, Toast.LENGTH_LONG).show();
             work.workers.execute(discard);
             return;
         }
-        ContentResolver resolver = getApplicationContext().getContentResolver();
-        FileTransferController.Opener opener = () -> FileShareIntents.detach(resolver.openFileDescriptor(uri, "w"));
+        if (!work.persistPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION)) {
+            work.persistPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        }
+        FileTransferController.Opener opener = () -> FileShareIntents.detach(resolver.openFileDescriptor(uri, "rwt"));
         if (retry >= 0) {
             current.retryDownload(retry, opener, discard);
         } else {
@@ -610,6 +628,7 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         super.onPause();
     }
 
+    @Override protected void onSaveInstanceState(Bundle outState) { super.onSaveInstanceState(outState); outState.putBoolean("files_share_consumed", work != null && work.shareConsumed); }
     @Override
     protected void onDestroy() {
         generation++;
@@ -644,6 +663,7 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         int pendingDescribes;
         /** The intent was read: its share is in {@link #waiting} or sent. */
         boolean opened;
+        boolean shareConsumed;
         String uuid;
         ComputerDetails computer;
         FileTransferEngine engine;
@@ -691,7 +711,7 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
         }
 
         boolean persistPermission(Uri uri, int flags) {
-            if (FileShareIntents.takePersistable(application.getContentResolver(), uri, flags)) {
+            if (FileShareIntents.takePersistable(application, application.getContentResolver(), uri, flags)) {
                 persistedPermissions.put(uri, flags);
                 return true;
             }
@@ -727,7 +747,7 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
             synchronized (persistedPermissions) {
                 ContentResolver resolver = application.getContentResolver();
                 for (Map.Entry<Uri, Integer> entry : persistedPermissions.entrySet()) {
-                    FileShareIntents.releasePersistable(resolver, entry.getKey(), entry.getValue());
+                    FileShareIntents.releasePersistable(application, resolver, entry.getKey(), entry.getValue());
                 }
                 persistedPermissions.clear();
             }
@@ -738,16 +758,22 @@ public class FileTransferActivity extends NightjarActivity implements FileTransf
             if (screen != null) screen.onUploaded();
         }
 
-        /** Deletes a download's document on a worker; one that stays is named on the screen. */
-        Runnable discard(Uri uri, String name) {
+        /** Deletes a newly created download's document on a worker unless it overwrote a pre-existing document. */
+        Runnable discard(Uri uri, String name, boolean deleteOnFailure) {
             ContentResolver resolver = getApplication().getContentResolver();
             return () -> {
+                if (!deleteOnFailure) return;
                 if (deleteDocument(resolver, uri)) return;
                 handler.post(() -> {
                     leftovers.add(name);
                     if (screen != null) screen.onLeftoversChanged();
                 });
             };
+        }
+
+        /** Deletes a download's document on a worker; one that stays is named on the screen. */
+        Runnable discard(Uri uri, String name) {
+            return discard(uri, name, true);
         }
 
         static boolean deleteDocument(ContentResolver resolver, Uri uri) {

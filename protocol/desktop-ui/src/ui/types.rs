@@ -22,7 +22,7 @@ pub enum Command {
     /// Only this device's microphone, on a PC that offers it (`Feature::MicOnly`).
     MicOnly { host: u64 },
     SetQuitOnLeave { host: u64, uuid: String, id: i32, enabled: bool },
-    QuitApp(u64),
+    QuitApp { host: u64, named: Option<i32> },
     ControlAction { host: u64, app: i32 },
     /// `named` is the app the prompt said would be closed; it is checked again before closing.
     QuitAndLaunch { host: u64, app: i32, named: Option<i32> },

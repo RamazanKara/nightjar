@@ -24,7 +24,7 @@ fn idle() -> Session {
 }
 
 fn source<'a>(id: u64, name: &'a str, online: bool, library: Option<&'a Library>, session: Option<&'a Session>) -> Source<'a> {
-    Source { id, unique_id: "", name, online, paired: true, library, classic: false, last_played: None, playtime_minutes: None, collections: None, session, host_control: false }
+    Source { id, unique_id: "", name, online, paired: true, library, shared_library: None, classic: false, last_played: None, shared_last_played: None, playtime_minutes: None, shared_playtime_minutes: None, collections: None, shared_collections: None, session, host_control: false }
 }
 
 const DOTA: u32 = 1093052211;

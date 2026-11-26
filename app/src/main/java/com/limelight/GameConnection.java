@@ -263,12 +263,7 @@ final class GameConnection {
         if (game.streamGuests != null) { game.streamGuests.stop(); game.streamGuests = null; }
         com.limelight.binding.usb.UsbForwarding detaching = game.usbForwarding;
         if (detaching != null) { detaching.stop(); game.usbForwarding = null; }
-        if (game.usbDriverBinder != null) {
-            game.usbDriverBinder.setListener(null);
-            game.usbDriverBinder.setStateListener(null);
-            game.usbDriverBinder.stop();
-            game.usbDriverBinder = null;
-        }
+        releaseUsbDriverBinder();
         if (game.connecting || game.connected) {
             game.connecting = game.connected = false;
             game.videoOutput.updatePipAutoEnter();
@@ -298,6 +293,16 @@ final class GameConnection {
         StringBuilder lines = new StringBuilder();
         for (StackTraceElement frame : stopping.getStackTrace()) lines.append("\n  at ").append(frame);
         return NightjarSessionJni.sessionStuckStopReport(true, lines.toString());
+    }
+
+    void releaseUsbDriverBinder() {
+        game.usbDriverReleased = true;
+        if (game.usbDriverBinder != null) {
+            game.usbDriverBinder.setListener(null);
+            game.usbDriverBinder.setStateListener(null);
+            game.usbDriverBinder.stop();
+            game.usbDriverBinder = null;
+        }
     }
 
     void streamMoved(String device) {

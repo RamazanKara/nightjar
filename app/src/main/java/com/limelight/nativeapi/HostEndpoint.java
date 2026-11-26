@@ -61,4 +61,23 @@ public final class HostEndpoint {
         }
         return pem.append("-----END CERTIFICATE-----\n").toString();
     }
+
+    /** True when another endpoint points at the same host address, ports, and pinned certificate. */
+    public boolean sameAddress(HostEndpoint other) {
+        return other != null
+                && java.util.Objects.equals(hostUuid, other.hostUuid)
+                && java.util.Objects.equals(address, other.address)
+                && httpPort == other.httpPort
+                && httpsPort == other.httpsPort
+                && java.util.Objects.equals(serverCertificatePem, other.serverCertificatePem);
+    }
+
+    /** True when the active host endpoint, HTTPS port, or pinned certificate changed between polls. */
+    public static boolean endpointChanged(ComputerDetails previous, ComputerDetails details) {
+        return previous == null
+                || details == null
+                || !java.util.Objects.equals(previous.activeAddress, details.activeAddress)
+                || previous.httpsPort != details.httpsPort
+                || !java.util.Objects.equals(previous.serverCert, details.serverCert);
+    }
 }

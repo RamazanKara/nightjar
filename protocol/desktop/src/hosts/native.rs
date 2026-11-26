@@ -13,9 +13,11 @@ pub const MOVE_WATCH_READS: u32 = 50;
 /// `work`'s answer, or an error when it takes longer than `wait`. It then ends on its own.
 pub(super) fn within<T: Send + 'static>(wait: Duration, work: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
     let (sender, answer) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
+    if let Err(err) = std::thread::Builder::new().name("native-timeout".into()).spawn(move || {
         let _ = sender.send(work());
-    });
+    }) {
+        return Err(format!("could not start request: {err}"));
+    }
     answer.recv_timeout(wait).unwrap_or_else(|_| Err(format!("no answer within {} ms", wait.as_millis())))
 }
 
@@ -39,6 +41,7 @@ impl Hosts {
             || host.native.library.is_none()
             || !host.native.library_live
             || host.native.full_at.is_none_or(|t| t.elapsed() >= NATIVE_FULL_INTERVAL);
+        let prev_full_at = host.native.full_at;
         host.native.loading = true;
         if full {
             host.native.full_at = Some(Instant::now());
@@ -47,7 +50,7 @@ impl Hosts {
         host.native_seq += 1;
         let (epoch, seq) = (host.native_epoch, host.native_seq);
         let record = host.connect_record();
-        self.run_on(id, Lane::Asked, move || {
+        if !self.run_on(id, Lane::Asked, move || {
             let result = client_for(&identity, &record, &record.address).and_then(|client| {
                 let (capabilities, library) = if full {
                     (
@@ -92,7 +95,12 @@ impl Hosts {
                 }
             });
             Some(Event::Native { id, epoch, seq, result })
-        });
+        }) && let Some(host) = self.get_mut(id) {
+            host.native.loading = false;
+            if full {
+                host.native.full_at = prev_full_at;
+            }
+        }
     }
 
     /// Whether this PC offers moving its game's stream between devices.
@@ -216,12 +224,12 @@ impl Hosts {
         for host in &mut self.list {
             if host.record.server_certificate.is_some() && !host.record.unique_id.is_empty() {
                 let saved = store.library(&host.record.unique_id);
-                host.native.last_played = saved.as_ref().map(|l| l.last_played.clone()).unwrap_or_default();
-                host.native.playtime_minutes = saved.as_ref().map(|l| l.playtime_minutes.clone()).unwrap_or_default();
-                host.native.collections = saved.as_ref().map(|l| l.collections.clone()).unwrap_or_default();
+                host.native.last_played = Arc::new(saved.as_ref().map(|l| l.last_played.clone()).unwrap_or_default());
+                host.native.playtime_minutes = Arc::new(saved.as_ref().map(|l| l.playtime_minutes.clone()).unwrap_or_default());
+                host.native.collections = Arc::new(saved.as_ref().map(|l| l.collections.clone()).unwrap_or_default());
                 // A PC without the native library: the app list it sent last.
                 let classic = saved.is_none().then(|| store.classic_apps(&host.record.unique_id)).flatten();
-                host.native.library = saved.map(|l| l.library);
+                host.native.library = saved.map(|l| Arc::new(l.library));
                 host.set_classic_apps(classic);
             }
         }
@@ -236,7 +244,7 @@ impl Hosts {
                 let host = self.get(id)?;
                 // A PC unpaired while its list was in flight must not get it back.
                 host.record.server_certificate.as_ref()?;
-                Some((host.record.unique_id.clone(), host.classic_apps.clone()))
+                Some((host.record.unique_id.clone(), host.classic_apps.as_deref().cloned()))
             })
             .filter(|(unique_id, _)| !unique_id.is_empty())
             .collect()
@@ -251,7 +259,7 @@ impl Hosts {
                 // A PC unpaired while its read was in flight must not get its library back.
                 host.record.server_certificate.as_ref()?;
                 let extra = vec![Default::default(); host.native.library.as_ref().map_or(0, |l| l.games.len())];
-                let library = NativeLibrary { library: host.native.library.clone()?, last_played: host.native.last_played.clone(), playtime_minutes: host.native.playtime_minutes.clone(), collections: host.native.collections.clone(), extra };
+                let library = NativeLibrary { library: host.native.library.as_deref()?.clone(), last_played: (*host.native.last_played).clone(), playtime_minutes: (*host.native.playtime_minutes).clone(), collections: (*host.native.collections).clone(), extra };
                 Some((host.record.unique_id.clone(), library))
             })
             .filter(|(unique_id, _)| !unique_id.is_empty())
@@ -297,8 +305,7 @@ impl Hosts {
     }
 }
 
-/// The addresses a poll tries, in order: only the pinned one when the user pinned the PC
-/// ([`Hosts::pin_address`]), otherwise the last that answered, then the others it was known by.
+/// Recognized host-specific 410 messages for control actions that already completed.
 pub(super) fn completed_action(control: AppControl, error: &nightjar_core::http::Error) -> bool {
     let nightjar_core::http::Error::Status { code: 410, message } = error else { return false; };
     let message = message.trim().trim_end_matches('.');

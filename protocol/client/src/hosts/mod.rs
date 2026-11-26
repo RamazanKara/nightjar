@@ -7,6 +7,7 @@ pub mod identity;
 pub mod io;
 pub mod manager;
 mod manager_ops;
+mod manager_poll;
 pub mod meta;
 pub mod pairing;
 pub mod poll;

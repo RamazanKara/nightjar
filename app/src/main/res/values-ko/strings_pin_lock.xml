@@ -48,4 +48,6 @@
     <string name="pin_key_delete">삭제</string>
     <string name="pin_key_confirm">확인</string>
     <string name="pin_dots_description">%2$d자리 중 %1$d자리 입력됨</string>
+    <string name="pin_pcs_none_off">선택한 PC가 없어 잠금을 껐습니다.</string>
+    <string name="pin_save_failed">PIN을 저장할 수 없습니다. 다시 시도하세요.</string>
 </resources>

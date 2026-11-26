@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">Performans katmanının bulunduğu köşe.</string>
     <string name="summary_reset_all">Tüm ayarları varsayılanlarına döndürür; bilgisayarlar, oyunlar, profiller ve dil korunur.</string>
     <string name="stream_controllers_off">Ayarlar’da Kumandalar Kapalı, bu yüzden PC’ye hiçbir kumanda ulaşmıyor.</string>
+    <string name="title_compact_overlay_device_info">Kompakt katmanda pil ve saati göster</string>
+    <string name="summary_compact_overlay_device_info">Kompakt performans katmanına bu cihazın pil yüzdesini ve yerel saati ekler.</string>
 </resources>

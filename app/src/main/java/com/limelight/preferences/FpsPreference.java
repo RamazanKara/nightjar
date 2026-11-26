@@ -6,12 +6,15 @@ import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.text.InputType;
 import android.util.AttributeSet;
+import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 
 import androidx.appcompat.app.AlertDialog;
 
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -70,7 +73,32 @@ public class FpsPreference extends MaterialListPreference {
                 })
                 .setNeutralButton(R.string.resolution_custom, (dialog, which) -> showCustomFps())
                 .setNegativeButton(android.R.string.cancel, null);
-        UiHelper.showDialog(getContext(), builder.create());
+        AlertDialog picker = builder.create();
+        UiHelper.showDialog(getContext(), picker);
+        addHelpButton(picker);
+    }
+
+    private void addHelpButton(AlertDialog picker) {
+        if (getDialogMessage() == null) return;
+        Button positive = picker.getButton(AlertDialog.BUTTON_POSITIVE);
+        if (positive == null || !(positive.getParent() instanceof ViewGroup)) return;
+        ViewGroup bar = (ViewGroup) positive.getParent();
+        MaterialButton help = new MaterialButton(picker.getContext(), null, android.R.attr.buttonBarNeutralButtonStyle);
+        help.setText(R.string.help);
+        if (positive.getLayoutParams() != null) {
+            help.setLayoutParams(new LinearLayout.LayoutParams((LinearLayout.LayoutParams) positive.getLayoutParams()));
+        }
+        help.setOnClickListener(view -> showHelp());
+        bar.addView(help, 0);
+    }
+
+    private void showHelp() {
+        if (getDialogMessage() == null) return;
+        UiHelper.showDialog(getContext(), new NavigationDialogBuilder(getContext())
+                .setTitle(getTitle())
+                .setMessage(getDialogMessage())
+                .setPositiveButton(android.R.string.ok, null)
+                .create());
     }
 
     private void showCustomFps() {

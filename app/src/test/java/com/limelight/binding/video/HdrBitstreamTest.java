@@ -64,6 +64,28 @@ public class HdrBitstreamTest {
         assertEquals(au.length, HdrBitstream.queuedLength(false, au, au.length));
     }
 
+    private static void assertEndsInRpu(boolean expected, byte[] au, int length) {
+        assertEquals(expected, HdrBitstream.endsInRpu(au, length));
+        assertEquals(expected, HdrBitstream.endsInRpu(java.nio.ByteBuffer.allocateDirect(au.length).put(au), length));
+    }
+
+    @Test
+    public void aFrameEndsInAnRpuOnlyWhenItsLastNalUnitIsOne() {
+        for (int padding : new int[] {0, 1, 1391}) {
+            byte[] au = accessUnit(padding);
+            assertEndsInRpu(true, au, au.length);
+            // Without its RPU the frame's last NAL unit is the slice, however it is padded.
+            assertEndsInRpu(false, au, au.length - padding - rpu().length);
+        }
+        ByteArrayOutputStream sliceLast = new ByteArrayOutputStream();
+        sliceLast.write(rpu(), 0, rpu().length);
+        sliceLast.write(new byte[] {0, 0, 1, 1 << 1, 0x01, 0x55, (byte) 0x80}, 0, 7);
+        assertEndsInRpu(false, sliceLast.toByteArray(), sliceLast.size());
+        assertEndsInRpu(false, new byte[] {0, 0, 1}, 3);
+        assertEndsInRpu(false, new byte[16], 16);
+        assertEndsInRpu(false, new byte[0], 0);
+    }
+
     @Test
     public void onlyHevcDolbyVisionFramesEndAtTheRpu() {
         // Profile 8: the RPU NAL unit comes last, then the FEC padding.

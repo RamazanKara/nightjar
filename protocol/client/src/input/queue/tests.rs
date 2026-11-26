@@ -511,3 +511,20 @@ fn pending_text_does_not_block_unrelated_channels_while_preserving_keyboard_orde
         ]
     );
 }
+
+#[test]
+fn consecutive_text_streams_without_rewaiting_settle() {
+    let mut q = queue(&sunshine());
+    let t0 = Instant::now();
+    q.send_text("a").unwrap();
+    let mut out = Vec::new();
+    assert_eq!(q.poll(t0, false, &mut out), Some(t0 + TEXT_SETTLE));
+    assert_eq!(take(&mut q, t0 + TEXT_SETTLE), [Input::Text("a".into())]);
+
+    // Back-to-back text events within the settle window emit immediately without another 50 ms wait.
+    q.send_text("b").unwrap();
+    assert_eq!(
+        take(&mut q, t0 + TEXT_SETTLE + Duration::from_millis(5)),
+        [Input::Text("b".into())]
+    );
+}

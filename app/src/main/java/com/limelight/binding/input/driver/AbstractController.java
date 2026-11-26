@@ -91,24 +91,31 @@ public abstract class AbstractController {
     }
 
     private static synchronized ThreadPoolExecutor usbWorkerFor(String usbDeviceName) {
+        usbWorkers.entrySet().removeIf(entry ->
+                !entry.getKey().equals(usbDeviceName)
+                        && entry.getValue().getActiveCount() == 0
+                        && entry.getValue().getQueue().isEmpty());
         return usbWorkers.computeIfAbsent(usbDeviceName, name -> newUsbWorker());
     }
 
     /** Waits boundedly on a background thread for any queued USB stop/release work on {@code usbDeviceName}. */
-    static void awaitUsbWorker(String usbDeviceName, long timeoutMs) {
-        if (usbDeviceName == null) return;
+    static boolean awaitUsbWorker(String usbDeviceName, long timeoutMs) {
+        if (usbDeviceName == null) return true;
         ThreadPoolExecutor worker;
         synchronized (AbstractController.class) {
             worker = usbWorkers.get(usbDeviceName);
         }
-        if (worker == null) return;
+        if (worker == null) return true;
         try {
             worker.submit(() -> { }).get(timeoutMs, TimeUnit.MILLISECONDS);
+            return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return false;
         } catch (java.util.concurrent.ExecutionException
                 | java.util.concurrent.TimeoutException
-                | java.util.concurrent.RejectedExecutionException ignored) {
+                | java.util.concurrent.RejectedExecutionException e) {
+            return false;
         }
     }
 
@@ -121,7 +128,9 @@ public abstract class AbstractController {
         runOnUsbWorker(() -> {
             if (!start()) {
                 stop();
-                onFailure.run();
+                // Queue onFailure behind any stop/release work queued by stop() so interface
+                // release and connection close finish before reporting failure or unplug.
+                runOnUsbWorker(onFailure);
             }
         });
     }

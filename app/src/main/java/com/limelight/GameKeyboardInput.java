@@ -379,7 +379,7 @@ final class GameKeyboardInput {
 
             // We'll send it as a raw key event if we have a key mapping, otherwise we'll send it
             // as UTF-8 text (if it's a printable character).
-            short translated = game.keyboardTranslator.translate(keyCode, event.getDeviceId());
+            short translated = game.keyboardTranslator.translate(keyCode, event.getScanCode(), event.getDeviceId());
             if (translated == 0) {
                 // Make sure it has a valid Unicode representation and it's not a dead character
                 // (which we don't support). If those are true, we can send it as UTF-8 text.
@@ -457,7 +457,7 @@ final class GameKeyboardInput {
                 return false;
             }
 
-            short translated = game.keyboardTranslator.translate(keyCode, event.getDeviceId());
+            short translated = game.keyboardTranslator.translate(keyCode, event.getScanCode(), event.getDeviceId());
             if (translated == 0) {
                 // If we sent this event as UTF-8 on key down, also report that it was handled
                 // when we get the key up event for it.

@@ -211,7 +211,6 @@ final class ControllerMotionBridge {
                         }
                         break;
                 }
-                break;
             }
         }
     }

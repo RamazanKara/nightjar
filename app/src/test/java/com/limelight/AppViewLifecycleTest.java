@@ -576,4 +576,106 @@ public class AppViewLifecycleTest {
             controller.pause().stop().destroy();
         }
     }
+
+    @Test
+    public void refreshLibraryClearsLoadingBarOnUnchangedFailureAndOffline() {
+        Intent intent = new Intent(RuntimeEnvironment.getApplication(), Library.class)
+                .putExtra(AppView.UUID_EXTRA, "refresh-host").putExtra(AppView.NAME_EXTRA, "PC");
+        ActivityController<Library> controller = Robolectric.buildActivity(Library.class, intent).setup();
+        try {
+            Library screen = controller.get();
+            ComputerDetails computer = new ComputerDetails();
+            computer.uuid = "refresh-host";
+            computer.state = ComputerDetails.State.ONLINE;
+            computer.pairState = com.limelight.nvstream.http.PairingManager.PairState.PAIRED;
+            computer.rawAppList = LIBRARY;
+            computer.activeAddress = new ComputerDetails.AddressTuple("10.0.0.2", 47989);
+            computer.httpsPort = 47984;
+            computer.caps = com.limelight.nvstream.http.TestHosts.fixture("sunshine-serverinfo.xml");
+            ReflectionHelpers.setField(screen, "computer", computer);
+            ReflectionHelpers.setField(screen, "lastRawApplist", LIBRARY);
+            ReflectionHelpers.setField(screen, "appGridAdapter",
+                    new AppGridAdapter(screen, new PreferenceConfiguration(), computer, "test", false));
+
+            ComputerManagerListener[] listener = new ComputerManagerListener[1];
+            int[] polls = {0};
+            ComputerManagerService manager = new ComputerManagerService();
+            ReflectionHelpers.setField(screen, "managerBinder", manager.new ComputerManagerBinder() {
+                @Override public void startPolling(ComputerManagerListener callback) { listener[0] = callback; }
+                @Override public void stopPolling() { }
+                @Override public ComputerManagerService.ApplistPoller createAppListPoller(ComputerDetails details) {
+                    return manager.new ApplistPoller(details) {
+                        @Override public void start() { }
+                        @Override public void stop() { }
+                        @Override public void pollNow() { polls[0]++; }
+                    };
+                }
+            });
+            ReflectionHelpers.callInstanceMethod(screen, "startComputerUpdates");
+
+            // Unchanged app list response clears loadingApps.
+            ReflectionHelpers.callInstanceMethod(screen, "refreshLibrary");
+            assertEquals(1, polls[0]);
+            assertTrue(screen.loadingApps);
+            listener[0].notifyComputerUpdated(computer);
+            idle();
+            assertFalse("unchanged library response clears loading bar", screen.loadingApps);
+
+            // Failed app list update clears loadingApps and shows error.
+            ReflectionHelpers.callInstanceMethod(screen, "refreshLibrary");
+            assertEquals(2, polls[0]);
+            assertTrue(screen.loadingApps);
+            listener[0].notifyAppListUpdated(computer, false);
+            idle();
+            assertFalse("failed library refresh clears loading bar", screen.loadingApps);
+
+            // Refresh while host is offline immediately marks offline without spinning.
+            computer.state = ComputerDetails.State.OFFLINE;
+            ReflectionHelpers.setField(screen, "computer", computer);
+            ReflectionHelpers.callInstanceMethod(screen, "refreshLibrary");
+            idle();
+            assertFalse("offline host does not stay loading", screen.loadingApps);
+        } finally {
+            controller.pause().stop().destroy();
+        }
+    }
+
+    @Test
+    public void pollerDisconnectAndGridUpdateAvoidNpeAndRefreshAdapter() {
+        Intent intent = new Intent(RuntimeEnvironment.getApplication(), Library.class)
+                .putExtra(AppView.UUID_EXTRA, "disconnect-host").putExtra(AppView.NAME_EXTRA, "PC");
+        ActivityController<Library> controller = Robolectric.buildActivity(Library.class, intent).setup();
+        try {
+            Library screen = controller.get();
+            ComputerDetails computer = new ComputerDetails();
+            computer.uuid = "disconnect-host";
+            computer.state = ComputerDetails.State.ONLINE;
+            computer.pairState = com.limelight.nvstream.http.PairingManager.PairState.PAIRED;
+            computer.activeAddress = new ComputerDetails.AddressTuple("10.0.0.3", 47989);
+            computer.httpsPort = 47984;
+            ReflectionHelpers.setField(screen, "computer", computer);
+
+            AppGridAdapter adapter = new AppGridAdapter(screen, new PreferenceConfiguration(), computer, "test", false);
+            int[] notified = {0};
+            adapter.registerDataSetObserver(new android.database.DataSetObserver() {
+                @Override public void onChanged() { notified[0]++; }
+            });
+            ComputerDetails updated = new ComputerDetails(computer);
+            updated.activeAddress = new ComputerDetails.AddressTuple("10.0.0.4", 47989);
+            adapter.updateComputer(updated);
+            assertEquals("updateComputer must notify grid observers when endpoint changes", 1, notified[0]);
+
+            android.content.ServiceConnection conn = ReflectionHelpers.getField(screen, "serviceConnection");
+            conn.onServiceDisconnected(new android.content.ComponentName(screen, ComputerManagerService.class));
+            idle();
+            assertNull(ReflectionHelpers.getField(screen, "poller"));
+            // Calling pollLibraryIfReady / refreshLibrary after disconnect must never throw NPE.
+            ReflectionHelpers.callInstanceMethod(screen, "pollLibraryIfReady");
+            ReflectionHelpers.callInstanceMethod(screen, "refreshLibrary");
+            idle();
+            assertFalse(screen.loadingApps);
+        } finally {
+            controller.pause().stop().destroy();
+        }
+    }
 }

@@ -44,8 +44,10 @@ public enum StreamPreset {
     boolean matches(SharedPreferences preferences, String nativeResolution, float panelMaxHz, boolean vrrOffered) {
         String fps = Integer.toString(fps(panelMaxHz));
         int bitrate = PreferenceConfiguration.getShownDefaultBitrate(preferences, nativeResolution, fps, null);
-        if (!nativeResolution.equals(preferences.getString(PreferenceConfiguration.RESOLUTION_PREF_STRING,
-                PreferenceConfiguration.DEFAULT_RESOLUTION)) ||
+        boolean followsScreen = preferences.getBoolean(
+                PreferenceConfiguration.RESOLUTION_FOLLOWS_SCREEN_PREF_STRING, false);
+        if ((!followsScreen && !nativeResolution.equals(preferences.getString(
+                PreferenceConfiguration.RESOLUTION_PREF_STRING, PreferenceConfiguration.DEFAULT_RESOLUTION))) ||
                 !fps.equals(preferences.getString(PreferenceConfiguration.FPS_PREF_STRING, PreferenceConfiguration.DEFAULT_FPS)) ||
                 preferences.getInt(PreferenceConfiguration.BITRATE_PREF_STRING, bitrate) != bitrate ||
                 vrrOffered && preferences.getBoolean("checkbox_vrr", false) ||

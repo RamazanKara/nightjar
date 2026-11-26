@@ -120,3 +120,26 @@ fn a_download_into_a_missing_folder_is_a_local_failure() {
     assert!(!called, "nothing is fetched without a place to put it");
 }
 
+#[test]
+fn copy_new_and_unlink_opens_source_before_creating_target() {
+    let dest = scratch("copy-new");
+    let missing_src = dest.with_file_name("missing.part");
+    let absent_to = dest.with_file_name("absent.bin");
+    let err = copy_new_and_unlink(&missing_src, &absent_to).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+    assert!(!absent_to.exists(), "missing source left an empty target");
+
+    let src = dest.with_file_name("ready.part");
+    std::fs::write(&src, b"payload").unwrap();
+    std::fs::write(&dest, b"existing").unwrap();
+    let err = copy_new_and_unlink(&src, &dest).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+    assert_eq!(std::fs::read(&dest).unwrap(), b"existing");
+    assert_eq!(std::fs::read(&src).unwrap(), b"payload");
+
+    copy_new_and_unlink(&src, &absent_to).unwrap();
+    assert_eq!(std::fs::read(&absent_to).unwrap(), b"payload");
+    assert!(!src.exists());
+    std::fs::remove_dir_all(dest.parent().unwrap()).unwrap();
+}
+

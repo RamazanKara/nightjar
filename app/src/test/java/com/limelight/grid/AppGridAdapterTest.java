@@ -291,4 +291,50 @@ public class AppGridAdapterTest {
             assertEquals("the key-up launches the selected card", 1, launched[0]);
         }
     }
+
+    @Test
+    public void searchAndHiddenTogglesFilterWithoutRedundantNotifications() {
+        try (var controller = Robolectric.buildActivity(com.limelight.ui.UiNavigationTest.Screen.class).setup()) {
+            com.limelight.nvstream.http.ComputerDetails computer = new com.limelight.nvstream.http.ComputerDetails();
+            computer.uuid = "adapter-host";
+            computer.name = "PC";
+            AppGridAdapter adapter = new AppGridAdapter(controller.get(),
+                    new com.limelight.preferences.PreferenceConfiguration(), computer, "test", false);
+            org.robolectric.util.ReflectionHelpers.setField(adapter, "loader",
+                    new com.limelight.grid.assets.CachedAppAssetLoader(computer, 1, null,
+                            new com.limelight.grid.assets.MemoryAssetLoader(), null, null) {
+                        @Override public void queueCacheLoad(NvApp app) { }
+                    });
+            adapter.addApp(new com.limelight.AppView.AppObject(new NvApp("Pokémon", 1, false)));
+            adapter.addApp(new com.limelight.AppView.AppObject(new NvApp("Alpha", 2, false)));
+            adapter.updateHiddenApps(java.util.Collections.singleton(1), true);
+            adapter.notifyDataSetChanged();
+            assertEquals(1, adapter.getCount());
+            assertEquals("Alpha", ((com.limelight.AppView.AppObject) adapter.getItem(0)).app.getAppName());
+
+            int[] changes = {0};
+            adapter.registerDataSetObserver(new android.database.DataSetObserver() {
+                @Override public void onChanged() { changes[0]++; }
+            });
+
+            adapter.setShowHiddenApps(false);
+            adapter.setSearchQuery("   ");
+            assertEquals("unchanged visibility and empty search must not re-notify", 0, changes[0]);
+
+            adapter.setShowHiddenApps(true);
+            assertEquals(1, changes[0]);
+            assertEquals(2, adapter.getCount());
+
+            adapter.setSearchQuery("pokemon");
+            assertEquals(2, changes[0]);
+            assertEquals(1, adapter.getCount());
+            assertEquals("Pokémon", ((com.limelight.AppView.AppObject) adapter.getItem(0)).app.getAppName());
+
+            adapter.setSearchQuery("POKÉMON ");
+            assertEquals("normalized identical search must not re-notify", 2, changes[0]);
+
+            adapter.clear();
+            assertEquals(0, adapter.getCount());
+        }
+    }
 }

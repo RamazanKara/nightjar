@@ -66,21 +66,37 @@ public final class UiNavigation {
     }
 
     public static void bindGrid(GridView grid) {
+        boolean[] armed = new boolean[1];
+        View.OnFocusChangeListener previous = grid.getOnFocusChangeListener();
+        grid.setOnFocusChangeListener((view, hasFocus) -> {
+            armed[0] = false;
+            if (previous != null) previous.onFocusChange(view, hasFocus);
+        });
         grid.setOnKeyListener((view, key, event) -> {
             // Match the card hints: Y and F open More, as do Menu, Shift+F10 and X.
             if (key != KeyEvent.KEYCODE_MENU && key != KeyEvent.KEYCODE_BUTTON_X
                     && !InputSource.isMoreKey(event)
                     && !(key == KeyEvent.KEYCODE_F10 && event.hasModifiers(KeyEvent.META_SHIFT_ON))) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) armed[0] = false;
                 return false;
             }
             if (grid.getSelectedItemPosition() < 0 || grid.getOnItemLongClickListener() == null) {
+                armed[0] = false;
                 // Nothing to open, but a pad's Y is still taken: left alone Android makes Space of it,
                 // which a grid reads as a press of the card it then selects (Nightjar #81).
                 return swallowsPadY(key, view);
             }
-            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
-                grid.getOnItemLongClickListener().onItemLongClick(grid, grid.getSelectedView(),
-                        grid.getSelectedItemPosition(), grid.getSelectedItemId());
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (event.getRepeatCount() == 0) armed[0] = true;
+                return true;
+            }
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                boolean wasArmed = armed[0];
+                armed[0] = false;
+                if (wasArmed && !event.isCanceled()) {
+                    grid.getOnItemLongClickListener().onItemLongClick(grid, grid.getSelectedView(),
+                            grid.getSelectedItemPosition(), grid.getSelectedItemId());
+                }
             }
             return true;
         });

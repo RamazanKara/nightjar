@@ -113,13 +113,21 @@ public final class ContinueHereGate {
             return false;
         }
         NativeApiClient client = new NativeApiClient(new JniNativeApiTransport(), endpoint);
+        Context appContext = parent.getApplicationContext();
         new Thread(() -> {
             StreamMove read = readWithin(client::streamMove, SELECT_READ_WAIT_MS);
             parent.runOnUiThread(() -> {
-                if (parent.isFinishing() || parent.isDestroyed()) {
+                if (parent.isFinishing() && !parent.isChangingConfigurations()) {
                     return;
                 }
-                if (read != null && asks(true, true, read, app)) {
+                boolean ask = read != null && asks(true, true, read, app);
+                if (parent.isFinishing() || parent.isDestroyed()) {
+                    // Activity was destroyed by configuration change before answer arrived: still start cleanly
+                    // with application context instead of silently dropping the user's launch.
+                    start.accept(appContext);
+                    return;
+                }
+                if (ask) {
                     prompt(parent, computer, client, read, start).show();
                 } else {
                     start.accept(parent);

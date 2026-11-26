@@ -184,4 +184,83 @@ public class FileTransferScreenTest {
         configuration.setLocale(new java.util.Locale(language));
         return configuration;
     }
+
+    @Test
+    public void staleTransferGrantsAreReleasedWhileUnrelatedPersistableGrantsStayIntact() {
+        Uri transferUri = Uri.parse("content://com.android.externalstorage.documents/document/primary%3Asend.bin");
+        Uri unrelatedTreeUri = Uri.parse("content://com.android.externalstorage.documents/tree/primary%3AROMs");
+        android.content.ContentResolver resolver = context.getContentResolver();
+        resolver.takePersistableUriPermission(unrelatedTreeUri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION | android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        assertTrue(FileShareIntents.takePersistable(context, resolver, transferUri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION));
+
+        FileShareIntents.releaseStaleGrants(context, null);
+
+        java.util.List<android.content.UriPermission> kept = resolver.getPersistedUriPermissions();
+        boolean sawUnrelated = false;
+        boolean sawTransfer = false;
+        for (android.content.UriPermission perm : kept) {
+            if (unrelatedTreeUri.equals(perm.getUri())) sawUnrelated = true;
+            if (transferUri.equals(perm.getUri())) sawTransfer = true;
+        }
+        assertTrue("unrelated persistable grant (e.g. FrontendSync ROM tree) must remain intact", sawUnrelated);
+        assertFalse("tracked file transfer grant must be released", sawTransfer);
+        assertTrue(context.getSharedPreferences("file_transfer_grants", Context.MODE_PRIVATE).getAll().isEmpty());
+    }
+
+    @Test
+    public void discardSkipsDeletionWhenPreExistingDocumentFlagIsFalse() throws Exception {
+        java.io.File preExisting = new java.io.File(context.getFilesDir(), "existing_target.bin");
+        try (java.io.FileOutputStream out = new java.io.FileOutputStream(preExisting)) {
+            out.write(new byte[] {1, 2, 3, 4});
+        }
+        Uri fileUri = Uri.fromFile(preExisting);
+        assertTrue(FileShareIntents.documentHasExistingContent(context.getContentResolver(), fileUri));
+
+        FileTransferActivity.TransferWork work = new FileTransferActivity.TransferWork(
+                (android.app.Application) context.getApplicationContext());
+        try {
+            work.discard(fileUri, "existing_target.bin", false).run();
+            assertTrue("pre-existing document must not be deleted on failed download", preExisting.exists());
+        } finally {
+            work.end();
+            preExisting.delete();
+        }
+    }
+
+    @Test
+    public void heldTransferGrantsSurviveReleaseStaleGrants() {
+        Uri heldUri = Uri.parse("content://com.android.externalstorage.documents/document/primary%3Aactive.bin");
+        Uri staleUri = Uri.parse("content://com.android.externalstorage.documents/document/primary%3Astale.bin");
+        android.content.ContentResolver resolver = context.getContentResolver();
+        assertTrue(FileShareIntents.takePersistable(context, resolver, staleUri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION));
+
+        FileTransferActivity.TransferWork work = new FileTransferActivity.TransferWork(
+                (android.app.Application) context.getApplicationContext());
+        assertTrue(work.persistPermission(heldUri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION));
+        RunningTransfers.hold(work);
+        try {
+            FileShareIntents.releaseStaleGrants(context, RunningTransfers.activeGrantUris());
+
+            java.util.List<android.content.UriPermission> kept = resolver.getPersistedUriPermissions();
+            boolean sawHeld = false;
+            boolean sawStale = false;
+            for (android.content.UriPermission perm : kept) {
+                if (heldUri.equals(perm.getUri())) sawHeld = true;
+                if (staleUri.equals(perm.getUri())) sawStale = true;
+            }
+            assertTrue("active RunningTransfers SAF grant must survive stale cleanup", sawHeld);
+            assertFalse("unheld stale SAF grant must be released", sawStale);
+            assertTrue(work.hasPersistedPermission(heldUri));
+            android.content.SharedPreferences grants =
+                    context.getSharedPreferences("file_transfer_grants", Context.MODE_PRIVATE);
+            assertTrue(grants.contains(heldUri.toString()));
+            assertFalse(grants.contains(staleUri.toString()));
+        } finally {
+            work.end();
+        }
+        assertTrue(context.getSharedPreferences("file_transfer_grants", Context.MODE_PRIVATE).getAll().isEmpty());
+    }
 }

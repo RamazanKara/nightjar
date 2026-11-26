@@ -2,7 +2,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs, UdpSocket}
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
 
-pub use crate::network_types::{Fallback, Kind, Medium, Network, Pace, Toward};
+pub use crate::network_types::{Fallback, Kind, Medium, Network, Pace, Toward, SSID_SUPPORTED};
 
 /// The interface the system routes traffic for `host` over, not the one with the internet
 /// connection: a PC on the same Ethernet segment is wired even when Wi-Fi is the default route.
@@ -36,10 +36,10 @@ pub struct Route {
 
 /// Blocks on name lookup, as [`toward`] does.
 pub fn route(host: &str) -> Route {
-    let Some(ip) = (host, 0).to_socket_addrs().ok().and_then(|mut found| found.next()).map(|a| a.ip()) else {
+    let Some(addr) = (host, 0).to_socket_addrs().ok().and_then(|mut found| found.next()) else {
         return Route { toward: Err(Fallback::Resolve), vpn: false };
     };
-    match interface_toward(ip) {
+    match interface_toward(addr) {
         Some(interface) => Route {
             toward: Toward::of(interface.medium, interface.link_mbps).ok_or(Fallback::NotTelling),
             vpn: interface.vpn,
@@ -128,22 +128,23 @@ fn parse_route_dev(output: &str) -> Option<&str> {
 }
 
 #[cfg(windows)]
-fn interface_toward(ip: IpAddr) -> Option<Interface> {
+fn interface_toward(addr: SocketAddr) -> Option<Interface> {
     use windows::Win32::NetworkManagement::IpHelper::{GetBestInterfaceEx, GetIfEntry2, MIB_IF_ROW2};
     use windows::Win32::Networking::WinSock::{AF_INET, AF_INET6, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6};
     let mut index = 0u32;
     let status = unsafe {
-        match ip {
-            IpAddr::V4(v4) => {
+        match addr {
+            SocketAddr::V4(v4) => {
                 let mut address: SOCKADDR_IN = std::mem::zeroed();
                 address.sin_family = AF_INET;
-                address.sin_addr.S_un.S_addr = u32::from_ne_bytes(v4.octets());
+                address.sin_addr.S_un.S_addr = u32::from_ne_bytes(v4.ip().octets());
                 GetBestInterfaceEx(&address as *const SOCKADDR_IN as *const SOCKADDR, &mut index)
             }
-            IpAddr::V6(v6) => {
+            SocketAddr::V6(v6) => {
                 let mut address: SOCKADDR_IN6 = std::mem::zeroed();
                 address.sin6_family = AF_INET6;
-                address.sin6_addr.u.Byte = v6.octets();
+                address.sin6_addr.u.Byte = v6.ip().octets();
+                address.Anonymous.sin6_scope_id = v6.scope_id();
                 GetBestInterfaceEx(&address as *const SOCKADDR_IN6 as *const SOCKADDR, &mut index)
             }
         }
@@ -216,8 +217,10 @@ fn interface_addresses() -> Result<Vec<(String, IpAddr)>, String> {
 /// socket connected toward it (which sends nothing) and the interface holding that address. Needs
 /// no `ip` binary, which the Flatpak runtime does not ship, and no system bus.
 #[cfg(not(windows))]
-fn interface_name_toward(ip: IpAddr) -> Result<String, String> {
-    let local = local_toward(SocketAddr::new(ip, 9)).ok_or("no local address toward it")?;
+fn interface_name_toward(addr: SocketAddr) -> Result<String, String> {
+    let mut dst = addr;
+    dst.set_port(9);
+    let local = local_toward(dst).ok_or("no local address toward it")?;
     let addresses = interface_addresses()?;
     interface_of_address(local, addresses.iter().map(|(name, address)| (name.as_str(), *address)))
         .map(str::to_owned)
@@ -239,8 +242,9 @@ fn route_dev_from_ip_command(ip: IpAddr) -> Result<String, String> {
 }
 
 #[cfg(target_os = "linux")]
-fn interface_toward(ip: IpAddr) -> Option<Interface> {
-    let name = match interface_name_toward(ip) {
+fn interface_toward(addr: SocketAddr) -> Option<Interface> {
+    let ip = addr.ip();
+    let name = match interface_name_toward(addr) {
         Ok(name) => {
             eprintln!("nightjar: route to {ip}: {name}, from the socket's local address");
             name
@@ -662,10 +666,29 @@ fn read() -> Result<Network, String> {
 }
 
 #[cfg(target_os = "linux")]
+fn linux_dbus_slot() -> &'static std::sync::Mutex<Option<zbus::blocking::Connection>> {
+    static DBUS: std::sync::Mutex<Option<zbus::blocking::Connection>> = std::sync::Mutex::new(None);
+    &DBUS
+}
+
+#[cfg(target_os = "linux")]
 fn read() -> Result<Network, String> {
     use zbus::{blocking::{connection::Builder, Proxy}, zvariant::OwnedObjectPath};
-    let read = || -> zbus::Result<Network> {
-        let connection = Builder::system()?.method_timeout(std::time::Duration::from_secs(2)).build()?;
+    let connection = {
+        let mut guard = linux_dbus_slot().lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(conn) = guard.as_ref() {
+            conn.clone()
+        } else {
+            let conn = Builder::system()
+                .map_err(|e| e.to_string())?
+                .method_timeout(std::time::Duration::from_secs(2))
+                .build()
+                .map_err(|e| e.to_string())?;
+            *guard = Some(conn.clone());
+            conn
+        }
+    };
+    let query = || -> zbus::Result<Network> {
         let proxy = |path: &str, interface: &str| Proxy::new_owned(connection.clone(), "org.freedesktop.NetworkManager", path.to_owned(), interface.to_owned());
         let manager = proxy("/org/freedesktop/NetworkManager", "org.freedesktop.NetworkManager")?;
         let primary: OwnedObjectPath = manager.get_property("PrimaryConnection")?;
@@ -692,7 +715,11 @@ fn read() -> Result<Network, String> {
         }
         Ok(network)
     };
-    read().map_err(|e| e.to_string())
+    query().map_err(|e| {
+        // Drop the cached bus connection so a daemon restart or closed socket reconnects next poll.
+        *linux_dbus_slot().lock().unwrap_or_else(|e| e.into_inner()) = None;
+        e.to_string()
+    })
 }
 
 #[cfg(target_os = "macos")]
@@ -712,15 +739,16 @@ fn mac_interface(name: &str) -> (Interface, bool) {
 }
 
 #[cfg(target_os = "macos")]
-fn interface_toward(ip: IpAddr) -> Option<Interface> {
-    Some(mac_interface(&interface_name_toward(ip).ok()?).0)
+fn interface_toward(addr: SocketAddr) -> Option<Interface> {
+    Some(mac_interface(&interface_name_toward(addr).ok()?).0)
 }
 
 #[cfg(target_os = "macos")]
 fn read() -> Result<Network, String> {
     // Connecting a UDP socket selects the current route without sending traffic.
-    let name = interface_name_toward(Ipv4Addr::new(192, 0, 2, 1).into())
-        .or_else(|_| interface_name_toward("2001:db8::1".parse().unwrap()))?;
+    let v4 = SocketAddr::from((Ipv4Addr::new(192, 0, 2, 1), 9));
+    let v6 = SocketAddr::from(("2001:db8::1".parse::<Ipv6Addr>().unwrap(), 9));
+    let name = interface_name_toward(v4).or_else(|_| interface_name_toward(v6))?;
     let (interface, cellular) = mac_interface(&name);
     Ok(Network { wifi: interface.medium == Medium::Wireless && !cellular, cellular, ..Default::default() })
 }

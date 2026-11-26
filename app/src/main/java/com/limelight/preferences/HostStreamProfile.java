@@ -297,95 +297,37 @@ public final class HostStreamProfile {
     }
 
     static HostStreamProfile deserialize(String value) {
-        return isLegacy(value) ? deserializeLegacy(value) : deserializeOverrides(value);
+        return isLegacy(value) ? deserializeLegacy(value) : deserializeOverrides(value, true);
     }
 
-    private static HostStreamProfile deserializeOverrides(String value) {
+    /** Parses a stored profile while skipping only individual unreadable entries rather than dropping the whole layer. */
+    static HostStreamProfile deserializeLenient(String value) {
+        if (value == null) return new HostStreamProfile();
+        if (!isLegacy(value)) {
+            return deserializeOverrides(value, false);
+        }
+        try {
+            return deserializeLegacy(value);
+        } catch (IllegalArgumentException e) {
+            return new HostStreamProfile();
+        }
+    }
+
+    private static HostStreamProfile deserializeOverrides(String value, boolean strict) {
         HostStreamProfile profile = new HostStreamProfile();
         String[] entries = value.split(";");
         for (int i = 1; i < entries.length; i++) {
             int split = entries[i].indexOf('=');
             if (split <= 0) {
-                throw new IllegalArgumentException("Invalid host profile entry");
+                if (strict) throw new IllegalArgumentException("Invalid host profile entry");
+                continue;
             }
             String key = entries[i].substring(0, split);
             String field = entries[i].substring(split + 1);
-            switch (key) {
-                case "res":
-                    if (field.equals(NATIVE)) {
-                        profile.nativeResolution = true;
-                    } else {
-                        String[] size = field.split("x", -1);
-                        if (size.length != 2) throw new IllegalArgumentException("Invalid resolution");
-                        profile.nativeResolution = false;
-                        profile.width = requireRange(Integer.parseInt(size[0]), 64, 16384);
-                        profile.height = requireRange(Integer.parseInt(size[1]), 64, 16384);
-                    }
-                    break;
-                case "refresh":
-                    profile.refreshRateX100 = requireRange(Integer.parseInt(field), 100, 100000);
-                    break;
-                case "bitrate":
-                    profile.bitrate = requireRange(Integer.parseInt(field), 500, MAX_BITRATE_KBPS);
-                    break;
-                case "scale":
-                    profile.renderScale = requireRange(Integer.parseInt(field), 50, 200);
-                    break;
-                case "dpi":
-                    // A scale Windows does not offer reads as the PC's own, as on the desktop,
-                    // instead of dropping the PC's other values with it.
-                    profile.displayScale = PreferenceConfiguration.virtualDisplayDpi(field);
-                    break;
-                case "codec":
-                    profile.codec = PreferenceConfiguration.FormatOption.valueOf(field);
-                    break;
-                case "virtual":
-                    profile.virtualDisplay = parseBoolean(field);
-                    break;
-                case "hdr":
-                    profile.hdr = parseBoolean(field);
-                    break;
-                case "full_range":
-                    profile.fullRange = parseBoolean(field);
-                    break;
-                case "yuv444":
-                    profile.yuv444 = parseBoolean(field);
-                    break;
-                case "vrr":
-                    profile.vrr = parseBoolean(field);
-                    break;
-                case "real_vrr":
-                    profile.realVrr = parseBoolean(field);
-                    break;
-                case "upscaling": {
-                    String[] parts = field.split(":", -1);
-                    if (parts.length > 2) throw new IllegalArgumentException("Invalid upscaling");
-                    profile.upscalingMode = UpscalingPolicy.Mode.fromStoredName(parts[0]);
-                    // Older v2 profiles stored both values in the same field.
-                    if (parts.length == 2) profile.upscalingSharpness = requireRange(Integer.parseInt(parts[1]), 0, 100);
-                    break;
-                }
-                case "sharpness":
-                    profile.upscalingSharpness = requireRange(Integer.parseInt(field), 0, 100);
-                    break;
-                case "pacing":
-                    profile.pacing = requirePacing(field);
-                    break;
-                case "host_times":
-                    profile.hostFrameTimes = parseBoolean(field);
-                    break;
-                case "newest":
-                    profile.dropLateFrames = parseBoolean(field);
-                    break;
-                case "rtx_hdr":
-                    profile.rtxHdr = parseBoolean(field);
-                    break;
-                case "rtx_video":
-                    profile.rtxVideo = parseBoolean(field);
-                    break;
-                default:
-                    // A value a newer build added; this build leaves it to the global settings.
-                    break;
+            try {
+                parseOverrideField(profile, key, field);
+            } catch (IllegalArgumentException e) {
+                if (strict) throw e;
             }
         }
         // Real VRR is part of VRR on; alone it would change nothing a layer shows.
@@ -394,6 +336,86 @@ public final class HostStreamProfile {
         if (profile.pacing == null) profile.hostFrameTimes = null;
         if (!"balanced".equals(profile.pacing)) profile.dropLateFrames = null;
         return profile;
+    }
+
+    private static void parseOverrideField(HostStreamProfile profile, String key, String field) {
+        switch (key) {
+            case "res":
+                if (field.equals(NATIVE)) {
+                    profile.nativeResolution = true;
+                } else {
+                    String[] size = field.split("x", -1);
+                    if (size.length != 2) throw new IllegalArgumentException("Invalid resolution");
+                    profile.nativeResolution = false;
+                    profile.width = requireRange(Integer.parseInt(size[0]), 64, 16384);
+                    profile.height = requireRange(Integer.parseInt(size[1]), 64, 16384);
+                }
+                break;
+            case "refresh":
+                profile.refreshRateX100 = requireRange(Integer.parseInt(field), 100, 100000);
+                break;
+            case "bitrate":
+                profile.bitrate = requireRange(Integer.parseInt(field), 500, MAX_BITRATE_KBPS);
+                break;
+            case "scale":
+                profile.renderScale = requireRange(Integer.parseInt(field), 50, 200);
+                break;
+            case "dpi":
+                // A scale Windows does not offer reads as the PC's own, as on the desktop,
+                // instead of dropping the PC's other values with it.
+                profile.displayScale = PreferenceConfiguration.virtualDisplayDpi(field);
+                break;
+            case "codec":
+                profile.codec = PreferenceConfiguration.FormatOption.valueOf(field);
+                break;
+            case "virtual":
+                profile.virtualDisplay = parseBoolean(field);
+                break;
+            case "hdr":
+                profile.hdr = parseBoolean(field);
+                break;
+            case "full_range":
+                profile.fullRange = parseBoolean(field);
+                break;
+            case "yuv444":
+                profile.yuv444 = parseBoolean(field);
+                break;
+            case "vrr":
+                profile.vrr = parseBoolean(field);
+                break;
+            case "real_vrr":
+                profile.realVrr = parseBoolean(field);
+                break;
+            case "upscaling": {
+                String[] parts = field.split(":", -1);
+                if (parts.length > 2) throw new IllegalArgumentException("Invalid upscaling");
+                profile.upscalingMode = UpscalingPolicy.Mode.fromStoredName(parts[0]);
+                // Older v2 profiles stored both values in the same field.
+                if (parts.length == 2) profile.upscalingSharpness = requireRange(Integer.parseInt(parts[1]), 0, 100);
+                break;
+            }
+            case "sharpness":
+                profile.upscalingSharpness = requireRange(Integer.parseInt(field), 0, 100);
+                break;
+            case "pacing":
+                profile.pacing = requirePacing(field);
+                break;
+            case "host_times":
+                profile.hostFrameTimes = parseBoolean(field);
+                break;
+            case "newest":
+                profile.dropLateFrames = parseBoolean(field);
+                break;
+            case "rtx_hdr":
+                profile.rtxHdr = parseBoolean(field);
+                break;
+            case "rtx_video":
+                profile.rtxVideo = parseBoolean(field);
+                break;
+            default:
+                // A value a newer build added; this build leaves it to the global settings.
+                break;
+        }
     }
 
     private static boolean parseBoolean(String value) {
@@ -421,6 +443,25 @@ public final class HostStreamProfile {
                 fields.length == 13 ? Integer.parseInt(fields[12]) : null, nativeResolution);
     }
 
+    /** Clears decoder/stream-format overrides so a crash reset removes any forced failing codec. */
+    boolean clearVideoCrashFields() {
+        boolean changed = nativeResolution != null || width != null || height != null
+                || refreshRateX100 != null || codec != null
+                || hdr != null || fullRange != null || yuv444 != null
+                || rtxHdr != null || rtxVideo != null;
+        nativeResolution = null;
+        width = null;
+        height = null;
+        refreshRateX100 = null;
+        codec = null;
+        hdr = null;
+        fullRange = null;
+        yuv444 = null;
+        rtxHdr = null;
+        rtxVideo = null;
+        return changed;
+    }
+
     /** This PC's stored values, unread, or null when it has none. */
     static String raw(Context context, String hostUuid) {
         return hostUuid == null ? null : context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -436,12 +477,8 @@ public final class HostStreamProfile {
         if (value == null) {
             return null;
         }
-        try {
-            HostStreamProfile profile = deserialize(value);
-            return profile.isEmpty() ? null : profile;
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
+        HostStreamProfile profile = deserializeLenient(value);
+        return profile.isEmpty() ? null : profile;
     }
 
     void save(Context context, String hostUuid) {
@@ -535,6 +572,6 @@ public final class HostStreamProfile {
 
     /** A copy, for the settings screen's draft. */
     HostStreamProfile copy() {
-        return deserializeOverrides(serialize());
+        return deserializeOverrides(serialize(), true);
     }
 }

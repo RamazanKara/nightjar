@@ -19,7 +19,7 @@ fn warp() -> (ID3D11Device, ID3D11DeviceContext) {
 }
 
 /// A render target standing for SDL's back buffer, cleared to magenta.
-fn back_buffer(device: &ID3D11Device, context: &ID3D11DeviceContext, size: (u32, u32), format: DXGI_FORMAT) -> (ID3D11Texture2D, ID3D11RenderTargetView) {
+pub(super) fn back_buffer(device: &ID3D11Device, context: &ID3D11DeviceContext, size: (u32, u32), format: DXGI_FORMAT) -> (ID3D11Texture2D, ID3D11RenderTargetView) {
     let mut texture = None;
     let mut view = None;
     // SAFETY: A plain texture and its view on a live device.
@@ -184,7 +184,7 @@ fn surface_direct_on_warp(in_place: bool, width: u32, height: u32, code: impl Fn
         }
     }
     let info = media::FrameInfo { width: width as i32, height: height as i32, kind: media::FRAME_D3D11_444, ten_bit: 0, pts: 0,
-        data: [std::ptr::null_mut(); 3], linesize: [0; 3], color_space: 1, color_range: 1, color_trc: 1 };
+        data: [std::ptr::null_mut(); 3], linesize: [0; 3], color_space: 1, color_range: 1, color_trc: 1, centred_chroma: false };
     let layout = media::PlanarLayout::of_d3d11(&info).unwrap();
     let parameters = surface_parameters(crate::stream::present::planar_parameters(&info, layout, false, 1.0, 1.0), DXGI_FORMAT_AYUV).unwrap();
     let (device, context) = warp();
@@ -244,7 +244,7 @@ fn a_surface_read_in_place_is_also_drawn_into_the_texture_for_what_reads_it() {
         }
     }
     let info = media::FrameInfo { width: width as i32, height: height as i32, kind: media::FRAME_D3D11_444, ten_bit: 0, pts: 0,
-        data: [std::ptr::null_mut(); 3], linesize: [0; 3], color_space: 1, color_range: 1, color_trc: 1 };
+        data: [std::ptr::null_mut(); 3], linesize: [0; 3], color_space: 1, color_range: 1, color_trc: 1, centred_chroma: false };
     let layout = media::PlanarLayout::of_d3d11(&info).unwrap();
     let parameters = surface_parameters(crate::stream::present::planar_parameters(&info, layout, false, 1.0, 1.0), DXGI_FORMAT_AYUV).unwrap();
     let (device, context) = warp();
@@ -351,7 +351,7 @@ fn a_decoder_texture_is_asked_for_its_description_once() {
     let (width, height) = (8, 4);
     let bytes = vec![0u8; (width * height * 4) as usize];
     let info = media::FrameInfo { width: width as i32, height: height as i32, kind: media::FRAME_D3D11_444, ten_bit: 0, pts: 0,
-        data: [std::ptr::null_mut(); 3], linesize: [0; 3], color_space: 1, color_range: 1, color_trc: 1 };
+        data: [std::ptr::null_mut(); 3], linesize: [0; 3], color_space: 1, color_range: 1, color_trc: 1, centred_chroma: false };
     let layout = media::PlanarLayout::of_d3d11(&info).unwrap();
     let parameters = crate::stream::present::planar_parameters(&info, layout, false, 1.0, 1.0);
     // SAFETY: Plain D3D11 calls on a device made and used on this thread.

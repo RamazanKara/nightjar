@@ -26,6 +26,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static com.limelight.preferences.PreferenceConfiguration.FRAME_PACING_BALANCED;
+import static com.limelight.preferences.PreferenceConfiguration.FRAME_PACING_MIN_LATENCY;
 import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
@@ -172,6 +173,111 @@ public class MediaCodecBalancedQueueTest {
         }
     }
 
+    @Test public void balancedDirectPathKeepsTwoFrameBurstAcrossConsecutiveRefreshesWithoutLatchLeadWait() throws Exception {
+        try (Fixture fixture = new Fixture(1, new IntRing())) {
+            fixture.renderer.setStreamFrameRateMilliHz(120_000);
+            ReflectionHelpers.setField(fixture.renderer, "hostPhaseLock", true);
+            ReflectionHelpers.setField(fixture.renderer, "refreshSlotsEnabled", true);
+            ReflectionHelpers.setField(fixture.renderer, "vsyncPresentationDeadlineNs", 11_330_000L);
+            // An ARR screen with VRR off still plans refresh slots; it sends no phase reports,
+            // which would need the native bridge here.
+            ReflectionHelpers.setField(fixture.renderer, "outputHasArrSupport", true);
+            fixture.dropLateFrames();
+            fixture.state.outputs = new int[] {20, 21};
+            fixture.state.anchorVsyncOnFirstOutput = true;
+            fixture.renderer.testClockNs = fixture.firstVsync;
+            fixture.state.allowDiscard.countDown();
+
+            fixture.start();
+            fixture.join();
+
+            assertTrue("two-frame burst must not drop either frame", fixture.state.dropped.isEmpty());
+            assertEquals(Arrays.asList(20, 21), fixture.state.rendered);
+            assertEquals(2, fixture.state.releaseTimestamps.size());
+            assertEquals("both outputs should land on consecutive refreshes", FRAME_NS,
+                    fixture.state.releaseTimestamps.get(1) - fixture.state.releaseTimestamps.get(0));
+            assertEquals(2.0, fixture.state.stats.summarize()[2][0], 0.0);
+            FrameLatencyMetrics metrics = ReflectionHelpers.getField(fixture.state.stats, "metrics");
+            long[][] samples = ReflectionHelpers.getField(metrics, "samples");
+            double wait1Ms = samples[2][0] / 1_000_000.0;
+            double wait2Ms = samples[2][1] / 1_000_000.0;
+            assertTrue("Frame 1 Display wait should exclude latch lead (< 1 ms), got " + wait1Ms, wait1Ms < 1.0);
+            assertEquals("Frame 2 Display wait should match one-refresh hold", FRAME_NS / 1_000_000.0, wait2Ms, 1.0);
+        }
+    }
+
+    @Test public void balancedDirectPathDropsMiddleFrameOfThreeOutputBurstAsCatchUp() throws Exception {
+        try (Fixture fixture = new Fixture(1, new IntRing())) {
+            fixture.renderer.setStreamFrameRateMilliHz(120_000);
+            ReflectionHelpers.setField(fixture.renderer, "hostPhaseLock", true);
+            ReflectionHelpers.setField(fixture.renderer, "refreshSlotsEnabled", true);
+            ReflectionHelpers.setField(fixture.renderer, "vsyncPresentationDeadlineNs", 11_330_000L);
+            // An ARR screen with VRR off still plans refresh slots; it sends no phase reports,
+            // which would need the native bridge here.
+            ReflectionHelpers.setField(fixture.renderer, "outputHasArrSupport", true);
+            fixture.dropLateFrames();
+            fixture.state.outputs = new int[] {20, 21, 22};
+            fixture.state.anchorVsyncOnFirstOutput = true;
+            fixture.renderer.testClockNs = fixture.firstVsync;
+            fixture.state.allowDiscard.countDown();
+
+            fixture.start();
+            fixture.join();
+
+            assertEquals(Collections.singletonList(21), fixture.state.dropped);
+            assertEquals(Arrays.asList(20, 22), fixture.state.rendered);
+            assertEquals("catch_up 1", fixture.state.stats.describeDrops(1));
+            assertEquals(2, fixture.state.releaseTimestamps.size());
+            assertEquals(FRAME_NS,
+                    fixture.state.releaseTimestamps.get(1) - fixture.state.releaseTimestamps.get(0));
+        }
+    }
+
+    @Test public void balancedEveryFrameOnVsyncExcludesLatchLeadFromDisplayWait() throws Exception {
+        try (Fixture fixture = new Fixture(2, new IntRing())) {
+            fixture.renderer.setStreamFrameRateMilliHz(120_000);
+            ReflectionHelpers.setField(fixture.renderer, "refreshSlotsEnabled", true);
+            long base = System.nanoTime();
+            long lead = 10_000_000L;
+            fixture.seed(100);
+            long expectedPresentNs = base + 2 * FRAME_NS;
+            long anchor = VsyncTimeline.anchorNs(expectedPresentNs, base, FRAME_NS);
+            fixture.renderer.onFrameTimeline(base, expectedPresentNs, expectedPresentNs - lead);
+
+            assertEquals(Collections.singletonList(100), fixture.state.rendered);
+            assertEquals(1, fixture.state.releaseTimestamps.size());
+            assertEquals(anchor + 2 * FRAME_NS - FRAME_NS / 2, (long) fixture.state.releaseTimestamps.get(0));
+            double[][] summary = fixture.state.stats.summarize();
+            assertEquals(1.0, summary[2][0], 0.0);
+            assertTrue("Display wait should exclude latch lead (< 1 ms), got " + summary[2][1], summary[2][1] < 1.0);
+        }
+    }
+
+    @Test public void lowestLatencyStillDropsOlderOutputOfTwoFrameBurstAsCatchUp() throws Exception {
+        try (Fixture fixture = new Fixture(1, new IntRing())) {
+            PreferenceConfiguration prefs = ReflectionHelpers.getField(fixture.renderer, "prefs");
+            prefs.framePacing = FRAME_PACING_MIN_LATENCY;
+            fixture.renderer.setStreamFrameRateMilliHz(120_000);
+            ReflectionHelpers.setField(fixture.renderer, "hostPhaseLock", true);
+            ReflectionHelpers.setField(fixture.renderer, "refreshSlotsEnabled", true);
+            ReflectionHelpers.setField(fixture.renderer, "vsyncPresentationDeadlineNs", 11_330_000L);
+            // An ARR screen with VRR off still plans refresh slots; it sends no phase reports,
+            // which would need the native bridge here.
+            ReflectionHelpers.setField(fixture.renderer, "outputHasArrSupport", true);
+            fixture.state.outputs = new int[] {20, 21};
+            fixture.state.anchorVsyncOnFirstOutput = true;
+            fixture.renderer.testClockNs = fixture.firstVsync;
+            fixture.state.allowDiscard.countDown();
+
+            fixture.start();
+            fixture.join();
+
+            assertEquals(Collections.singletonList(20), fixture.state.dropped);
+            assertEquals(Collections.singletonList(21), fixture.state.rendered);
+            assertEquals("catch_up 1", fixture.state.stats.describeDrops(1));
+        }
+    }
+
     /** Force the old size/poll race, but never wait for a consumer while holding its monitor. */
     private static final class SizeBarrierQueue extends IntRing {
         final CountDownLatch sizeRead = new CountDownLatch(1);
@@ -198,7 +304,9 @@ public class MediaCodecBalancedQueueTest {
         final List<Integer> dropped = new ArrayList<>();
         final List<Integer> rendered = new ArrayList<>();
         final List<Long> releaseTimestamps = new ArrayList<>();
-        boolean outputDelivered, codecCallHeldQueueLock;
+        int[] outputs = {NEW};
+        int nextOutput;
+        boolean anchorVsyncOnFirstOutput, codecCallHeldQueueLock;
     }
 
     private static final class Fixture implements AutoCloseable {
@@ -287,15 +395,23 @@ public class MediaCodecBalancedQueueTest {
         static State state;
 
         @Implementation public int dequeueOutputBuffer(MediaCodec.BufferInfo info, long timeoutUs) {
-            if (state.outputDelivered) {
-                ReflectionHelpers.setField(state.renderer, "stopping", true);
+            if (state.nextOutput >= state.outputs.length) {
+                if (timeoutUs > 0) {
+                    ReflectionHelpers.setField(state.renderer, "stopping", true);
+                }
                 return MediaCodec.INFO_TRY_AGAIN_LATER;
             }
-            state.outputDelivered = true;
-            long now = System.nanoTime();
-            info.presentationTimeUs = NEW;
-            state.stats.onDecoderInput(NEW, NEW, now, now, now, (char) 0);
-            return NEW;
+            int id = state.outputs[state.nextOutput++];
+            long now = state.renderer.nowNs();
+            if (state.anchorVsyncOnFirstOutput && state.nextOutput == 1) {
+                synchronized (state.renderer.vsyncMonitor) {
+                    // A latch just passed: the burst has almost a whole refresh before the next one.
+                    state.renderer.vsyncTimeNs = now + state.renderer.vsyncPresentationDeadlineNs - 100_000L;
+                }
+            }
+            info.presentationTimeUs = id;
+            state.stats.onDecoderInput(id, id, now, now, now, (char) 0);
+            return id;
         }
 
         @Implementation public void releaseOutputBuffer(int index, boolean render) {

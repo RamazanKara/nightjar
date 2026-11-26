@@ -603,6 +603,12 @@ type = "String"
 value = "checkbox_mouse_emulation_fixed_step"
 
 [[android_const]]
+name = "MOUSE_EMULATION_SENSITIVITY_PREF_STRING"
+vis = "package"
+type = "String"
+value = "seekbar_mouse_emulation_sensitivity"
+
+[[android_const]]
 name = "BACK_AS_META_PREF_STRING"
 vis = "package"
 type = "String"
@@ -1365,6 +1371,12 @@ type = "boolean"
 value = true
 
 [[android_const]]
+name = "DEFAULT_MOUSE_EMULATION_SENSITIVITY"
+vis = "package"
+type = "int"
+value = 100
+
+[[android_const]]
 name = "DEFAULT_ANALOG_STICK_FOR_SCROLLING"
 vis = "package"
 type = "String"
@@ -1603,6 +1615,12 @@ name = "OVERLAY_POSITION_PREF_STRING"
 vis = "package"
 type = "String"
 value = "performance_overlay_position"
+
+[[android_const]]
+name = "COMPACT_OVERLAY_DEVICE_INFO_PREF_STRING"
+vis = "package"
+type = "String"
+value = "checkbox_compact_overlay_device_info"
 
 [[android_const]]
 name = "OVERLAY_COMPACT_DEFAULT_PREF_STRING"
@@ -2176,6 +2194,16 @@ scope = "global"
 desktop_key = "mouse_fixed_step"
 shown_while = { parent = "checkbox_mouse_emulation", on = true }
 advice = "Enable for precise pointing in controller mouse mode: hold X while moving the stick to move a fixed step; Y doubles the step from 1 to 128 pixels, then wraps to 1."
+
+[[android_setting]]
+key = "seekbar_mouse_emulation_sensitivity"
+category = "category_gamepad_settings"
+tier = "more"
+kind = "int"
+xml_default = "100"
+scope = "global"
+shown_while = { parent = "checkbox_mouse_emulation", on = true }
+advice = "Adjust how fast the sticks move the pointer in controller mouse mode; 100% is default sensitivity."
 
 [[android_setting]]
 key = "checkbox_gamepad_touchpad_as_mouse"
@@ -2927,6 +2955,16 @@ xml_default = "false"
 scope = "global"
 desktop_key = "input_only_any_host"
 advice = "Enable to add Input-only to a game's menu on PCs whose host has no Input-only mode of its own (Sunshine, GameStream, Apollo with its input-only mode off). The PC still streams video and audio at 640x360, 30 FPS and 500 kbps, about 0.7 Mbit/s with overhead; Nightjar discards both. Hosts with their own mode keep using their Input-only tile. See [Input-only on any PC](controls.md#input-only-on-any-pc)."
+
+[[android_setting]]
+key = "checkbox_compact_overlay_device_info"
+category = "category_streaming"
+tier = "more"
+kind = "bool"
+xml_default = "false"
+scope = "global"
+desktop_key = "compact_overlay_device_info"
+advice = "Off by default, under Streaming's More rows. Adds this device's battery percentage and local clock time to the compact performance overlay."
 
 [[android_setting]]
 key = "theme"
@@ -3705,6 +3743,14 @@ default_expr = "OverlayCorner::TopLeft"
 scope = "layer"
 override_allowed = true
 android_key = "performance_overlay_position"
+
+[[desktop_setting]]
+key = "compact_overlay_device_info"
+rust_type = "bool"
+default_expr = "false"
+scope = "layer"
+override_allowed = true
+android_key = "checkbox_compact_overlay_device_info"
 
 [[desktop_setting]]
 key = "mouse_mode"

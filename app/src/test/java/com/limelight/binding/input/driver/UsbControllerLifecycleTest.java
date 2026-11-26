@@ -157,26 +157,50 @@ public class UsbControllerLifecycleTest {
     }
 
     @Test
-    public void autoForwardedControllerIsSkippedByUsbDriverService() {
+    public void autoForwardedControllerIsSkippedOnlyWhileForwardingIsActive() throws Exception {
+        UsbPads.Connection.inputReport = UsbPads.dualSenseReport();
         UsbDevice pad = UsbPads.dualSense("/dev/bus/usb/001/011");
         app.getSharedPreferences("usb_forwarding", Context.MODE_PRIVATE).edit()
                 .putStringSet("auto", java.util.Collections.singleton(
                         String.format(java.util.Locale.ROOT, "%04x:%04x", pad.getVendorId(), pad.getProductId())))
                 .commit();
+        com.limelight.binding.usb.UsbForwarding forwarding = null;
         try {
             com.limelight.preferences.PreferenceConfiguration config = new com.limelight.preferences.PreferenceConfiguration();
             config.usbDualSense = true;
-            assertFalse(UsbDriverService.shouldClaimDevice(app, pad, config));
+            // Stored "auto" list alone outside an active stream forwarding that device must not block claiming.
+            assertTrue(UsbDriverService.shouldClaimDevice(app, pad, config));
             bind(pad).start();
+            UsbPads.await(() -> listener.has("added"));
+            assertEquals("Inactive auto pref must not prevent UsbDriverService claiming", 1, UsbPads.Connection.claims.get());
+
+            // When an active UsbForwarding session starts forwarding this device, UsbDriverService skips claiming it.
+            forwarding = new com.limelight.binding.usb.UsbForwarding(app, config, null, ignored -> {});
+            forwarding.setDeviceReleaser(UsbDriverService::releaseActiveDevice);
+            UsbPads.Connection.releases.set(0);
+            shadowOf((UsbManager) app.getSystemService(Context.USB_SERVICE)).addOrUpdateUsbDevice(pad, true);
+            forwarding.choose(pad);
             shadowOf(Looper.getMainLooper()).idle();
-            assertEquals("Auto-forwarded controller must not be opened by UsbDriverService", 0, UsbPads.Connection.claims.get());
+            assertFalse(UsbDriverService.shouldClaimDevice(app, pad, config));
+            assertTrue(forwarding.isForwarded(pad));
         } finally {
+            if (service != null) {
+                service.destroy();
+                service = null;
+            }
+            if (forwarding != null) {
+                forwarding.stop();
+                forwarding.awaitDetaches(2000);
+                shadowOf(Looper.getMainLooper()).idle();
+            }
+            UsbDriverService.awaitDeviceRelease(pad, 2000);
+            shadowOf(Looper.getMainLooper()).idle();
             app.getSharedPreferences("usb_forwarding", Context.MODE_PRIVATE).edit().clear().commit();
         }
     }
 
     @Test
-    public void releasingActiveDeviceStopsControllerAndPreventsReclaimUntilDetach() throws Exception {
+    public void releasingActiveDeviceStopsControllerAndFailedForwardAllowsReclaimWithoutReplug() throws Exception {
         UsbPads.Connection.inputReport = UsbPads.dualSenseReport();
         UsbDevice pad = UsbPads.dualSense("/dev/bus/usb/001/012");
         bind(pad).start();
@@ -187,9 +211,15 @@ public class UsbControllerLifecycleTest {
         UsbPads.await(() -> UsbPads.Connection.closes.get() == 1 && listener.has("removed"));
         assertEquals(UsbPads.Connection.claims.get(), UsbPads.Connection.releases.get());
 
-        // A stray attach event for the same device must not reclaim it while forwarded.
+        // While forwarding still owns the device, a stray attach broadcast must not reclaim it.
         app.sendBroadcast(new Intent(UsbManager.ACTION_USB_DEVICE_ATTACHED).putExtra(UsbManager.EXTRA_DEVICE, pad));
         shadowOf(Looper.getMainLooper()).idleFor(1500, java.util.concurrent.TimeUnit.MILLISECONDS);
-        assertEquals("Released device must not be reclaimed mid-stream", 1, UsbPads.Connection.closes.get());
+        assertEquals("Released device must not be reclaimed while forwarding holds it", 1, UsbPads.Connection.claims.get());
+
+        // Once forwarding fails or ends, UsbDriverService rechecks and reclaims without needing replug.
+        UsbDriverService.onForwardingEnded(pad);
+        shadowOf(Looper.getMainLooper()).idle();
+        UsbPads.await(() -> UsbPads.Connection.claims.get() == 2);
+        assertEquals(2, UsbPads.Connection.claims.get());
     }
 }

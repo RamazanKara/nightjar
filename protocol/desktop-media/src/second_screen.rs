@@ -172,9 +172,14 @@ impl Companion {
             .stderr(Stdio::null())
             .spawn()?;
         let mut input = child.stdin.take();
-        // A process that cannot take the line is ended by its input closing, as `self` drops.
-        if let Some(pipe) = input.as_mut() {
-            pipe.write_all(format!("{hand_over}\n").as_bytes()).and_then(|()| pipe.flush())?;
+        // A process that cannot take the line is ended by its input closing and reaped cleanly.
+        if let Some(pipe) = input.as_mut()
+            && let Err(error) = pipe.write_all(format!("{hand_over}\n").as_bytes()).and_then(|()| pipe.flush())
+        {
+            drop(input);
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error);
         }
         Ok(Self { child, input })
     }

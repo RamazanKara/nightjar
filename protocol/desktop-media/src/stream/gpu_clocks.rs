@@ -46,22 +46,48 @@ fn level_mhz(line: &str) -> Option<u32> {
     rest[..digits].parse().ok()
 }
 
-/// The amdgpu cards of `drm` (a `/sys/class/drm`), by name: `cardN` entries whose device is AMD's
-/// and has the clock levels.
+/// The amdgpu cards of `drm` (a `/sys/class/drm`), by `(card_name, device_dir, pci_device_id)`.
 pub fn amd_cards(drm: &Path) -> Vec<(String, PathBuf)> {
+    amd_cards_with_pci(drm)
+        .into_iter()
+        .map(|(name, device, _)| (name, device))
+        .collect()
+}
+
+fn amd_cards_with_pci(drm: &Path) -> Vec<(String, PathBuf, Option<u32>)> {
     let Ok(entries) = std::fs::read_dir(drm) else { return Vec::new() };
-    let mut cards: Vec<(String, PathBuf)> = entries
+    let mut cards: Vec<(String, PathBuf, Option<u32>)> = entries
         .filter_map(Result::ok)
         .filter_map(|entry| {
             let name = entry.file_name().to_string_lossy().into_owned();
             let numbered = name.strip_prefix("card").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
             let device = entry.path().join("device");
-            let amd = std::fs::read_to_string(device.join("vendor")).is_ok_and(|v| v.trim() == AMD_VENDOR);
-            (numbered && amd && device.join("pp_dpm_sclk").exists()).then_some((name, device))
+            let amd = std::fs::read_to_string(device.join("vendor")).is_ok_and(|v| v.trim().eq_ignore_ascii_case(AMD_VENDOR));
+            let dev_id = std::fs::read_to_string(device.join("device"))
+                .ok()
+                .and_then(|s| u32::from_str_radix(s.trim().trim_start_matches("0x").trim_start_matches("0X"), 16).ok());
+            (numbered && amd && device.join("pp_dpm_sclk").exists()).then_some((name, device, dev_id))
         })
         .collect();
-    cards.sort();
+    cards.sort_by(|a, b| a.0.cmp(&b.0));
     cards
+}
+
+/// Selects the amdgpu card matching `pci = Some((vendor_id, device_id))`, or returns `None` when
+/// the rendering GPU belongs to another vendor (so hybrid systems never wake an inactive dGPU).
+fn select_amd_card(drm: &Path, pci: Option<(u32, u32)>) -> Option<(String, PathBuf)> {
+    if let Some((vendor, _)) = pci
+        && vendor != 0x1002
+    {
+        return None;
+    }
+    let cards = amd_cards_with_pci(drm);
+    if let Some((_, device_id)) = pci
+        && let Some((name, device, _)) = cards.iter().find(|(_, _, id)| *id == Some(device_id))
+    {
+        return Some((name.clone(), device.clone()));
+    }
+    cards.into_iter().next().map(|(name, device, _)| (name, device))
 }
 
 /// One reading of `device` (a card's `device` folder).
@@ -115,7 +141,13 @@ pub struct Sampler {
 impl Sampler {
     /// The sampler of the first amdgpu card, None without one (or when the thread cannot start).
     pub fn start() -> Option<Self> {
-        let (card, device) = amd_cards(Path::new(DRM)).into_iter().next()?;
+        Self::start_for_device(None)
+    }
+
+    /// Samples the amdgpu card matching `pci` `(vendor_id, device_id)`, returning `None` when
+    /// `pci` identifies a non-AMD GPU so hybrid setups do not wake an idle AMD card.
+    pub fn start_for_device(pci: Option<(u32, u32)>) -> Option<Self> {
+        let (card, device) = select_amd_card(Path::new(DRM), pci)?;
         let shared = Arc::new(Shared { samples: Mutex::new(Vec::new()), stop: AtomicBool::new(false) });
         let (thread_shared, thread_device) = (shared.clone(), device.clone());
         let thread = std::thread::Builder::new()
@@ -187,6 +219,25 @@ mod tests {
         let unread = [Sample::default()];
         assert_eq!(summary("card0", &unread, None, None, None, None),
             "amdgpu card0 over 1 samples a second apart: performance level unreadable, platform profile unreadable");
+    }
+
+    #[test]
+    fn non_amd_renderer_skips_amdgpu_and_matching_device_picks_right_card() {
+        let root = std::env::temp_dir().join(format!("nightjar-gpu-clocks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let mk = |card: &str, vendor: &str, dev_id: &str| {
+            let dev = root.join(card).join("device");
+            std::fs::create_dir_all(&dev).unwrap();
+            std::fs::write(dev.join("vendor"), vendor).unwrap();
+            std::fs::write(dev.join("device"), dev_id).unwrap();
+            std::fs::write(dev.join("pp_dpm_sclk"), "0: 800Mhz *\n").unwrap();
+        };
+        mk("card0", "0x1002", "0x744c");
+        mk("card1", "0x1002", "0x15bf");
+        assert_eq!(select_amd_card(&root, Some((0x10de, 0x2684))), None, "NVIDIA renderer must not wake AMD card");
+        assert_eq!(select_amd_card(&root, Some((0x1002, 0x15bf))).map(|(c, _)| c), Some("card1".into()));
+        assert_eq!(select_amd_card(&root, None).map(|(c, _)| c), Some("card0".into()));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

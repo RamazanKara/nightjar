@@ -22,6 +22,8 @@ pub const MAX_IMAGE_PIXELS: u64 = 1 << 25;
 pub const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 /// 64 MiB over a slow link takes a while; the host answers within this once it has the body.
 const IMAGE_READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// Overall streaming deadline for up to 64 MiB PNG transfers; stalled reads still fail in 30 s.
+const IMAGE_TOTAL_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Why the image clipboard gave no image or took none.
 #[derive(Debug)]
@@ -218,7 +220,7 @@ impl HostClient {
         let result = transport::probe_stream(
             &request,
             &self.cancel,
-            IMAGE_READ_TIMEOUT,
+            IMAGE_TOTAL_TIMEOUT,
             &mut |status, headers, _| {
                 if status == 404 {
                     return Err(Error::NotFound("/actions/clipboard".into()));

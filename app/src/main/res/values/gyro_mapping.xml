@@ -42,6 +42,7 @@
     <string name="gyro_diag_record">Record</string>
     <string name="gyro_diag_stop">Stop</string>
     <string name="gyro_diag_recording">Recording</string>
+    <string name="gyro_diag_cap_reached">Recording stopped at %1$d rows.</string>
     <string name="gyro_diag_mapping_settings">Mapping: settings</string>
     <string name="gyro_diag_mapping_flydigi">Mapping: Flydigi</string>
     <string name="gyro_diag_identify">Controllers</string>

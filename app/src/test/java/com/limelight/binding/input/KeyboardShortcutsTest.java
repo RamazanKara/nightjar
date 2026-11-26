@@ -74,4 +74,15 @@ public class KeyboardShortcutsTest {
         assertThrows(IllegalArgumentException.class, () -> KeyboardShortcuts.parse("{\"version\":2,\"data\":[]}"));
         assertThrows(IOException.class, () -> KeyboardShortcuts.read(new ByteArrayInputStream(new byte[KeyboardShortcuts.MAX_BYTES + 1])));
     }
+
+    @Test public void preservesUnreadableStoredShortcutsInsteadOfOverwritingWithEmpty() {
+        android.content.Context context = org.robolectric.RuntimeEnvironment.getApplication();
+        String corrupt = "{\"version\":99,\"future\":\"keep-me\"}";
+        android.preference.PreferenceManager.getDefaultSharedPreferences(context)
+                .edit().putString("keyboard_shortcuts", corrupt).commit();
+        assertTrue(KeyboardShortcuts.hasUnreadableStored(context));
+        KeyboardShortcuts.save(context, Arrays.asList());
+        assertEquals(corrupt, android.preference.PreferenceManager.getDefaultSharedPreferences(context)
+                .getString("keyboard_shortcuts", null));
+    }
 }

@@ -50,7 +50,7 @@
 //! PresentRefreshCount and SyncRefreshCount) and `stat_sync_ns` (SyncQPCTime on the session clock).
 
 use std::collections::VecDeque;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -219,12 +219,28 @@ pub fn resolve(path: &Path) -> PathBuf {
 
 impl TimingCsv {
     pub fn create(path: &Path) -> std::io::Result<Self> {
+        Self::open(path, false)
+    }
+
+    pub fn append(path: &Path) -> std::io::Result<Self> {
+        Self::open(path, true)
+    }
+
+    fn open(path: &Path, append: bool) -> std::io::Result<Self> {
         if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
             std::fs::create_dir_all(dir)?;
         }
-        let mut file = BufWriter::new(File::create(path)?);
-        file.write_all(header().as_bytes())?;
-        file.flush()?;
+        let raw = if append {
+            OpenOptions::new().create(true).append(true).open(path)?
+        } else {
+            File::create(path)?
+        };
+        let needs_header = !append || raw.metadata()?.len() == 0;
+        let mut file = BufWriter::new(raw);
+        if needs_header {
+            file.write_all(header().as_bytes())?;
+            file.flush()?;
+        }
         let (sender, inbox) = sync_channel(QUEUE);
         let lost = Arc::new(AtomicU64::new(0));
         let counter = lost.clone();

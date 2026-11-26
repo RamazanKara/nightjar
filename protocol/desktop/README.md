@@ -143,8 +143,8 @@ The last command uses a previously packaged release app. When checking an Intel 
 Apple Silicon, add `--arch x86_64 --inspect-only` and supply the Intel app path. Run the same
 check on the Intel Mac without `--inspect-only` to exercise native launch.
 
-To update the Metal shaders after changing their SPIR-V inputs, run `python3 desktop/src/metal/generate.py /path/to/spirv-cross` from
-`protocol/` with SPIRV-Cross tag `vulkan-sdk-1.4.321.0`. Commit the regenerated `.metal` files
+To update the Metal shaders after changing their SPIR-V inputs, run `python3 desktop-media/src/metal/generate.py /path/to/spirv-cross` from
+`client/protocol/` with SPIRV-Cross tag `vulkan-sdk-1.4.321.0`. Commit the regenerated `.metal` files
 alongside their inputs and run the hardware check.
 
 ## Installing

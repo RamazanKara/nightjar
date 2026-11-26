@@ -2,10 +2,8 @@
 //! caches (no-op when unchanged), aliases, pinned addresses, and one-time import tracking.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::path::Path;
 
 use nightjar_policy::hosts::{
     EndpointSlot, HostCapabilitiesSnapshot, HostNames, HostNoticesState, HostPackedEntry,
@@ -13,7 +11,7 @@ use nightjar_policy::hosts::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::io::{dir_lock, write_atomic};
+use super::io::{GuardedJsonFile, dir_lock};
 
 const HOST_META_FILE: &str = "host_meta.json";
 
@@ -54,44 +52,36 @@ struct HostMetaFile {
 /// Synchronized `host_meta.json` store.
 #[derive(Clone, Debug)]
 pub struct HostMetaStore {
-    path: PathBuf,
-    lock: Arc<std::sync::Mutex<()>>,
+    file: GuardedJsonFile,
 }
 
 impl HostMetaStore {
     pub fn open(dir: impl AsRef<Path>) -> Self {
         let dir = dir.as_ref();
         Self {
-            path: dir.join(HOST_META_FILE),
-            lock: dir_lock(dir),
+            file: GuardedJsonFile::new(dir.join(HOST_META_FILE), dir_lock(dir), true),
         }
     }
 
     pub fn path(&self) -> &Path {
-        &self.path
+        self.file.path()
     }
 
     fn read_unlocked(&self) -> HostMetaFile {
-        let Ok(text) = fs::read_to_string(&self.path) else {
-            return HostMetaFile::default();
-        };
-        serde_json::from_str(&text).unwrap_or_else(|e| {
-            eprintln!("nightjar: ignoring unreadable {}: {e}", self.path.display());
-            HostMetaFile::default()
-        })
+        self.file.read_json_or_default()
     }
 
     fn write_unlocked(&self, file: &mut HostMetaFile) -> io::Result<()> {
         file.hosts.retain(|_, entry| !entry.is_empty());
         let text = serde_json::to_string_pretty(file).map_err(io::Error::other)?;
-        write_atomic(&self.path, text.as_bytes(), true)
+        self.file.write_bytes(text.as_bytes())
     }
 
     fn with_notices_mut<R>(
         &self,
         f: impl FnOnce(&mut HostNoticesState) -> (R, bool),
     ) -> io::Result<R> {
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         let mut state = HostNoticesState {
             hosts: file
@@ -118,7 +108,7 @@ impl HostMetaStore {
         &self,
         f: impl FnOnce(&mut HostPackedModesState) -> (R, bool),
     ) -> io::Result<R> {
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         let mut state = HostPackedModesState {
             hosts: file
@@ -182,7 +172,7 @@ impl HostMetaStore {
         if uuid.is_empty() {
             return -1;
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let file = self.read_unlocked();
         let Some(entry) = file.hosts.get(uuid) else {
             return -1;
@@ -216,7 +206,7 @@ impl HostMetaStore {
         if uuid.is_empty() {
             return false;
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let file = self.read_unlocked();
         file.hosts
             .get(uuid)
@@ -244,7 +234,7 @@ impl HostMetaStore {
         if uuid.is_empty() {
             return None;
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let file = self.read_unlocked();
         let raw = file.hosts.get(uuid)?.capabilities.as_deref()?;
         HostCapabilitiesSnapshot::parse(raw).map(|snap| snap.canonical_json().to_owned())
@@ -259,7 +249,7 @@ impl HostMetaStore {
         let Some(incoming) = HostCapabilitiesSnapshot::parse(json) else {
             return Ok(false);
         };
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         if let Some(existing_raw) = file
             .hosts
@@ -279,7 +269,7 @@ impl HostMetaStore {
         if uuid.is_empty() {
             return Ok(false);
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         let Some(entry) = file.hosts.get_mut(uuid) else {
             return Ok(false);
@@ -295,7 +285,7 @@ impl HostMetaStore {
         if uuid.is_empty() {
             return None;
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let file = self.read_unlocked();
         file.hosts
             .get(uuid)
@@ -309,7 +299,7 @@ impl HostMetaStore {
             return Ok(false);
         }
         let normalized = HostNames::normalize_alias(alias, None);
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         let entry = file.hosts.entry(uuid.to_owned()).or_default();
         if entry.alias == normalized {
@@ -324,7 +314,7 @@ impl HostMetaStore {
         if uuid.is_empty() {
             return None;
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let file = self.read_unlocked();
         file.hosts
             .get(uuid)
@@ -335,7 +325,7 @@ impl HostMetaStore {
         if uuid.is_empty() {
             return Ok(false);
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         let entry = file.hosts.entry(uuid.to_owned()).or_default();
         if entry.pinned_address == slot {
@@ -351,7 +341,7 @@ impl HostMetaStore {
         if uuid.is_empty() {
             return Ok(false);
         }
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         if file.hosts.remove(uuid).is_none() {
             return Ok(false);
@@ -361,7 +351,7 @@ impl HostMetaStore {
     }
 
     pub fn needs_import(&self, source: &str) -> bool {
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let file = self.read_unlocked();
         !file.imported_sources.contains(source)
     }
@@ -373,7 +363,7 @@ impl HostMetaStore {
         source: &str,
         entries: &BTreeMap<String, serde_json::Value>,
     ) -> io::Result<bool> {
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.file.lock();
         let mut file = self.read_unlocked();
         if !file.imported_sources.insert(source.to_owned()) {
             return Ok(false);

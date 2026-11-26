@@ -214,4 +214,40 @@ public class ControllerButtonMapTest {
         assertEquals("name:Generic Pad", ControllerButtonMap.deviceKey(0, 0, " Generic Pad "));
         assertEquals("name:", ControllerButtonMap.deviceKey(0, 0, null));
     }
+
+    @Test
+    public void eightBitDoScanCodeSourcesAreRemappableAndSurviveStorage() {
+        int btnC = ControllerButtonMap.sourceForKey(0, 306);
+        int btnZ = ControllerButtonMap.sourceForKey(0, 309);
+        int l4 = ControllerButtonMap.sourceForKey(0, 0x2c0);
+        int r4 = ControllerButtonMap.sourceForKey(0, 0x2c1);
+
+        assertEquals(ControllerButtonMap.SCAN_SOURCE_FLAG | 306, btnC);
+        assertEquals(ControllerButtonMap.SCAN_SOURCE_FLAG | 309, btnZ);
+        assertEquals(ControllerButtonMap.SCAN_SOURCE_FLAG | 0x2c0, l4);
+        assertEquals(ControllerButtonMap.SCAN_SOURCE_FLAG | 0x2c1, r4);
+        assertTrue(ControllerButtonMap.isRemappableSource(btnC));
+        assertTrue(ControllerButtonMap.isRemappableSource(btnZ));
+        assertTrue(ControllerButtonMap.isRemappableSource(l4));
+        assertTrue(ControllerButtonMap.isRemappableSource(r4));
+        assertEquals(306, ControllerButtonMap.scanCodeOf(btnC));
+        assertEquals(0x2c1, ControllerButtonMap.scanCodeOf(r4));
+
+        // Out-of-range scan codes are ignored as remappable sources.
+        assertFalse(ControllerButtonMap.isRemappableSource(ControllerButtonMap.SCAN_SOURCE_FLAG | 1));
+        assertFalse(ControllerButtonMap.isRemappableSource(ControllerButtonMap.SCAN_SOURCE_FLAG | 0x300));
+
+        ControllerButtonMap map = new ControllerButtonMap();
+        map.put(btnC, ControllerButtonMap.TARGET_PADDLE1);
+        map.put(btnZ, ControllerButtonMap.TARGET_PADDLE2);
+        map.put(l4, ControllerButtonMap.TARGET_PADDLE3);
+        map.put(r4, ControllerButtonMap.TARGET_PADDLE4);
+
+        ControllerButtonMap restored = ControllerButtonMap.deserialize(map.serialize());
+        assertEquals(ControllerButtonMap.TARGET_PADDLE1, restored.map(btnC));
+        assertEquals(ControllerButtonMap.TARGET_PADDLE2, restored.map(btnZ));
+        assertEquals(ControllerButtonMap.TARGET_PADDLE3, restored.map(l4));
+        assertEquals(ControllerButtonMap.TARGET_PADDLE4, restored.map(r4));
+        assertEquals(PADDLE1_FLAG | PADDLE2_FLAG | PADDLE3_FLAG | PADDLE4_FLAG, restored.targetButtonFlags());
+    }
 }

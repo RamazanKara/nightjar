@@ -165,8 +165,13 @@ impl InputQueue {
         };
         let sunshine = self.sunshine;
         let same_buttons = |queued: &InputEvent| match queued {
-            InputEvent::Controller { buttons: old, .. } => {
-                *old as u16 == buttons as u16
+            InputEvent::Controller {
+                active_mask: old_active,
+                buttons: old,
+                ..
+            } => {
+                *old_active == active_mask
+                    && *old as u16 == buttons as u16
                     && (!sunshine || (*old >> 16) as u16 == (buttons >> 16) as u16)
             }
             _ => false,

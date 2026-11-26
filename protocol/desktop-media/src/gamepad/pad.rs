@@ -44,6 +44,8 @@ pub struct Pad {
     /// With Back opening the stream controls: Back is held while other buttons of a quit combo
     /// with Select are, so it counts toward that combo and opens the controls on release instead.
     pub(super) back_waiting: bool,
+    /// Physical button bitmask SDL expects `set_motion` not to churn redundantly on repeated state.
+    pub(super) motion_rates: [std::cell::Cell<u16>; 2],
     /// Holding Guide opens the stream menu: where this pad's Guide press is.
     pub(super) guide: Guide,
     /// The physical button (as `1 << SDL_GamepadButton`) `guide` follows: Guide, or Back with

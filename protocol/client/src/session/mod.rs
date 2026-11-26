@@ -322,17 +322,64 @@ pub trait Listener: Send + Sync {
     }
 }
 
+type InterruptWake = Arc<Mutex<Option<Box<dyn Fn() + Send + Sync>>>>;
+
 /// Aborts a [`Session::start`] in progress from another thread (`LiInterruptConnection`).
-#[derive(Clone, Debug, Default)]
-pub struct Interrupt(Arc<AtomicBool>);
+#[derive(Clone, Default)]
+pub struct Interrupt {
+    pub(crate) flag: Arc<AtomicBool>,
+    wake: InterruptWake,
+}
+
+impl std::fmt::Debug for Interrupt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Interrupt")
+            .field("interrupted", &self.is_interrupted())
+            .finish()
+    }
+}
+
+pub(crate) struct InterruptGuard {
+    wake: InterruptWake,
+}
+
+impl Drop for InterruptGuard {
+    fn drop(&mut self) {
+        *self.wake.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    }
+}
 
 impl Interrupt {
     pub fn interrupt(&self) {
-        self.0.store(true, Ordering::SeqCst);
+        self.flag.store(true, Ordering::SeqCst);
+        if let Some(wake) = self.wake.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
+            wake();
+        }
     }
 
     pub fn is_interrupted(&self) -> bool {
-        self.0.load(Ordering::SeqCst)
+        self.flag.load(Ordering::SeqCst)
+    }
+
+    /// Registers a callback fired when [`Self::interrupt`] is called; fires immediately if
+    /// already interrupted.
+    pub(crate) fn on_interrupt(
+        &self,
+        wake: impl Fn() + Send + Sync + 'static,
+    ) -> InterruptGuard {
+        let guard = {
+            let mut slot = self.wake.lock().unwrap_or_else(|p| p.into_inner());
+            *slot = Some(Box::new(wake));
+            InterruptGuard {
+                wake: self.wake.clone(),
+            }
+        };
+        if self.is_interrupted()
+            && let Some(wake) = self.wake.lock().unwrap_or_else(|p| p.into_inner()).as_ref()
+        {
+            wake();
+        }
+        guard
     }
 }
 
@@ -403,6 +450,8 @@ impl InputHandle {
     }
 }
 
+type WatchGateway = Arc<dyn Fn(IpAddr) -> Option<IpAddr> + Send + Sync>;
+
 impl Session {
     /// Connects and starts streaming; blocks until the stream runs or a stage fails. Every
     /// stage is reported to `listener` as it starts, completes or fails.
@@ -414,33 +463,37 @@ impl Session {
         listener: Arc<dyn Listener>,
         interrupt: &Interrupt,
     ) -> Result<Session, StartError> {
-        let mut parts = Parts {
-            shared: Arc::new(Shared::new(
-                listener.clone(),
-                config.network_priority,
-                config.receive_decode_priority,
-            )),
-            remote: None,
-            local: None,
-            outcome: None,
-            audio_socket: None,
-            audio_pinger: None,
-            video_pinger: None,
-            video_shared: None,
-            video_receive_buffer: None,
-            audio_shared: Arc::new(audio::AudioShared::default()),
-            control: None,
-            control_thread: None,
-            video: None,
-            video_decoder: None,
-            audio: None,
-            audio_renderer: None,
-            microphone: Arc::new(Mutex::new(None)),
-            video_next_socket: Arc::default(),
-            audio_next_socket: Arc::default(),
-            roamer: None,
-            roam_poll: None,
-        };
+        Self::start_inner(host, config, video, audio, listener, interrupt, None)
+    }
+
+    /// Variant of [`Session::start`] that arms [`Session::watch_host`] before termination events
+    /// are released, closing the window between handshake finish and `watch_host`.
+    pub fn start_with_watch(
+        host: &HostInfo,
+        config: SessionConfig,
+        video: Box<dyn VideoDecoder>,
+        audio: Box<dyn AudioRenderer>,
+        listener: Arc<dyn Listener>,
+        interrupt: &Interrupt,
+        watch: (u16, WatchGateway),
+    ) -> Result<Session, StartError> {
+        Self::start_inner(host, config, video, audio, listener, interrupt, Some(watch))
+    }
+
+    fn start_inner(
+        host: &HostInfo,
+        config: SessionConfig,
+        video: Box<dyn VideoDecoder>,
+        audio: Box<dyn AudioRenderer>,
+        listener: Arc<dyn Listener>,
+        interrupt: &Interrupt,
+        watch: Option<(u16, WatchGateway)>,
+    ) -> Result<Session, StartError> {
+        let mut parts = Parts::new(
+            listener.clone(),
+            config.network_priority,
+            config.receive_decode_priority,
+        );
         match start(
             &mut parts,
             host,
@@ -451,6 +504,16 @@ impl Session {
             interrupt,
         ) {
             Ok(()) => {
+                if let (Some((port, gateway)), Some(remote), Some(control)) =
+                    (watch, parts.remote, parts.control.clone())
+                {
+                    *parts.shared.host_watch.lock().unwrap_or_else(|p| p.into_inner()) =
+                        Some(HostWatch {
+                            control,
+                            host: SocketAddr::new(remote.ip(), port),
+                            gateway,
+                        });
+                }
                 parts.shared.started();
                 Ok(Session { parts })
             }

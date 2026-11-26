@@ -89,8 +89,12 @@ public class TvChannelHelper {
 
             Long channelId = getChannelId(computer.uuid);
             if (channelId != null) {
-                context.getContentResolver().update(TvContract.buildChannelUri(channelId),
-                        builder.toContentValues(), null, null);
+                try {
+                    context.getContentResolver().update(TvContract.buildChannelUri(channelId),
+                            builder.toContentValues(), null, null);
+                } catch (RuntimeException e) {
+                    LimeLog.warning("TV channel update failed: " + e.getMessage());
+                }
                 return;
             }
 
@@ -99,16 +103,13 @@ public class TvChannelHelper {
             try {
                 channelUri = context.getContentResolver().insert(
                         TvContract.Channels.CONTENT_URI, builder.toContentValues());
-            } catch (IllegalArgumentException e) {
-                // This can happen on HarmonyOS devices which report to
-                // support Leanback APIs, yet don't implement this URI
-                e.printStackTrace();
-                return;
-            }
-
-            if (channelUri != null) {
-                long id = ContentUris.parseId(channelUri);
-                updateChannelIcon(id);
+                if (channelUri != null) {
+                    long id = ContentUris.parseId(channelUri);
+                    updateChannelIcon(id);
+                }
+            } catch (RuntimeException e) {
+                // Broken OEM / HarmonyOS devices may reject or lack Leanback provider URIs.
+                LimeLog.warning("TV channel insert failed: " + e.getMessage());
             }
         }
     }
@@ -292,6 +293,11 @@ public class TvChannelHelper {
         return posterArtKey(validLaunch, appKey, false, false);
     }
 
+    private static String stableProgramId(NvApp app) {
+        String uuid = app.getAppUuid();
+        return (uuid == null || uuid.isEmpty()) ? String.valueOf(app.getAppId()) : uuid;
+    }
+
     String addGameToChannel(ComputerDetails computer, NvApp app, String launchArtKey) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!isAndroidTV()) {
@@ -303,7 +309,7 @@ public class TvChannelHelper {
                 return null;
             }
 
-            ExistingProgram existing = getExistingProgram(channelId, ""+app.getAppId());
+            ExistingProgram existing = getExistingProgram(channelId, app);
             String existingArtKey = existing == null ? null : posterArtKeyFromUri(existing.posterArtUri, computer.uuid);
             String artKey = resolveChannelArtKey(context, computer.uuid, app, launchArtKey, existingArtKey);
             // A game without a cover of its own gets a poster with its title: the TV home screen
@@ -323,27 +329,31 @@ public class TvChannelHelper {
                     .setPosterArtAspectRatio(ASPECT_RATIO_MOVIE_POSTER)
                     .setPosterArtUri(PosterContentProvider.createBoxArtUri(computer.uuid, artKey))
                     .setIntent(ServerHelper.createAppShortcutIntent(context, computer, app, artKey))
-                    .setInternalProviderId(""+app.getAppId())
+                    .setInternalProviderId(stableProgramId(app))
                     // Weight should increase each time we run the game
                     .setWeight((int)((System.currentTimeMillis() - 1500000000000L) / 1000));
 
             if (existing != null) {
-                context.getContentResolver().update(TvContract.buildPreviewProgramUri(existing.id),
-                        builder.toContentValues(), null, null);
+                try {
+                    context.getContentResolver().update(TvContract.buildPreviewProgramUri(existing.id),
+                            builder.toContentValues(), null, null);
+                } catch (RuntimeException e) {
+                    LimeLog.warning("TV program update failed: " + e.getMessage());
+                    return null;
+                }
                 return artKey;
             }
 
             try {
                 context.getContentResolver().insert(TvContract.PreviewPrograms.CONTENT_URI,
                         builder.toContentValues());
-            } catch (IllegalArgumentException e) {
-                // This can happen on HarmonyOS devices which report to
-                // support Leanback APIs, yet don't implement this URI
-                e.printStackTrace();
-                return artKey;
+                TvContract.requestChannelBrowsable(context, channelId);
+            } catch (RuntimeException e) {
+                // Broken OEM / HarmonyOS devices may reject or lack Leanback provider URIs.
+                LimeLog.warning("TV program insert failed: " + e.getMessage());
+                return null;
             }
 
-            TvContract.requestChannelBrowsable(context, channelId);
             return artKey;
         }
         return null;
@@ -360,7 +370,11 @@ public class TvChannelHelper {
                 return;
             }
 
-            context.getContentResolver().delete(TvContract.buildChannelUri(channelId), null, null);
+            try {
+                context.getContentResolver().delete(TvContract.buildChannelUri(channelId), null, null);
+            } catch (RuntimeException e) {
+                LimeLog.warning("TV channel delete failed: " + e.getMessage());
+            }
         }
     }
 
@@ -375,13 +389,16 @@ public class TvChannelHelper {
                 return;
             }
 
-
-            ExistingProgram existing = getExistingProgram(channelId, ""+app.getAppId());
+            ExistingProgram existing = getExistingProgram(channelId, app);
             if (existing == null) {
                 return;
             }
 
-            context.getContentResolver().delete(TvContract.buildPreviewProgramUri(existing.id), null, null);
+            try {
+                context.getContentResolver().delete(TvContract.buildPreviewProgramUri(existing.id), null, null);
+            } catch (RuntimeException e) {
+                LimeLog.warning("TV program delete failed: " + e.getMessage());
+            }
         }
     }
 
@@ -414,11 +431,16 @@ public class TvChannelHelper {
             }
 
             return null;
+        } catch (RuntimeException e) {
+            LimeLog.warning("TV channel query failed: " + e.getMessage());
+            return null;
         }
     }
 
     @TargetApi(Build.VERSION_CODES.O)
-    private ExistingProgram getExistingProgram(long channelId, String appId) {
+    private ExistingProgram getExistingProgram(long channelId, NvApp app) {
+        String primaryId = stableProgramId(app);
+        String legacyId = String.valueOf(app.getAppId());
         try (Cursor cursor = context.getContentResolver().query(
                 TvContract.buildPreviewProgramsUriForChannel(channelId),
                 new String[] {
@@ -433,15 +455,24 @@ public class TvChannelHelper {
             if (cursor == null || cursor.getCount() == 0) {
                 return null;
             }
+            ExistingProgram legacyMatch = null;
             while (cursor.moveToNext()) {
                 String internalProviderId = cursor.getString(INTERNAL_PROVIDER_ID_INDEX);
-                if (appId.equals(internalProviderId)) {
+                boolean isPrimary = primaryId.equals(internalProviderId);
+                boolean isLegacy = !isPrimary && legacyId.equals(internalProviderId);
+                if (isPrimary || isLegacy) {
                     long id = cursor.getLong(ID_INDEX);
                     int browsable = cursor.getInt(PROGRAM_BROWSABLE_INDEX);
                     if (browsable != 0) {
                         String posterUri = cursor.getColumnCount() > POSTER_ART_URI_INDEX && !cursor.isNull(POSTER_ART_URI_INDEX)
                                 ? cursor.getString(POSTER_ART_URI_INDEX) : null;
-                        return new ExistingProgram(id, posterUri);
+                        ExistingProgram match = new ExistingProgram(id, posterUri);
+                        if (isPrimary) {
+                            return match;
+                        }
+                        if (legacyMatch == null) {
+                            legacyMatch = match;
+                        }
                     } else {
                         int countDeleted = context.getContentResolver().delete(TvContract.buildPreviewProgramUri(id), null, null);
                         if (countDeleted > 0) {
@@ -453,6 +484,9 @@ public class TvChannelHelper {
                 }
             }
 
+            return legacyMatch;
+        } catch (RuntimeException e) {
+            LimeLog.warning("TV program query failed: " + e.getMessage());
             return null;
         }
     }

@@ -107,9 +107,10 @@ impl Audio {
     fn init_wasapi(&mut self, decoder: AudioDecoder, packet_ms: u32) {
         match super::super::wasapi::Output::open() {
             Ok(output) => {
-                let playout = Arc::new(Mutex::new(Playout::new(decoder, packet_ms, output.period_frames)));
+                let period = output.period_frames();
+                let playout = Arc::new(Mutex::new(Playout::new(decoder, packet_ms, period)));
                 lock(&output.queue).playout = Some(playout.clone());
-                eprintln!("nightjar: audio: 7.1.4 through WASAPI, {} frames a period", output.period_frames);
+                eprintln!("nightjar: audio: 7.1.4 through WASAPI, {} frames a period", period);
                 self.playout = Some(playout);
                 self.wasapi = Some(output);
             }

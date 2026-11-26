@@ -61,7 +61,8 @@ float4 planesDirect(float4 position : SV_Position) : SV_Target {
     planeY.GetDimensions(lumaSize.x, lumaSize.y);
     float3 samples;
     samples.x = planeY.SampleLevel(sampleLinear, at / float2(lumaSize), 0);
-    float2 uv = (flags & 32) != 0 ? at / float2(size) : clamp(at * 0.5, 0.5, visible * 0.5 - 0.5) / float2(size);
+    float2 chromaAt = at + float2((flags & 16384) != 0 ? 0.0 : 0.5, 0.0);
+    float2 uv = (flags & 32) != 0 ? at / float2(size) : clamp(chromaAt * 0.5, 0.5, visible * 0.5 - 0.5) / float2(size);
     samples.y = planeCb.SampleLevel(sampleLinear, uv, 0);
     samples.z = planeCr.SampleLevel(sampleLinear, uv, 0);
     if ((flags & 64) != 0) samples *= 65535.0 / 1023.0;

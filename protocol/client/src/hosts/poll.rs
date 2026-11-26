@@ -110,6 +110,7 @@ impl PollCancel {
     ///
     /// Holds the registration mutex across `canceller.cancel()` so a finishing worker's
     /// [`PollCancelGuard::drop`] cannot return its client to the pool until cancellation finishes.
+    /// Registered cancellers must be fast and non-blocking (never wait on the worker thread).
     pub fn cancel(&self) {
         let mut state = self.0.state.lock().unwrap_or_else(|e| e.into_inner());
         self.0.cancelled.store(true, Ordering::Release);

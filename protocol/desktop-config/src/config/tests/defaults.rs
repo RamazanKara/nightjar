@@ -44,6 +44,13 @@ fn native_scale_defaults_normalizes_and_scales_preserving_aspect() {
     let mut ov = Overrides::default();
     ov.capture(&scaled, &["width", "height", "native_scale"]);
     assert_eq!(ov.apply(&Settings::default()).native_scale, 75);
+
+    let panel_360 = Display { width: 2560, height: 1440, refresh_hz: 360.0, refresh_reported: true };
+    let (_, _, fps_360, _) = stream_mode(&Settings::default(), panel_360);
+    assert_eq!(fps_360, 360, "display refresh rate above 240 Hz is not clamped down");
+    let panel_500 = Display { width: 1920, height: 1080, refresh_hz: 500.0, refresh_reported: true };
+    let (_, _, fps_500, _) = stream_mode(&Settings::default(), panel_500);
+    assert_eq!(fps_500, 480, "display refresh rate aligns with 480 Hz ceiling");
 }
 
 #[test]

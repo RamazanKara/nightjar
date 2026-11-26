@@ -41,7 +41,7 @@ public final class WifiFacts {
         if (band == null) return UNKNOWN;
         switch (band) {
             case GHZ_2_4: return frequencyMhz == 2484 ? 14 : (frequencyMhz - 2407) / 5;
-            case GHZ_5: return (frequencyMhz - 5000) / 5;
+            case GHZ_5: return frequencyMhz < 5000 ? (frequencyMhz - 4000) / 5 : (frequencyMhz - 5000) / 5;
             default: return frequencyMhz == 5935 ? 2 : (frequencyMhz - 5950) / 5;
         }
     }

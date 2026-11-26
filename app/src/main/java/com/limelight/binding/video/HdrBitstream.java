@@ -46,6 +46,36 @@ public final class HdrBitstream {
         return end;
     }
 
+    // An RPU is at most about 500 bytes; a slice this near the end means there is none.
+    private static final int RPU_SEARCH_BYTES = 4096;
+    private static final int HEVC_RPU = 62;
+
+    /**
+     * Whether the last NAL unit of an HEVC access unit is a Dolby Vision RPU, whatever zero bytes
+     * follow it. An NVIDIA Shield's Dolby Vision decoder takes the device's hardware composer down,
+     * and Android with it, on frames without one (nightjar#193).
+     */
+    public static boolean endsInRpu(byte[] data, int length) {
+        int end = queuedLength(true, data, length);
+        for (int i = end - 4; i >= Math.max(0, end - RPU_SEARCH_BYTES); i--) {
+            if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1) return isRpu(data[i + 3]);
+        }
+        return false;
+    }
+
+    /** {@link #endsInRpu(byte[], int)} for a frame handed over in place. */
+    public static boolean endsInRpu(ByteBuffer data, int length) {
+        int end = queuedLength(true, data, length);
+        for (int i = end - 4; i >= Math.max(0, end - RPU_SEARCH_BYTES); i--) {
+            if (data.get(i) == 0 && data.get(i + 1) == 0 && data.get(i + 2) == 1) return isRpu(data.get(i + 3));
+        }
+        return false;
+    }
+
+    private static boolean isRpu(byte nalHeader) {
+        return (nalHeader >> 1 & 0x3f) == HEVC_RPU;
+    }
+
     /**
      * Whether a Dolby Vision access unit in {@code videoFormat} ends at its RPU, so that
      * {@link #queuedLength} trims it: HEVC (profile 8), whose RPU NAL unit comes last. An AV1 frame

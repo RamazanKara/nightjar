@@ -476,8 +476,8 @@ final class MediaCodecSession {
         r.dolbyVisionActive = dolbyVision;
         r.restartRecreates = MediaCodecHdrControl.restartRecreates(selectedDecoderInfo.getName(), lowLatencyKeysApplied);
         if (r.restartRecreates) {
-            LimeLog.info("Decoder " + selectedDecoderInfo.getName() + " restarts as a new codec: with its" +
-                    " vendor low-latency mode, stop() and configure() leave it without input buffers");
+            LimeLog.info("Decoder " + selectedDecoderInfo.getName() + " restarts as a new codec:" +
+                    " stop() and configure() are not safe on it as it is set up");
         }
     }
 

@@ -104,20 +104,25 @@ impl Gamepads {
         if !self.motion {
             return;
         }
-        let (sensor, label) = match kind {
-            motion_type::ACCEL => (SDL_SENSOR_ACCEL, "accel"),
-            motion_type::GYRO => (SDL_SENSOR_GYRO, "gyro"),
+        let (sensor, slot, label) = match kind {
+            motion_type::ACCEL => (SDL_SENSOR_ACCEL, 0usize, "accel"),
+            motion_type::GYRO => (SDL_SENSOR_GYRO, 1usize, "gyro"),
             _ => return,
         };
         for pad in self.sent_as(index) {
             // A pad pinned as Xbox told the host it has no motion sensors.
             let on = rate_hz != 0 && !pad.mapping.drops_motion_and_touchpad();
+            let wanted_rate = if on { rate_hz } else { 0 };
             // SAFETY: an open gamepad.
             unsafe {
                 let already = SDL_GamepadSensorEnabled(pad.handle, sensor);
+                if !should_apply_motion_rate(pad.motion_rates[slot].get(), wanted_rate, already, on) {
+                    continue;
+                }
                 // Nightjar #177: if a Bluetooth controller missed its initial enhanced-mode report
                 // right on arrival, SDL3 can still report the sensor enabled and treat another
-                // `true` call as a no-op; cycling `false -> true` forces SDL to resend it.
+                // `true` call as a no-op; cycling `false -> true` forces SDL to resend it once per
+                // rate transition.
                 if should_cycle_sensor(on, already) {
                     let _ = SDL_SetGamepadSensorEnabled(pad.handle, sensor, false);
                 }
@@ -128,6 +133,8 @@ impl Gamepads {
                         pad.name,
                         crate::sdl::error()
                     );
+                } else {
+                    pad.motion_rates[slot].set(wanted_rate);
                 }
             }
         }
@@ -146,6 +153,9 @@ impl Gamepads {
                 SDL_RumbleGamepadTriggers(pad.handle, 0, 0, 0);
                 SDL_SetGamepadSensorEnabled(pad.handle, SDL_SENSOR_ACCEL, false);
                 SDL_SetGamepadSensorEnabled(pad.handle, SDL_SENSOR_GYRO, false);
+            }
+            for rate in &pad.motion_rates {
+                rate.set(0);
             }
             pad.announced = false;
             pad.buttons = 0;
@@ -320,9 +330,15 @@ fn should_cycle_sensor(want_on: bool, already_enabled: bool) -> bool {
     want_on && already_enabled
 }
 
+/// Whether `set_motion` should touch SDL's sensor state: skips repeated identical states once applied,
+/// while applying changes in rate or mismatched SDL sensor state.
+fn should_apply_motion_rate(prev_rate: u16, wanted_rate: u16, already_enabled: bool, want_on: bool) -> bool {
+    prev_rate != wanted_rate || already_enabled != want_on
+}
+
 #[cfg(test)]
 mod tests {
-    use super::should_cycle_sensor;
+    use super::{should_apply_motion_rate, should_cycle_sensor};
 
     #[test]
     fn re_enabling_an_already_enabled_sensor_cycles_off_then_on() {
@@ -330,5 +346,14 @@ mod tests {
         assert!(!should_cycle_sensor(true, false));
         assert!(!should_cycle_sensor(false, true));
         assert!(!should_cycle_sensor(false, false));
+    }
+
+    #[test]
+    fn repeated_identical_motion_rate_is_skipped() {
+        assert!(should_apply_motion_rate(0, 250, true, true), "first enable even if SDL left enabled");
+        assert!(!should_apply_motion_rate(250, 250, true, true), "repeated host state does not cycle");
+        assert!(should_apply_motion_rate(250, 125, true, true), "changed rate reapplies");
+        assert!(should_apply_motion_rate(250, 0, true, false), "disabling reapplies");
+        assert!(!should_apply_motion_rate(0, 0, false, false), "repeated disable skipped");
     }
 }

@@ -172,6 +172,9 @@ pub struct Shared {
     pub teardowns: Mutex<Vec<super::super::Teardown>>,
     /// The toast that the microphone runs without the echo cancellation asked for was shown.
     pub echo_cancel_noted: std::sync::atomic::AtomicBool,
+    /// Deferred USB capability check (`usb_ask`) so slow hosts never delay the first video frame.
+    pub usb_pending: std::sync::atomic::AtomicBool,
+    pub usb_native: Mutex<Option<Result<nightjar_core::http::NativeCapabilities, String>>>,
     /// When the last of the pictures in a row the presenter could not show was ready (session
     /// clock, us; 0 for none): the decoder that made it gives way (`Decoder::presenter_refused`).
     pub present_refused: AtomicU64,
@@ -214,6 +217,8 @@ impl Shared {
             roam_watch: Mutex::new(None),
             teardowns: Mutex::new(Vec::new()),
             echo_cancel_noted: std::sync::atomic::AtomicBool::new(false),
+            usb_pending: std::sync::atomic::AtomicBool::new(false),
+            usb_native: Mutex::new(None),
             present_refused: AtomicU64::new(0),
             keep_decoder: std::sync::atomic::AtomicBool::new(false),
             waker,

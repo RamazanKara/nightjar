@@ -3,11 +3,32 @@
 use super::*;
 use crate::stun;
 
+const STUN_RETRY_MIN: Millis = 5_000;
+const PUBLISH_RETRY_MIN: Millis = 5_000;
+const PUBLISH_RETRY_MAX: Millis = 60_000;
+
+pub(super) fn stun_retry_delay(ok: bool, failures: u32) -> (Millis, u32) {
+    if ok {
+        (STUN_EVERY, 0)
+    } else {
+        let delay = STUN_RETRY_MIN
+            .saturating_mul(1 << failures.min(6))
+            .min(STUN_EVERY);
+        (delay, failures.saturating_add(1))
+    }
+}
+
 impl HostService {
     /// Drops the paths that closed. The map is write-locked only when one did, which is rare:
     /// a write lock every second made the receive thread's next datagram wait for it (and for
     /// every datagram in flight before it). The dropped paths go after the lock does.
     pub(super) fn prune_closed(&self) {
+        let now_unix = unix_now();
+        self.shared
+            .ended
+            .lock()
+            .unwrap()
+            .retain(|_, until| now_unix < *until);
         let any = self
             .shared
             .tunnels
@@ -25,18 +46,26 @@ impl HostService {
                 .filter(|(_, (_, tunnel))| tunnel.is_closed())
                 .map(|(tag, _)| *tag)
                 .collect();
-            tags.iter().filter_map(|tag| tunnels.remove(tag)).collect()
+            tags.iter()
+                .filter_map(|tag| tunnels.remove(tag).map(|entry| (*tag, entry)))
+                .collect()
         };
+        for (tag, (session, tunnel)) in &closed {
+            self.mark_ended(*tag, *session, tunnel.epoch());
+        }
         drop(closed);
     }
 
     pub(super) fn run(&self) {
         let mut next_stun: Millis = 0;
+        let mut stun_failures = 0;
         while !self.stopped() {
             let now = self.shared.node.now();
             if now >= next_stun {
-                next_stun = now + STUN_EVERY;
-                self.discover();
+                let ok = self.discover() || self.shared.config.stun_servers.is_empty();
+                let (delay, next_failures) = stun_retry_delay(ok, stun_failures);
+                stun_failures = next_failures;
+                next_stun = now + delay;
             }
             self.serve_devices();
             self.prune_closed();
@@ -55,7 +84,7 @@ impl HostService {
         }
     }
 
-    fn discover(&self) {
+    fn discover(&self) -> bool {
         let answers = self.shared.node.stun(&self.shared.config.stun_servers);
         let local = self.shared.node.local_addr().ok();
         let mut public: Vec<SocketAddr> = Vec::new();
@@ -64,6 +93,7 @@ impl HostService {
                 public.push(*answer);
             }
         }
+        let ok = !public.is_empty();
         let nat = local.map_or(Nat::Unknown, |local| {
             Nat::from_mapping(stun::mapping(local, &answers))
         });
@@ -81,8 +111,11 @@ impl HostService {
         if changed {
             for state in self.shared.devices.lock().unwrap().iter_mut() {
                 state.published = None;
+                state.publish_retry_at = None;
+                state.publish_failures = 0;
             }
         }
+        ok
     }
 
     /// Starts the publications and the looks for devices' records that are due; both run on
@@ -113,6 +146,7 @@ impl HostService {
             .iter()
             .filter(|state| {
                 !public.is_empty()
+                    && state.publish_retry_at.is_none_or(|at| now >= at)
                     && match &state.published {
                         None => true,
                         Some((at_window, at, endpoints)) => {
@@ -206,10 +240,18 @@ impl HostService {
                     .node
                     .put(&record.item(&keys, window, crate::crypto::random()));
             let mut devices = self.shared.devices.lock().unwrap();
-            if let Some(state) = devices.iter_mut().find(|state| state.device.id == id)
-                && confirmed > 0
-            {
-                state.published = Some((window, now, public.clone()));
+            if let Some(state) = devices.iter_mut().find(|state| state.device.id == id) {
+                if confirmed > 0 {
+                    state.published = Some((window, now, public.clone()));
+                    state.publish_retry_at = None;
+                    state.publish_failures = 0;
+                } else {
+                    let delay = PUBLISH_RETRY_MIN
+                        .saturating_mul(1 << state.publish_failures.min(4))
+                        .min(PUBLISH_RETRY_MAX);
+                    state.publish_failures = state.publish_failures.saturating_add(1);
+                    state.publish_retry_at = Some(now + delay);
+                }
             }
             drop(devices);
             self.shared.status.lock().unwrap().dht_error = (confirmed == 0).then(|| {
@@ -261,7 +303,6 @@ impl HostService {
         if state.answered == Some(record.session) {
             return;
         }
-        state.answered = Some(record.session);
         let peer = Peer::of(state);
         drop(devices);
         // A punch may be starting this very path: one start per device session, so no two
@@ -271,7 +312,13 @@ impl HostService {
             return;
         }
         let candidates = punch::candidates(&record.endpoints, record.nat);
-        self.open(&peer, record.session, record.time, candidates);
+        let opened = self.open(&peer, record.session, record.time, candidates);
         self.shared.starting.lock().unwrap().remove(&claim);
+        if opened.is_some() || self.is_ended(peer.tag, record.session) {
+            let mut devices = self.shared.devices.lock().unwrap();
+            if let Some(state) = devices.iter_mut().find(|state| state.device.id == id) {
+                state.answered = Some(record.session);
+            }
+        }
     }
 }

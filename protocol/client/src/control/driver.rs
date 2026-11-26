@@ -194,6 +194,13 @@ pub fn connect(
     key: &Key,
     options: SessionOptions,
 ) -> Result<(ControlClient, ControlHandle), ConnectError> {
+    if config
+        .interrupt
+        .as_ref()
+        .is_some_and(crate::session::Interrupt::is_interrupted)
+    {
+        return Err(ConnectError::Interrupted);
+    }
     let local = config.local.unwrap_or_else(|| match config.remote {
         SocketAddr::V4(_) => SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0),
         SocketAddr::V6(_) => SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 0),
@@ -207,6 +214,7 @@ pub fn connect(
     let roaming = config.roaming && caps.client_roaming;
     let control_socket = ControlSocket {
         socket,
+        host_ip: None,
         roam_inbox: VecDeque::new(),
         roaming,
         intercept: true,
@@ -266,10 +274,32 @@ pub fn connect(
     let handle = ControlHandle {
         shared: shared.clone(),
     };
+    let _interrupt_guard = config.interrupt.as_ref().map(|interrupt| {
+        let stop = shared.clone();
+        interrupt.on_interrupt(move || {
+            stop.stop.store(true, Ordering::Release);
+            stop.waker.wake();
+        })
+    });
     let deadline = Instant::now() + config.connect_timeout;
     loop {
+        if shared.stop.load(Ordering::Acquire) {
+            host.peer_mut(peer).reset();
+            return Err(ConnectError::Interrupted);
+        }
         match host.service()? {
-            Some(Event::Connect { .. }) => break,
+            Some(Event::Connect { .. }) => {
+                let peer_ip = host
+                    .peer(peer)
+                    .address()
+                    .map_or(config.remote.ip(), |addr| addr.ip())
+                    .to_canonical();
+                let sock = host.socket_mut();
+                sock.host_ip = Some(peer_ip);
+                sock.last_receive = Some(Instant::now());
+                sock.marking = None;
+                break;
+            }
             Some(Event::Disconnect { .. }) => return Err(ConnectError::Refused),
             Some(Event::Receive { .. }) => {}
             None => {
@@ -459,11 +489,9 @@ impl ControlClient {
     /// Runs roaming: the datagrams set aside, a network change or a host silence, the
     /// timers, and the datagrams to send. Returns the next timer.
     fn roam(&mut self, now: Instant) -> Option<Instant> {
+        self.install_next_socket();
         // With roaming off no socket moves, no roaming datagram is kept and none goes out.
         let roaming = self.roaming.as_mut()?;
-        if let Some(socket) = lock(&self.shared.next_socket).take() {
-            self.host.socket_mut().replace(socket);
-        }
         let inbox = std::mem::take(&mut self.host.socket_mut().roam_inbox);
         for datagram in inbox {
             // A dropped datagram is never answered; an attempt left without answers fails.
@@ -500,6 +528,9 @@ impl ControlClient {
             .iter()
             .any(|event| matches!(event, RoamEvent::Roamed { .. }))
         {
+            if let Some(addr) = self.host.peer(self.peer).address() {
+                self.host.socket_mut().host_ip = Some(addr.ip().to_canonical());
+            }
             // ENet's resend timers backed off during the outage; a ping gets traffic going.
             self.host.peer_mut(self.peer).ping();
         }

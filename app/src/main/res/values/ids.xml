@@ -16,4 +16,5 @@
     <item name="spring_scale_y" type="id" />
     <item name="stream_menu_cover" type="id" />
     <item name="stream_menu_close" type="id" />
+    <item name="cover_bound_tuple" type="id" />
 </resources>

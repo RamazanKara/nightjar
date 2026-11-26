@@ -56,4 +56,6 @@
     <string name="title_usb_switch_pro">USB Switch Pro 드라이버</string>
     <string name="summary_usb_switch_pro">유선 Switch Pro Controller를 Nightjar가 직접 읽어 자이로, 진동, Home, Capture가 작동합니다. 스트림 중에 Android가 USB 접근 권한을 요청합니다. Bluetooth 연결과 Joy-Con은 Android 입력을 그대로 사용합니다.</string>
     <string name="usb_switch_pro_denied">USB 접근 권한이 없어 Switch Pro Controller는 Android 입력을 사용합니다.\n다시 시도하려면 케이블을 다시 연결하세요.</string>
+    <string name="title_seekbar_mouse_emulation_sensitivity">컨트롤러 마우스 감도</string>
+    <string name="summary_seekbar_mouse_emulation_sensitivity">컨트롤러 마우스 모드에서 스틱이 포인터를 움직이는 속도를 조절합니다. 낮출수록 세밀한 조준이 쉬워집니다.</string>
 </resources>

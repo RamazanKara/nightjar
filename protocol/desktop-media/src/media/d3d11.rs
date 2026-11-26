@@ -35,6 +35,7 @@ use super::{D3d11Surface, Pictures};
 
 pub(crate) const HARD_SLOT_CAP: usize = 32;
 const SHARED_DEVICE_ENV: &str = "NIGHTJAR_D3D11_SHARED_DEVICE";
+static NEXT_BRIDGE_ID: AtomicU64 = AtomicU64::new(1);
 
 /// RAII wrapper around an NT shared handle so early error returns never leak kernel handles.
 struct OwnedHandle(HANDLE);
@@ -366,7 +367,8 @@ struct PoolState {
 
 /// Cross-device bridge between a dedicated `D3D11_CREATE_DEVICE_VIDEO_SUPPORT` decode device and
 /// SDL3's Direct3D 11 renderer device using NT-handle shared textures and monitored `ID3D11Fence`s.
-pub(super) struct DecodeBridge {
+pub(crate) struct DecodeBridge {
+    id: u64,
     decode_device: ID3D11Device,
     decode_context: ID3D11DeviceContext,
     decode_queue: ID3D11DeviceContext4,
@@ -529,6 +531,15 @@ impl DecodeBridge {
             return Err(format!("{SHARED_DEVICE_ENV}=1"));
         }
         let (decode_device, decode_context) = create_video_device_for(renderer_device)?;
+        Self::new_with_decode_device(renderer_device, decode_device, decode_context, pictures)
+    }
+
+    fn new_with_decode_device(
+        renderer_device: &ID3D11Device,
+        decode_device: ID3D11Device,
+        decode_context: ID3D11DeviceContext,
+        pictures: Pictures,
+    ) -> Result<Arc<Self>, String> {
         let decode_mt: ID3D10Multithread = decode_device.cast().map_err(|e| format!("decode ID3D10Multithread: {e}"))?;
         let decode_dev5: ID3D11Device5 = decode_device.cast().map_err(|e| format!("decode ID3D11Device5: {e}"))?;
         let decode_queue: ID3D11DeviceContext4 = decode_context.cast().map_err(|e| format!("decode ID3D11DeviceContext4: {e}"))?;
@@ -569,6 +580,7 @@ impl DecodeBridge {
 
         let max_slots = (pictures.waiting + 4).clamp(4, 16);
         Ok(Arc::new(Self {
+            id: NEXT_BRIDGE_ID.fetch_add(1, Ordering::Relaxed),
             decode_device, decode_context, decode_queue, decode_mt, decode_fence_dec, reuse_fence_dec,
             render_device: renderer_device.clone(), render_device1, render_context, render_context1,
             render_queue, decode_fence_ren, reuse_fence_ren,
@@ -716,6 +728,7 @@ impl Drop for SlotLease {
 pub(super) struct SharedFrame { lease: Arc<SlotLease>, decode_value: u64 }
 
 impl SharedFrame {
+    pub(super) fn bridge_id(&self) -> u64 { self.lease.bridge.id }
     pub(super) fn render_texture_raw(&self) -> *mut c_void { self.lease.slot.render_tex.as_raw() }
     pub(super) fn mark_renderer_flushed(&self) { self.lease.bridge.mark_renderer_flushed(); }
 

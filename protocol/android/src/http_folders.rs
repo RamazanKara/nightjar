@@ -8,11 +8,12 @@
 use std::io::{Read, Write};
 
 use jni::JNIEnv;
-use jni::objects::{JByteArray, JClass, JObject, JString, JValue};
+use jni::objects::{GlobalRef, JClass, JObject, JString, JValue};
 use jni::sys::{jint, jlong, jstring};
 use nightjar_core::http::{EntryKind, Error, FileError, FileRefusal, TransferCancel};
 use serde_json::{Value, json};
 
+use crate::bridge::{byte_array, jbytes};
 use crate::http::{CANCELS, CLIENTS, error_json, new_jstring, ok_json};
 use crate::native_api;
 
@@ -133,9 +134,32 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarHttpJni_folderEnt
     new_jstring(&env, &reply)
 }
 
+fn next_array_capacity(current_capacity: usize, needed: usize) -> Option<usize> {
+    if current_capacity >= needed && current_capacity > 0 {
+        None
+    } else {
+        Some(needed.max(1).min(i32::MAX as usize))
+    }
+}
+
+fn ensure_cached_byte_array<'a>(
+    env: &mut JNIEnv,
+    slot: &'a mut Option<(GlobalRef, usize)>,
+    needed: usize,
+) -> Result<&'a GlobalRef, jni::errors::Error> {
+    let current = slot.as_ref().map_or(0, |(_, cap)| *cap);
+    if let Some(cap) = next_array_capacity(current, needed) {
+        let len = i32::try_from(cap).unwrap_or(i32::MAX);
+        let arr = env.new_byte_array(len)?;
+        *slot = Some((env.new_global_ref(arr)?, len as usize));
+    }
+    Ok(&slot.as_ref().expect("allocated above").0)
+}
+
 struct JniDownloadSink<'local, 'env, 'obj> {
     env: &'env mut JNIEnv<'local>,
     sink: &'obj JObject<'local>,
+    buf_array: Option<(GlobalRef, usize)>,
 }
 
 impl Write for JniDownloadSink<'_, '_, '_> {
@@ -143,17 +167,24 @@ impl Write for JniDownloadSink<'_, '_, '_> {
         if buf.is_empty() {
             return Ok(0);
         }
-        let res = self.env.with_local_frame(4, |env| {
-            let arr = env.byte_array_from_slice(buf)?;
-            let arr_obj: JObject = arr.into();
+        let Self {
+            env,
+            sink,
+            buf_array,
+        } = self;
+        let len = i32::try_from(buf.len()).unwrap_or(i32::MAX);
+        let write_slice = &buf[..len as usize];
+        let res = env.with_local_frame(4, |env| {
+            let global = ensure_cached_byte_array(env, buf_array, write_slice.len())?;
+            env.set_byte_array_region(byte_array(global), 0, jbytes(write_slice))?;
             env.call_method(
-                self.sink,
+                *sink,
                 "write",
                 "([BII)V",
                 &[
-                    JValue::Object(&arr_obj),
+                    JValue::Object(global.as_obj()),
                     JValue::Int(0),
-                    JValue::Int(buf.len() as i32),
+                    JValue::Int(len),
                 ],
             )?;
             Ok::<(), jni::errors::Error>(())
@@ -164,7 +195,7 @@ impl Write for JniDownloadSink<'_, '_, '_> {
             }
             return Err(std::io::Error::other("Destination write failed"));
         }
-        Ok(buf.len())
+        Ok(write_slice.len())
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
@@ -177,42 +208,59 @@ struct JniUploadSource<'local, 'env, 'obj> {
     source: &'obj JObject<'local>,
     remaining: u64,
     checked_eof: bool,
+    buf_array: Option<(GlobalRef, usize)>,
 }
 
-fn slice_java_read(mut out: Vec<u8>, n: jint) -> Result<Option<Vec<u8>>, jni::errors::Error> {
+fn validate_java_read_len(max_len: usize, n: jint) -> Result<Option<usize>, jni::errors::Error> {
     if n <= 0 {
         return Ok(None);
     }
     let len =
         usize::try_from(n)
             .ok()
-            .filter(|&n| n <= out.len())
+            .filter(|&n| n <= max_len)
             .ok_or(jni::errors::Error::JniCall(
                 jni::errors::JniError::InvalidArguments,
             ))?;
-    out.truncate(len);
-    Ok(Some(out))
+    Ok(Some(len))
 }
 
 impl JniUploadSource<'_, '_, '_> {
-    fn java_read(&mut self, max_len: usize) -> std::io::Result<Option<Vec<u8>>> {
-        let len = i32::try_from(max_len).unwrap_or(i32::MAX);
-        let res = self.env.with_local_frame(4, |env| {
-            let buf = env.new_byte_array(len)?;
-            let buf_obj: JObject = buf.into();
-            let n = env
+    fn read_java_into(&mut self, dst: &mut [u8]) -> std::io::Result<Option<usize>> {
+        if dst.is_empty() {
+            return Ok(None);
+        }
+        let Self {
+            env,
+            source,
+            buf_array,
+            ..
+        } = self;
+        let ask = i32::try_from(dst.len()).unwrap_or(i32::MAX);
+        let dst = &mut dst[..ask as usize];
+        let res = env.with_local_frame(4, |env| {
+            let global = ensure_cached_byte_array(env, buf_array, dst.len())?;
+            let raw_n = env
                 .call_method(
-                    self.source,
+                    *source,
                     "read",
                     "([BII)I",
-                    &[JValue::Object(&buf_obj), JValue::Int(0), JValue::Int(len)],
+                    &[
+                        JValue::Object(global.as_obj()),
+                        JValue::Int(0),
+                        JValue::Int(ask),
+                    ],
                 )?
                 .i()?;
-            if n <= 0 {
-                return Ok::<Option<Vec<u8>>, jni::errors::Error>(None);
-            }
-            let out = env.convert_byte_array(JByteArray::from(buf_obj))?;
-            slice_java_read(out, n)
+            let Some(n) = validate_java_read_len(dst.len(), raw_n)? else {
+                return Ok::<Option<usize>, jni::errors::Error>(None);
+            };
+            // SAFETY: `i8` and `u8` have identical layout and alignment, and `&mut dst[..n]`
+            // is uniquely borrowed for the duration of `get_byte_array_region`.
+            let out_i8 =
+                unsafe { std::slice::from_raw_parts_mut(dst[..n].as_mut_ptr().cast::<i8>(), n) };
+            env.get_byte_array_region(byte_array(global), 0, out_i8)?;
+            Ok(Some(n))
         });
         match res {
             Ok(opt) => Ok(opt),
@@ -233,7 +281,8 @@ impl Read for JniUploadSource<'_, '_, '_> {
         }
         if self.remaining == 0 {
             self.checked_eof = true;
-            if self.java_read(1)?.is_some() {
+            let mut probe = [0u8; 1];
+            if self.read_java_into(&mut probe)?.is_some() {
                 return Err(std::io::Error::other("File size changed during the upload"));
             }
             return Ok(0);
@@ -241,20 +290,19 @@ impl Read for JniUploadSource<'_, '_, '_> {
         let ask = usize::try_from(self.remaining)
             .unwrap_or(usize::MAX)
             .min(buf.len());
-        let Some(chunk) = self.java_read(ask)? else {
+        let Some(n) = self.read_java_into(&mut buf[..ask])? else {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::UnexpectedEof,
                 "Source stream ended before declared length",
             ));
         };
-        let n = chunk.len().min(ask);
-        buf[..n].copy_from_slice(&chunk[..n]);
         self.remaining -= n as u64;
         if self.remaining == 0 {
             // Check for unexpected extra bytes BEFORE handing back the final chunk, so the last
             // bytes never cross the socket if the file grew.
             self.checked_eof = true;
-            if self.java_read(1)?.is_some() {
+            let mut probe = [0u8; 1];
+            if self.read_java_into(&mut probe)?.is_some() {
                 return Err(std::io::Error::other("File size changed during the upload"));
             }
         }
@@ -337,6 +385,7 @@ fn folder_download_impl<'local>(
             let mut sink = JniDownloadSink {
                 env: &mut env,
                 sink: &sink_obj,
+                buf_array: None,
             };
             let mut on_progress = |done: u64, total: Option<u64>| {
                 if let Some(ref vm) = vm
@@ -422,9 +471,11 @@ fn folder_upload_impl<'local>(
                 source: &source_obj,
                 remaining: len,
                 checked_eof: false,
+                buf_array: None,
             };
             if len == 0 {
-                match source.java_read(1) {
+                let mut probe = [0u8; 1];
+                match source.read_java_into(&mut probe) {
                     Ok(Some(_)) => {
                         return new_jstring(
                             &env,
@@ -468,18 +519,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn slice_java_read_guards_bounds() {
-        assert_eq!(slice_java_read(vec![1, 2, 3], 0).unwrap(), None);
-        assert_eq!(slice_java_read(vec![1, 2, 3], -1).unwrap(), None);
-        assert_eq!(
-            slice_java_read(vec![1, 2, 3, 4], 3).unwrap(),
-            Some(vec![1, 2, 3])
-        );
-        assert_eq!(
-            slice_java_read(vec![1, 2, 3, 4], 4).unwrap(),
-            Some(vec![1, 2, 3, 4])
-        );
-        assert!(slice_java_read(vec![1, 2, 3, 4], 5).is_err());
-        assert!(slice_java_read(vec![1, 2], i32::MAX).is_err());
+    fn validate_java_read_len_guards_bounds() {
+        assert_eq!(validate_java_read_len(3, 0).unwrap(), None);
+        assert_eq!(validate_java_read_len(3, -1).unwrap(), None);
+        assert_eq!(validate_java_read_len(4, 3).unwrap(), Some(3));
+        assert_eq!(validate_java_read_len(4, 4).unwrap(), Some(4));
+        assert!(validate_java_read_len(4, 5).is_err());
+        assert!(validate_java_read_len(2, i32::MAX).is_err());
+    }
+
+    #[test]
+    fn next_array_capacity_reuses_until_larger_needed() {
+        assert_eq!(next_array_capacity(0, 0), Some(1));
+        assert_eq!(next_array_capacity(0, 4096), Some(4096));
+        assert_eq!(next_array_capacity(4096, 1024), None);
+        assert_eq!(next_array_capacity(4096, 4096), None);
+        assert_eq!(next_array_capacity(4096, 8192), Some(8192));
     }
 }

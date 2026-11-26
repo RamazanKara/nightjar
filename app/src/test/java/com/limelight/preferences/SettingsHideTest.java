@@ -392,6 +392,8 @@ public class SettingsHideTest {
                 {"video", "adaptive_quality_min_resolution", "adaptive_quality_mode", "motion"},
                 {"video", "adaptive_quality_min_fps", "adaptive_quality_mode", "motion"},
                 {"display", "upscaling_sharpness", "upscaling_mode", "fsr1"},
+                {"streaming", PreferenceConfiguration.COMPACT_OVERLAY_DEVICE_INFO_PREF_STRING,
+                        PreferenceConfiguration.ENABLE_PERF_OVERLAY_STRING, "bool:true"},
                 {"debug", SettingRules.PYROWAVE_PREACQUIRE, "video_format", "forcepyrowave"}};
         assertEquals(rows.length, SettingRules.NOTE_ROWS.size());
         try (ActivityController<StreamSettings> controller = start()) {
@@ -406,7 +408,11 @@ public class SettingsHideTest {
                 CharSequence summary = fragment.findPreference(row[1]).getSummary();
                 assertTrue(row[1] + ": " + summary, summary != null && summary.toString().contains(reason));
                 // Its mode comes on: still shown, without the reason.
-                prefs().edit().putString(row[2], row[3]).commit();
+                if ("bool:true".equals(row[3])) {
+                    prefs().edit().putBoolean(row[2], true).commit();
+                } else {
+                    prefs().edit().putString(row[2], row[3]).commit();
+                }
                 settle(screen);
                 assertTrue(visible(fragment).contains(row[1]));
                 assertNull(row[1], SettingRules.whenReason(context(), row[1], prefs(), devices));

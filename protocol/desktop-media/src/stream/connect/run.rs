@@ -394,15 +394,24 @@ pub(crate) fn connect(
     let (early, slices) = (race_ask.early_decode, race_ask.slices);
     let watch = roam_watch(settings, &plan.record.address, &shared);
     let roam_shared = shared.clone();
-    let usb_ask =
-        (settings.usb_forwarding && plan.info.capabilities.has(Feature::NativeApi)).then(|| {
-            let client = client.clone();
-            std::thread::spawn(move || {
-                client
+    let usb_ask_started = settings.usb_forwarding && plan.info.capabilities.has(Feature::NativeApi);
+    if usb_ask_started {
+        let usb_client = client.clone();
+        let usb_shared = shared.clone();
+        if let Err(err) = std::thread::Builder::new()
+            .name("usb-caps".into())
+            .spawn(move || {
+                let res = usb_client
                     .native_capabilities_with_files()
-                    .map_err(|e| e.to_string())
+                    .map_err(|e| e.to_string());
+                *lock(&usb_shared.usb_native) = Some(res);
+                usb_shared.wake();
             })
-        });
+        {
+            *lock(&shared.usb_native) = Some(Err(format!("usb-caps thread failed: {err}")));
+            shared.wake();
+        }
+    }
     let passthrough = stream.audio_passthrough;
     let frame_warp = frame_warp_for(settings, role, &plan.info.capabilities);
     let mut config = session_config(
@@ -426,7 +435,7 @@ pub(crate) fn connect(
                 .with_device(plan.device.clone()),
         ),
         pipeline::audio_renderer(shared.clone(), passthrough, settings.mute_audio),
-        Arc::new(pipeline::Events::new(shared)),
+        Arc::new(pipeline::Events::new(shared.clone())),
         interrupt,
     )
     .map_err(|e| ConnectError {
@@ -556,13 +565,15 @@ pub(crate) fn connect(
             && outcome.negotiated_video_format & VIDEO_FORMAT_MASK_PYROWAVE == 0
             && role == AppRole::Stream,
         rate_change: rate_change::offered(&outcome.host_control_messages, role),
-        usb: if settings.usb_forwarding {
-            let native = usb_ask.map(|ask| {
-                ask.join()
-                    .unwrap_or_else(|_| Err("the request panicked".into()))
-            });
-            crate::usb::availability(&plan.info.capabilities, native)
+        usb: if !settings.usb_forwarding {
+            Availability::Unknown
+        } else if !usb_ask_started {
+            crate::usb::availability(&plan.info.capabilities, None)
+        } else if let Some(native) = lock(&shared.usb_native).take() {
+            crate::usb::availability(&plan.info.capabilities, Some(native))
         } else {
+            // Defer waiting on slow/stalled hosts to Streaming::pump so connect readiness never blocks on USB metadata.
+            shared.usb_pending.store(true, std::sync::atomic::Ordering::Release);
             Availability::Unknown
         },
         touch: outcome.sunshine_feature_flags

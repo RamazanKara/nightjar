@@ -342,6 +342,18 @@ public final class PerformanceOverlay {
         return text;
     }
 
+    /** Appends optional battery percentage and local clock time to an already-populated compact line. */
+    public static CharSequence withCompactDeviceInfo(CharSequence compactText, String batteryText, String clockText) {
+        if (compactText == null || compactText.length() == 0) return compactText;
+        boolean hasBattery = batteryText != null && !batteryText.isEmpty();
+        boolean hasClock = clockText != null && !clockText.isEmpty();
+        if (!hasBattery && !hasClock) return compactText;
+        android.text.SpannableStringBuilder out = new android.text.SpannableStringBuilder(compactText);
+        if (hasBattery) out.append(" \u00b7 ").append(batteryText);
+        if (hasClock) out.append(" \u00b7 ").append(clockText);
+        return out;
+    }
+
     /** Colours the compact overlay's dot and remembers the health it stands for. */
     static final class HealthSpan extends ForegroundColorSpan {
         final Health health;

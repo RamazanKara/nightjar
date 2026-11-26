@@ -68,6 +68,8 @@ pub struct DriverConfig {
     pub warn: Warn,
     /// Frame Warp's shared state: counts input as it leaves and takes the host's messages.
     pub frame_warp: Option<Arc<crate::frame_warp::FrameWarp>>,
+    /// Session-start cancellation signal checked during [`super::connect`].
+    pub interrupt: Option<crate::session::Interrupt>,
 }
 
 impl DriverConfig {
@@ -85,6 +87,7 @@ impl DriverConfig {
             roam_seq: LaunchSeq::default(),
             warn: Warn::default(),
             frame_warp: None,
+            interrupt: None,
         }
     }
 
@@ -262,13 +265,23 @@ impl ControlHandle {
     /// [`ControlHandle::network_changed`] should follow. Fails unless both sides have
     /// roaming on.
     pub fn move_to(&self, local: IpAddr) -> io::Result<()> {
-        let socket = self.bind_move(local)?;
+        self.move_to_addr(SocketAddr::new(local, 0))
+    }
+
+    /// Moves the control socket to `local`, preserving IPv6 `scope_id` on link-local addresses.
+    pub fn move_to_addr(&self, local: SocketAddr) -> io::Result<()> {
+        let socket = self.bind_move_addr(local)?;
         self.move_to_socket(socket)
     }
 
     /// Binds the socket [`ControlHandle::move_to`] moves to, so a caller moving other sockets
     /// too can bind them all before anything moves.
     pub fn bind_move(&self, local: IpAddr) -> io::Result<UdpSocket> {
+        self.bind_move_addr(SocketAddr::new(local, 0))
+    }
+
+    /// Binds the socket [`ControlHandle::move_to_addr`] moves to while preserving IPv6 `scope_id`.
+    pub fn bind_move_addr(&self, local: SocketAddr) -> io::Result<UdpSocket> {
         if !self.shared.roaming {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
@@ -281,7 +294,9 @@ impl ControlHandle {
                 "the control socket cannot change address family",
             ));
         }
-        let socket = UdpSocket::bind(SocketAddr::new(local, 0))?;
+        let mut bind_addr = local;
+        bind_addr.set_port(0);
+        let socket = UdpSocket::bind(bind_addr)?;
         // What rusty_enet's init sets on a UdpSocket.
         socket.set_nonblocking(true)?;
         socket.set_broadcast(true)?;

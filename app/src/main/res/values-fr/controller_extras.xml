@@ -56,4 +56,6 @@
     <string name="title_usb_switch_pro">Pilote Switch Pro USB</string>
     <string name="summary_usb_switch_pro">Nightjar lit lui-même une Switch Pro Controller filaire, pour que le gyroscope, les vibrations, Home et Capture fonctionnent. Android demande l’accès USB pendant un stream ; le Bluetooth et les Joy-Con restent gérés par Android.</string>
     <string name="usb_switch_pro_denied">Pas d’accès USB ; la Switch Pro Controller reste sur l’entrée d’Android.\nRebranchez le câble pour réessayer.</string>
+    <string name="title_seekbar_mouse_emulation_sensitivity">Sensibilité de la souris à la manette</string>
+    <string name="summary_seekbar_mouse_emulation_sensitivity">Ajuste la vitesse à laquelle les sticks déplacent le pointeur en mode souris de la manette. Une valeur plus basse facilite la visée précise.</string>
 </resources>

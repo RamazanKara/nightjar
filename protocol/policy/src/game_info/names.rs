@@ -108,6 +108,10 @@ pub fn likeness(a: &str, b: &str) -> f32 {
     }
     let words_a: Vec<&str> = a.split(' ').collect();
     let words_b: Vec<&str> = b.split(' ').collect();
+    let is_number = |w: &&str| !w.is_empty() && w.bytes().all(|c| c.is_ascii_digit());
+    if !words_a.iter().filter(|w| is_number(w)).eq(words_b.iter().filter(|w| is_number(w))) {
+        return 0.0;
+    }
     let mut left: Vec<&str> = words_b.clone();
     let mut common = 0;
     for word in &words_a {

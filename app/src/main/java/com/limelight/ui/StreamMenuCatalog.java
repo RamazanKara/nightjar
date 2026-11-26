@@ -116,7 +116,7 @@ final class StreamMenuCatalog {
             if (o.localOutput) {
                 entries.add(entry(Section.DISPLAY, Item.ZOOM, o.zoomEnabled ?
                         R.string.desktop_zoom_disable : R.string.desktop_zoom_enable, R.drawable.ic_zoom_in, o.zoomEnabled));
-                if (o.zoomEnabled) {
+                if (o.zoomEnabled || o.zoomed) {
                     entries.add(action(Section.DISPLAY, Item.ZOOM_RESET, R.string.desktop_zoom_reset, R.drawable.ic_zoom_out));
                 }
             }
@@ -282,7 +282,7 @@ final class StreamMenuCatalog {
             list.removeIf(entry -> entry.item == Item.TOUCH_MODE || entry.item == Item.ONSCREEN_CONTROLS ||
                     entry.item == Item.CONTROLS_LAYOUT || entry.item == Item.MIC_BUTTON || entry.item == Item.MENU_BUTTON ||
                     entry.item == Item.GAME_CONTROLS ||
-                    entry.item == Item.ZOOM);
+                    entry.item == Item.ZOOM || entry.item == Item.ZOOM_RESET);
         }
         return list;
     }

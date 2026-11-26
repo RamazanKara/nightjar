@@ -73,6 +73,10 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     long hangResetTimeoutMs = MediaCodecRecovery.HANG_RESET_TIMEOUT_MS, streamStartMs = -1, streamStartUptimeMs, latencyCsvBytes, vsyncTimeNs, vsyncIntervalNs, vsyncPresentationDeadlineNs, appVsyncOffsetNs, balancedOnOutput, balancedOnVsync, vulkanOutputs, phaseReports;
     volatile boolean hangResetPending, restartWithoutVendorKeys, recoveryAfterFailure, heatHoldsBitrate, heatEasesLoad, hostFrameTimes, hostPhaseLock, submitHints;
     volatile long inputWaitSinceMs = -1, lastVideoFrameTimeMs;
+    // A test pins the output path's clocks here (MediaCodecBalancedQueueTest); 0 reads the system clocks.
+    long testClockNs;
+    long nowNs() { long t = testClockNs; return t != 0 ? t : System.nanoTime(); }
+    long elapsedNs() { long t = testClockNs; return t != 0 ? t : SystemClock.elapsedRealtimeNanos(); }
     volatile SubmitHandoff<MediaCodecDecodeLoop.HandedUnit> submitHandoff;
     final Map<String, HungKeys> hungKeys = new ConcurrentHashMap<>();
     DecoderRecoveryBackoff recoveryBackoff = new DecoderRecoveryBackoff();
@@ -311,7 +315,11 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     public Integer getDecodedTransfer() { return codecSelector.getDecodedTransfer(); }
     @Override public int setChromaPacking(int version, int width, int height, int colorSpace, int colorRange) { return codecSelector.setChromaPacking(version, width, height, colorSpace, colorRange); }
     public int getPreferredColorSpace() { return codecSelector.getPreferredColorSpace(); }
-    public int getPreferredColorRange() { return prefs.fullRange ? MoonBridge.COLOR_RANGE_FULL : MoonBridge.COLOR_RANGE_LIMITED; }
+    // A Dolby Vision ANNOUNCE asks for limited range (nightjar-core's sdp), its base layer included.
+    public int getPreferredColorRange() {
+        return prefs.fullRange && (announcedHdrFormat & HdrFormatPolicy.DOLBY_VISION) == 0 ?
+                MoonBridge.COLOR_RANGE_FULL : MoonBridge.COLOR_RANGE_LIMITED;
+    }
     public int getActiveVideoFormat() { return this.videoFormat; }
 
     static int maxInputSize(int bitrateKbps, int fps, int width, int height) { return NightjarPolicyJni.videoMaxInputSize(bitrateKbps, fps, width, height); }
@@ -464,9 +472,9 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                         try {
                             int outIndex = videoDecoder.dequeueOutputBuffer(info, 50000);
                             if (outIndex >= 0) {
-                                workStartNs = System.nanoTime();
+                                workStartNs = nowNs();
                                 if (cpuTime) workCpuStartNs = Debug.threadCpuTimeNanos();
-                                long outputDrainStartNs = SystemClock.elapsedRealtimeNanos();
+                                long outputDrainStartNs = elapsedNs();
                                 outIndex = framePresenter.handleDecodedOutput(outIndex, workStartNs, info, outputDrainStartNs);
                             }
                             if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) onOutputFormatChanged();
@@ -587,6 +595,11 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
         if ((videoFormat & MoonBridge.VIDEO_FORMAT_MASK_PYROWAVE) != 0) {
             return submitPyroWaveFrame(decodeUnitData, decodeUnitLength, frameNumber, frameHostProcessingLatency,
                     enqueueTimeNs, receiveTimeNs, presentationTimeUs);
+        }
+        if (dolbyVisionActive && decodeUnitType == MoonBridge.BUFFER_TYPE_PICDATA && HdrBitstream.endsAtRpu(videoFormat) &&
+                !(decodeUnitData == null ? HdrBitstream.endsInRpu(directInput, decodeUnitLength) :
+                        HdrBitstream.endsInRpu(decodeUnitData, decodeUnitLength))) {
+            return recovery.leaveDolbyVision();
         }
         int csd = decodeLoop.handleIdrCsd(decodeUnitData, decodeUnitLength, decodeUnitType, frameType);
         if (csd == 1) return MoonBridge.DR_OK;

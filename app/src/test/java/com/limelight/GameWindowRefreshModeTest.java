@@ -4,6 +4,7 @@ import android.app.Application;
 import android.content.pm.PackageManager;
 import android.graphics.SurfaceTexture;
 import android.media.MediaFormat;
+import android.os.Looper;
 import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceHolder;
@@ -329,14 +330,17 @@ public class GameWindowRefreshModeTest {
             activity.videoOutput.refresh.pollRefreshSwitchTick();
             assertNotNull(activity.videoOutput.refresh.refreshHeartbeat);
             assertTrue(activity.videoOutput.refresh.refreshHeartbeat.running());
+            assertEquals(144f, activity.videoOutput.refresh.refreshHeartbeat.dot().getRequestedFrameRate(), 0f);
             assertEquals(3, holder.getChildCount());
 
             // Teardown removes the fallback heartbeat dot cleanly.
             ReflectionHelpers.callInstanceMethod(activity.videoOutput, "stopRefreshSwitchPolling");
             assertNull(activity.videoOutput.refresh.refreshHeartbeat);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
             assertEquals(2, holder.getChildCount());
         } finally {
             ReflectionHelpers.callInstanceMethod(activity.videoOutput, "stopRefreshSwitchPolling");
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
             RefreshSwitchMonitorTest.FakePanel.clear();
             surface.release();
             texture.release();
@@ -393,12 +397,14 @@ public class GameWindowRefreshModeTest {
             activity.videoOutput.refresh.pollRefreshSwitchTick();
             assertNotNull(activity.videoOutput.refresh.refreshHeartbeat);
             assertTrue(activity.videoOutput.refresh.refreshHeartbeat.running());
+            assertEquals(144f, activity.videoOutput.refresh.refreshHeartbeat.dot().getRequestedFrameRate(), 0f);
 
             // Moving out of foreground stops the fallback heartbeat on the next tick.
             ReflectionHelpers.setField(activity, "foreground", false);
             ShadowSystemClock.advanceBy(Duration.ofSeconds(1));
             activity.videoOutput.refresh.pollRefreshSwitchTick();
             assertNull(activity.videoOutput.refresh.refreshHeartbeat);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
             assertEquals(2, holder.getChildCount());
 
             // Returning to foreground does not stay wedged at stage 2: a subsequent drop restarts
@@ -415,8 +421,16 @@ public class GameWindowRefreshModeTest {
             assertNotNull(activity.videoOutput.refresh.refreshHeartbeat);
             assertTrue(activity.videoOutput.refresh.refreshHeartbeat.running());
             assertEquals(3, holder.getChildCount());
+
+            // Pausing stops the fallback heartbeat immediately via updateCompositorHeartbeat().
+            ReflectionHelpers.setField(activity, "foreground", false);
+            activity.videoOutput.updateCompositorHeartbeat();
+            assertNull(activity.videoOutput.refresh.refreshHeartbeat);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertEquals(2, holder.getChildCount());
         } finally {
             ReflectionHelpers.callInstanceMethod(activity.videoOutput, "stopRefreshSwitchPolling");
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
             RefreshSwitchMonitorTest.FakePanel.clear();
             surface.release();
             texture.release();

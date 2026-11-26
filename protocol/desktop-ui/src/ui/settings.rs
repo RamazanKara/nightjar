@@ -32,13 +32,10 @@ pub(super) fn rail_folded(section: &str) -> bool {
 /// Whether a Debug setting is not at its default: the section then shows without "Show debug
 /// settings", so a changed diagnostic is never out of sight.
 pub(super) fn debug_changed(s: &Settings) -> bool {
-    // The defaults' Debug values, serialized once: this runs every frame.
-    static DEFAULTS: std::sync::OnceLock<Option<serde_json::Value>> = std::sync::OnceLock::new();
-    let defaults = DEFAULTS.get_or_init(|| serde_json::to_value(Settings::default()).ok());
-    let now = serde_json::to_value(s).ok();
-    SECTION_KEYS[section_index(en("Debug"))].iter().flat_map(|keys| keys.iter()).any(|key| {
-        now.as_ref().and_then(|v| v.get(*key)) != defaults.as_ref().and_then(|v| v.get(*key))
-    })
+    // The defaults compared field-by-field once: this runs every frame.
+    static DEFAULTS: std::sync::OnceLock<Settings> = std::sync::OnceLock::new();
+    let defaults = DEFAULTS.get_or_init(Settings::default);
+    SECTION_KEYS[section_index(en("Debug"))].iter().flat_map(|keys| keys.iter()).any(|key| s.field_differs(defaults, key))
 }
 
 /// Whether the list of sections shows Debug: asked for with "Show debug settings", a Debug setting
@@ -72,7 +69,7 @@ pub(super) const SECTION_KEYS: [&[&[&str]]; 9] = [
         &["mute_audio"], &["audio_passthrough"]],
     &[&["overlay", "overlay_mode"], &["overlay_position"], &["auto_reconnect"],
         &["client_roaming", "roaming_metered"], &["network_grace_ms"], &["receive_coalescing"], &["jumbo_frames"], &["internet_play"], &["hide_connection_warnings"],
-        &["dual_screen"], &["second_screen_width", "second_screen_height"], &["input_only_any_host"]],
+        &["compact_overlay_device_info"], &["dual_screen"], &["second_screen_width", "second_screen_height"], &["input_only_any_host"]],
     &[&["theme"], &["language"], &["open_on_start", "console_home"], &["quick_resume"], &["check_updates"], &["windowed_launcher"], &["home_card_size"],
         &["show_debug_settings"], &["ui_zoom"], &["high_contrast"], &["reduce_motion"]],
     &[&["graphics_card"], &["renderer"], &["display_output"], &["video_planes"], &["high_performance_gpu_power"], &["sops"], &["decode_queue_frames"]],
@@ -530,6 +527,7 @@ impl Launcher {
             held: false,
             defer_reset: false,
             reset_clicked: false,
+            custom_reset: None,
         };
         let screen = self.screen;
         // Variable refresh rate needs tearing on Windows: where the swap chain can't, the row is not
@@ -641,6 +639,9 @@ impl Launcher {
         if reset_all {
             *s = reset_to_defaults(s);
             (*custom_size_on, *custom_fps_on) = (None, None);
+            if self.sign_in == Some(true) {
+                commands.push(Command::SetSignIn(false));
+            }
         }
         if *s != before {
             self.settings_dirty = true;

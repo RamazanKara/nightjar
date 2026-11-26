@@ -2,6 +2,8 @@ package com.limelight.grid;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
@@ -35,6 +37,7 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     private static final float HIDDEN_ALPHA = 0.45f;
     /** The covers that step back while one has the selection. */
     private final com.limelight.ui.CoverCard.Group coverGroup = new com.limelight.ui.CoverCard.Group();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private ComputerDetails computer;
     private final String uniqueId;
@@ -46,6 +49,7 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     private java.util.function.Consumer<NvApp> artListener;
     private Set<Integer> hiddenAppIds = new HashSet<>();
     private ArrayList<AppView.AppObject> allApps = new ArrayList<>();
+    private final java.util.Map<String, String> normalizedTitles = new java.util.HashMap<>();
 
     public AppGridAdapter(Context context, PreferenceConfiguration prefs, ComputerDetails computer, String uniqueId, boolean showHiddenApps) {
         super(context, getLayoutIdForPreferences(prefs));
@@ -68,13 +72,16 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     }
 
     public void setSearchQuery(String query) {
-        searchQuery = normalizeSearch(query);
-        notifyDataSetChanged();
+        String normalized = normalizeSearch(query);
+        if (normalized.equals(searchQuery)) return;
+        searchQuery = normalized;
+        rebuildVisibleItems();
     }
 
     public void setShowHiddenApps(boolean show) {
+        if (showHiddenApps == show) return;
         showHiddenApps = show;
-        notifyDataSetChanged();
+        rebuildVisibleItems();
     }
 
     public int getLibraryCount() {
@@ -90,9 +97,18 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
                 .replaceAll("\\p{M}+", "").toLowerCase(Locale.ROOT).trim();
     }
 
+    private String normalizedTitle(String name) {
+        String cached = normalizedTitles.get(name);
+        if (cached == null) {
+            cached = normalizeSearch(name);
+            normalizedTitles.put(name, cached);
+        }
+        return cached;
+    }
+
     private boolean isVisible(AppView.AppObject app) {
         return (showHiddenApps || !app.isHidden) &&
-                (searchQuery.isEmpty() || normalizeSearch(app.app.getAppName()).contains(searchQuery));
+                (searchQuery.isEmpty() || normalizedTitle(app.app.getAppName()).contains(searchQuery));
     }
 
     private static int getLayoutIdForPreferences(PreferenceConfiguration prefs) {
@@ -133,13 +149,15 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     public void updateComputer(ComputerDetails updated) {
         if (updated == null) return;
         ComputerDetails previous = this.computer;
-        boolean endpointChanged = previous == null
-                || !java.util.Objects.equals(previous.activeAddress, updated.activeAddress)
-                || previous.httpsPort != updated.httpsPort
-                || !java.util.Objects.equals(previous.serverCert, updated.serverCert);
+        boolean endpointChanged = com.limelight.nativeapi.HostEndpoint.endpointChanged(previous, updated);
         this.computer = updated;
         if (endpointChanged && loader != null) {
             rebuildLoader();
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            notifyDataSetChanged();
+        } else {
+            mainHandler.post(this::notifyDataSetChanged);
         }
     }
 
@@ -219,6 +237,10 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     @Override
     public void notifyDataSetChanged() {
         sortList(allApps);
+        rebuildVisibleItems();
+    }
+
+    private void rebuildVisibleItems() {
         itemList.clear();
         for (AppView.AppObject app : allApps) {
             if (isVisible(app)) itemList.add(app);
@@ -230,6 +252,7 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
     public void clear() {
         super.clear();
         allApps.clear();
+        normalizedTitles.clear();
     }
 
     @Override

@@ -343,7 +343,7 @@ final class StreamSettingsRowBindings {
         Preference simpleScreen = fragment.findPreference("simple_screen");
         if (simpleScreen != null) {
             simpleScreen.setOnPreferenceClickListener(preference -> {
-                ((StreamSettings) fragment.getActivity()).showSection("display");
+                ((StreamSettings) fragment.getActivity()).showSection("video");
                 return true;
             });
         }
@@ -648,14 +648,12 @@ final class StreamSettingsRowBindings {
             if (!Boolean.TRUE.equals(value)) {
                 return true;
             }
-            new NavigationDialogBuilder(fragment.getActivity())
-                    .setTitle(R.string.title_usb_dualsense)
-                    .setMessage(R.string.usb_dualsense_permission_info)
-                    .setPositiveButton(R.string.usb_dualsense_enable, (dialog, which) -> dualSense.setChecked(true))
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show();
+            showDualSenseConsent(fragment, dualSense);
             return false;
         });
+        if (fragment.dualSenseConsentShowing && fragment.getActivity() != null && !fragment.getActivity().isFinishing()) {
+            showDualSenseConsent(fragment, dualSense);
+        }
 
         // Hide USB driver options on devices without USB host support
         if (!activity.supportsUsbHost()) {
@@ -681,5 +679,29 @@ final class StreamSettingsRowBindings {
             // Remove the vibration strength selector of the device doesn't have amplitude control
             fragment.removeSetting("seekbar_vibrate_fallback_strength");
         }
+    }
+
+    private static void showDualSenseConsent(StreamSettingsFragment fragment, SwitchPreference dualSense) {
+        Activity activity = fragment.getActivity();
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+            return;
+        }
+        fragment.dualSenseConsentShowing = true;
+        AlertDialog dialog = new NavigationDialogBuilder(activity)
+                .setTitle(R.string.title_usb_dualsense)
+                .setMessage(R.string.usb_dualsense_permission_info)
+                .setPositiveButton(R.string.usb_dualsense_enable, (d, which) -> {
+                    fragment.dualSenseConsentShowing = false;
+                    dualSense.setChecked(true);
+                })
+                .setNegativeButton(android.R.string.cancel, (d, which) -> fragment.dualSenseConsentShowing = false)
+                .setOnCancelListener(d -> fragment.dualSenseConsentShowing = false)
+                .create();
+        dialog.setOnDismissListener(d -> {
+            if (!activity.isChangingConfigurations()) {
+                fragment.dualSenseConsentShowing = false;
+            }
+        });
+        UiHelper.showDialog(activity, dialog);
     }
 }

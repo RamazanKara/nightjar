@@ -176,19 +176,19 @@ pub fn library_filters(entries: &[Entry]) -> Vec<FilterChip> {
     }];
     let installed_count = entries.iter().filter(|e| e.installed()).count();
     let not_installed_count = entries.len() - installed_count;
-    if not_installed_count > 0 {
+    if installed_count > 0 && not_installed_count > 0 {
         chips.push(FilterChip {
             filter: LibraryFilter::Installed,
             store_name: None,
             count: installed_count,
         });
-        if installed_count > 0 {
-            chips.push(FilterChip {
-                filter: LibraryFilter::NotInstalled,
-                store_name: None,
-                count: not_installed_count,
-            });
-        }
+    }
+    if not_installed_count > 0 {
+        chips.push(FilterChip {
+            filter: LibraryFilter::NotInstalled,
+            store_name: None,
+            count: not_installed_count,
+        });
     }
 
     let mut stores: BTreeMap<String, (String, usize)> = BTreeMap::new();
@@ -647,16 +647,11 @@ pub fn project_home(
         shown
     };
     let played = Played { sources, recents };
-    let mut visible: Vec<&Entry> = filtered(pool, &active_filter, sort, played)
-        .into_iter()
-        .filter(|e| matches_query(e))
+    let mut visible: Vec<&Entry> = pool
+        .iter()
+        .filter(|e| active_filter.matches(e) && matches_query(e))
         .collect();
-
-    if words.is_empty() && active_filter == LibraryFilter::All {
-        // Keep stable sort already produced by `filtered`.
-    } else {
-        sort_entries(&mut visible, sort, played);
-    }
+    sort_entries(&mut visible, sort, played);
 
     let chips: Vec<ProjectedChip> = raw_chips
         .into_iter()

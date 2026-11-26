@@ -43,7 +43,7 @@ fn page_screenshots() {
             let mut hosts = Hosts::without_discovery(records, Arc::new(|| {}));
             hosts.list[0].reach = Reach::Online;
             hosts.list[0].info = Some(answer(true, 7));
-            hosts.list[0].apps = Apps::Loaded(games.clone());
+            hosts.list[0].apps = Apps::Loaded(Arc::new(games.clone()));
             hosts.list[1].reach = Reach::Offline;
             hosts.list[2].reach = Reach::Online;
             hosts.list[2].info = Some(answer(false, 0));
@@ -149,18 +149,18 @@ fn glass_page_screenshots() {
         let pc = &mut f.hosts.list[0];
         pc.reach = Reach::Online;
         pc.info = Some(files::tests::native_answer());
-        pc.native.library = Some(Library { revision: "r1".into(), games });
-        pc.apps = Apps::Loaded(apps.clone());
+        pc.native.library = Some(Arc::new(Library { revision: "r1".into(), games }));
+        pc.apps = Apps::Loaded(Arc::new(apps.clone()));
         for (n, app) in apps.iter().enumerate() {
             if art_less.contains(&n) {
-                pc.art.insert(app.id, Art::Missing);
+                Arc::make_mut(&mut pc.art).insert(app.id, Art::Missing);
                 continue;
             }
             let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../app/src/debug/assets/demo/art/{}.jpg", n + 1));
             let image = image::load_from_memory(&std::fs::read(&path).expect("the demo cover")).expect("a JPEG").to_rgba8();
             let image = egui::ColorImage::from_rgba_unmultiplied([image.width() as usize, image.height() as usize], &image);
-            pc.ambient.insert(app.id, f.ctx.load_texture(format!("ambient-{n}"), crate::ambient::bake(&image), egui::TextureOptions::LINEAR));
-            pc.art.insert(app.id, Art::Ready(f.ctx.load_texture(format!("cover-{n}"), image, egui::TextureOptions::LINEAR)));
+            Arc::make_mut(&mut pc.ambient).insert(app.id, f.ctx.load_texture(format!("ambient-{n}"), crate::ambient::bake(&image), egui::TextureOptions::LINEAR));
+            Arc::make_mut(&mut pc.art).insert(app.id, Art::Ready(f.ctx.load_texture(format!("cover-{n}"), image, egui::TextureOptions::LINEAR)));
         }
         let uuid = f.hosts.list[0].record.unique_id.clone();
         for (n, days) in [(2u32, 1u64), (8, 3), (3, 8)] {
@@ -343,10 +343,10 @@ fn polish_screenshots() {
             let pc = &mut f.hosts.list[0];
             pc.reach = Reach::Online;
             pc.info = Some(files::tests::native_answer());
-            pc.native.library = Some(Library { revision: "r1".into(), games });
-            pc.apps = Apps::Loaded(apps.clone());
+            pc.native.library = Some(Arc::new(Library { revision: "r1".into(), games }));
+            pc.apps = Apps::Loaded(Arc::new(apps.clone()));
             for (n, app) in apps.iter().enumerate() {
-                pc.art.insert(app.id, demo_art(&f.ctx, n));
+                Arc::make_mut(&mut pc.art).insert(app.id, demo_art(&f.ctx, n));
             }
         }
         f.hosts.list[1].reach = Reach::Offline;
@@ -561,7 +561,7 @@ fn polish_screenshots() {
         let mut f = fresh(vec![HostRecord { address: "192.0.2.10".into(), ..record("Living Room PC", true, true) }], true);
         f.hosts.list[0].reach = Reach::Online;
         f.hosts.list[0].info = Some(files::tests::native_answer());
-        f.hosts.list[0].native.library = Some(Library { revision: "r1".into(), games: Vec::new() });
+        f.hosts.list[0].native.library = Some(Arc::new(Library { revision: "r1".into(), games: Vec::new() }));
         f.l.open(Screen::AllGames);
         shoot(&mut f, "all-games-empty");
         // Nothing installed: the Installed chip is offered and shows no game.
@@ -578,7 +578,7 @@ fn polish_screenshots() {
             playtime_minutes: None,
             collections: Vec::new(),
         };
-        f.hosts.list[0].native.library = Some(Library { revision: "r2".into(), games: vec![none("Night Drive", 0), none("Farm Life", 1)] });
+        f.hosts.list[0].native.library = Some(Arc::new(Library { revision: "r2".into(), games: vec![none("Night Drive", 0), none("Farm Life", 1)] }));
         f.l.library_filter = console::LibraryFilter::Installed;
         shoot(&mut f, "all-games-empty-filter");
         // The library still on its way: the spinner Home shows.

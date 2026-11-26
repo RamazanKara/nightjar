@@ -1,17 +1,18 @@
 // Turns an open "Device results" issue into a row in the device table: validates the pasted
-// results, updates site/data/device-results.json and docs/devices.md on main, copies the data to
-// gh-pages, then comments on the issue and closes it. Failures are explained in one comment that
-// is edited in place; editing the issue runs the workflow again.
+// results, updates site/data/device-results.json and docs/devices.md on a data branch, copies the
+// data to gh-pages, then comments on the issue and closes it. Failures are explained in one
+// comment that is edited in place; editing the issue runs the workflow again.
 // Runs from .github/workflows/device-results.yml with GITHUB_EVENT_PATH, GITHUB_REPOSITORY and
 // GITHUB_TOKEN. The issue body is only ever read as data from the event file, never from a shell.
 //
 //   node .github/scripts/device-results-issue.mjs [--event event.json] [--dry-run]
-//       [--data site/data/device-results.json] [--docs docs/devices.md] [--today YYYY-MM-DD]
+//       [--branch device-results] [--data site/data/device-results.json] [--docs docs/devices.md]
+//       [--today YYYY-MM-DD]
 //
 // --dry-run (or DRY_RUN=1) computes everything and prints what would be written, committed,
 // commented and closed, without touching the files, git or the API.
-import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,8 +21,9 @@ import { applyToDocs } from '../../scripts/device-docs.mjs';
 
 export const MARKER = '<!-- device-results-bot -->';
 export const LABEL = 'device-results';
+export const DATA_BRANCH = 'device-results';
 export const SITE_URL = 'https://ramazankara.github.io/nightjar/devices.html';
-export const DOCS_URL = 'https://github.com/RamazanKara/nightjar/blob/main/docs/devices.md#devices';
+export const DOCS_URL = 'https://github.com/RamazanKara/nightjar/blob/' + DATA_BRANCH + '/docs/devices.md#devices';
 const BOT = 'github-actions[bot]';
 const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com';
 const MAX_PROBLEMS = 12;
@@ -120,9 +122,26 @@ export function failureComment(problems) {
   ].join('\n');
 }
 
+export function unexpectedFailureComment(error) {
+  const detail = safe(String(error?.message ?? error ?? 'unknown error').split('\n')[0]).slice(0, 200);
+  const runUrl = process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
+    ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+    : '';
+  return [
+    MARKER,
+    'Thanks for the results. I ran into an error while saving them:',
+    '',
+    '- ' + detail,
+    '',
+    ...(runUrl ? ['Workflow run: ' + runUrl, ''] : []),
+    'You do not need to resubmit; a maintainer can check the workflow run and re-run it.'
+  ].join('\n');
+}
+
 function options(args) {
   const parsed = {
     event: process.env.GITHUB_EVENT_PATH,
+    branch: process.env.DEVICE_RESULTS_BRANCH || DATA_BRANCH,
     data: 'site/data/device-results.json',
     docs: 'docs/devices.md',
     today: new Date().toISOString().slice(0, 10),
@@ -131,6 +150,7 @@ function options(args) {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--event') parsed.event = args[++i];
+    else if (arg === '--branch') parsed.branch = args[++i];
     else if (arg === '--data') parsed.data = args[++i];
     else if (arg === '--docs') parsed.docs = args[++i];
     else if (arg === '--today') parsed.today = args[++i];
@@ -142,6 +162,13 @@ function options(args) {
 }
 
 const git = (args, cwd) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
+
+function hasRemoteBranch(branch) {
+  const res = spawnSync('git', ['ls-remote', '--exit-code', '--heads', 'origin', branch], { encoding: 'utf8' });
+  if (res.status === 0) return true;
+  if (res.status === 2) return false;
+  throw new Error('git ls-remote failed: ' + (res.stderr || res.status));
+}
 
 function pushWithRetry(prepare, push) {
   for (let attempt = 1; ; attempt++) {
@@ -157,25 +184,31 @@ function pushWithRetry(prepare, push) {
 
 /** Copies the data file to data/ on gh-pages and pushes when it differs. */
 function publishToPages(dataFile) {
-  const dir = join(mkdtempSync(join(process.env.RUNNER_TEMP ?? tmpdir(), 'gh-pages-')), 'site');
+  const root = mkdtempSync(join(process.env.RUNNER_TEMP ?? tmpdir(), 'gh-pages-'));
+  const dir = join(root, 'site');
   git(['fetch', '--depth=1', 'origin', 'gh-pages']);
   git(['worktree', 'add', '--detach', dir, 'FETCH_HEAD']);
   let changed = false;
-  pushWithRetry(
-    () => {
-      git(['fetch', '--depth=1', 'origin', 'gh-pages'], dir);
-      git(['reset', '--hard', 'FETCH_HEAD'], dir);
-      mkdirSync(join(dir, 'data'), { recursive: true });
-      copyFileSync(dataFile, join(dir, 'data', 'device-results.json'));
-      changed = Boolean(git(['status', '--porcelain', '--', 'data/device-results.json'], dir).trim());
-      if (!changed) return;
-      git(['add', 'data/device-results.json'], dir);
-      git(['commit', '-m', 'docs(site): publish device results\n\nSigned-off-by: ' + BOT + ' <' + BOT_EMAIL + '>'], dir);
-    },
-    () => {
-      if (changed) git(['push', 'origin', 'HEAD:gh-pages'], dir);
-    }
-  );
+  try {
+    pushWithRetry(
+      () => {
+        git(['fetch', '--depth=1', 'origin', 'gh-pages'], dir);
+        git(['reset', '--hard', 'FETCH_HEAD'], dir);
+        mkdirSync(join(dir, 'data'), { recursive: true });
+        copyFileSync(dataFile, join(dir, 'data', 'device-results.json'));
+        changed = Boolean(git(['status', '--porcelain', '--', 'data/device-results.json'], dir).trim());
+        if (!changed) return;
+        git(['add', 'data/device-results.json'], dir);
+        git(['commit', '-m', 'docs(site): publish device results\n\nSigned-off-by: ' + BOT + ' <' + BOT_EMAIL + '>'], dir);
+      },
+      () => {
+        if (changed) git(['push', 'origin', 'HEAD:gh-pages'], dir);
+      }
+    );
+  } finally {
+    try { git(['worktree', 'remove', '--force', dir]); } catch {}
+    rmSync(root, { recursive: true, force: true });
+  }
 }
 
 export async function main(args) {
@@ -206,54 +239,68 @@ export async function main(args) {
     else if (mine.body !== text) await api('/repos/' + repo + '/issues/comments/' + mine.id, { method: 'PATCH', body: JSON.stringify({ body: text }) });
   }
 
-  if (!opts.dryRun) {
-    git(['config', 'user.name', BOT]);
-    git(['config', 'user.email', BOT_EMAIL]);
-  }
-
-  // The table and docs are recomputed from the tip of main on every attempt, so two issues
-  // handled at the same time cannot overwrite each other.
-  let result;
-  let table;
-  pushWithRetry(
-    () => {
-      if (!opts.dryRun) {
-        git(['fetch', '--depth=1', 'origin', 'main']);
-        git(['reset', '--hard', 'FETCH_HEAD']);
-      }
-      table = JSON.parse(readFileSync(dataFile, 'utf8'));
-      result = evaluate({ issue: n, body: issue.body, table, today: opts.today });
-    },
-    () => {
-      if (result.status !== 'ok' || result.action === 'unchanged') return;
-      const docs = applyToDocs(readFileSync(docsFile, 'utf8'), table);
-      if (opts.dryRun) {
-        console.log('--- ' + opts.docs + ' block ---\n' + docs.slice(docs.indexOf('<!-- device-results:start'), docs.indexOf('<!-- device-results:end -->')) + '---');
-        return;
-      }
-      writeFileSync(dataFile, JSON.stringify(table, null, 2) + '\n');
-      writeFileSync(docsFile, docs);
-      const message = join(mkdtempSync(join(tmpdir(), 'commit-')), 'message.txt');
-      const verb = result.action === 'updated' ? 'update' : 'add';
-      writeFileSync(message, 'docs(devices): ' + verb + ' results from issue #' + n + '\n\nSigned-off-by: ' + BOT + ' <' + BOT_EMAIL + '>\n');
-      git(['add', opts.data, opts.docs]);
-      git(['commit', '-F', message]);
-      git(['push', 'origin', 'HEAD:main']);
+  try {
+    if (!opts.dryRun) {
+      git(['config', 'user.name', BOT]);
+      git(['config', 'user.email', BOT_EMAIL]);
     }
-  );
+    const baseHead = opts.dryRun ? '' : git(['rev-parse', 'HEAD']).trim();
 
-  if (result.status === 'invalid') {
-    console.log('#' + n + ': invalid, ' + result.problems.length + ' problem(s)');
-    await comment(failureComment(result.problems));
-    return;
+    // The table and docs are recomputed from the tip of the data branch on every attempt, so two
+    // issues handled at the same time cannot overwrite each other.
+    let result;
+    let table;
+    pushWithRetry(
+      () => {
+        if (!opts.dryRun) {
+          if (hasRemoteBranch(opts.branch)) {
+            git(['fetch', '--depth=1', 'origin', opts.branch]);
+            git(['reset', '--hard', 'FETCH_HEAD']);
+          } else {
+            git(['reset', '--hard', baseHead]);
+          }
+        }
+        table = JSON.parse(readFileSync(dataFile, 'utf8'));
+        result = evaluate({ issue: n, body: issue.body, table, today: opts.today });
+      },
+      () => {
+        if (result.status !== 'ok' || result.action === 'unchanged') return;
+        const docs = applyToDocs(readFileSync(docsFile, 'utf8'), table);
+        if (opts.dryRun) {
+          console.log('--- ' + opts.docs + ' block ---\n' + docs.slice(docs.indexOf('<!-- device-results:start'), docs.indexOf('<!-- device-results:end -->')) + '---');
+          return;
+        }
+        writeFileSync(dataFile, JSON.stringify(table, null, 2) + '\n');
+        writeFileSync(docsFile, docs);
+        const message = join(mkdtempSync(join(tmpdir(), 'commit-')), 'message.txt');
+        const verb = result.action === 'updated' ? 'update' : 'add';
+        writeFileSync(message, 'docs(devices): ' + verb + ' results from issue #' + n + '\n\nSigned-off-by: ' + BOT + ' <' + BOT_EMAIL + '>\n');
+        git(['add', opts.data, opts.docs]);
+        git(['commit', '-F', message]);
+        git(['push', 'origin', 'HEAD:refs/heads/' + opts.branch]);
+      }
+    );
+
+    if (result.status === 'invalid') {
+      console.log('#' + n + ': invalid, ' + result.problems.length + ' problem(s)');
+      await comment(failureComment(result.problems));
+      return;
+    }
+    console.log('#' + n + ': ' + result.action + (result.hold ? ', kept open for the stream notes' : ''));
+    if (opts.dryRun) console.log('Would copy ' + opts.data + ' to gh-pages:data/device-results.json');
+    else publishToPages(dataFile);
+    await comment(successComment(result));
+    if (result.hold) return;
+    if (opts.dryRun) return console.log('Would close #' + n + ' as completed');
+    await api('/repos/' + repo + '/issues/' + n, { method: 'PATCH', body: JSON.stringify({ state: 'closed', state_reason: 'completed' }) });
+  } catch (error) {
+    try {
+      await comment(unexpectedFailureComment(error));
+    } catch (commentError) {
+      console.error('Also failed to comment on #' + n + ': ' + commentError.message);
+    }
+    throw error;
   }
-  console.log('#' + n + ': ' + result.action + (result.hold ? ', kept open for the stream notes' : ''));
-  if (opts.dryRun) console.log('Would copy ' + opts.data + ' to gh-pages:data/device-results.json');
-  else publishToPages(dataFile);
-  await comment(successComment(result));
-  if (result.hold) return;
-  if (opts.dryRun) return console.log('Would close #' + n + ' as completed');
-  await api('/repos/' + repo + '/issues/' + n, { method: 'PATCH', body: JSON.stringify({ state: 'closed', state_reason: 'completed' }) });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

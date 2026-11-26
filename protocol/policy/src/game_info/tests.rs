@@ -47,6 +47,9 @@ fn matching_takes_the_same_game_and_refuses_another() {
     // A sequel or another game of the series is not the game.
     assert_eq!(best("DOOM 3", &results), None);
     assert_eq!(best("Hades", &["Hades II", "Hadean Lands"]), None);
+    assert_eq!(best("Spider-Man", &["Spider-Man 2", "Spider-Man II"]), None);
+    assert_eq!(best("Left 4 Dead", &["Left 4 Dead 2"]), None);
+    assert_eq!(best("Half-Life 2: Episode 1", &["Half-Life 1: Episode 2"]), None);
     assert_eq!(best("Witcher 3: Wild Hunt", &["The Witcher 3: Wild Hunt"]), Some(0));
     assert_eq!(best("Mafia: Definitive Edition", &["Mafia", "Mafia II"]), Some(0));
     // The service's order decides between two equally good.

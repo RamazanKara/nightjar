@@ -424,6 +424,7 @@ final class MediaCodecCodecSelector {
         String[] mimes = {"video/hevc", "video/av01"};
         int[] formatBits = {MoonBridge.VIDEO_FORMAT_H265, MoonBridge.VIDEO_FORMAT_H265_MAIN10,
                 MoonBridge.VIDEO_FORMAT_AV1_MAIN8, MoonBridge.VIDEO_FORMAT_AV1_MAIN10};
+        long budgetDeadlineMs = android.os.SystemClock.uptimeMillis() + PackedFallback.CHECK_TIMEOUT_MS;
         for (int codec = 0; codec < 2; codec++) {
             MediaCodecInfo decoder = decoders[codec];
             if (decoder == null || !decoder.isHardwareAccelerated() || decoder.isSoftwareOnly()) continue;
@@ -441,14 +442,23 @@ final class MediaCodecCodecSelector {
                             continue;
                         }
                     }
-                    // Under a watchdog: this runs while the connecting screen waits, and a decoder
-                    // or GPU driver that never returns must not hold the start.
+                    // Under a single overall watchdog budget: a decoder or GPU driver that hangs
+                    // must not consume another timeout waiting for the other bit depth.
                     final String decoderName = decoder.getName();
                     final String codecName = codecs[codec];
                     final boolean tenBit = depth == 1;
-                    if (PackedFallback.within(() -> Packed444.verifySampling(r.context, decoderName, codecName, tenBit),
-                            PackedFallback.CHECK_TIMEOUT_MS, decoderName + (tenBit ? " 10-bit" : " 8-bit"))) modes |= 1 << bit;
-                    else if (depth == 1) r.packedTenBitIssue = MediaCodecDecoderRenderer.ISSUE_TEN_BIT_SAMPLING;
+                    long remainingMs = Math.max(0L, budgetDeadlineMs - android.os.SystemClock.uptimeMillis());
+                    PackedFallback.Outcome outcome = PackedFallback.withinOutcome(
+                            () -> Packed444.verifySampling(r.context, decoderName, codecName, tenBit),
+                            remainingMs, decoderName + (tenBit ? " 10-bit" : " 8-bit"));
+                    if (outcome == PackedFallback.Outcome.PASS) {
+                        modes |= 1 << bit;
+                    } else {
+                        if (depth == 1) r.packedTenBitIssue = MediaCodecDecoderRenderer.ISSUE_TEN_BIT_SAMPLING;
+                        if (outcome == PackedFallback.Outcome.TIMEOUT) {
+                            break;
+                        }
+                    }
                 }
             } catch (IllegalArgumentException e) {
                 LimeLog.warning("Packed chroma decoder geometry is unsupported: " + e);
@@ -524,6 +534,8 @@ final class MediaCodecCodecSelector {
             }
             vulkan = true;
         }
+        // With "Full color range" on, a Dolby Vision stream still asks for limited range (sdp,
+        // getPreferredColorRange) and the host codes it limited range with its RPUs (nightjar#193).
         int dolbyVisionDecoders = (r.dolbyVisionDecoder != null ? HdrFormatPolicy.DOLBY_VISION_HEVC : 0) |
                 (r.dolbyVisionAv1Decoder != null ? HdrFormatPolicy.DOLBY_VISION_AV1 : 0);
         int format = HdrFormatPolicy.pick(hostHdrFormats, displayTypes, dolbyVisionDecoders, videoFormats, surface);
@@ -582,7 +594,11 @@ final class MediaCodecCodecSelector {
     }
 
     MediaCodecInfo dolbyVisionDecoderForStream() {
-        if (r.dolbyVisionFailed || r.packing != null || (r.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_10BIT) == 0) {
+        // Neither an SDR picture nor a 4:4:4 one carries RPUs.
+        if (r.dolbyVisionFailed || r.packing != null ||
+                Boolean.FALSE.equals(r.currentHdrMode) ||
+                (r.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_YUV444) != 0 ||
+                (r.videoFormat & MoonBridge.VIDEO_FORMAT_MASK_10BIT) == 0) {
             return null;
         }
         if ((r.announcedHdrFormat & HdrFormatPolicy.DOLBY_VISION_HEVC) != 0 &&

@@ -44,8 +44,8 @@ public class UsbDriverService extends Service implements UsbDriverListener {
     private final UsbDriverBinder binder = new UsbDriverBinder();
 
     private final CopyOnWriteArrayList<AbstractController> controllers = new CopyOnWriteArrayList<>();
-    private final Set<Integer> releasedDeviceIds = Collections.synchronizedSet(new HashSet<>());
-    private final Set<String> releasedDeviceNames = Collections.synchronizedSet(new HashSet<>());
+    private final CopyOnWriteArraySet<AbstractController> readyControllers = new CopyOnWriteArraySet<>();
+    private final Set<String> forwardedDevices = Collections.synchronizedSet(new HashSet<>());
 
     private volatile UsbDriverListener listener;
     private UsbDriverStateListener stateListener;
@@ -109,6 +109,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
     public void deviceRemoved(AbstractController controller) {
         // Remove the the controller from our list (if not removed already)
         controllers.remove(controller);
+        readyControllers.remove(controller);
 
         // Call through to the client's listener
         LimeLog.info("USB controller detached");
@@ -126,8 +127,11 @@ public class UsbDriverService extends Service implements UsbDriverListener {
         LimeLog.info("USB controller attached");
         handler.post(() -> {
             UsbDriverListener current = listener;
-            if (started && controllers.contains(controller) && current != null) {
-                current.deviceAdded(controller);
+            if (started && controllers.contains(controller)) {
+                readyControllers.add(controller);
+                if (current != null) {
+                    current.deviceAdded(controller);
+                }
             }
         });
     }
@@ -160,8 +164,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
                 }, 1000);
             }
             else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
-                releasedDeviceIds.remove(device.getDeviceId());
-                if (device.getDeviceName() != null) releasedDeviceNames.remove(device.getDeviceName());
+                forwardedDevices.remove(deviceKey(device));
                 if (pendingPermissions.remove(device.getDeviceId()) && stateListener != null) {
                     stateListener.onUsbPermissionPromptCompleted();
                 }
@@ -169,6 +172,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
                     if (isControllerForDevice(controller, device)) {
                         // Input stops now; the pad's USB worker finishes releasing it.
                         controllers.remove(controller);
+                        readyControllers.remove(controller);
                         controller.stop();
                     }
                 }
@@ -204,9 +208,9 @@ public class UsbDriverService extends Service implements UsbDriverListener {
         public void setListener(UsbDriverListener listener) {
             UsbDriverService.this.listener = listener;
 
-            // Report all controllerMap that already exist
+            // Report only controllers that finished starting and called deviceAdded().
             if (listener != null) {
-                for (AbstractController controller : controllers) {
+                for (AbstractController controller : readyControllers) {
                     listener.deviceAdded(controller);
                 }
             }
@@ -238,25 +242,75 @@ public class UsbDriverService extends Service implements UsbDriverListener {
     }
 
     /** Waits boundedly off the main thread for any queued USB controller close/interface release on {@code device}. */
-    public static void awaitDeviceRelease(UsbDevice device, long timeoutMs) {
-        if (device == null) return;
-        AbstractController.awaitUsbWorker(device.getDeviceName(), timeoutMs);
+    public static boolean awaitDeviceRelease(UsbDevice device, long timeoutMs) {
+        if (device == null) return true;
+        return AbstractController.awaitUsbWorker(device.getDeviceName(), timeoutMs);
     }
 
-    /** Releases a claimed controller and prevents reclaiming it for the rest of this session (until unplugged). */
+    /** Clears forwarding holds for {@code device} and rechecks it if it is still attached. */
+    public static void onForwardingEnded(UsbDevice device) {
+        if (device == null) return;
+        String key = deviceKey(device);
+        for (UsbDriverService service : activeServices) {
+            if (service.forwardedDevices.remove(key)) {
+                service.recheckDeviceAfterForwarding(device);
+            }
+        }
+    }
+
+    /** Clears all active forwarding holds across active services and rechecks attached USB devices. */
+    public static void clearForwardingHolds() {
+        for (UsbDriverService service : activeServices) {
+            boolean cleared;
+            synchronized (service.forwardedDevices) {
+                cleared = !service.forwardedDevices.isEmpty();
+                service.forwardedDevices.clear();
+            }
+            if (cleared) {
+                service.recheckAttachedDevices();
+            }
+        }
+    }
+
+    private static String deviceKey(UsbDevice device) {
+        if (device == null) return "";
+        String name = device.getDeviceName();
+        return name != null ? "path:" + name : "id:" + device.getDeviceId();
+    }
+
+    /** Releases a claimed controller and holds it unclaimed while USB forwarding owns it. */
     public void releaseDevice(UsbDevice device) {
         if (device == null) return;
-        releasedDeviceIds.add(device.getDeviceId());
-        if (device.getDeviceName() != null) releasedDeviceNames.add(device.getDeviceName());
+        forwardedDevices.add(deviceKey(device));
         if (pendingPermissions.remove(device.getDeviceId()) && stateListener != null) {
             stateListener.onUsbPermissionPromptCompleted();
         }
         for (AbstractController controller : controllers) {
             if (isControllerForDevice(controller, device)) {
                 controllers.remove(controller);
+                readyControllers.remove(controller);
                 controller.stop();
             }
         }
+    }
+
+    private void recheckDeviceAfterForwarding(UsbDevice device) {
+        handler.post(() -> {
+            if (!started || device == null || usbManager == null) return;
+            UsbDevice attached = device.getDeviceName() != null
+                    ? usbManager.getDeviceList().get(device.getDeviceName())
+                    : null;
+            handleUsbDeviceState(attached != null ? attached : device);
+        });
+    }
+
+    private void recheckAttachedDevices() {
+        handler.post(() -> {
+            if (!started || usbManager == null) return;
+            for (UsbDevice dev : usbManager.getDeviceList().values()) {
+                handleUsbDeviceState(dev);
+            }
+        });
     }
 
     private static boolean isControllerForDevice(AbstractController controller, UsbDevice device) {
@@ -270,9 +324,8 @@ public class UsbDriverService extends Service implements UsbDriverListener {
 
     private void handleUsbDeviceState(UsbDevice device) {
         if (!started || device == null || pendingPermissions.contains(device.getDeviceId()) ||
-                releasedDeviceIds.contains(device.getDeviceId()) ||
-                (device.getDeviceName() != null && releasedDeviceNames.contains(device.getDeviceName())) ||
-                UsbForwarding.isAutoForwarded(this, device) ||
+                forwardedDevices.contains(deviceKey(device)) ||
+                UsbForwarding.isForwardingDevice(device) ||
                 !usbManager.getDeviceList().containsKey(device.getDeviceName())) {
             return;
         }
@@ -283,7 +336,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
         }
 
         // Are we able to operate it?
-        if (shouldClaimDevice(device, prefConfig)) {
+        if (shouldClaimDevice(this, device, prefConfig)) {
             // Do we have permission yet?
             if (!usbManager.hasPermission(device)) {
                 // Let's ask for permission
@@ -368,6 +421,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
             int usbDeviceId = device.getDeviceId();
             controller.startOnUsbWorker(() -> {
                 controllers.remove(controller);
+                readyControllers.remove(controller);
                 reportStartFailed(usbDeviceId);
             });
         }
@@ -447,7 +501,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
     }
 
     public static boolean shouldClaimDevice(Context context, UsbDevice device, PreferenceConfiguration config) {
-        return !UsbForwarding.isAutoForwarded(context, device) && shouldClaimDevice(device, config);
+        return !UsbForwarding.isForwardingDevice(device) && shouldClaimDevice(device, config);
     }
 
     public static boolean shouldClaimDevice(UsbDevice device, PreferenceConfiguration config) {
@@ -492,8 +546,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
 
     private void stop() {
         activeServices.remove(this);
-        releasedDeviceIds.clear();
-        releasedDeviceNames.clear();
+        forwardedDevices.clear();
         if (!started) {
             return;
         }
@@ -515,6 +568,7 @@ public class UsbDriverService extends Service implements UsbDriverListener {
             controller.stop();
         }
         controllers.clear();
+        readyControllers.clear();
     }
 
     @Override

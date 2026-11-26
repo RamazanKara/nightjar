@@ -372,4 +372,38 @@ public class FileTransferControllerTest {
         assertEquals(1, deleted.get());
         assertTrue(screen.rows.isEmpty());
     }
+
+    @Test
+    public void queuedOrFailedUploadKeepsOpenerAliveUntilClearedOrClosed() {
+        AtomicInteger opens = new AtomicInteger();
+        AtomicInteger closes = new AtomicInteger();
+        FileTransferController.Opener tracking = new FileTransferController.Opener() {
+            @Override public int open() {
+                opens.incrementAndGet();
+                return 81;
+            }
+            @Override public void close() {
+                closes.incrementAndGet();
+            }
+        };
+
+        long id = controller.send("stay_open.bin", 64, tracking);
+        engine.outcomes.put(id, FileProblems.NETWORK);
+        settle();
+
+        assertEquals(FileRow.State.FAILED, screen.row(id).state);
+        assertEquals(1, opens.get());
+        assertEquals("failed upload must keep opener alive for retry", 0, closes.get());
+
+        controller.retry(id);
+        settle();
+        assertEquals(FileRow.State.DONE, screen.row(id).state);
+        assertEquals(2, opens.get());
+        assertEquals("Done upload still keeps job until clearFinished/close", 0, closes.get());
+
+        controller.clearFinished();
+        assertEquals("clearFinished closes removed job's opener once", 1, closes.get());
+        controller.close();
+        assertEquals(1, closes.get());
+    }
 }

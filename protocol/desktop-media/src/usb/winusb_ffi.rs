@@ -46,6 +46,24 @@ pub(super) struct UsbInterfaceDescriptor {
     pub(super) i_interface: u8,
 }
 
+/// `WINUSB_PIPE_INFORMATION_EX` from Windows `winusbio.h`.
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct WinUsbPipeInformationEx {
+    pub(super) pipe_type: u32,
+    pub(super) pipe_id: u8,
+    pub(super) maximum_packet_size: u16,
+    pub(super) interval: u8,
+    pub(super) maximum_bytes_per_interval: u32,
+}
+
+#[cfg(windows)]
+const _: () = assert!(std::mem::size_of::<WinUsbPipeInformationEx>() == 16);
+
+#[cfg(windows)]
+pub(super) const USBD_PIPE_TYPE_ISOCHRONOUS: u32 = 1;
+
 const USBD_STATUS_SUCCESS: u32 = 0x0000_0000;
 const USBD_STATUS_STALL_PID: u32 = 0xC000_0004;
 const USBD_STATUS_DATA_OVERRUN: u32 = 0xC000_0008;
@@ -84,6 +102,49 @@ pub(in crate::usb) fn win32_error_to_errno(error: u32) -> i32 {
         87 => wire::EINVAL,
         _ => wire::EPROTO,
     }
+}
+
+/// Maps a Win32 error from overlapped completion to USB/IP errno, preserving cancellation.
+pub(in crate::usb) fn overlapped_error_to_errno(error: u32, cancel_reason: Option<i32>) -> i32 {
+    if error == 995 {
+        cancel_reason.unwrap_or(wire::ECONNRESET)
+    } else if cancel_reason == Some(wire::ECONNRESET) {
+        wire::ECONNRESET
+    } else {
+        win32_error_to_errno(error)
+    }
+}
+
+/// Validates an isochronous OUT packet table before calling `WinUsb_WriteIsochPipeAsap`.
+///
+/// `WinUsb_WriteIsochPipeAsap` only accepts a flat contiguous byte length and splits it on the wire
+/// into `max_bytes_per_interval` chunks with at most one trailing shorter packet. Any zero-length,
+/// non-contiguous, oversized, or interior short packet cannot be expressed accurately and is
+/// refused with `wire::EINVAL`.
+pub(in crate::usb) fn validate_winusb_iso_out_table(
+    asked: &[IsoPacket],
+    max_bytes_per_interval: u32,
+) -> Result<u32, i32> {
+    if asked.is_empty() || max_bytes_per_interval == 0 {
+        return Err(wire::EINVAL);
+    }
+    let mut expected_offset = 0u32;
+    let last_idx = asked.len() - 1;
+    for (idx, packet) in asked.iter().enumerate() {
+        if packet.offset != expected_offset
+            || packet.length == 0
+            || packet.length > max_bytes_per_interval
+        {
+            return Err(wire::EINVAL);
+        }
+        if idx < last_idx && packet.length != max_bytes_per_interval {
+            return Err(wire::EINVAL);
+        }
+        expected_offset = expected_offset
+            .checked_add(packet.length)
+            .ok_or(wire::EINVAL)?;
+    }
+    Ok(expected_offset)
 }
 
 /// Target interface number if a control setup packet has recipient = Interface (`bmRequestType & 0x1f == 1`).
@@ -145,7 +206,9 @@ mod loader {
     };
     use windows::Win32::System::Threading::CreateEventW;
 
-    use super::{UsbInterfaceDescriptor, UsbdIsoPacketDescriptor, WinUsbSetupPacket};
+    use super::{
+        UsbInterfaceDescriptor, UsbdIsoPacketDescriptor, WinUsbPipeInformationEx, WinUsbSetupPacket,
+    };
 
     pub(in crate::usb::winusb) type WinUsbHandle = *mut c_void;
     pub(in crate::usb::winusb) type IsochBufferHandle = *mut c_void;
@@ -156,6 +219,13 @@ mod loader {
     type FnGetAssociated = unsafe extern "system" fn(WinUsbHandle, u8, *mut WinUsbHandle) -> WinBool;
     type FnQuerySettings =
         unsafe extern "system" fn(WinUsbHandle, u8, *mut UsbInterfaceDescriptor) -> WinBool;
+    type FnQueryPipeEx = unsafe extern "system" fn(
+        WinUsbHandle,
+        u8,
+        u8,
+        *mut WinUsbPipeInformationEx,
+    ) -> WinBool;
+    type FnGetAlt = unsafe extern "system" fn(WinUsbHandle, *mut u8) -> WinBool;
     type FnSetAlt = unsafe extern "system" fn(WinUsbHandle, u8) -> WinBool;
     type FnControl = unsafe extern "system" fn(
         WinUsbHandle,
@@ -206,6 +276,8 @@ mod loader {
         pub(in crate::usb::winusb) free: FnFree,
         pub(in crate::usb::winusb) get_associated: FnGetAssociated,
         pub(in crate::usb::winusb) query_settings: FnQuerySettings,
+        pub(in crate::usb::winusb) query_pipe_ex: FnQueryPipeEx,
+        pub(in crate::usb::winusb) get_alt: FnGetAlt,
         pub(in crate::usb::winusb) set_alt: FnSetAlt,
         pub(in crate::usb::winusb) control_transfer: FnControl,
         pub(in crate::usb::winusb) read_pipe: FnPipeIo,
@@ -247,6 +319,8 @@ mod loader {
                 free: load!("WinUsb_Free", FnFree),
                 get_associated: load!("WinUsb_GetAssociatedInterface", FnGetAssociated),
                 query_settings: load!("WinUsb_QueryInterfaceSettings", FnQuerySettings),
+                query_pipe_ex: load!("WinUsb_QueryPipeEx", FnQueryPipeEx),
+                get_alt: load!("WinUsb_GetCurrentAlternateSetting", FnGetAlt),
                 set_alt: load!("WinUsb_SetCurrentAlternateSetting", FnSetAlt),
                 control_transfer: load!("WinUsb_ControlTransfer", FnControl),
                 read_pipe: load!("WinUsb_ReadPipe", FnPipeIo),
@@ -267,6 +341,11 @@ mod loader {
 
     pub(in crate::usb::winusb) struct OwnedEvent(pub(in crate::usb::winusb) HANDLE);
 
+    // SAFETY: Win32 event handles created via `CreateEventW` are kernel objects valid across threads.
+    unsafe impl Send for OwnedEvent {}
+    // SAFETY: Reading the handle value concurrently to wait/reset/close under WinUsbDevice locks is thread-safe.
+    unsafe impl Sync for OwnedEvent {}
+
     impl OwnedEvent {
         pub(in crate::usb::winusb) fn new() -> Result<Self, i32> {
             // SAFETY: manual-reset, initially unsignaled unnamed event owned by this guard.
@@ -284,21 +363,7 @@ mod loader {
             }
         }
     }
-
-    pub(in crate::usb::winusb) struct IsochBufferGuard {
-        pub(in crate::usb::winusb) api: &'static WinUsbApi,
-        pub(in crate::usb::winusb) handle: IsochBufferHandle,
-    }
-
-    impl Drop for IsochBufferGuard {
-        fn drop(&mut self) {
-            // SAFETY: callers always complete/cancel overlapped I/O before dropping this guard.
-            unsafe {
-                let _ = (self.api.unregister_isoch_buffer)(self.handle);
-            }
-        }
-    }
 }
 
 #[cfg(windows)]
-pub(super) use loader::{api, IsochBufferGuard, IsochBufferHandle, OwnedEvent, WinBool, WinUsbApi, WinUsbHandle};
+pub(super) use loader::{api, IsochBufferHandle, OwnedEvent, WinBool, WinUsbApi, WinUsbHandle};

@@ -57,10 +57,10 @@ public final class RedactedLog {
     // Informational lines worth keeping; the rest is too frequent and would push out a session.
     private static final String[] INFO_PREFIXES = {
             "Stream request", "Connection terminated", "Selected ", "Decoder", "Reconfigure", "Stream now",
-            "Display luminance", "Display modes changed", "Display refresh policy:", "Microphone", "PC stream profiles", "Present mode",
+            "Display luminance", "Display modes changed", "Display refresh policy:", "Refresh drop recovery:", "Microphone", "PC stream profiles", "Present mode",
             "PyroWave", "Phase lock", "Low latency", "Automatic codec", "Streaming engine", "Device controls bitrate",
             "DualSense USB ", "USB controller announcement ", "Audio output:", "Audio track configuration:",
-            "Video receive buffer"};
+            "Video receive buffer", "Stream summary"};
 
     public RedactedLog() {
         this(null);
@@ -120,7 +120,10 @@ public final class RedactedLog {
         secrets.sort(Comparator.comparingInt(String::length).reversed());
         // A placeholder no PC name holds, so a PC named "PC" does not mark the marks again.
         for (String secret : secrets) {
-            text = text.replace(secret, PC_PLACEHOLDER);
+            text = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(secret),
+                            java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE)
+                    .matcher(text)
+                    .replaceAll(java.util.regex.Matcher.quoteReplacement(PC_PLACEHOLDER));
         }
         text = text.replace(PC_PLACEHOLDER, "[PC]");
         String[] marks = {"[url]", "[email]", "[address]", "[address]", "[address]", "[id]", "[hex]", "[data]", "[path]"};

@@ -182,6 +182,35 @@ pub fn is_krpc(datagram: &[u8]) -> bool {
     datagram.first() == Some(&b'd')
 }
 
+/// Whether `ip` is routable on the public internet (rejects loopback, private, link-local,
+/// multicast, broadcast, unspecified, and documentation/benchmark ranges for DHT nodes).
+fn is_public_dht_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            !v4.is_unspecified()
+                && !v4.is_loopback()
+                && !v4.is_private()
+                && !v4.is_link_local()
+                && !v4.is_multicast()
+                && !v4.is_broadcast()
+                && !v4.is_documentation()
+        }
+        IpAddr::V6(v6) => {
+            if let Some(mapped) = v6.to_ipv4_mapped() {
+                return is_public_dht_ip(IpAddr::V4(mapped));
+            }
+            let seg0 = v6.segments()[0];
+            let unique_local = (seg0 & 0xfe00) == 0xfc00;
+            let link_local = (seg0 & 0xffc0) == 0xfe80;
+            !v6.is_unspecified()
+                && !v6.is_loopback()
+                && !v6.is_multicast()
+                && !unique_local
+                && !link_local
+        }
+    }
+}
+
 pub fn parse(datagram: &[u8]) -> Option<Message> {
     let message = crate::bencode::decode(datagram)?;
     let tid = message.get(b"t")?.as_bytes()?.to_vec();
@@ -210,7 +239,7 @@ pub fn parse(datagram: &[u8]) -> Option<Message> {
                     ),
                 }));
             }
-            nodes.retain(|node| node.address.port() != 0 && !node.address.ip().is_unspecified());
+            nodes.retain(|node| node.address.port() != 0 && is_public_dht_ip(node.address.ip()));
             Some(Message::Reply {
                 tid,
                 reply: Reply {
@@ -477,7 +506,7 @@ mod tests {
     }
 
     fn address(n: u8) -> SocketAddr {
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, n)), 6881)
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(93, 184, 216, n)), 6881)
     }
 
     fn compact(nodes: &[(Id, SocketAddr)]) -> Vec<u8> {
@@ -649,5 +678,37 @@ mod tests {
         assert!(!writable.contains(&address(20)));
         // A reply to no query of this lookup is not taken.
         assert!(!lookup.on_reply(b"zz", address(30), &Reply::default()));
+    }
+
+    #[test]
+    fn parse_rejects_non_public_node_addresses() {
+        let mut raw_nodes = Vec::new();
+        for addr in [
+            SocketAddr::from(([127, 0, 0, 1], 6881)),
+            SocketAddr::from(([10, 0, 0, 1], 6881)),
+            SocketAddr::from(([192, 168, 1, 1], 6881)),
+            SocketAddr::from(([224, 0, 0, 1], 6881)),
+            SocketAddr::from(([169, 254, 1, 1], 6881)),
+            SocketAddr::from(([93, 184, 216, 34], 6881)),
+        ] {
+            raw_nodes.extend(compact(&[(id(1), addr)]));
+        }
+        let datagram = Value::dict([
+            ("t", Value::bytes(*b"aa")),
+            ("y", Value::bytes(*b"r")),
+            (
+                "r",
+                Value::dict([
+                    ("id", Value::bytes(id(2))),
+                    ("nodes", Value::bytes(raw_nodes)),
+                ]),
+            ),
+        ])
+        .encode();
+        let Some(Message::Reply { reply, .. }) = parse(&datagram) else {
+            panic!("expected reply");
+        };
+        assert_eq!(reply.nodes.len(), 1);
+        assert_eq!(reply.nodes[0].address, SocketAddr::from(([93, 184, 216, 34], 6881)));
     }
 }

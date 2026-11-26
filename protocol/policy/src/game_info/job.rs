@@ -477,12 +477,19 @@ impl Job {
                     self.pending = None;
                     self.tries = 0;
                 }
+                (200, _) => {
+                    self.note(format!("{name}: unreadable Twitch token reply"));
+                    self.pending = None;
+                    self.fail_part();
+                }
                 (status, _) => {
                     // 400 and 403 are a wrong client ID or secret.
                     if matches!(status, 400 | 401 | 403) {
                         self.session.info_refused = true;
+                        self.note(format!("{name}: HTTP {status}, the IGDB client ID or secret was not accepted"));
+                    } else {
+                        self.note(format!("{name}: HTTP {status}"));
                     }
-                    self.note(format!("{name}: HTTP {status}, the IGDB client ID or secret was not accepted"));
                     self.pending = None;
                     self.fail_part();
                 }

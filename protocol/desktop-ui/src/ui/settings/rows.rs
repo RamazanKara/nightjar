@@ -2,7 +2,6 @@
 
 use super::*;
 
-/// A Wait through network dropouts choice in seconds; 0 is Off.
 /// "Frames waiting for the decoder"'s choices, as Android's `decode_queue_frames_values`.
 pub(in crate::ui) const DECODE_QUEUE_CHOICES: [u32; 4] = [3, 5, 8, 15];
 
@@ -254,7 +253,7 @@ pub(in crate::ui) const ANDROID_KEYS: &[(&str, &str)] = &[
     ("auto_reconnect", "checkbox_auto_reconnect"), ("connection_test", "network_tests"), ("client_roaming", "checkbox_client_roaming"),
     ("network_grace_ms", "list_network_grace"),
     ("receive_coalescing", "checkbox_receive_coalescing"), ("jumbo_frames", "jumbo_frames"), ("internet_play", "checkbox_internet_play"),
-    ("hide_connection_warnings", "checkbox_disable_warnings"), ("dual_screen", "checkbox_dual_screen"),
+    ("hide_connection_warnings", "checkbox_disable_warnings"), ("compact_overlay_device_info", "checkbox_compact_overlay_device_info"), ("dual_screen", "checkbox_dual_screen"),
     ("second_screen_width", "list_resolution_screen2"), ("input_only_any_host", "checkbox_input_only_any_host"),
     // App
     ("theme", "theme"), ("language", "list_languages"), ("open_on_start", "list_open_on_start"),
@@ -347,9 +346,11 @@ pub(in crate::ui) struct Rows<'a> {
     pub(super) idle: Option<String>,
     pub(super) held: bool,
     /// When set for the next row, a click on Reset sets `reset_clicked` instead of resetting only
-    /// the row's own keys (used by Recommended's `simple_*` rows, which apply through `simple_apply`).
+    /// the row's own keys (used by Recommended's `simple_*` rows and individual stream buttons).
     pub(super) defer_reset: bool,
     pub(super) reset_clicked: bool,
+    /// Per-row default label and changed flag for rows that share one underlying map/setting key.
+    pub(super) custom_reset: Option<(&'static str, bool)>,
 }
 
 /// The fold row of the open section, drawn before its first folded row; its words come once the
@@ -420,6 +421,11 @@ impl Rows<'_> {
 
     pub(super) fn take_reset(&mut self) -> bool {
         std::mem::take(&mut self.reset_clicked)
+    }
+
+    /// Overrides the Reset button's default tooltip text and differs flag on the next row.
+    pub(super) fn custom_reset(&mut self, default: &'static str, differs: bool) {
+        self.custom_reset = Some((default, differs));
     }
 
     /// Room the next row's control takes beyond the usual column (a PC's list beside its button).

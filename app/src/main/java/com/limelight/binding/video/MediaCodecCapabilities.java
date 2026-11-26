@@ -263,7 +263,7 @@ final class MediaCodecCapabilities {
     }
 
     private static boolean isPowerVR(String glRenderer) {
-        return glRenderer.toLowerCase().contains("powervr");
+        return glRenderer != null && glRenderer.toLowerCase(java.util.Locale.ROOT).contains("powervr");
     }
 
     private static String getAdrenoVersionString(String glRenderer) {
@@ -322,10 +322,20 @@ final class MediaCodecCapabilities {
      * Codec2-era entries, by the GLES 3 check in initialize().
      */
     static void addMediaTekAndQcomRefFrameInvalidation(List<String> refFrameInvalidationHevcPrefixes) {
-        LimeLog.info("Added omx.mtk/c2.mtk and c2.qcom to reference frame invalidation support list");
-        for (String prefix : new String[] {"omx.mtk", "c2.mtk"}) {
-            refFrameInvalidationAvcPrefixes.add(prefix);
-            refFrameInvalidationHevcPrefixes.add(prefix);
+        addMediaTekAndQcomRefFrameInvalidation(refFrameInvalidationHevcPrefixes, null);
+    }
+
+    static void addMediaTekAndQcomRefFrameInvalidation(List<String> refFrameInvalidationHevcPrefixes, String glRenderer) {
+        // PowerVR SoCs (e.g. MT8176 / GE8100 / GE8300 / GE8320) handle MediaTek RFI below
+        // so GE8xxx hangs on HEVC and MT8176 avoids high-latency AVC maxNumReferenceFrames.
+        if (!isPowerVR(glRenderer)) {
+            LimeLog.info("Added omx.mtk/c2.mtk and c2.qcom to reference frame invalidation support list");
+            for (String prefix : new String[] {"omx.mtk", "c2.mtk"}) {
+                refFrameInvalidationAvcPrefixes.add(prefix);
+                refFrameInvalidationHevcPrefixes.add(prefix);
+            }
+        } else {
+            LimeLog.info("Added c2.qcom to reference frame invalidation support list (PowerVR MediaTek RFI handled separately)");
         }
         refFrameInvalidationHevcPrefixes.add("c2.qcom");
     }
@@ -392,7 +402,7 @@ final class MediaCodecCapabilities {
                 refFrameInvalidationHevcPrefixes.add("omx.qcom");
                 refFrameInvalidationAvcPrefixes.add("c2.qti");
                 refFrameInvalidationHevcPrefixes.add("c2.qti");
-                addMediaTekAndQcomRefFrameInvalidation(refFrameInvalidationHevcPrefixes);
+                addMediaTekAndQcomRefFrameInvalidation(refFrameInvalidationHevcPrefixes, glRenderer);
             }
 
             // Qualcomm's early HEVC decoders break hard on our HEVC stream. The best check to

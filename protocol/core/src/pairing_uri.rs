@@ -75,16 +75,16 @@ impl PairingUri {
         out
     }
 
-    /// Parses a link. Another scheme, more than [`MAX_LEN`] bytes, a version other than 1, a
-    /// missing or empty host, otp or fp, a host with anything but an address's characters, a port
-    /// that is 0 or not a number, a fingerprint that is not 64 hex digits, a bad percent escape,
-    /// text that is not UTF-8 and a repeated key reject it. Unknown keys are ignored; `pass`, `id`
-    /// and `name` may be absent.
     pub fn is_link(text: &str) -> bool {
         let text = text.trim();
         text.starts_with(PREFIX) || text.starts_with(SHELL_PREFIX)
     }
 
+    /// Parses a link. Another scheme, more than [`MAX_LEN`] bytes, a version other than 1, a
+    /// missing or empty host, otp or fp, a host with anything but an address's characters, a port
+    /// that is 0 or not a number, a fingerprint that is not 64 hex digits, a bad percent escape,
+    /// text that is not UTF-8 and a repeated key reject it. Unknown keys are ignored; `pass`, `id`
+    /// and `name` may be absent.
     pub fn parse(uri: &str) -> Option<Self> {
         let uri = uri.trim();
         if uri.len() > MAX_LEN {

@@ -214,6 +214,8 @@ public final class GameTouchControls extends FrameLayout {
         for (TouchLayout.Button b : layout.buttons) names.add(b.name);
         showDialog.accept(new NavigationDialogBuilder(activity).setTitle(R.string.touch_layout_title)
                 .setItems(names.toArray(new String[0]), (dialog, which) -> {
+                    final TouchLayout.Button picked = which >= 6 && which - 6 < layout.buttons.size()
+                            ? layout.buttons.get(which - 6) : null;
                     // Wait for the stream menu's dismissal/focus restoration before showing another dialog.
                     post(() -> {
                         if (which == 0) {
@@ -236,7 +238,7 @@ public final class GameTouchControls extends FrameLayout {
                         } else if (which == 3) chooseGrid();
                         else if (which == 4) importLayout();
                         else if (which == 5) exportLayout();
-                        else edit(layout.buttons.get(which - 6), layout.buttons.get(which - 6).kind);
+                        else if (picked != null && layout.buttons.contains(picked)) edit(picked, picked.kind);
                     });
                 }).setNegativeButton(android.R.string.cancel, null).create());
     }
@@ -429,7 +431,7 @@ public final class GameTouchControls extends FrameLayout {
     }
 
     private EditText number(LinearLayout parent, int label, int value) {
-        EditText edit = field(parent, label, Integer.toString(value), 2);
+        EditText edit = field(parent, label, Integer.toString(value), 3);
         edit.setInputType(InputType.TYPE_CLASS_NUMBER);
         return edit;
     }

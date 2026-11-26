@@ -211,7 +211,6 @@ impl Launcher {
     }
 }
 
-/// The large title: up to two lines, then cut, as large as the column lets a name be.
 /// A game's facts as the game page writes them, one line each: its genres, its themes and its
 /// time to beat ("Story 20 h · Story + extras 24 h · Everything 90 h"); a line without anything
 /// to say is left out.
@@ -321,6 +320,7 @@ impl Launcher {
             cover,
             cover.width(),
             t::RADIUS_COVER,
+            Id::unique(("cover-in", host_id, app_id)),
             &game.title,
             art,
             1.0,
@@ -434,7 +434,7 @@ impl Launcher {
             commands,
         );
         y += 26.0;
-        let rows = self.game_rows(view, host, source, game, &state, &sources);
+        let rows = self.game_rows(host, source, game, &state, &sources);
         y = self.paint_rows(
             ui,
             &rows,

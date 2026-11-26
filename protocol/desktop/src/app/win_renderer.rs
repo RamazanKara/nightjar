@@ -96,6 +96,7 @@ impl App {
         ));
         self.color_probed = None;
         self.base_probed = None;
+        self.base_probe_retried = None;
         self.packed_probed = None;
         self.window_changed = true;
         eprintln!(

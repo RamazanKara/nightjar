@@ -134,7 +134,14 @@ impl Updates {
     pub fn start(enabled: bool, wake: crate::hosts::Waker, skip_file: PathBuf) -> Self {
         let copy = self_update::current();
         if !copy.checks() { return Self::default(); }
-        let agent = format!("Nightjar/{} ({})", crate::VERSION, if cfg!(windows) { "Windows" } else { "Linux" });
+        let os = if cfg!(windows) {
+            "Windows"
+        } else if cfg!(target_os = "macos") {
+            "macOS"
+        } else {
+            "Linux"
+        };
+        let agent = format!("Nightjar/{} ({os})", crate::VERSION);
         let net: Arc<dyn Transport> = Arc::new(Native::new(agent));
         let steps = Steps::for_copy(copy, net.clone());
         Self::begin(enabled, copy.clone(), net, steps, crate::VERSION, online, wake).with_skip_file(skip_file)

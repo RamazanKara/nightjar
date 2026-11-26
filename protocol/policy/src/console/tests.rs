@@ -135,6 +135,39 @@ fn hidden_split_and_tracker_and_reconcile_work_end_to_end() {
 }
 
 #[test]
+fn ambiguous_install_id_hides_only_targeted_app_id() {
+    let lib = Library {
+        revision: "r1".into(),
+        games: vec![
+            game("dup-id", 101, "Alpha", Some("steam:1"), None, Some(true), false),
+            game("dup-id", 202, "Beta", Some("steam:2"), None, Some(true), false),
+            game("dup-manual", 303, "Manual A", None, None, Some(true), false),
+            game("dup-manual", 404, "Manual B", None, None, Some(true), false),
+        ],
+    };
+    let src = source(1, "pc-1", "Desk", true, &lib);
+    let keys = hide_keys(&[src], 1, 101);
+    assert_eq!(keys.len(), 1);
+    assert_eq!(keys[0].install_id, "");
+    assert_eq!(keys[0].app_id, 101);
+    assert!(is_hidden(&src, "dup-id", 101, &keys));
+    assert!(!is_hidden(&src, "dup-id", 202, &keys));
+
+    let manual_keys = hide_keys(&[src], 1, 303);
+    assert_eq!(manual_keys.len(), 1);
+    assert_eq!(manual_keys[0].install_id, "");
+    assert_eq!(manual_keys[0].app_id, 303);
+    assert!(is_hidden(&src, "dup-manual", 303, &manual_keys));
+    assert!(!is_hidden(&src, "dup-manual", 404, &manual_keys));
+
+    let keys_by_id = hide_keys_by_id(&[src], "pc-1", 202);
+    assert_eq!(keys_by_id.len(), 1);
+    assert_eq!(keys_by_id[0].install_id, "");
+    assert!(is_hidden(&src, "dup-id", 202, &keys_by_id));
+    assert!(!is_hidden(&src, "dup-id", 101, &keys_by_id));
+}
+
+#[test]
 fn home_projection_filters_searches_and_sorts() {
     let mut g1 = game("i1", 1, "Alpha", Some("steam:1"), Some(("steam", "Steam")), Some(true), false);
     g1.last_played = Some(100);
@@ -291,4 +324,49 @@ fn library_memo_invalidates_when_source_metadata_or_session_changes() {
     let merged_running = memo.get(&[with_session], &[]);
     assert_eq!(memo.merges(), 5);
     assert!(merged_running.shown()[0].running());
+}
+
+#[test]
+fn zero_installed_chips_distinct_install_ids_and_newer_recents_follow_policy() {
+    let lib_uninstalled = Library {
+        revision: "r1".into(),
+        games: vec![game("id-old", 42, "Old", None, None, Some(false), false)],
+    };
+    let mut lp = BTreeMap::new();
+    lp.insert("id-old".into(), 100u64);
+    let mut s1 = source(1, "pc-1", "PC", true, &lib_uninstalled);
+    s1.last_played = Some(&lp);
+    let entries = merge_library(&[s1]);
+
+    // DA-L2: when nothing is installed, emit only NotInstalled (never Installed (0)).
+    let chips = library_filters(&entries);
+    assert!(chips.iter().all(|c| c.filter != LibraryFilter::Installed));
+    assert!(chips.iter().any(|c| c.filter == LibraryFilter::NotInstalled && c.count == 1));
+
+    // DA-L3: distinct non-empty install_ids must not match by app_id fallback.
+    let lib_both = Library {
+        revision: "r2".into(),
+        games: vec![game("id-new", 42, "New", None, None, Some(true), false)],
+    };
+    let s2 = source(1, "pc-1", "PC", true, &lib_both);
+    let starred = favourite_games(
+        &[s2],
+        &[Favourite {
+            host: "pc-1".into(),
+            install_id: "id-other".into(),
+            app_id: 42,
+            title: "Other".into(),
+        }],
+    );
+    assert!(starred.is_empty());
+
+    // DA-L4: last_played prefers newer local recent timestamp over stale store timestamp.
+    let recents = vec![Recent {
+        host: "pc-1".into(),
+        install_id: "id-old".into(),
+        app_id: 42,
+        title: "Old".into(),
+        at: 250,
+    }];
+    assert_eq!(last_played(&entries[0], &[s1], &recents), Some(250));
 }

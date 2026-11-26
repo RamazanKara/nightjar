@@ -56,4 +56,6 @@
     <string name="title_usb_switch_pro">USB Switch Pro ドライバ</string>
     <string name="summary_usb_switch_pro">有線接続の Switch Pro Controller を Nightjar が直接読み取り、ジャイロ、振動、Home、Capture が使えるようになります。ストリーム中に Android が USB へのアクセス許可を求めます。Bluetooth 接続と Joy-Con は Android の入力のままです。</string>
     <string name="usb_switch_pro_denied">USB にアクセスできないため、Switch Pro Controller は Android の入力を使用します。\n再試行するにはケーブルを接続し直してください。</string>
+    <string name="title_seekbar_mouse_emulation_sensitivity">コントローラーマウス感度</string>
+    <string name="summary_seekbar_mouse_emulation_sensitivity">コントローラーマウスモードでスティックがポインターを動かす速さを調整します。低くすると細かい照準が合わせやすくなります。</string>
 </resources>

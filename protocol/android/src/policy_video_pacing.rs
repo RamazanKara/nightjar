@@ -293,13 +293,42 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_refresh
     lead_ns: jlong,
     out: JLongArray,
 ) -> jboolean {
+    if out.is_null() {
+        return JNI_FALSE;
+    }
+    let Ok(len) = env.get_array_length(&out) else {
+        return JNI_FALSE;
+    };
+    if len < 3 {
+        return JNI_FALSE;
+    }
     let Some(v) = REFRESH_SLOTS_SLAB.with(handle, |slots| {
         let s = slots.plan(release_ns, vsync_ns, interval_ns, lead_ns);
-        [s.vsync_ns, s.target_ns, i64::from(s.shared)]
+        [s.vsync_ns, s.target_ns, i64::from(s.shared), s.hold_ns]
     }) else {
         return JNI_FALSE;
     };
-    write_longs(&mut env, &out, &v)
+    let slice = if len >= 4 { &v[..] } else { &v[..3] };
+    write_longs(&mut env, &out, slice)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_refreshSlotsEarliestClaimed(
+    _: JNIEnv,
+    _: JClass,
+    handle: jlong,
+    release_ns: jlong,
+    vsync_ns: jlong,
+    interval_ns: jlong,
+    lead_ns: jlong,
+) -> jboolean {
+    jbool(
+        REFRESH_SLOTS_SLAB
+            .with(handle, |s| {
+                s.earliest_claimed(release_ns, vsync_ns, interval_ns, lead_ns)
+            })
+            .unwrap_or(false),
+    )
 }
 
 // --- DisplayFrameRatePolicy (#168) ---

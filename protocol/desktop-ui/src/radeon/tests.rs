@@ -272,3 +272,10 @@ fn a_host_without_radeon_endpoints_is_told_apart() {
     assert!(!is_missing(&api_error(409, ErrorCode::NoSession, None)));
     assert!(!is_missing(&Error::Io(std::io::Error::from(std::io::ErrorKind::TimedOut))));
 }
+
+#[test]
+fn failure_matches_only_the_gpu_that_was_written() {
+    let f = Failure::of_gpu(&api_error(422, ErrorCode::InvalidValue, Some("chill.max_fps")), Some(0), Some("chill.max_fps"));
+    assert_eq!(f.gpu, Some(0));
+    assert_eq!(f.setting.as_deref(), Some("chill.max_fps"));
+}

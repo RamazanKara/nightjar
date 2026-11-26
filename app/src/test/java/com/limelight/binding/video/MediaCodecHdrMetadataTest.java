@@ -183,6 +183,74 @@ public class MediaCodecHdrMetadataTest {
     }
 
     @Test
+    public void aDolbyVisionDecoderWithPqOutputOrNoTransferDoesNotRestartForMissingHdr10Metadata() throws IOException {
+        MediaFormat pq = MediaFormat.createVideoFormat("video/raw", 3840, 2160);
+        pq.setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_ST2084);
+        // A decoder that names PQ, or no transfer, and never the metadata (nightjar#193).
+        MediaFormat noTransfer = MediaFormat.createVideoFormat("video/raw", 3840, 2160);
+        for (MediaFormat output : new MediaFormat[] {pq, noTransfer, null}) {
+            try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
+                MediaCodecDecoderRenderer renderer = streaming(activity.get());
+                ReflectionHelpers.setField(renderer, "dolbyVisionActive", true);
+                AtomicInteger type = ReflectionHelpers.getField(renderer, "codecRecoveryType");
+                renderer.setHdrMode(true, METADATA);
+                assertNotNull(ReflectionHelpers.getField(renderer, "uncheckedHdrStaticInfo"));
+                ReflectionHelpers.setField(renderer, "outputFormat", output);
+
+                checkOutput(renderer);
+                assertNull(ReflectionHelpers.getField(renderer, "uncheckedHdrStaticInfo"));
+                for (int i = 0; i < 2 * MediaCodecDecoderRenderer.HDR_STATIC_INFO_OUTPUTS; i++) {
+                    checkOutput(renderer);
+                }
+                assertEquals(recovery("CR_RECOVERY_TYPE_NONE"), type.get());
+                assertEquals(0, (int) ReflectionHelpers.getField(renderer, "hdrStaticInfoOutputs"));
+            }
+        }
+    }
+
+    @Test
+    public void hdrOffLeavesTheDolbyVisionDecoderInsteadOfRestartingIt() throws IOException {
+        try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
+            MediaCodecDecoderRenderer renderer = streaming(activity.get());
+            ReflectionHelpers.setField(renderer, "dolbyVisionActive", true);
+            AtomicInteger type = ReflectionHelpers.getField(renderer, "codecRecoveryType");
+            renderer.setHdrMode(false, null);
+
+            assertEquals(true, ReflectionHelpers.getField(renderer, "dolbyVisionFailed"));
+            assertEquals(recovery("CR_RECOVERY_TYPE_RESTART"), type.get());
+            assertEquals("HDR off", ReflectionHelpers.getField(renderer, "restartReason"));
+
+            // The recovery sets up the next decoder at once, with no stop() and configure() in SDR
+            // (this renderer has none to set up).
+            ReflectionHelpers.setField(renderer, "codecRecoveryThreadQuiescedFlags",
+                    (int) ReflectionHelpers.getStaticField(MediaCodecDecoderRenderer.class, "CR_FLAG_INPUT_THREAD"));
+            ReflectionHelpers.callInstanceMethod(renderer, "doCodecRecoveryIfRequired",
+                    ReflectionHelpers.ClassParameter.from(int.class,
+                            (int) ReflectionHelpers.getStaticField(MediaCodecDecoderRenderer.class, "CR_FLAG_RENDER_THREAD")));
+            assertEquals(java.util.Collections.singletonList("release"), RecordingCodec.calls);
+        }
+    }
+
+    @Test
+    public void onlyHdrOffOnTheDolbyVisionDecoderGivesItUp() throws IOException {
+        try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
+            // An HDR10 stream turning HDR off.
+            MediaCodecDecoderRenderer hdr10 = streaming(activity.get());
+            hdr10.setHdrMode(false, null);
+            assertEquals("HDR off", ReflectionHelpers.getField(hdr10, "restartReason"));
+            assertEquals(false, ReflectionHelpers.getField(hdr10, "dolbyVisionFailed"));
+
+            // A Dolby Vision stream restarting with new metadata.
+            MediaCodecDecoderRenderer dolbyVision = streaming(activity.get());
+            ReflectionHelpers.setField(dolbyVision, "dolbyVisionActive", true);
+            RecordingCodec.refuseParameters = new IllegalStateException("refused");
+            dolbyVision.setHdrMode(true, METADATA);
+            assertEquals("HDR metadata", ReflectionHelpers.getField(dolbyVision, "restartReason"));
+            assertEquals(false, ReflectionHelpers.getField(dolbyVision, "dolbyVisionFailed"));
+        }
+    }
+
+    @Test
     public void metadataShowingInTheSixtiethOutputNeedsNoRestart() throws IOException {
         try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
             MediaCodecDecoderRenderer renderer = streaming(activity.get());
@@ -346,6 +414,29 @@ public class MediaCodecHdrMetadataTest {
             } catch (IllegalStateException expected) {
                 assertTrue(expected.getCause() instanceof IOException);
             }
+        }
+    }
+
+    @Test
+    public void duplicateHdrReportsSkipRedundantVulkanUpdates() throws IOException {
+        try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
+            MediaCodecDecoderRenderer renderer = streaming(activity.get());
+            AtomicInteger vulkanCalls = new AtomicInteger();
+            ReflectionHelpers.setField(renderer, "vulkanRenderer", new VulkanRendererBridge(0L) {
+                @Override public void setHdrMode(boolean enabled, byte[] hdrMetadata) {
+                    vulkanCalls.incrementAndGet();
+                }
+            });
+
+            renderer.setHdrMode(true, METADATA);
+            assertEquals(1, vulkanCalls.get());
+            renderer.setHdrMode(true, METADATA.clone());
+            assertEquals(1, vulkanCalls.get());
+
+            renderer.setHdrMode(false, null);
+            assertEquals(2, vulkanCalls.get());
+            renderer.setHdrMode(false, null);
+            assertEquals(2, vulkanCalls.get());
         }
     }
 }

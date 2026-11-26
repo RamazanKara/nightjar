@@ -78,9 +78,12 @@ public final class HostCursorShapes {
     /** Any thread; the message is not copied, so the caller must not reuse it. */
     public void accept(byte[] message) {
         if (closed) return;
-        if (pending.incrementAndGet() > MAX_PENDING) {
+        // Keep IMAGE definitions (kind 3) up to a wider cap so bursting SHOWs do not miss cache and drop to default arrow.
+        boolean isImage = message != null && message.length >= 2 && message[1] == CursorShapeMessage.Kind.IMAGE.ordinal();
+        int cap = isImage ? MAX_PENDING * 4 : MAX_PENDING;
+        if (pending.incrementAndGet() > cap) {
             pending.decrementAndGet();
-            LimeLog.warning("Cursor shape dropped: more than " + MAX_PENDING + " waiting to be decoded");
+            LimeLog.warning("Cursor shape dropped: more than " + cap + " waiting to be decoded");
             return;
         }
         decoder.post(() -> {

@@ -395,6 +395,16 @@
             android:title="@string/title_checkbox_mouse_emulation_fixed_step"
             android:dialogMessage="@string/summary_checkbox_mouse_emulation_fixed_step"
             android:defaultValue="false" />
+        <com.limelight.preferences.SeekBarPreference
+            android:key="seekbar_mouse_emulation_sensitivity"
+            android:title="@string/title_seekbar_mouse_emulation_sensitivity"
+            android:dialogMessage="@string/summary_seekbar_mouse_emulation_sensitivity"
+            seekbar:min="25"
+            seekbar:step="5"
+            seekbar:keyStep="5"
+            android:max="200"
+            android:defaultValue="100"
+            android:text="%" />
         <com.limelight.preferences.MaterialSwitchPreference
             android:key="checkbox_gamepad_touchpad_as_mouse"
             android:title="@string/title_checkbox_gamepad_touchpad_as_mouse"
@@ -845,6 +855,11 @@
             android:defaultValue="false" />
     </PreferenceCategory>
     <PreferenceCategory android:key="category_streaming">
+        <com.limelight.preferences.MaterialSwitchPreference
+            android:key="checkbox_compact_overlay_device_info"
+            android:title="@string/title_compact_overlay_device_info"
+            android:dialogMessage="@string/summary_compact_overlay_device_info"
+            android:defaultValue="false" />
         <com.limelight.preferences.MaterialSwitchPreference
             android:key="checkbox_dual_screen"
             android:title="@string/title_checkbox_dual_screen"

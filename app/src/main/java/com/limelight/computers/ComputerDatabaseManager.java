@@ -95,7 +95,12 @@ public class ComputerDatabaseManager {
 
         File v4Db = app.getDatabasePath(COMPUTER_DB_NAME);
         if (v4Db != null && v4Db.exists()) {
-            combined.addAll(readSqliteV4(v4Db.getPath()));
+            List<ComputerDetails> v4 = readSqliteV4(v4Db.getPath());
+            if (v4 == null) {
+                LimeLog.warning("Deferring legacy host migration because computers4.db could not be read");
+                return;
+            }
+            combined.addAll(v4);
         }
 
         List<ComputerDetails> v1 = LegacyDatabaseReader.migrateAllComputers(app);
@@ -161,7 +166,8 @@ public class ComputerDatabaseManager {
                 out.add(details);
             }
         } catch (SQLiteException e) {
-            LimeLog.info("No legacy computers4.db rows read: " + e.getMessage());
+            LimeLog.warning("Failed to read legacy computers4.db rows: " + e.getMessage());
+            return null;
         }
         return out;
     }

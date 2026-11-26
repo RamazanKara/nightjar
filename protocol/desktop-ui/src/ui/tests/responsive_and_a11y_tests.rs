@@ -9,8 +9,8 @@ fn from_art_to_the_sky_the_moon_fades_in_with_it() {
     for (window, zoom, page) in [(vec2(1280.0, 800.0), 100, Screen::Hosts), (vec2(1280.0, 800.0), 150, Screen::Profiles), (vec2(1280.0, 800.0), 150, Screen::Hosts)] {
         let mut f = home_with_games(2);
         let pc = f.hosts.list[0].id;
-        f.hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
-        f.hosts.list[0].art.insert(1000, Art::Missing);
+        f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
+        Arc::make_mut(&mut f.hosts.list[0].art).insert(1000, Art::Missing);
         f.l.settings.ui_zoom = zoom;
         f.size = window;
         f.l.go(Screen::Game { host: pc, app: 1000 });
@@ -258,8 +258,8 @@ fn a_fade_turned_back_turns_where_it_stands() {
     for frames_on in [0, 1, 2] {
         let mut f = home_with_games(2);
         let pc = f.hosts.list[0].id;
-        f.hosts.list[0].apps = Apps::Loaded(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]);
-        f.hosts.list[0].art.insert(1000, Art::Missing);
+        f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![nightjar_policy::http::App { name: "Game 00".into(), uuid: "install-0".into(), ..game(1000) }]));
+        Arc::make_mut(&mut f.hosts.list[0].art).insert(1000, Art::Missing);
         f.l.go(Screen::Game { host: pc, app: 1000 });
         f.settle();
         f.settle();
@@ -368,7 +368,7 @@ fn the_pages_merge_the_library_once_and_again_when_it_changes() {
     assert_eq!(f.l.library.merges(), merges, "the same library on every one of these frames");
 
     // What a PC says next shows on the next frame.
-    f.hosts.list[0].native.library.as_mut().expect("a library").games[1].title = "Renamed".into();
+    Arc::make_mut(f.hosts.list[0].native.library.as_mut().expect("a library")).games[1].title = "Renamed".into();
     f.frame(Vec::new());
     assert_eq!(f.l.library.merges(), merges + 1);
     assert!(shows(&f, "Renamed") && !shows(&f, "Game 01"), "{:?}", f.drawn);
@@ -389,8 +389,8 @@ fn a_frame_notes_the_covers_it_draws_or_needs_as_in_use() {
     f.size = vec2(1280.0, 800.0);
     let id = f.hosts.list[0].id;
     let (first, last) = (cover_texture(&f, "first"), cover_texture(&f, "last"));
-    f.hosts.list[0].art.insert(1, Art::Ready(first.clone()));
-    f.hosts.list[0].art.insert(150, Art::Ready(last.clone()));
+    Arc::make_mut(&mut f.hosts.list[0].art).insert(1, Art::Ready(first.clone()));
+    Arc::make_mut(&mut f.hosts.list[0].art).insert(150, Art::Ready(last.clone()));
     f.l.go(Screen::Apps(id));
     f.settle();
     crate::hosts::covers_noted(&f.ctx);
@@ -422,8 +422,8 @@ fn a_cover_given_up_for_room_is_asked_for_again_whether_its_pc_is_up_or_away() {
     let here = cover_texture(&f, "here");
     // Both were loaded, at the version their PC lists them with.
     assert!(f.hosts.list[0].begin_art(1, "").is_some() && f.hosts.list[0].begin_art(2, "").is_some());
-    f.hosts.list[0].art.insert(1, Art::Ready(here.clone()));
-    f.hosts.list[0].art.insert(2, Art::Dropped);
+    Arc::make_mut(&mut f.hosts.list[0].art).insert(1, Art::Ready(here.clone()));
+    Arc::make_mut(&mut f.hosts.list[0].art).insert(2, Art::Dropped);
     let asked = |f: &Frames| -> Vec<i32> {
         let view = View { hosts: &f.hosts, pads: &f.pads, connecting: None, waking: None };
         let mut commands = Vec::new();
@@ -458,9 +458,9 @@ fn a_page_keeps_its_backdrop_when_its_cover_is_given_up_for_room() {
     let id = f.hosts.list[0].id;
     let ambient = cover_texture(&f, "ambient");
     let pc = &mut f.hosts.list[0];
-    pc.art.insert(1, Art::Dropped);
-    pc.ambient.insert(1, ambient.clone());
-    pc.ambient_glow.insert(1, Color32::RED);
+    Arc::make_mut(&mut pc.art).insert(1, Art::Dropped);
+    Arc::make_mut(&mut pc.ambient).insert(1, ambient.clone());
+    Arc::make_mut(&mut pc.ambient_glow).insert(1, Color32::RED);
     let view = View { hosts: &f.hosts, pads: &f.pads, connecting: None, waking: None };
     match super::home::ambient_for(&view, id, 1, "App 1") {
         super::backdrop::Want::Art { texture, glow, .. } => assert_eq!((texture.id(), glow), (ambient.id(), Color32::RED)),

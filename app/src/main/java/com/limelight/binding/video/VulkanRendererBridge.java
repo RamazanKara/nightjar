@@ -33,7 +33,7 @@ public class VulkanRendererBridge {
     // Set when the native stop returned: the renderer no longer uses the output window
     private volatile boolean stopped;
 
-    private VulkanRendererBridge(long handle) {
+    VulkanRendererBridge(long handle) {
         this.handle = handle;
     }
 

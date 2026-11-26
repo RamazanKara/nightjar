@@ -10,7 +10,7 @@ use transfer::{CONTINUE_WAIT, ContinueBy, continue_elapsed};
 #[cfg(test)]
 use transfer::{PROGRESS_BYTES, Throttle, is_continue_elapsed, send_upload};
 
-use super::wire::{read_head, read_response_with_headers, Reader};
+use super::wire::{read_response_with_headers, Reader};
 use super::Error;
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, StreamOwned};
@@ -324,7 +324,7 @@ pub(crate) fn probe_stream(
     connection(request, &[cancel], deadline, Some(write_timeout(request)), &head_str, None, |stream, peer| {
         stream.flush().map_err(io_tls_error)?;
         let mut reader = Reader { stream, buffer: Vec::new(), eof: false };
-        let head = read_head(&mut reader)?;
+        let head = super::wire::read_final_head(&mut reader)?;
         headers(head.status, &head.headers, peer)?;
         let mut total = 0usize;
         if head.header("Transfer-Encoding").is_some_and(|t| t.eq_ignore_ascii_case("chunked")) {
@@ -341,8 +341,8 @@ pub(crate) fn probe_stream(
                         return Err(Error::Malformed("connection closed before the HTTP body ended".into()));
                     }
                     let take = left.min(reader.buffer.len());
-                    let chunk: Vec<u8> = reader.buffer.drain(..take).collect();
-                    on_chunk(&chunk)?;
+                    on_chunk(&reader.buffer[..take])?;
+                    reader.buffer.drain(..take);
                     total += take;
                     left -= take;
                 }
@@ -355,8 +355,8 @@ pub(crate) fn probe_stream(
                     return Err(Error::Malformed("connection closed before the HTTP body ended".into()));
                 }
                 let take = (len - total).min(reader.buffer.len());
-                let chunk: Vec<u8> = reader.buffer.drain(..take).collect();
-                on_chunk(&chunk)?;
+                on_chunk(&reader.buffer[..take])?;
+                reader.buffer.drain(..take);
                 total += take;
             }
         } else {
@@ -376,7 +376,16 @@ pub(crate) fn probe_stream(
 }
 
 fn send_inner(request: &Request<'_>, cancel: &Cancel, body: Option<Body<'_>>, timeout: Option<Duration>, headers: &mut HeaderHook<'_>) -> Result<Response, Error> {
-    let deadline = timeout.map_or(Deadline::None, |timeout| Deadline::At(std::time::Instant::now() + timeout));
+    let deadline = timeout
+        .or_else(|| {
+            request
+                .timeouts
+                .read
+                .map(|read| request.timeouts.connect.saturating_add(read))
+        })
+        .map_or(Deadline::None, |limit| {
+            Deadline::At(std::time::Instant::now() + limit)
+        });
     let head = request_head(request, body);
     connection(request, &[cancel], deadline, Some(write_timeout(request)), &head, None, |stream, peer| {
         if let Some(body) = body { stream.write_all(body.bytes).map_err(io_tls_error)?; }

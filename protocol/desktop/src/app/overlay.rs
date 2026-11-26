@@ -121,8 +121,6 @@ fn show_usb_section(ui: &mut egui::Ui, panel: &mut usb::Panel) {
     }
 }
 
-/// The overlay and toasts, drawn with egui over the picture.
-/// Returns whether the user's shortcuts changed (saved or deleted in the stream menu) and want writing.
 /// Whether a stream with `settings` goes on video planes, drawing straight to the display
 /// (`kms_scanout::planned`).
 #[cfg(target_os = "linux")]
@@ -163,6 +161,9 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     let input_only = s.facts.role == nightjar_core::http::AppRole::InputOnly;
     let small_stream = s.small_stream_input_only();
     let mic_only = s.mic_only();
+    if !s.menu_visible {
+        s.settle_bitrate_slider(nightjar_desktop_ui::stream_overlay_widgets::take_pending_bitrate_slider(&gui.ctx));
+    }
     if !s.overlay_visible && toast.is_none() && !input_only && !s.menu_visible {
         return false;
     }
@@ -175,7 +176,12 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     // The menu and the screens that take input always run egui. The overlay repaints the shapes it
     // drew while what it shows is unchanged: its lines change once a second, not every present.
     let live = s.menu_visible || mic_only || input_only;
-    let digest = overlay_digest(s, mode, live, &title, toast.as_deref(), gui.surface(window, renderer));
+    let compact_device_line = (s.overlay_visible
+        && mode == config::OverlayMode::Compact
+        && s.compact_overlay_device_info()
+        && !s.overlay.compact.text.is_empty())
+    .then(|| compact_with_device_info(s));
+    let digest = overlay_digest(s, mode, live, &title, toast.as_deref(), gui.surface(window, renderer), compact_device_line.as_ref());
     if !gui::overlay_must_run(gui.overlay_shown(), digest, live, gui.input_pending(), gui.animating()) {
         gui.overlay_repaint(renderer);
         return false;
@@ -406,7 +412,7 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
                                     ui.add_enabled_ui(!busy, |ui| {
                                         ui.horizontal(|ui| {
                                             ui.add_enabled_ui(!rates.bitrate_locked(), |ui| {
-                                                theme::step_value(ui, &mut rates.menu_kbps, 500..=800_000, 1000.0, |d| d.speed(100).suffix(" kbps"));
+                                                theme::step_value(ui, &mut rates.menu_kbps, 500..=2_000_000, 1000.0, |d| d.speed(100).suffix(" kbps"));
                                             });
                                             theme::step_value(ui, &mut rates.menu_fps, 10.0..=500.0, 1.0, |d| d.suffix(" fps").max_decimals(3));
                                         });
@@ -624,7 +630,8 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
         }
         if visible {
             let lines = s.overlay.lines(mode);
-            let compact = (mode == config::OverlayMode::Compact).then_some((&s.overlay.compact, s.overlay.notice.as_ref()));
+            let compact = (mode == config::OverlayMode::Compact)
+                .then_some((compact_device_line.as_ref().unwrap_or(&s.overlay.compact), s.overlay.notice.as_ref()));
             egui::Area::new(egui::Id::unique("overlay"))
                 .anchor(anchor, offset)
                 .show(&ctx, |ui| {
@@ -688,10 +695,18 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     shortcuts_changed
 }
 
+fn compact_with_device_info(s: &Streaming) -> stream::overlay::Compact {
+    let clock = crate::startup::local_clock_hh_mm();
+    s.overlay.compact.with_device_info(
+        stream::overlay::battery_percent(),
+        (!clock.is_empty()).then_some(clock.as_str()),
+    )
+}
+
 /// Digests what the overlay pass draws: the stream's overlay state, the title and toast, the
 /// language, the size and scale it draws at (`surface`) and whether a live screen is up. Equal
 /// digests draw the same shapes, so `gui::overlay_must_run` can repaint them.
-fn overlay_digest(s: &Streaming, mode: config::OverlayMode, live: bool, title: &str, toast: Option<&str>, surface: ((i32, i32), f32)) -> u64 {
+fn overlay_digest(s: &Streaming, mode: config::OverlayMode, live: bool, title: &str, toast: Option<&str>, surface: ((i32, i32), f32), compact_line: Option<&stream::overlay::Compact>) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     live.hash(&mut hasher);
@@ -707,8 +722,9 @@ fn overlay_digest(s: &Streaming, mode: config::OverlayMode, live: bool, title: &
         key.hash(&mut hasher);
         value.hash(&mut hasher);
     }
-    s.overlay.compact.text.hash(&mut hasher);
-    std::mem::discriminant(&s.overlay.compact.health).hash(&mut hasher);
+    let compact = compact_line.unwrap_or(&s.overlay.compact);
+    compact.text.hash(&mut hasher);
+    std::mem::discriminant(&compact.health).hash(&mut hasher);
     s.overlay.notice.hash(&mut hasher);
     hasher.finish()
 }

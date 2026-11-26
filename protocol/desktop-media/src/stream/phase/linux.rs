@@ -486,8 +486,38 @@ mod os {
             });
             let period_ns = choose_period_ns(measured_period, refresh_hz);
             let ust_session_us = nightjar_core::session::now_us() as i64 - age_us;
-            Some(EglSyncSample { surface: surface as usize, ust_session_us, msc, sbc, period_ns })
+            let sample = EglSyncSample { surface: surface as usize, ust_session_us, msc, sbc, period_ns };
+            FRAME_EGL_SYNC.with(|cached| *cached.borrow_mut() = Some(sample));
+            Some(sample)
         }
+    }
+
+    thread_local! {
+        static FRAME_EGL_SYNC: RefCell<Option<EglSyncSample>> = const { RefCell::new(None) };
+    }
+
+    pub(crate) fn clear_frame_egl_sync() {
+        FRAME_EGL_SYNC.with(|cached| *cached.borrow_mut() = None);
+    }
+
+    pub(crate) fn egl_sync_sample_for_present(
+        renderer: *mut SDL_Renderer,
+        refresh_hz: f32,
+    ) -> Option<EglSyncSample> {
+        let cached = FRAME_EGL_SYNC.with(|cell| *cell.borrow());
+        if let Some(sample) = cached {
+            let idle = SWAP_TRACKER.with(|tracker| {
+                let tracker = tracker.borrow();
+                tracker.surface == sample.surface
+                    && tracker.verified
+                    && !tracker.broken
+                    && tracker.submitted_sbc <= sample.sbc
+            });
+            if idle {
+                return Some(sample);
+            }
+        }
+        egl_sync_sample(renderer, refresh_hz)
     }
 
     fn glx_timing(renderer: *mut SDL_Renderer, refresh_hz: f32) -> Option<(i64, i64)> {
@@ -659,6 +689,7 @@ mod os {
     }
 
     pub(crate) fn egl_swap_presented(surface: usize, completed_sbc_before: u64) {
+        clear_frame_egl_sync();
         SWAP_TRACKER.with(|tracker| {
             let mut tracker = tracker.borrow_mut();
             tracker.bind(surface);
@@ -667,10 +698,12 @@ mod os {
     }
 
     pub(crate) fn note_external_present() {
+        clear_frame_egl_sync();
         SWAP_TRACKER.with(|tracker| tracker.borrow_mut().note_external_present());
     }
 
     pub fn reset_display_timing() {
+        clear_frame_egl_sync();
         DRM_CACHE.with(|cache| {
             let mut cache = cache.borrow_mut();
             cache.key = None;
@@ -686,12 +719,15 @@ mod os {
 pub use os::reset_display_timing;
 #[cfg(target_os = "linux")]
 pub(crate) use os::{
-    egl_swap_check, egl_swap_presented, egl_sync_sample, note_external_present, present_stats,
-    timing_with_source,
+    clear_frame_egl_sync, egl_swap_check, egl_swap_presented, egl_sync_sample,
+    egl_sync_sample_for_present, note_external_present, present_stats, timing_with_source,
 };
 
 #[cfg(not(target_os = "linux"))]
 pub fn reset_display_timing() {}
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn clear_frame_egl_sync() {}
 
 #[cfg(not(target_os = "linux"))]
 #[allow(dead_code)]

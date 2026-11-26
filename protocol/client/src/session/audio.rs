@@ -315,36 +315,7 @@ impl ArrivalJitter {
     }
 }
 
-/// RAII guard ensuring an unstarted [`AudioRenderer`] still runs `stop()` + `cleanup()` if
-/// `try_clone` or `thread::Builder::spawn` fails before the worker thread takes ownership.
-pub(super) struct RendererCleanupGuard(Option<Box<dyn AudioRenderer>>);
-
-impl RendererCleanupGuard {
-    pub(super) fn new(renderer: Box<dyn AudioRenderer>) -> Self {
-        Self(Some(renderer))
-    }
-
-    pub(super) const fn empty() -> Self {
-        Self(None)
-    }
-
-    pub(super) fn is_armed(&self) -> bool {
-        self.0.is_some()
-    }
-
-    pub(super) fn take(&mut self) -> Option<Box<dyn AudioRenderer>> {
-        self.0.take()
-    }
-}
-
-impl Drop for RendererCleanupGuard {
-    fn drop(&mut self) {
-        if let Some(mut renderer) = self.0.take() {
-            renderer.stop();
-            renderer.cleanup();
-        }
-    }
-}
+pub(super) type RendererCleanupGuard = super::shared::CleanupGuard<Box<dyn AudioRenderer>>;
 
 pub struct AudioStream {
     shared: Arc<AudioShared>,

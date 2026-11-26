@@ -38,6 +38,10 @@ public class StepSlider extends Slider {
     private int keyStep = SEEKBAR_INITIAL_KEY_STEP;
     private OnPositionChangeListener listener;
     private boolean touching;
+
+    public boolean isTouching() {
+        return touching;
+    }
     private final Runnable hideKeyValue = () -> {
         if (!touching) setActiveThumbIndex(-1);
         invalidate();

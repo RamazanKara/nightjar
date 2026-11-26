@@ -2,6 +2,7 @@
 //! `SDL_RenderGeometryRaw` on the same renderer that shows the video, so the launcher, the
 //! stream and its overlay share one window and one swap chain.
 
+mod ime;
 mod stage;
 
 use std::collections::HashMap;
@@ -26,6 +27,8 @@ pub struct Gui {
     cursor: Option<egui::CursorIcon>,
     cursors: HashMap<i32, *mut SDL_Cursor>,
     focused: bool,
+    ime_composing: bool,
+    ime_area: Option<([i32; 4], i32)>,
     /// Screen readers, once attached to the window (a11y.rs).
     a11y: Option<crate::a11y::Accessibility>,
     /// Whether the coming passes are worth a screen reader's tree (see [`Self::set_readable`]).
@@ -276,6 +279,8 @@ impl Gui {
             cursor: None,
             cursors: HashMap::new(),
             focused: true,
+            ime_composing: false,
+            ime_area: None,
             a11y: None,
             readable: true,
             ran: Instant::now(),
@@ -456,17 +461,33 @@ impl Gui {
                 }
                 SDL_EVENT_KEY_DOWN | SDL_EVENT_KEY_UP => {
                     let k = event.key;
-                    self.modifiers = modifiers_of(k.r#mod);
+                    self.sync_modifiers(modifiers_of(k.r#mod));
                     if let Some(key) = key_of(k.key) {
-                        if k.down && key == Key::V && self.modifiers.command {
-                            let text = SDL_GetClipboardText();
-                            if !text.is_null() {
-                                let pasted = std::ffi::CStr::from_ptr(text).to_string_lossy().into_owned();
-                                SDL_free(text.cast());
-                                self.events.push(Event::Paste(pasted));
+                        if k.down {
+                            let paste = (key == Key::V && self.modifiers.command)
+                                || (key == Key::Insert
+                                    && self.modifiers.shift
+                                    && !self.modifiers.command
+                                    && !self.modifiers.ctrl);
+                            let cut = (key == Key::X && self.modifiers.command)
+                                || (key == Key::Delete
+                                    && self.modifiers.shift
+                                    && !self.modifiers.command
+                                    && !self.modifiers.ctrl);
+                            let copy = (key == Key::C && self.modifiers.command)
+                                || (key == Key::Insert
+                                    && self.modifiers.ctrl
+                                    && !self.modifiers.shift
+                                    && !self.modifiers.alt);
+                            if paste {
+                                if let Some(pasted) = clipboard_text() {
+                                    self.events.push(Event::Paste(pasted));
+                                }
+                            } else if cut {
+                                self.events.push(Event::Cut);
+                            } else if copy {
+                                self.events.push(Event::Copy);
                             }
-                        } else if k.down && key == Key::C && self.modifiers.command {
-                            self.events.push(Event::Copy);
                         }
                         self.events.push(Event::Key {
                             key,
@@ -477,20 +498,23 @@ impl Gui {
                         });
                     }
                 }
+                SDL_EVENT_TEXT_EDITING => ime::handle_text_editing(&mut self.ime_composing, &mut self.events, &event.edit),
                 SDL_EVENT_TEXT_INPUT => {
-                    let text = std::ffi::CStr::from_ptr(event.text.text).to_string_lossy().into_owned();
-                    if !text.chars().any(char::is_control) {
-                        self.events.push(Event::Text(text));
+                    if !ime::handle_text_input(&mut self.ime_composing, &mut self.events, &event.text) {
+                        return false;
                     }
                 }
                 SDL_EVENT_WINDOW_FOCUS_GAINED => {
                     self.focused = true;
                     if let Some(a11y) = &mut self.a11y { a11y.focus(true); }
+                    self.sync_modifiers(modifiers_of(SDL_GetModState()));
                     self.events.push(Event::WindowFocused(true));
                 }
                 SDL_EVENT_WINDOW_FOCUS_LOST => {
                     self.focused = false;
                     if let Some(a11y) = &mut self.a11y { a11y.focus(false); }
+                    self.sync_modifiers(Modifiers::NONE);
+                    ime::clear_composition(&mut self.ime_composing, &mut self.events);
                     self.events.push(Event::WindowFocused(false));
                 }
                 SDL_EVENT_RENDER_TARGETS_RESET => {
@@ -506,6 +530,13 @@ impl Gui {
             }
         }
         true
+    }
+
+    fn sync_modifiers(&mut self, modifiers: Modifiers) {
+        if modifiers != self.modifiers {
+            self.modifiers = modifiers;
+            self.events.push(Event::ModifiersChanged(modifiers));
+        }
     }
 
     /// Runs one egui pass over the window.
@@ -570,18 +601,9 @@ impl Gui {
         if let (Some(a11y), Some(update)) = (&mut self.a11y, &output.accesskit_update) {
             a11y.update(window, update);
         }
-        let wants_text = output.ime.is_some();
         // SDL's own state, not a copy: a stream's text field starts and stops text input too.
         // SAFETY: a live window.
-        unsafe {
-            if wants_text != SDL_TextInputActive(window) {
-                if wants_text {
-                    SDL_StartTextInput(window);
-                } else {
-                    SDL_StopTextInput(window);
-                }
-            }
-        }
+        unsafe { ime::sync_platform_text_input(window, &mut self.ime_area, output.ime, self.ctx.zoom_factor()) };
         for command in &output.commands {
             if let egui::OutputCommand::CopyText(text) = command
                 && let Ok(text) = CString::new(text.as_str()) {
@@ -650,14 +672,18 @@ impl Gui {
         self.window_state = state;
     }
 
+    fn paint_stored_overlay(&mut self, renderer: *mut SDL_Renderer, output: egui::FullOutput) {
+        let primitives = std::mem::take(&mut self.overlay.primitives);
+        self.paint_tessellated(renderer, output, &primitives);
+        self.overlay.primitives = primitives;
+    }
+
     /// Repaints the shapes the last overlay pass drew, without running egui. Only valid while
     /// [`Self::overlay_shown`] is the digest of the frame being drawn.
     pub fn overlay_repaint(&mut self, renderer: *mut SDL_Renderer) {
         self.on_screen = None;
         let output = egui::FullOutput { pixels_per_point: self.overlay.ppp, ..Default::default() };
-        let primitives = std::mem::take(&mut self.overlay.primitives);
-        self.paint_tessellated(renderer, output, &primitives);
-        self.overlay.primitives = primitives;
+        self.paint_stored_overlay(renderer, output);
     }
 
     /// Draws a stream overlay pass that ran egui for `digest`, and keeps its shapes for
@@ -666,8 +692,8 @@ impl Gui {
         self.on_screen = None;
         let ppp = output.pixels_per_point;
         let primitives = self.ctx.tessellate(std::mem::take(&mut output.shapes), ppp);
-        self.overlay = OverlayShown { digest: Some(digest), primitives: primitives.clone(), ppp };
-        self.paint_tessellated(renderer, output, &primitives);
+        self.overlay = OverlayShown { digest: Some(digest), primitives, ppp };
+        self.paint_stored_overlay(renderer, output);
     }
 
     pub fn paint_if_changed(&mut self, renderer: *mut SDL_Renderer, mut output: egui::FullOutput, must_draw: bool, clear: impl FnOnce()) -> bool {

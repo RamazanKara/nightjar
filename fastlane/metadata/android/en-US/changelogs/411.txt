@@ -1,0 +1,6 @@
+• Dolby Vision with Full color range streams in limited range and no longer restarts NVIDIA Shield TVs (#193)
+• Balanced pacing keeps two-frame bursts on consecutive refreshes (#194)
+• Optional battery level and clock in the compact overlay (#191)
+• Pinch-to-zoom alongside two-finger scroll (#189) and smooth controller mouse scaling (#187)
+• Safer refresh-rate requests on Android 15+ (#168)
+• More reliable file transfers, USB, controllers, pairing and streaming (#147, #184)

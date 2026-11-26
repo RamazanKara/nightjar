@@ -337,6 +337,16 @@ final class ConsoleHomeListAdapter extends RecyclerView.Adapter<RecyclerView.Vie
     }
 
     @Override
+    public void onViewRecycled(@NonNull RecyclerView.ViewHolder holder) {
+        if (holder instanceof CardHolder) {
+            ((CardHolder) holder).markMore(false);
+        } else if (holder instanceof ShelfAdapter.CardHolder) {
+            ((ShelfAdapter.CardHolder) holder).clearMark();
+        }
+        super.onViewRecycled(holder);
+    }
+
+    @Override
     public long getItemId(int position) {
         String key = rows.get(position).key;
         Long id = ids.get(key);
@@ -598,8 +608,13 @@ final class ConsoleHomeListAdapter extends RecyclerView.Adapter<RecyclerView.Vie
         }
 
         private void markMore(boolean marked) {
+            if (moreMarked == marked) {
+                if (more != null) more.setHovered(marked);
+                return;
+            }
             moreMarked = marked;
-            more.setHovered(marked);
+            if (more != null) more.setHovered(marked);
+            if (listener != null) listener.onHostMoreMark(this, marked ? () -> markMore(false) : null);
         }
 
         /**

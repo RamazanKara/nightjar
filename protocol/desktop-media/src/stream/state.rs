@@ -74,12 +74,18 @@ pub(super) fn shows_rate(ticks: u32, fps_millihz: u32) -> bool {
     (f64::from(ticks) - expected).abs() <= expected * 0.15
 }
 
-/// The timing CSV when `NIGHTJAR_TIMING_CSV` names a file or folder.
-pub(super) fn open_timing_csv() -> Option<crate::timing_csv::TimingCsv> {
+/// The timing CSV when `NIGHTJAR_TIMING_CSV` names a file or folder. Automatic reconnects append
+/// to the existing file instead of truncating earlier rows.
+pub(super) fn open_timing_csv(append: bool) -> Option<crate::timing_csv::TimingCsv> {
     let path = crate::timing_csv::path_from_env()?;
-    match crate::timing_csv::TimingCsv::create(&path) {
+    let opened = if append {
+        crate::timing_csv::TimingCsv::append(&path)
+    } else {
+        crate::timing_csv::TimingCsv::create(&path)
+    };
+    match opened {
         Ok(csv) => {
-            eprintln!("nightjar: writing the timing CSV to {}", path.display());
+            eprintln!("nightjar: {} the timing CSV {}", if append { "appending to" } else { "writing" }, path.display());
             Some(csv)
         }
         Err(error) => {
@@ -89,14 +95,50 @@ pub(super) fn open_timing_csv() -> Option<crate::timing_csv::TimingCsv> {
     }
 }
 
+#[cfg(windows)]
+#[link(name = "bcrypt")]
+unsafe extern "system" {
+    fn BCryptGenRandom(algorithm: *mut std::ffi::c_void, buffer: *mut u8, count: u32, flags: u32) -> i32;
+}
+
 pub(super) fn random_bytes<const N: usize>() -> [u8; N] {
-    use std::hash::{BuildHasher, Hasher};
     let mut out = [0u8; N];
-    for chunk in out.chunks_mut(8) {
-        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-        h.write_u64(session::now_us());
-        let bytes = h.finish().to_le_bytes();
-        chunk.copy_from_slice(&bytes[..chunk.len()]);
+    let filled = {
+        #[cfg(windows)]
+        {
+            const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x0000_0002;
+            // SAFETY: valid buffer of `out.len()` bytes; system-preferred RNG needs no algorithm handle.
+            unsafe {
+                BCryptGenRandom(
+                    std::ptr::null_mut(),
+                    out.as_mut_ptr(),
+                    u32::try_from(out.len()).unwrap_or(0),
+                    BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+                ) >= 0
+            }
+        }
+        // Linux and macOS (unix): read OS CSPRNG from `/dev/urandom`.
+        #[cfg(unix)]
+        {
+            use std::io::Read;
+            std::fs::File::open("/dev/urandom")
+                .and_then(|mut file| file.read_exact(&mut out))
+                .is_ok()
+        }
+        // Fallback when neither Windows BCrypt nor a POSIX `/dev/urandom` device exists (`not(unix)`).
+        #[cfg(not(any(windows, unix)))]
+        {
+            false
+        }
+    };
+    if !filled {
+        use std::hash::{BuildHasher, Hasher};
+        for chunk in out.chunks_mut(8) {
+            let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+            h.write_u64(session::now_us());
+            let bytes = h.finish().to_le_bytes();
+            chunk.copy_from_slice(&bytes[..chunk.len()]);
+        }
     }
     out
 }

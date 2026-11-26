@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use nightjar_core::control::clipboard_sync::{ClipboardItem, ClipboardSync, Local, Received};
+use nightjar_core::control::clipboard_sync::{ClipboardItem, ClipboardSync, PreparedLocal, Received};
 use nightjar_core::control::ClientMessage;
 use nightjar_core::rtsp::MicrophoneState;
 use nightjar_core::sdp::{self, StreamConfig};
@@ -587,17 +587,18 @@ pub fn clipboard_sync_local(text: String) -> i32 {
     let Some(sync) = clipboard.as_mut() else {
         return CLIPBOARD_COPY_FAILED;
     };
-    match sync.local(ClipboardItem::Text(text), Instant::now()) {
-        Local::Send(message) => {
-            if send(message) {
+    match sync.prepare_local(ClipboardItem::Text(text), Instant::now()) {
+        PreparedLocal::Send(pending) => {
+            if send(pending.message().clone()) {
+                sync.confirm_local(&pending);
                 CLIPBOARD_COPY_SENT
             } else {
                 platform::warn("Clipboard sync: a copy could not be sent");
                 CLIPBOARD_COPY_FAILED
             }
         }
-        Local::Skip => CLIPBOARD_COPY_SKIPPED,
-        Local::TooLarge(bytes) => {
+        PreparedLocal::Skip => CLIPBOARD_COPY_SKIPPED,
+        PreparedLocal::TooLarge(bytes) => {
             platform::warn(&format!(
                 "Clipboard sync: a copy of {bytes} bytes is too large to send"
             ));

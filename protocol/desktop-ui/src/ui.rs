@@ -85,6 +85,7 @@ pub struct Launcher {
     pub settings: Settings,
     pub profiles: Profiles,
     pub network: crate::network_types::Network,
+    pub ssid_supported: bool,
     home_wifi_name: String,
     /// Every PC's library merged, kept while the PCs and the hidden games are what it was made from.
     pub(crate) library: console::LibraryMemo,
@@ -216,6 +217,8 @@ pub struct Launcher {
     pub power: Vec<crate::power_types::Offer>,
     /// The system's preferred languages, for the Language setting's default.
     pub system_languages: Vec<String>,
+    /// Non-Latin-1 scripts required by shown PC names and game titles, cached by host/library signature.
+    title_scripts: (u64, crate::theme::ScriptSet),
     /// The look and motion egui's style was last built for.
     look: Option<(crate::theme::Look, bool)>,
     /// Whether the system asks for light apps (`sdl::system_light`), for the System theme: the main
@@ -272,6 +275,7 @@ impl Launcher {
             settings,
             profiles,
             network: crate::network_types::Network::default(),
+            ssid_supported: crate::network_types::SSID_SUPPORTED,
             home_wifi_name: String::new(),
             library: console::LibraryMemo::default(),
             edit_settings: Settings::default(),
@@ -345,6 +349,7 @@ impl Launcher {
             identity_error: None,
             power: Vec::new(),
             system_languages: Vec::new(),
+            title_scripts: (0, crate::theme::ScriptSet::default()),
             look: None,
             system_light: false,
             screen_keyboard: false,
@@ -366,7 +371,7 @@ impl Launcher {
         if self.zoom_keys(&ctx) {
             commands.push(Command::SaveSettings);
         }
-        self.sync_look(&ctx);
+        self.sync_look(&ctx, view.hosts);
         #[cfg(any(test, feature = "demo-library"))]
         if let Some(menu) = self.demo_menu {
             self.demo_stream_menu(ui, menu);
@@ -553,6 +558,9 @@ impl Launcher {
         let files_shown = match self.screen { Screen::Files(id) => Some(id), _ => None };
         if let Some((host, away)) = self.files.running_away(files_shown)
             && files::running_button(&ctx, away) {
+                if let Some(save) = self.screen.save_command() {
+                    commands.push(save);
+                }
                 commands.push(Command::OpenFiles(host));
             }
         self.draw_toast(&ctx);

@@ -145,10 +145,27 @@ pub(super) fn draw_controls_sections(
         }
         response
     });
-    setting_row(ui, s, rows, &["stream_menu_buttons"], "Y in the stream menu", "What this button runs while the stream menu is open. Default runs the tile marked with this button in its corner; an action that leaves the stream, such as Disconnect, asks first.", |ui, s| stream_menu_button(ui, s, Hotkey::Y));
-    setting_row(ui, s, rows, &["stream_menu_buttons"], "X in the stream menu", "What this button runs while the stream menu is open. Default runs the tile marked with this button in its corner; an action that leaves the stream, such as Disconnect, asks first.", |ui, s| stream_menu_button(ui, s, Hotkey::X));
-    setting_row(ui, s, rows, &["stream_menu_buttons"], "LB in the stream menu", "What this button runs while the stream menu is open. Default runs the tile marked with this button in its corner; an action that leaves the stream, such as Disconnect, asks first.", |ui, s| stream_menu_button(ui, s, Hotkey::Lb));
-    setting_row(ui, s, rows, &["stream_menu_buttons"], "RB in the stream menu", "What this button runs while the stream menu is open. Default runs the tile marked with this button in its corner; an action that leaves the stream, such as Disconnect, asks first.", |ui, s| stream_menu_button(ui, s, Hotkey::Rb));
+    for (hotkey, label) in [
+        (Hotkey::Y, en("Y in the stream menu")),
+        (Hotkey::X, en("X in the stream menu")),
+        (Hotkey::Lb, en("LB in the stream menu")),
+        (Hotkey::Rb, en("RB in the stream menu")),
+    ] {
+        let differs = s.stream_menu_buttons.get(&hotkey) != rows.defaults.stream_menu_buttons.get(&hotkey);
+        rows.defer_reset();
+        rows.custom_reset(en("Default"), differs);
+        setting_row(ui, s, rows, &["stream_menu_buttons"], label, "What this button runs while the stream menu is open. Default runs the tile marked with this button in its corner; an action that leaves the stream, such as Disconnect, asks first.", |ui, s| stream_menu_button(ui, s, hotkey));
+        if rows.take_reset() {
+            match rows.defaults.stream_menu_buttons.get(&hotkey) {
+                Some(v) => {
+                    s.stream_menu_buttons.insert(hotkey, v.clone());
+                }
+                None => {
+                    s.stream_menu_buttons.remove(&hotkey);
+                }
+            }
+        }
+    }
     rows.always();
     if !layered {
         rows.action("keyboard_shortcuts");
@@ -333,6 +350,12 @@ pub(super) fn draw_controls_sections(
         toggle(ui, &mut s.hide_connection_warnings)
     });
     rows.group("");
+    // Never left out: a PC's, game's or profile's settings can show the overlay for theirs.
+    rows.unused(s.overlay, || trf("Not used without {}", &[&tr("Performance overlay")]));
+    setting_row(ui, s, rows, &["compact_overlay_device_info"], "Show battery and clock in compact overlay", "Add this device’s battery percentage and local time to the compact performance overlay.", |ui, s| {
+        toggle(ui, &mut s.compact_overlay_device_info)
+    });
+    rows.always();
     setting_row(ui, s, rows, &["dual_screen"], "Dual screen mode", "Streams the same game to a second screen too, in a stream of its own; sound and controllers stay with the first. Needs a second screen and PC support.", |ui, s| {
         toggle(ui, &mut s.dual_screen)
     });

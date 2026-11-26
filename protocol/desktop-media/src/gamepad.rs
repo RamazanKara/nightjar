@@ -209,6 +209,7 @@ impl Gamepads {
             rt: 0,
             ls: (0, 0),
             rs: (0, 0),
+            motion_rates: Default::default(),
             announced: false,
             refused: false,
             has_touchpad_click,

@@ -179,6 +179,16 @@ Copy-Item (Join-Path $PSScriptRoot 'README.md') $stage
 # sonora's BSD notice: the microphone's noise suppression and automatic gain are built in.
 New-Item -ItemType Directory -Force (Join-Path $stage 'licenses-sonora') | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'assets\NOTICE-SONORA.txt') (Join-Path $stage 'licenses-sonora')
+# Nightjar GPL-3.0 licence, contributors, Figtree OFL, and shader notices.
+$clientRoot = Split-Path (Split-Path $PSScriptRoot)
+$nightjarLicences = Join-Path $stage 'licenses-nightjar'
+New-Item -ItemType Directory -Force $nightjarLicences | Out-Null
+Copy-Item (Join-Path $clientRoot 'LICENSE.txt') (Join-Path $nightjarLicences 'Nightjar-GPL-3.0.txt')
+Copy-Item (Join-Path $clientRoot 'CONTRIBUTORS.md') $nightjarLicences
+Copy-Item (Join-Path $PSScriptRoot 'assets\Figtree-OFL.txt') $nightjarLicences
+foreach ($notice in 'pyrowave_notices.txt', 'NOTICE-FSR1.txt', 'NOTICE-SGSR1.txt') {
+    Copy-Item (Join-Path $clientRoot "app\src\main\assets\$notice") $nightjarLicences
+}
 # The decode-only FFmpeg's (LGPL, with the source offer) and dav1d's (BSD) licences, from the prefix.
 if ($FfmpegDir) {
     foreach ($licences in 'licenses-ffmpeg', 'licenses-dav1d') {

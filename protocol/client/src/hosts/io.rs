@@ -11,7 +11,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 static DIR_LOCKS: OnceLock<Mutex<BTreeMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
+static FILE_LOCKS: OnceLock<Mutex<BTreeMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
 static NEXT_TMP: AtomicU64 = AtomicU64::new(0);
+const STALE_TMP_AGE: std::time::Duration = std::time::Duration::from_secs(3600);
 
 fn normalize_lexical(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
@@ -55,6 +57,48 @@ pub fn dir_lock(dir: &Path) -> Arc<Mutex<()>> {
         .clone()
 }
 
+/// Returns the process-wide mutex guarding `path` across independent store instances.
+pub fn file_lock(path: &Path) -> Arc<Mutex<()>> {
+    let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
+    let key = match path.file_name() {
+        Some(name) => canonical_dir(parent).join(name),
+        None => normalize_lexical(path),
+    };
+    let map = FILE_LOCKS.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let mut guard = map.lock().unwrap_or_else(|e| e.into_inner());
+    guard
+        .entry(key)
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone()
+}
+
+fn cleanup_stale_tmps(dir: &Path, target_name: &str) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    let prefix = format!("{target_name}.");
+    let now = std::time::SystemTime::now();
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if !name.starts_with(&prefix) || !name.ends_with(".tmp") {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
+        if !meta.is_file() {
+            continue;
+        }
+        let Ok(modified) = meta.modified() else {
+            continue;
+        };
+        if now.duration_since(modified).is_ok_and(|age| age >= STALE_TMP_AGE) {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
 /// Writes `bytes` to `path` atomically (unique temp file, `sync_all`, rename). When `private` is
 /// true, Unix permissions are restricted to `0o600`.
 #[cfg_attr(not(unix), allow(unused_variables))]
@@ -70,6 +114,8 @@ pub fn write_atomic(path: &Path, bytes: &[u8], private: bool) -> io::Result<()> 
         .file_name()
         .ok_or_else(|| io::Error::other("no file name"))?
         .to_string_lossy();
+    let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
+    cleanup_stale_tmps(parent, &name);
     let temporary = path.with_file_name(format!(
         "{name}.{}.{}.tmp",
         std::process::id(),
@@ -151,6 +197,13 @@ impl UnreadableGuard {
             .insert(path.to_owned());
     }
 
+    pub(crate) fn clear(&self, path: &Path) {
+        self.paths
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(path);
+    }
+
     pub(crate) fn check_writable(&self, path: &Path) -> io::Result<()> {
         let flagged = self
             .paths
@@ -169,5 +222,93 @@ impl UnreadableGuard {
             )));
         }
         Ok(())
+    }
+}
+
+/// Synchronized JSON store file that treats only `NotFound` as empty, refuses overwrites after
+/// an unreadable or corrupt read, and clears the unreadable flag once a subsequent read succeeds.
+#[derive(Clone, Debug)]
+pub(crate) struct GuardedJsonFile {
+    path: PathBuf,
+    lock: Arc<Mutex<()>>,
+    unreadable: Arc<UnreadableGuard>,
+    private: bool,
+}
+
+impl GuardedJsonFile {
+    pub(crate) fn new(path: PathBuf, lock: Arc<Mutex<()>>, private: bool) -> Self {
+        Self {
+            path,
+            lock,
+            unreadable: Arc::new(UnreadableGuard::default()),
+            private,
+        }
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub(crate) fn lock(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.lock.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub(crate) fn try_lock(&self) -> Result<std::sync::MutexGuard<'_, ()>, String> {
+        self.lock.lock().map_err(|_| "lock poisoned".to_owned())
+    }
+
+    pub(crate) fn mark_readable(&self) {
+        self.unreadable.clear(&self.path);
+    }
+
+    pub(crate) fn mark_unreadable(&self, reason: &dyn std::fmt::Display) {
+        eprintln!(
+            "nightjar: cannot read {} ({reason}); it is left as it is",
+            self.path.display()
+        );
+        self.unreadable.leave_as_it_is(&self.path);
+    }
+
+    /// Reads the raw file text: returns `Ok(None)` strictly on `NotFound` (clearing any stale
+    /// guard) and records non-`NotFound` I/O failures so writes refuse to clobber the file.
+    pub(crate) fn read_text(&self) -> Option<String> {
+        match fs::read_to_string(&self.path) {
+            Ok(text) => Some(text),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                self.unreadable.clear(&self.path);
+                None
+            }
+            Err(e) => {
+                self.mark_unreadable(&e);
+                None
+            }
+        }
+    }
+
+    /// Reads and parses JSON `T` (falling back to `T::default()` on `NotFound` or error),
+    /// clearing the guard on a good read and refusing subsequent overwrites on any non-`NotFound`
+    /// I/O or parse failure.
+    pub(crate) fn read_json_or_default<T>(&self) -> T
+    where
+        T: serde::de::DeserializeOwned + Default,
+    {
+        let Some(text) = self.read_text() else {
+            return T::default();
+        };
+        match serde_json::from_str::<T>(&text) {
+            Ok(value) => {
+                self.mark_readable();
+                value
+            }
+            Err(e) => {
+                self.mark_unreadable(&e);
+                T::default()
+            }
+        }
+    }
+
+    pub(crate) fn write_bytes(&self, bytes: &[u8]) -> io::Result<()> {
+        self.unreadable.check_writable(&self.path)?;
+        write_atomic(&self.path, bytes, self.private)
     }
 }

@@ -30,8 +30,26 @@ public final class UpdateFlow {
 
     private static final AtomicBoolean checking = new AtomicBoolean();
     private static final AtomicBoolean updating = new AtomicBoolean();
+    private static final Object manualWaitLock = new Object();
+    private static java.lang.ref.WeakReference<Activity> waitingManualActivity;
 
     private UpdateFlow() {
+    }
+
+    private static void deliverResult(Activity activity, ReleaseInfo offer, int message) {
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            if (activity.isFinishing() || activity.isDestroyed()) {
+                return;
+            }
+            if (offer != null) {
+                showOffer(activity, offer);
+            } else if (message != 0) {
+                Toast.makeText(activity, message, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     /** Whether the updater exists in this build and install: not from Google Play, not built for a store. */
@@ -54,6 +72,8 @@ public final class UpdateFlow {
             return;
         }
         new Thread(() -> {
+            ReleaseInfo offer = null;
+            int manualMessage = 0;
             try {
                 // Old downloads go once the app is running again, whether or not that install finished.
                 UpdateDownloader.cleanUp(app);
@@ -66,22 +86,47 @@ public final class UpdateFlow {
                         }
                     });
                 }
+                if (release.isUpdateFor(BuildConfig.VERSION_NAME)) {
+                    offer = release;
+                } else {
+                    manualMessage = R.string.update_up_to_date;
+                }
             } catch (UpdateException.RateLimited e) {
                 // Asking again soon would only repeat it.
                 prefs.markChecked(now);
+                manualMessage = R.string.update_check_failed;
             } catch (Exception e) {
                 // Offline or GitHub is unreachable: stay silent and try again on the next start.
                 LimeLog.info("Update check failed: " + e);
+                manualMessage = R.string.update_check_failed;
             } finally {
-                checking.set(false);
+                Activity manual;
+                synchronized (manualWaitLock) {
+                    manual = waitingManualActivity == null ? null : waitingManualActivity.get();
+                    waitingManualActivity = null;
+                    checking.set(false);
+                }
+                deliverResult(manual, offer, manualMessage);
             }
         }, "nightjar-update-check").start();
     }
 
     /** The Settings action: always asks, shows every newer release (even a skipped one) and says what happened. */
     public static void checkNow(Activity activity) {
-        if (updating.get() || !checking.compareAndSet(false, true)) {
+        if (updating.get()) {
             return;
+        }
+        if (!checking.compareAndSet(false, true)) {
+            synchronized (manualWaitLock) {
+                if (checking.get()) {
+                    waitingManualActivity = new java.lang.ref.WeakReference<>(activity);
+                    Toast.makeText(activity, R.string.update_checking, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            }
+            if (!checking.compareAndSet(false, true)) {
+                return;
+            }
         }
         Toast.makeText(activity, R.string.update_checking, Toast.LENGTH_SHORT).show();
         UpdatePrefs prefs = new UpdatePrefs(activity);
@@ -100,20 +145,12 @@ public final class UpdateFlow {
                 LimeLog.info("Update check failed: " + e);
                 message = R.string.update_check_failed;
             } finally {
-                checking.set(false);
+                synchronized (manualWaitLock) {
+                    waitingManualActivity = null;
+                    checking.set(false);
+                }
             }
-            ReleaseInfo offer = found;
-            int toast = message;
-            activity.runOnUiThread(() -> {
-                if (activity.isFinishing() || activity.isDestroyed()) {
-                    return;
-                }
-                if (offer != null) {
-                    showOffer(activity, offer);
-                } else {
-                    Toast.makeText(activity, toast, Toast.LENGTH_SHORT).show();
-                }
-            });
+            deliverResult(activity, found, message);
         }, "nightjar-update-check").start();
     }
 

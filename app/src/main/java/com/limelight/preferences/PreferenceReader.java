@@ -142,11 +142,16 @@ final class PreferenceReader {
         }
 
         readResolutionAndFps(context, prefs, config);
+        SharedPreferences.Editor missingDefaults = null;
         if (!prefs.contains(SMALL_ICONS_PREF_STRING)) {
-            prefs.edit().putBoolean(SMALL_ICONS_PREF_STRING, PreferenceResolution.getDefaultSmallMode(context)).apply();
+            missingDefaults = prefs.edit().putBoolean(SMALL_ICONS_PREF_STRING, PreferenceResolution.getDefaultSmallMode(context));
         }
         if (!prefs.contains(GAMEPAD_MOTION_SENSORS_PREF_STRING) && Build.VERSION.SDK_INT == Build.VERSION_CODES.S) {
-            prefs.edit().putBoolean(GAMEPAD_MOTION_SENSORS_PREF_STRING, false).apply();
+            if (missingDefaults == null) missingDefaults = prefs.edit();
+            missingDefaults.putBoolean(GAMEPAD_MOTION_SENSORS_PREF_STRING, false);
+        }
+        if (missingDefaults != null) {
+            missingDefaults.apply();
         }
 
         config.videoFormat = PreferenceResolution.getVideoFormatValue(context);
@@ -289,9 +294,12 @@ final class PreferenceReader {
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
         config.overlayPosition = com.limelight.ui.OverlayPlacement.Corner.parse(
                 prefs.getString(OVERLAY_POSITION_PREF_STRING, null)).key;
+        config.compactOverlayDeviceInfo = prefs.getBoolean(COMPACT_OVERLAY_DEVICE_INFO_PREF_STRING, false);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);
         config.mouseEmulation = prefs.getBoolean(MOUSE_EMULATION_STRING, DEFAULT_MOUSE_EMULATION);
         config.mouseEmulationFixedStep = prefs.getBoolean(MOUSE_EMULATION_FIXED_STEP_STRING, false);
+        config.mouseEmulationSensitivity = Math.max(25, Math.min(200,
+                prefs.getInt(MOUSE_EMULATION_SENSITIVITY_PREF_STRING, DEFAULT_MOUSE_EMULATION_SENSITIVITY)));
         config.disableRumble = FoldedChoice.VIBRATION.isOff(prefs);
         config.rumbleFeel = FoldedChoice.VIBRATION.valueWhileOn(prefs);
         config.backAsMeta = prefs.getBoolean(BACK_AS_META_PREF_STRING, false);

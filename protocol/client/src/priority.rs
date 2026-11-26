@@ -25,7 +25,7 @@
 //!   the desktop portal and then RealtimeKit over D-Bus instead ([`raise_current_thread`]).
 //! - The decode priority switch ([`decode_priority_switch`]) turns the direct submission level
 //!   and everything Windows does off. On for the desktop; on Android the Debug setting "Decoder
-//!   priority for receiving", off by default: raising VideoRecv to the decode level measured
+//!   priority for receiving", on by default: raising VideoRecv to the decode level measured
 //!   worse under load on the Retroid. Its environment variable or property wins, for A/B runs.
 //!
 //! The option is a plain argument, never process-global state, so two sessions in one
@@ -670,7 +670,10 @@ fn set_thread_nice(nice: i32) -> io::Result<()> {
 
 #[cfg(not(any(target_os = "linux", target_os = "android", windows)))]
 fn set_thread_nice(_nice: i32) -> io::Result<()> {
-    Ok(())
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "thread nice values are not supported on this platform",
+    ))
 }
 
 #[cfg(test)]

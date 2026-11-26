@@ -179,7 +179,7 @@ impl Launcher {
         }
         glass::cover_glow(&mut out, &ctx, cover, t::RADIUS_COVER, self.ambient.glow(), GLOW_BLUR, SHADOW_Y, SHADOW_BLUR);
         let art = view.hosts.get(launch.host_id).and_then(|pc| pc.art.get(&launch.app_id));
-        cover_shapes(ui, &mut out, cover, cover.width(), t::RADIUS_COVER, launch.title(), art, 1.0);
+        cover_shapes(ui, &mut out, cover, cover.width(), t::RADIUS_COVER, Id::unique(("cover-in", launch.host_id, launch.app_id)), launch.title(), art, 1.0);
         ui.painter().extend(out);
 
         match failed {

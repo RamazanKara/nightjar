@@ -177,14 +177,49 @@ pub fn current_layout() -> Option<KeyboardLayout> {
     }
     #[cfg(target_os = "linux")]
     {
-        ["/etc/default/keyboard", "/etc/vconsole.conf"]
-            .iter()
-            .find_map(|path| std::fs::read_to_string(path).ok().and_then(|text| xkb_layout(&text)))
+        linux_session_layout().or_else(|| {
+            ["/etc/default/keyboard", "/etc/vconsole.conf"]
+                .iter()
+                .find_map(|path| std::fs::read_to_string(path).ok().and_then(|text| xkb_layout(&text)))
+        })
     }
     #[cfg(not(any(windows, target_os = "linux")))]
     {
         None
     }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_session_layout() -> Option<KeyboardLayout> {
+    if let Ok(layout) = std::env::var("XKB_DEFAULT_LAYOUT") {
+        let variant = std::env::var("XKB_DEFAULT_VARIANT").ok();
+        if let Some(found) = xkb_from_parts(
+            layout.split(',').next().unwrap_or(""),
+            variant.as_deref().and_then(|v| v.split(',').next()),
+        ) {
+            return Some(found);
+        }
+    }
+    let config_dir = std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")));
+    if let Some(kxkbrc) = config_dir.and_then(|dir| std::fs::read_to_string(dir.join("kxkbrc")).ok())
+        && let Some(found) = parse_kxkbrc_layout(&kxkbrc)
+    {
+        return Some(found);
+    }
+    for key in ["mru-sources", "sources"] {
+        if let Ok(out) = std::process::Command::new("gsettings")
+            .args(["get", "org.gnome.desktop.input-sources", key])
+            .output()
+            && out.status.success()
+            && let Some(found) = parse_gsettings_sources(&String::from_utf8_lossy(&out.stdout))
+        {
+            return Some(found);
+        }
+    }
+    None
 }
 
 #[cfg(windows)]
@@ -215,6 +250,56 @@ pub fn klid_layout(name: &str) -> Option<KeyboardLayout> {
     Some(KeyboardLayout { source: LayoutSource::Klid, klid, tag: name.to_ascii_uppercase() })
 }
 
+#[cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
+fn xkb_from_parts(layout: &str, variant: Option<&str>) -> Option<KeyboardLayout> {
+    let layout = layout.trim();
+    if layout.is_empty() {
+        return None;
+    }
+    let tag = match variant.map(str::trim).filter(|variant| !variant.is_empty()) {
+        Some(variant) => format!("{layout}({variant})"),
+        None => layout.to_owned(),
+    };
+    (tag.len() <= MAX_TAG_BYTES && tag.bytes().all(|b| b.is_ascii_graphic()))
+        .then_some(KeyboardLayout { source: LayoutSource::Xkb, klid: 0, tag })
+}
+
+/// First KDE Plasma XKB layout from `~/.config/kxkbrc` (`LayoutList=de,us`, `VariantList=nodeadkeys,`).
+#[cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
+pub fn parse_kxkbrc_layout(text: &str) -> Option<KeyboardLayout> {
+    let value = |key: &str| {
+        text.lines()
+            .filter_map(|line| line.trim().strip_prefix(key)?.trim_start().strip_prefix('='))
+            .next_back()
+            .map(|value| value.split(',').next().unwrap_or("").trim().to_owned())
+    };
+    let layout = value("LayoutList")?;
+    let variant = value("VariantList");
+    xkb_from_parts(&layout, variant.as_deref())
+}
+
+/// First `('xkb', '...')` source from `gsettings get org.gnome.desktop.input-sources ...`.
+#[cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
+pub fn parse_gsettings_sources(text: &str) -> Option<KeyboardLayout> {
+    let mut rest = text;
+    while let Some(pos) = rest.find("('xkb'") {
+        let after = &rest[pos + "('xkb'".len()..];
+        let Some(first_quote) = after.find('\'') else { break };
+        let after_open = &after[first_quote + 1..];
+        let Some(end_quote) = after_open.find('\'') else { break };
+        let spec = &after_open[..end_quote];
+        let (layout, variant) = match spec.split_once('+') {
+            Some((layout, variant)) => (layout, Some(variant)),
+            None => (spec, None),
+        };
+        if let Some(found) = xkb_from_parts(layout, variant) {
+            return Some(found);
+        }
+        rest = &after_open[end_quote + 1..];
+    }
+    None
+}
+
 /// The first layout and its variant from `/etc/default/keyboard` or `/etc/vconsole.conf`
 /// (`XKBLAYOUT="de,us"`, `XKBVARIANT="nodeadkeys,"`), as `de(nodeadkeys)`.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -225,13 +310,9 @@ pub fn xkb_layout(text: &str) -> Option<KeyboardLayout> {
             value.split(',').next().unwrap_or("").trim().to_owned()
         })
     };
-    let layout = value("XKBLAYOUT").filter(|layout| !layout.is_empty())?;
-    let tag = match value("XKBVARIANT").filter(|variant| !variant.is_empty()) {
-        Some(variant) => format!("{layout}({variant})"),
-        None => layout,
-    };
-    (tag.len() <= MAX_TAG_BYTES && tag.bytes().all(|b| b.is_ascii_graphic()))
-        .then_some(KeyboardLayout { source: LayoutSource::Xkb, klid: 0, tag })
+    let layout = value("XKBLAYOUT")?;
+    let variant = value("XKBVARIANT");
+    xkb_from_parts(&layout, variant.as_deref())
 }
 
 #[cfg(test)]
@@ -312,6 +393,26 @@ mod tests {
         // An arrow sets nothing, so a touch keyboard's next character still goes.
         field.key_down(types(SDLK_RIGHT, SDL_KMOD_NONE));
         assert_eq!(field.text("c"), Some("c"));
+    }
+
+    #[test]
+    fn session_xkb_layouts_parse_gnome_and_kde_configs() {
+        assert_eq!(
+            parse_gsettings_sources("[('xkb', 'de+nodeadkeys'), ('xkb', 'us')]"),
+            Some(KeyboardLayout { source: LayoutSource::Xkb, klid: 0, tag: "de(nodeadkeys)".into() })
+        );
+        assert_eq!(
+            parse_gsettings_sources("[('ibus', 'mozc-jp'), ('xkb', 'jp')]"),
+            Some(KeyboardLayout { source: LayoutSource::Xkb, klid: 0, tag: "jp".into() })
+        );
+        assert_eq!(
+            parse_kxkbrc_layout("[Layout]\nLayoutList=fr,us\nVariantList=oss,\n"),
+            Some(KeyboardLayout { source: LayoutSource::Xkb, klid: 0, tag: "fr(oss)".into() })
+        );
+        assert_eq!(
+            parse_kxkbrc_layout("[Layout]\nLayoutList=us\n"),
+            Some(KeyboardLayout { source: LayoutSource::Xkb, klid: 0, tag: "us".into() })
+        );
     }
 
     #[test]

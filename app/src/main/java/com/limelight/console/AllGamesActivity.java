@@ -593,7 +593,8 @@ public class AllGamesActivity extends NightjarActivity implements HostFeed.Liste
         boolean hide = !card.hidden();
         CharSequence star = getString(remove ? R.string.console_favourite_remove : R.string.console_favourite_add);
         CharSequence hiding = getString(hide ? R.string.applist_menu_hide_app : R.string.applist_menu_show_app);
-        CharSequence openPlay = OpenPlay.menuLabel(this, card.hostUuid, card.appId);
+        CharSequence openPlay = OpenPlay.menuLabel(this, card.hostUuid, card.appId,
+                card.source != null ? card.source.stableId() : "");
         UiHelper.showDialog(this, new NavigationDialogBuilder(this)
                 .setTitle(card.title)
                 .setItems(copies.isEmpty() ? new CharSequence[]{star, openPlay}

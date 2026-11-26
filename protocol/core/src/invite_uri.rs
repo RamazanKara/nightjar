@@ -188,6 +188,7 @@ impl InviteUri {
         out
     }
 
+    /// Whether `text` begins with the Rubylight invite link scheme.
     pub fn is_link(text: &str) -> bool {
         let text = text.trim();
         text.starts_with(PREFIX) || text.starts_with(SHELL_PREFIX)

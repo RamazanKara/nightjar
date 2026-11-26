@@ -1,7 +1,7 @@
 //! What lies behind every page: a game's ambient, or on a page without art the night sky with its
 //! moon. Whatever shows cross-fades to the next. Chrome samples the same textures in screen space.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -102,6 +102,8 @@ const SKY_SIZES: usize = 5;
 /// A placed moon's glow is baked in steps of the window this fine, and this many bakes are kept.
 const SKY_BAKE_STEPS: f32 = 40.0;
 const SKY_BAKES_KEPT: usize = 24;
+/// How many fallback gradient tile textures are kept in memory at once.
+const TILES_KEPT: usize = 32;
 /// How many places, by page and window, are kept for the moon.
 const PLACEMENTS_KEPT: usize = 64;
 /// A moon's place is kept by page, window and moon.
@@ -148,6 +150,7 @@ pub(super) struct Ambient {
     /// The first run's moon, flat, in high contrast.
     flat: Option<Moon>,
     tiles: HashMap<String, (TextureHandle, Color32)>,
+    tile_order: VecDeque<String>,
     /// Skies baked with their moon's glow where it stood, by moon and place.
     skies: HashMap<u64, TextureHandle>,
     /// Where each page's moon stands in each window, None where it stepped back.
@@ -216,6 +219,7 @@ impl Ambient {
     /// made again as they are asked for; what the page wants shows again on the next frame.
     pub(super) fn renderer_changed(&mut self) {
         self.tiles.clear();
+        self.tile_order.clear();
         self.skies.clear();
         self.bird = None;
         self.fade = glass::CrossFade::default();
@@ -235,19 +239,24 @@ impl Ambient {
     }
 
     fn tile(&mut self, ctx: &Context, title: &str) -> (TextureHandle, Color32) {
-        self.tiles
-            .entry(title.to_owned())
-            .or_insert_with(|| {
-                let pair = nightjar_policy::tile::tile_pair(nightjar_policy::tile::title_hash(title));
-                let (top, bottom) = super::cards::tile_colors(pair);
-                let baked = ambient::bake_tile(top, bottom);
-                let glow = ambient::glow_of(&baked);
-                (
-                    ctx.load_texture("ambient-tile", baked, TextureOptions::LINEAR),
-                    glow,
-                )
-            })
-            .clone()
+        if let Some(cached) = self.tiles.get(title) {
+            return cached.clone();
+        }
+        while self.tiles.len() >= TILES_KEPT {
+            let Some(old) = self.tile_order.pop_front() else {
+                self.tiles.clear();
+                break;
+            };
+            self.tiles.remove(&old);
+        }
+        let pair = nightjar_policy::tile::tile_pair(nightjar_policy::tile::title_hash(title));
+        let (top, bottom) = super::cards::tile_colors(pair);
+        let baked = ambient::bake_tile(top, bottom);
+        let glow = ambient::glow_of(&baked);
+        let entry = (ctx.load_texture("ambient-tile", baked, TextureOptions::LINEAR), glow);
+        self.tile_order.push_back(title.to_owned());
+        self.tiles.insert(title.to_owned(), entry.clone());
+        entry
     }
 
     /// The sky, baked for the same overscanned area as an ambient, so one fades into the other, with
@@ -541,7 +550,7 @@ impl Ambient {
             if let Want::Sky(moon) = want {
                 self.flat = moon.first_run().then_some(moon);
             }
-            publish(ctx, false, None);
+            publish(ctx, false, false, None);
             return;
         }
         match want {
@@ -567,7 +576,11 @@ impl Ambient {
             Some(Shows::Sky(_)) if self.sky_at == Some((self.page, screen)) => self.sky_disc,
             _ => None,
         };
-        publish(ctx, self.pending.is_some(), disc);
+        let placed = self.pending.is_some_and(|moon| {
+            self.placements.contains_key(&self.placement_key(screen, moon))
+                && ctx.cumulative_pass_nr() > self.settle_until
+        });
+        publish(ctx, self.pending.is_some(), placed, disc);
         self.layers(ctx, screen);
     }
 
@@ -669,7 +682,11 @@ impl Ambient {
                 self.disc = placed;
             }
         }
-        publish(ctx, self.pending.is_some(), self.disc);
+        let placed_ready = self.pending.is_some_and(|moon| {
+            self.placements.contains_key(&self.placement_key(screen, moon))
+                && ctx.cumulative_pass_nr() > self.settle_until
+        });
+        publish(ctx, self.pending.is_some(), placed_ready, self.disc);
         #[cfg(test)]
         ctx.data_mut(|d| {
             d.insert_temp(
@@ -686,13 +703,62 @@ impl Ambient {
 }
 
 mod sky;
-pub(super) use sky::{
-    disc_of, find_sky, hold_page, laid_out, moon_disc, placing, Held,
-};
+pub(super) use sky::{disc_of, find_sky, moon_disc, placing, Held};
 use sky::{
-    clear_of, clear_of_tints, day_wash, fade_over, held_id, page_id, paint_moon, publish,
-    stars, MoonFade, SETTLE_PASSES,
+    clear_of, clear_of_tints, day_wash, fade_over, held_id, hold_page, laid_out, page, page_id,
+    paint_moon, placed, publish, stars, MoonFade, SETTLE_PASSES,
 };
+
+/// Holds what a scrolled page laid out for the moon to avoid, skipping the shape walk and
+/// deferred buffer clone when a settled placement exists and layout, scroll, focus, deferred lifts,
+/// and input events are unchanged.
+pub(super) fn hold_page_scroll(
+    ctx: &Context,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    layer: egui::LayerId,
+    from: usize,
+    full: Rect,
+    page_top: f32,
+    content_rect: Rect,
+) {
+    #[derive(Clone, PartialEq)]
+    struct ScrollLayoutStamp {
+        page: u64,
+        full: Rect,
+        down_y: f32,
+        content: Rect,
+        shapes: usize,
+        focused: Option<egui::Id>,
+        deferred_sig: u64,
+    }
+    let down = Vec2::new(0.0, full.top() - page_top);
+    let to = ctx.graphics(|g| g.get(layer).map_or(0, |l| l.next_idx().0));
+    let stamp = ScrollLayoutStamp {
+        page: page(ctx),
+        full,
+        down_y: down.y,
+        content: content_rect,
+        shapes: to.saturating_sub(from),
+        focused: ctx.memory(|m| m.focused()),
+        deferred_sig: glass::deferred_sig(ctx),
+    };
+    let stamp_id = egui::Id::unique(("moon-scroll-stamp", id));
+    let unchanged = placed(ctx)
+        && !ctx.input(|i| !i.events.is_empty() || i.pointer.any_released())
+        && ctx.data(|d| d.get_temp::<ScrollLayoutStamp>(stamp_id)).as_ref() == Some(&stamp);
+    if !unchanged {
+        ctx.data_mut(|d| d.insert_temp(stamp_id, stamp));
+        let soft = glass::soft_textures(ctx);
+        let deferred = glass::deferred(ctx);
+        let mut rects = ctx.graphics(|g| {
+            g.get(layer).map_or_else(Vec::new, |l| {
+                laid_out(&soft, l.all_entries().skip(from).map(|c| &c.shape), down, full)
+            })
+        });
+        rects.extend(laid_out(&soft, deferred.iter().flat_map(|(_, shapes)| shapes), down, full));
+        hold_page(ctx, full, rects, down.y);
+    }
+}
 #[cfg(test)]
 pub(super) use sky::{band_foot, painted, Painted};
 #[cfg(test)]

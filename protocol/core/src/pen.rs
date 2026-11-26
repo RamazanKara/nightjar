@@ -17,8 +17,6 @@ pub const PEN_BARREL_ROLL_MAGIC: u32 = 0x5500_000B;
 pub const PEN_BARREL_ROLL_BYTES: usize = 40;
 /// A roll the pen does not report.
 pub const ROLL_UNKNOWN: u16 = 0xFFFF;
-/// Input magics other clients use for touchpad packets; never ours.
-pub const RESERVED_MAGICS: [u32; 2] = [0x5500_0009, 0x5500_000A];
 /// Serverinfo element: the host takes [`PenBarrelRoll`] packets.
 pub const SERVERINFO_FIELD: &str = "PenBarrelRollVersion";
 /// DESCRIBE attribute: this stream takes them. The name is shared with other clients.
@@ -151,9 +149,8 @@ mod tests {
     }
 
     #[test]
-    fn magics_stay_clear_of_the_reserved_ones() {
-        assert!(!RESERVED_MAGICS.contains(&PEN_BARREL_ROLL_MAGIC));
-        assert!(!RESERVED_MAGICS.contains(&PEN_MAGIC));
+    fn magics_stay_distinct_and_sized() {
+        assert_ne!(PEN_BARREL_ROLL_MAGIC, PEN_MAGIC);
         assert_eq!(PEN_BARREL_ROLL_BYTES, PEN_BYTES + 4);
     }
 }

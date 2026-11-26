@@ -24,4 +24,5 @@
     <string name="controller_connect_as_automatic">自動</string>
     <string name="controller_connect_as_xbox_summary">Xbox（モーションセンサーとタッチパッドなし）</string>
     <string name="pc_tap_to_pair">%1$s\nタップしてペアリング</string>
+    <string name="controller_button_scan">拡張ボタン %1$s</string>
 </resources>

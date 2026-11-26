@@ -382,8 +382,8 @@ fn a_launch_waits_for_an_app_list_being_read_again_instead_of_dropping() {
         monitor_resume: false,
     };
     assert!(matches!(launch_app(&Apps::Loading, 5), LaunchApp::Wait), "a reload in flight keeps the launch");
-    assert!(matches!(launch_app(&Apps::Loaded(vec![app.clone()]), 5), LaunchApp::Ready(a) if a.id == 5));
-    assert!(matches!(launch_app(&Apps::Loaded(vec![app]), 6), LaunchApp::Missing));
+    assert!(matches!(launch_app(&Apps::Loaded(std::sync::Arc::new(vec![app.clone()])), 5), LaunchApp::Ready(a) if a.id == 5));
+    assert!(matches!(launch_app(&Apps::Loaded(std::sync::Arc::new(vec![app])), 6), LaunchApp::Missing));
     assert!(matches!(launch_app(&Apps::NotLoaded, 5), LaunchApp::Gone));
     // A reload that ends in an error is shown, not dropped.
     assert!(matches!(launch_app(&Apps::Failed("x".into()), 5), LaunchApp::Failed(why) if why == "x"));

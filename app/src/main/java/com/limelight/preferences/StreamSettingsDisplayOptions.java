@@ -114,7 +114,13 @@ final class StreamSettingsDisplayOptions {
         final Context appContext = activity.getApplicationContext();
         final StreamSettings.SettingsFragment.DecoderWidthProbe probe = StreamSettings.SettingsFragment.decoderWidthProbe;
         fragment.decoderProbe = new Thread(() -> {
-            int decoderResW = probe.probe(appContext);
+            int decoderResW;
+            try {
+                decoderResW = probe.probe(appContext);
+            } catch (RuntimeException e) {
+                LimeLog.warning("Decoder resolution probe failed: " + e.getMessage());
+                return;
+            }
             activity.runOnUiThread(() -> {
                 if (fragment.isAdded() && fragment.getActivity() == activity && !activity.isFinishing()) {
                     removeUndecodableResolutions(fragment, Math.max(displayResW, decoderResW));
@@ -185,7 +191,7 @@ final class StreamSettingsDisplayOptions {
             LimeLog.info("Disabling HDR toggle on old broken SHIELD TV firmware");
             hdr.setEnabled(false);
             hdr.setChecked(false);
-            hdr.setSummary("Update the firmware on your NVIDIA SHIELD Android TV to enable HDR");
+            hdr.setSummary(R.string.summary_hdr_shield_firmware_update);
         }
 
         // Add a listener to the FPS and resolution preference

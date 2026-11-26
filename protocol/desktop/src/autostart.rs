@@ -123,10 +123,33 @@ fn run_program(command: &str) -> Option<String> {
     program.filter(|p| !p.is_empty()).map(str::to_owned)
 }
 
+/// Undoes one pass of XDG `.desktop` keyfile string escaping (`\s`, `\n`, `\t`, `\r`, `\\`).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn unescape_keyfile_value(value: &str) -> Option<String> {
+    let mut out = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next()? {
+            's' => out.push(' '),
+            'n' => out.push('\n'),
+            't' => out.push('\t'),
+            'r' => out.push('\r'),
+            '\\' => out.push('\\'),
+            _ => return None,
+        }
+    }
+    Some(out)
+}
+
 /// The program of an `Exec` line, undoing [`exec_field`].
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn exec_program(exec: &str) -> Option<String> {
-    let exec = exec.trim();
+    let keyfile_unescaped = unescape_keyfile_value(exec)?;
+    let exec = keyfile_unescaped.trim();
     let Some(quoted) = exec.strip_prefix('"') else {
         return exec.split_whitespace().next().map(|p| p.replace("%%", "%"));
     };
@@ -136,9 +159,11 @@ fn exec_program(exec: &str) -> Option<String> {
         match c {
             '"' => return Some(program).filter(|p| !p.is_empty()),
             '\\' => {
-                // Both unescaping rounds of exec_field.
+                // After keyfile unescaping, double-quoted Exec strings escape `"`, `` ` ``, `$`, `\`.
                 let next = chars.next()?;
-                let next = if next == '\\' { chars.next()? } else { next };
+                if !matches!(next, '"' | '`' | '$' | '\\') {
+                    return None;
+                }
                 program.push(next);
             }
             '%' => {
@@ -179,7 +204,9 @@ fn exec_field(exe: &Path) -> String {
     let mut quoted = String::from("\"");
     for c in exe.to_string_lossy().chars() {
         match c {
-            '"' | '`' | '$' | '\\' => {
+            // The key file layer halves escapes first, then Exec unquoting consumes `\\` into `\`.
+            '\\' => quoted.push_str("\\\\\\\\"),
+            '"' | '`' | '$' => {
                 // The key file format unescapes once before Exec's own quoting does.
                 quoted.push_str("\\\\");
                 quoted.push(c);
@@ -523,6 +550,11 @@ mod tests {
     fn the_exec_field_escapes_what_the_format_reads() {
         assert_eq!(exec_field(Path::new("/opt/my apps/nightjar")), "\"/opt/my apps/nightjar\"");
         assert_eq!(exec_field(Path::new("/a$b/100%/c")), "\"/a\\\\$b/100%%/c\"");
+        let with_backslash = exec_field(Path::new("/a\\b/100%/$c\"d"));
+        assert_eq!(with_backslash, "\"/a\\\\\\\\b/100%%/\\\\$c\\\\\"d\"");
+        assert_eq!(exec_program(&format!("{with_backslash} --autostart")).as_deref(), Some("/a\\b/100%/$c\"d"));
+        // Reject three-backslash broken keyfile escapes rather than masking them in the test parser.
+        assert_eq!(exec_program("\"/a\\\\\\b/nightjar\" --autostart"), None);
     }
 
     #[test]

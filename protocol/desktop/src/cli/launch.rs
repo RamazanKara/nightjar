@@ -221,20 +221,30 @@ impl CliLaunch {
     pub fn host_seen(&self, hosts: &crate::hosts::Hosts) -> Option<HostSeen> {
         use crate::hosts::{Apps, Reach};
         let host = hosts.get(self.host)?;
+        // Once launched (or idle), the state machine no longer inspects the app list or game UUID.
+        let need_apps = matches!(self.phase, Phase::Starting) && self.launch.app.is_some();
         Some(HostSeen {
             answered: host.info.is_some(),
             paired: host.paired(),
             offline: (host.reach == Reach::Offline).then(|| host.error.clone().unwrap_or_default()),
-            running: host.running_app().map(|id| {
-                let uuid = host.info.as_ref().and_then(|i| i.current_game_uuid.clone());
-                (id, uuid)
-            }),
+            running: if need_apps {
+                host.running_app().map(|id| {
+                    let uuid = host.info.as_ref().and_then(|i| i.current_game_uuid.clone());
+                    (id, uuid)
+                })
+            } else {
+                None
+            },
             confirms_replacement: host.confirms_replacement(),
-            apps: match &host.apps {
-                Apps::NotLoaded => AppsSeen::NotLoaded,
-                Apps::Loading => AppsSeen::Loading,
-                Apps::Loaded(apps) => AppsSeen::Loaded(apps.clone()),
-                Apps::Failed(e) => AppsSeen::Failed(e.clone()),
+            apps: if need_apps && self.launch.join.is_none() {
+                match &host.apps {
+                    Apps::NotLoaded => AppsSeen::NotLoaded,
+                    Apps::Loading => AppsSeen::Loading,
+                    Apps::Loaded(apps) => AppsSeen::Loaded(apps.as_ref().clone()),
+                    Apps::Failed(e) => AppsSeen::Failed(e.clone()),
+                }
+            } else {
+                AppsSeen::NotLoaded
             },
         })
     }

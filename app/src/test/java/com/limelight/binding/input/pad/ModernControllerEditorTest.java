@@ -525,6 +525,27 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         controller.finishEditing(false);
     }
 
+    @Test public void fullyTransparentControlCanStillBeSelectedInEditor() {
+        ModernController controller = controller(GAME);
+        controller.startEditing();
+        layout();
+        PadEditor editor = (PadEditor) frame.getChildAt(frame.getChildCount() - 1);
+        View surface = editor.getChildAt(0);
+        float density = frame.getContext().getResources().getDisplayMetrics().density;
+
+        editor.select(PadLayout.Control.HOME);
+        editor.setOpacity(PadLayout.MIN_OPACITY);
+        assertEquals(0, editor.draft().spec(PadLayout.Control.HOME).opacity);
+
+        editor.select(null);
+        float[] box = editor.draft().bounds(PadLayout.Control.HOME, surface.getWidth(), surface.getHeight(), density,
+                new float[4]);
+        tap(surface, box[0] + box[2] / 2, box[1] + box[3] / 2);
+        assertEquals("Opacity-0 control stays selectable on the editing surface",
+                PadLayout.Control.HOME, editor.selected());
+        controller.finishEditing(false);
+    }
+
     private static void assertWhole(PadEditor editor, String state) {
         View panel = editor.panel();
         assertTrue(state + ": the panel lies on the surface", panel.getX() >= 0 && panel.getY() >= 0

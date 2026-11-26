@@ -460,6 +460,7 @@ final class GameRecovery {
     private void endStreamAfterPackedFailure(String reason) {
         new Thread(() -> {
             if (game.isFinishing() || game.isDestroyed() || game.displayedFailureDialog) return;
+            MoonBridge.markStartFailureReported(game);
             game.displayMessage("Packed full-chroma presentation stopped: " + reason);
             game.connectionTerminated(-1);
         }, "Packed chroma end").start();

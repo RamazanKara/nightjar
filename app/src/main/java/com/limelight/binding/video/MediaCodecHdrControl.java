@@ -54,8 +54,10 @@ final class MediaCodecHdrControl {
     }
 
     static boolean restartRecreates(String decoderName, List<String> tuningKeys) {
-        if (decoderName == null || tuningKeys == null || tuningKeys.isEmpty()) return false;
-        return NightjarPolicyJni.videoRestartRecreates(decoderName, String.join("\n", tuningKeys));
+        if (decoderName == null) return false;
+        // No keys is an answer too: NVIDIA's Dolby Vision decoder restarts as a new codec without any.
+        return NightjarPolicyJni.videoRestartRecreates(decoderName,
+                tuningKeys == null ? "" : String.join("\n", tuningKeys));
     }
 
     static void setHdrMode(MediaCodecDecoderRenderer r, boolean enabled, byte[] hdrMetadata) {
@@ -81,11 +83,15 @@ final class MediaCodecHdrControl {
                 return;
             }
             byte[] metadata = enabled && hdrMetadata != null && hdrMetadata.length >= 24 ? hdrMetadata : null;
-            boolean previousMode = r.currentHdrMode != null ? r.currentHdrMode : r.codecSelector.assumesHdr();
+            boolean firstReport = r.currentHdrMode == null;
+            boolean previousMode = !firstReport ? r.currentHdrMode : r.codecSelector.assumesHdr();
+            boolean vulkanUnchanged = !firstReport
+                    && previousMode == enabled
+                    && java.util.Arrays.equals(r.currentHdrMetadata, metadata);
             r.currentHdrMode = enabled;
             // The Vulkan renderer switches its output between SDR and HDR10 itself
             VulkanRendererBridge vulkan = r.vulkanRenderer;
-            if (vulkan != null) vulkan.setHdrMode(enabled, metadata);
+            if (vulkan != null && !vulkanUnchanged) vulkan.setHdrMode(enabled, metadata);
             if (enabled && r.upscaler != null) r.upscalingPolicy.fail(UpscalingPolicy.Reason.HDR);
             MediaCodecDecoderRenderer.HdrChange change = MediaCodecDecoderRenderer.hdrChange(
                     previousMode, enabled, r.currentHdrMetadata, metadata, Build.VERSION.SDK_INT);
@@ -100,6 +106,9 @@ final class MediaCodecHdrControl {
             }
             // HACK: Reset codec recovery attempt counter, since this is an expected "recovery"
             r.codecRecoveryAttempts = 0;
+            // SDR frames carry no RPU: the recovery sets up the base layer's decoder, which the stream
+            // keeps until the next ANNOUNCE, instead of restarting the Dolby Vision one (nightjar#193).
+            if (!enabled && r.dolbyVisionActive) r.dolbyVisionFailed = true;
             // The host's first HDR report restarts a 10-bit stream once: it adds metadata or turns HDR off.
             r.session.requestRestart(enabled ? (metadata != null ? "HDR metadata" : "HDR on") : "HDR off");
         }
@@ -132,7 +141,6 @@ final class MediaCodecHdrControl {
         }
         synchronized (r.codecRecoveryMonitor) {
             byte[] expected = r.uncheckedHdrStaticInfo;
-            MediaFormat format = r.outputFormat;
             if (expected == null || r.codecRecoveryType.get() != MediaCodecDecoderRenderer.CR_RECOVERY_TYPE_NONE) {
                 return;
             }
@@ -140,12 +148,14 @@ final class MediaCodecHdrControl {
                 r.uncheckedHdrStaticInfo = null;
                 return;
             }
-            if (r.dolbyVisionActive && format != null && format.containsKey(MediaFormat.KEY_COLOR_TRANSFER) &&
-                    format.getInteger(MediaFormat.KEY_COLOR_TRANSFER) != MediaFormat.COLOR_TRANSFER_ST2084) {
+            if (r.dolbyVisionActive) {
+                // Whatever transfer its output names, PQ or none: a decoder that never shows the key was
+                // restarted for it a second into the stream (nightjar#193).
                 r.uncheckedHdrStaticInfo = null;
-                LimeLog.info("Dolby Vision decoder maps the picture itself; output format has no HDR10 static metadata");
+                LimeLog.info("Dolby Vision carries its mastering metadata in the RPUs; the output format is not checked for it");
                 return;
             }
+            MediaFormat format = r.outputFormat;
             ByteBuffer carried = format != null && format.containsKey(MediaFormat.KEY_HDR_STATIC_INFO) ?
                     format.getByteBuffer(MediaFormat.KEY_HDR_STATIC_INFO) : null;
             if (carriesHdrStaticInfo(carried, expected)) {

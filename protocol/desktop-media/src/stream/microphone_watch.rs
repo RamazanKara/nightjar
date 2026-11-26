@@ -46,11 +46,15 @@ impl MicrophoneBusyWatch {
                         }
                     }
                     // Said once per kind of failure; the next answer counts again.
-                    Err(error) if last_error.as_ref() != Some(&error) => {
-                        eprintln!("nightjar: microphone only: the PC's session could not be read: {error}");
-                        last_error = Some(error);
+                    Err(error) => {
+                        if seen.swap(false, Ordering::AcqRel) {
+                            wake();
+                        }
+                        if last_error.as_ref() != Some(&error) {
+                            eprintln!("nightjar: microphone only: the PC's session could not be read: {error}");
+                            last_error = Some(error);
+                        }
                     }
-                    Err(_) => {}
                 }
                 let until = Instant::now() + every;
                 while !stopped.load(Ordering::Acquire) && Instant::now() < until {
@@ -103,8 +107,8 @@ mod tests {
         }
         std::thread::sleep(Duration::from_millis(50));
         assert!(!watch.busy());
-        // false (no change), true (wake), error (none), true (none), false (wake).
-        assert_eq!(wakes.load(Ordering::SeqCst), 2);
+        // false (initial), true (wake 1), error clears busy (wake 2), true (wake 3), false (wake 4).
+        assert_eq!(wakes.load(Ordering::SeqCst), 4);
     }
 
     #[test]

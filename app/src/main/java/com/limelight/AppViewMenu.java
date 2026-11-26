@@ -119,13 +119,14 @@ final class AppViewMenu {
                     R.drawable.ic_add, view.getString(R.string.applist_menu_scut));
         }
         addAppAction(sheet, selectedApp, selectedView, OPEN_ON_START_ID, R.drawable.ic_play,
-                com.limelight.console.OpenPlay.menuLabel(view, view.computer.uuid, selectedApp.app.getAppId()));
+                com.limelight.console.OpenPlay.menuLabel(view, view.computer.uuid, selectedApp.app.getAppId(),
+                        selectedApp.app.getAppUuid()));
         addAppAction(sheet, selectedApp, selectedView, VIEW_DETAILS_ID,
                 R.drawable.ic_info, view.getString(R.string.applist_menu_details));
         sheet.setOnDismissListener(dialog -> {
             appMenu = null;
             view.suspendGridUpdates = false;
-            if (view.poller != null && view.inForeground) view.poller.pollNow();
+            if (view.inForeground) view.pollLibraryNow();
         });
         sheet.show();
     }
@@ -256,7 +257,7 @@ final class AppViewMenu {
         view.suspendGridUpdates = true;
         picker.setOnDismissListener(dialog -> {
             view.suspendGridUpdates = false;
-            if (view.poller != null && view.inForeground) view.poller.pollNow();
+            if (view.inForeground) view.pollLibraryNow();
         });
         picker.show();
     }
@@ -295,9 +296,7 @@ final class AppViewMenu {
                     ServerHelper.doQuit(view, view.computer, app.app, view.managerBinder, () -> {
                         // Trigger a poll immediately
                         view.suspendGridUpdates = false;
-                        if (view.poller != null) {
-                            view.poller.pollNow();
-                        }
+                        view.pollLibraryIfReady();
                     });
                 }, null);
                 return true;

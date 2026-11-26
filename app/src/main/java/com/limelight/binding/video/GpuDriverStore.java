@@ -1,6 +1,8 @@
 package com.limelight.binding.video;
 
 import android.annotation.SuppressLint;
+import android.app.ActivityManager;
+import android.app.ApplicationExitInfo;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
@@ -164,14 +166,18 @@ public final class GpuDriverStore {
         String selected = prefs.getString("selected", "");
         String interrupted = prefs.getString("active", "");
         if (!interrupted.isEmpty() && !active.containsKey(interrupted)) {
-            // A crash names no reason: the notice says only that the custom driver failed.
-            SharedPreferences.Editor edit = prefs.edit().remove("active").putBoolean("fallback", true)
-                    .remove("fallbackReason");
-            if (selected.equals(interrupted)) {
-                edit.remove("selected");
-                selected = "";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !wasCrashExit(context)) {
+                prefs.edit().remove("active").commit();
+            } else {
+                // A crash names no reason: the notice says only that the custom driver failed.
+                SharedPreferences.Editor edit = prefs.edit().remove("active").putBoolean("fallback", true)
+                        .remove("fallbackReason");
+                if (selected.equals(interrupted)) {
+                    edit.remove("selected");
+                    selected = "";
+                }
+                edit.commit();
             }
-            edit.commit();
         }
         if (selected.isEmpty()) return null;
         for (Driver driver : list(context)) if (driver.id.equals(selected)) return driver;
@@ -187,6 +193,31 @@ public final class GpuDriverStore {
 
     public static boolean usedFallback(Context context) {
         return preferences(context).getBoolean("fallback", false);
+    }
+
+    private static boolean wasCrashExit(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return true;
+        }
+        try {
+            ActivityManager am = context.getSystemService(ActivityManager.class);
+            if (am == null) {
+                return true;
+            }
+            List<ApplicationExitInfo> reasons = am.getHistoricalProcessExitReasons(context.getPackageName(), 0, 1);
+            if (reasons == null || reasons.isEmpty()) {
+                return true;
+            }
+            int reason = reasons.get(0).getReason();
+            return reason == ApplicationExitInfo.REASON_CRASH
+                    || reason == ApplicationExitInfo.REASON_CRASH_NATIVE
+                    || reason == ApplicationExitInfo.REASON_ANR
+                    || reason == ApplicationExitInfo.REASON_SIGNALED
+                    || reason == ApplicationExitInfo.REASON_INITIALIZATION_FAILURE
+                    || reason == ApplicationExitInfo.REASON_UNKNOWN;
+        } catch (RuntimeException ignored) {
+            return true;
+        }
     }
 
     /** The notice for the last custom-driver failure, which names its reason when one is known. */

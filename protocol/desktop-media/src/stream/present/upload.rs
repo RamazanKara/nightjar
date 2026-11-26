@@ -28,6 +28,15 @@ impl FrameSource<'_> {
             Self::Owned(picture) => picture.take_frame(),
         }
     }
+
+    /// Moves the frame out when owned, without cloning a borrowed reference.
+    #[cfg(windows)]
+    pub(super) fn take_owned(&mut self) -> Option<media::Frame> {
+        match self {
+            Self::Ref(_) => None,
+            Self::Owned(picture) => picture.take_frame(),
+        }
+    }
 }
 
 impl VideoTexture {
@@ -520,7 +529,9 @@ impl VideoTexture {
                     }
                     let copied = source.frame().copy_to_d3d11(self.d3d11, w, h);
                     self.copied = copied;
-                    if !copied {
+                    if copied {
+                        let _ = source.take_owned();
+                    } else {
                         self.fail(
                             format!("copying a {w}x{h} decoder picture into the {} video texture failed", pixel_format_name(format)),
                             "the GPU copy failed".into(),

@@ -517,6 +517,7 @@ pub fn is_retryable_http_error(error: &http::Error) -> bool {
             if matches!(
                 e.kind(),
                 ErrorKind::TimedOut
+                    | ErrorKind::WouldBlock
                     | ErrorKind::ConnectionReset
                     | ErrorKind::ConnectionAborted
                     | ErrorKind::ConnectionRefused
@@ -710,5 +711,14 @@ mod tests {
             err,
             LaunchFlowError::Local(LocalLaunchFailure::ConfirmCancelled)
         ));
+    }
+
+    #[test]
+    fn would_block_http_error_is_retryable() {
+        let err = http::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::WouldBlock,
+            "temporarily unavailable",
+        ));
+        assert!(is_retryable_http_error(&err));
     }
 }

@@ -595,8 +595,15 @@ public final class HomeModel {
             if (best == null) {
                 continue;
             }
+            boolean isStarred = false;
+            for (ConsoleSnapshot.Source copy : copies) {
+                if (starred.contains(copy.hostUuid + ":" + copy.appId)) {
+                    isStarred = true;
+                    break;
+                }
+            }
             library.add(new GameCard("game:" + title.key, title.title, best.hostUuid, best.hostName, best.appId,
-                    HomeRows.badgeOf(snapshot, best), best, hosts, starred.contains(best.hostUuid + ":" + best.appId),
+                    HomeRows.badgeOf(snapshot, copies), best, hosts, isStarred,
                     false, listing, HomeRows.lineLastPlayed(snapshot, title, only), copies));
         }
         List<GameCard> allGames = new ArrayList<>();

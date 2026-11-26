@@ -8,6 +8,7 @@ import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.RecordingCanvas;
+import android.graphics.Rect;
 import android.graphics.RenderEffect;
 import android.graphics.RenderNode;
 import android.graphics.Shader;
@@ -40,6 +41,9 @@ public class GlassHost extends FrameLayout {
     private boolean liveReady;
     private boolean liveScheduled;
     private final List<GlassSurface> surfaces = new ArrayList<>();
+    private final java.util.Set<GlassSurface> invalidatedThisDraw = new java.util.HashSet<>();
+    private final Rect dirtyTargetRect = new Rect();
+    private final Rect surfaceRect = new Rect();
     private Live live;
 
     private Bitmap ambient;
@@ -166,7 +170,11 @@ public class GlassHost extends FrameLayout {
 
     @Override
     protected void dispatchDraw(Canvas canvas) {
-        super.dispatchDraw(canvas);
+        try {
+            super.dispatchDraw(canvas);
+        } finally {
+            invalidatedThisDraw.clear();
+        }
         if (!liveReady && !liveScheduled && isLive()) {
             // The first frame is out; the next one may blur.
             liveScheduled = true;
@@ -184,9 +192,51 @@ public class GlassHost extends FrameLayout {
         // On Android 14+ HWUI partial-damage frames, scrolling child 0 does not always mark sibling
         // GlassSurfaces dirty, leaving the bottom dock stale or blank (#61).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && liveReady && isLive()
-                && getChildCount() > 0 && child == getChildAt(0)) {
-            if (live != null && !live.content.hasDisplayList()) invalidate();
-            invalidateSurfaces();
+                && getChildCount() > 0 && child == getChildAt(0) && !surfaces.isEmpty()) {
+            invalidateIntersectingSurfaces(target);
+        }
+    }
+
+    private void invalidateIntersectingSurfaces(View target) {
+        if (getWidth() <= 0 || getHeight() <= 0) {
+            for (GlassSurface surface : surfaces) {
+                if (surface.getVisibility() == View.VISIBLE) {
+                    surface.invalidate();
+                }
+            }
+            return;
+        }
+        if (target == null || target.getWidth() <= 0 || target.getHeight() <= 0) {
+            dirtyTargetRect.set(0, 0, getWidth(), getHeight());
+        } else {
+            dirtyTargetRect.set(0, 0, target.getWidth(), target.getHeight());
+            try {
+                offsetDescendantRectToMyCoords(target, dirtyTargetRect);
+            } catch (IllegalArgumentException ignored) {
+                dirtyTargetRect.set(0, 0, getWidth(), getHeight());
+            }
+        }
+        int blurMarginPx = Math.round(32f * getResources().getDisplayMetrics().density);
+        boolean anySurfaceInvalidated = false;
+        for (GlassSurface surface : surfaces) {
+            if (surface.getVisibility() != View.VISIBLE || surface.getWidth() <= 0 || surface.getHeight() <= 0) {
+                continue;
+            }
+            surfaceRect.set(0, 0, surface.getWidth(), surface.getHeight());
+            try {
+                offsetDescendantRectToMyCoords(surface, surfaceRect);
+            } catch (IllegalArgumentException ignored) {
+                continue;
+            }
+            surfaceRect.inset(-blurMarginPx, -blurMarginPx);
+            if (Rect.intersects(surfaceRect, dirtyTargetRect) && invalidatedThisDraw.add(surface)) {
+                anySurfaceInvalidated = true;
+                surface.invalidate();
+            }
+        }
+        if (anySurfaceInvalidated && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                && live != null && !live.content.hasDisplayList()) {
+            invalidate();
         }
     }
 

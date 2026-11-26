@@ -43,13 +43,19 @@ impl Scanout {
             ));
         }
         let (w, h) = (u32::from(snapshot.mode.hdisplay), u32::from(snapshot.mode.vdisplay));
-        let overlay_buffers = match (0..2).map(|_| card.dumb_buffer(w, h, plan::ARGB8888)).collect::<std::io::Result<Vec<_>>>() {
-            Ok(buffers) => buffers,
-            Err(e) => {
-                card.remove_fb(fb);
-                return Err(format!("no overlay buffers: {e}"));
+        let mut overlay_buffers = Vec::with_capacity(2);
+        for _ in 0..2 {
+            match card.dumb_buffer(w, h, plan::ARGB8888) {
+                Ok(buffer) => overlay_buffers.push(buffer),
+                Err(e) => {
+                    for buffer in overlay_buffers {
+                        card.destroy_dumb(buffer);
+                    }
+                    card.remove_fb(fb);
+                    return Err(format!("no overlay buffers: {e}"));
+                }
             }
-        };
+        }
         let rect = picture_rect(&snapshot.mode, &layout, visible, viewport);
         let next_fb = fb.id;
         let vrr_on = plan::vrr_engaged(&caps_of(&snapshot.connector, &snapshot.crtc), self.wishes.vrr);

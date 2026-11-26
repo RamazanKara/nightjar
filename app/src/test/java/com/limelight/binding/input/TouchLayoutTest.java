@@ -69,4 +69,17 @@ public class TouchLayoutTest {
         held.release("one"); assertEquals(Collections.singletonList("1:true"), events);
         held.releaseAll(); assertEquals(Arrays.asList("1:true", "1:false"), events);
     }
+
+    @Test public void unreadableLayoutIsMarkedUnreadableAndSaveLeavesRawJsonIntact() {
+        android.content.Context context = RuntimeEnvironment.getApplication();
+        String profile = "future-profile";
+        String futureJson = "{\"version\":99,\"buttons\":[]}";
+        context.getSharedPreferences("GameTouchLayouts", android.content.Context.MODE_PRIVATE)
+                .edit().putString(profile, futureJson).commit();
+        TouchLayout loaded = TouchLayout.load(context, profile);
+        assertTrue(loaded.isUnreadable());
+        loaded.save(context, profile);
+        assertEquals(futureJson, context.getSharedPreferences("GameTouchLayouts", android.content.Context.MODE_PRIVATE)
+                .getString(profile, null));
+    }
 }

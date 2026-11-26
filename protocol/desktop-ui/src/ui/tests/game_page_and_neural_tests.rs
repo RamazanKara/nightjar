@@ -22,7 +22,7 @@ fn a_pc_offers_the_one_action_its_state_calls_for() {
 
     // Running a game of its known list: Resume starts it again, the line names the game.
     let mut f = Frames::with(record("Den", true, true), Reach::Online, Some(answer(true, 7)), vec![game(7)]);
-    f.hosts.list[0].apps = Apps::Loaded(vec![game(7)]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![game(7)]));
     f.settle();
     assert_eq!(action_of(&f), PcAction::Resume(7));
     assert!(matches!(line_of(&f), PcLine::Running(_)));
@@ -162,7 +162,7 @@ fn a_pcs_page_asks_for_the_covers_on_screen_at_the_version_every_page_asks_with(
             collections: Vec::new(),
         })
         .collect();
-    f.hosts.list[0].native.library = Some(Library { revision: "r1".into(), games });
+    f.hosts.list[0].native.library = Some(Arc::new(Library { revision: "r1".into(), games }));
     let covers = |commands: Vec<Command>| -> std::collections::BTreeMap<i32, String> {
         let asked = commands.into_iter().filter_map(|c| match c {
             Command::RequestArt { host, app, version } if host == id => Some((app, version)),
@@ -220,9 +220,9 @@ fn an_app_grid_has_seven_fixed_columns_and_no_labels_on_art() {
     let id = f.hosts.list[0].id;
     for app in 2..=15 {
         let art = demo_art(&f.ctx, app as usize);
-        f.hosts.get_mut(id).unwrap().art.insert(app, art);
+        Arc::make_mut(&mut f.hosts.get_mut(id).unwrap().art).insert(app, art);
     }
-    f.hosts.get_mut(id).unwrap().art.insert(1, Art::Missing);
+    Arc::make_mut(&mut f.hosts.get_mut(id).unwrap().art).insert(1, Art::Missing);
     f.settle();
     let (_, width) = crate::ui::cards::grid(1184.0);
     assert_eq!(width, 155.0, "seven columns at the design's width");
@@ -320,7 +320,7 @@ fn the_pc_capsule_speaks_of_the_pc_whose_page_it_is() {
     let mut hosts = Hosts::without_discovery(vec![record("Den", true, true), other], Arc::new(|| {}));
     for host in &mut hosts.list {
         host.reach = Reach::Online;
-        host.apps = Apps::Loaded(vec![game(1)]);
+        host.apps = Apps::Loaded(Arc::new(vec![game(1)]));
     }
     let attic = hosts.list[1].id;
     let mut f = Frames::over(ctx, l, hosts);
@@ -346,7 +346,7 @@ fn the_capsule_opens_the_pcs_with_two_or_more() {
 #[test]
 fn the_capsule_of_the_only_pc_opens_its_options() {
     let mut f = Frames::with(record("Den", true, true), Reach::Online, Some(answer(true, 0)), Vec::new());
-    f.hosts.list[0].apps = Apps::Loaded(vec![game(1)]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![game(1)]));
     let id = f.hosts.list[0].id;
     f.l.go(Screen::Apps(id));
     f.settle();
@@ -472,7 +472,7 @@ fn picking_a_pc_does_what_enter_does_on_its_card() {
 #[test]
 fn a_pc_with_no_apps_shows_one_line_and_refresh() {
     let mut f = Frames::with(record("Den", true, true), Reach::Online, Some(answer(true, 0)), Vec::new());
-    f.hosts.list[0].apps = Apps::Loaded(Vec::new());
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(Vec::new()));
     let id = f.hosts.list[0].id;
     f.l.go(Screen::Apps(id));
     f.settle();
@@ -492,7 +492,7 @@ fn a_pc_with_no_apps_shows_one_line_and_refresh() {
     assert_eq!(at(&f, "This PC lists no apps."), line);
     assert!(!shows(&f, "Loading the library\u{2026}"), "{:?}", f.drawn);
     // A list with a game in it lands as any.
-    f.hosts.list[0].apps = Apps::Loaded(vec![game(7)]);
+    f.hosts.list[0].apps = Apps::Loaded(Arc::new(vec![game(7)]));
     f.settle();
     assert!(!shows(&f, "This PC lists no apps.") && !shows(&f, "Refresh"), "{:?}", f.drawn);
     // Failed, it says so out loud with the way to try again.

@@ -24,6 +24,14 @@ public final class ControllerButtonMap {
             BUTTON_MODE = 110, BUTTON_1 = 188, BUTTON_16 = 203, MEDIA_RECORD = 130;
 
     /**
+     * Kernel scan-code sources for extra controller buttons without an Android key code (e.g.
+     * 8BitDo Ultimate 2 Wireless L4 0x2c0 / R4 0x2c1 or raw BTN_C 306 / BTN_Z 309).
+     */
+    static final int SCAN_SOURCE_FLAG = 0x30000;
+    static final int SCAN_GAMEPAD_MIN = 0x120, SCAN_GAMEPAD_MAX = 0x13f;
+    static final int SCAN_TRIGGER_HAPPY_MIN = 0x2c0, SCAN_TRIGGER_HAPPY_MAX = 0x2cf;
+
+    /**
      * Extended buttons the host passes through. They have no Android key code, so they are stored
      * as codes above every key code; an older Nightjar ignores them as unsupported entries.
      */
@@ -72,11 +80,39 @@ public final class ControllerButtonMap {
     /**
      * Digital buttons only. D-pad and trigger keys are left alone because their
      * hat/axis events would still arrive alongside a remapped key event. Extra buttons such as
-     * C, Z, 1-16 and an Xbox pad's Share (MEDIA_RECORD) are sources too.
+     * C, Z, 1-16, an Xbox pad's Share (MEDIA_RECORD), and unmapped kernel scan-code buttons are sources too.
      */
     public static boolean isRemappableSource(int keyCode) {
         return (keyCode >= BUTTON_A && keyCode <= BUTTON_MODE && keyCode != BUTTON_L2 && keyCode != BUTTON_R2) ||
-                (keyCode >= BUTTON_1 && keyCode <= BUTTON_16) || keyCode == MEDIA_RECORD;
+                (keyCode >= BUTTON_1 && keyCode <= BUTTON_16) || keyCode == MEDIA_RECORD ||
+                isScanCodeSource(keyCode);
+    }
+
+    public static boolean isScanCodeSource(int source) {
+        if ((source & ~0xFFFF) != SCAN_SOURCE_FLAG) {
+            return false;
+        }
+        int scanCode = source & 0xFFFF;
+        return (scanCode >= SCAN_GAMEPAD_MIN && scanCode <= SCAN_GAMEPAD_MAX) ||
+                (scanCode >= SCAN_TRIGGER_HAPPY_MIN && scanCode <= SCAN_TRIGGER_HAPPY_MAX);
+    }
+
+    public static int scanCodeOf(int source) {
+        return isScanCodeSource(source) ? (source & 0xFFFF) : 0;
+    }
+
+    /** Identifies a controller button for mapping, falling back to its kernel scan code when unmapped by Android. */
+    public static int sourceForKey(int keyCode, int scanCode) {
+        if (keyCode != DISABLED) {
+            return keyCode;
+        }
+        if (scanCode > 0) {
+            int scanSource = SCAN_SOURCE_FLAG | scanCode;
+            if (isScanCodeSource(scanSource)) {
+                return scanSource;
+            }
+        }
+        return DISABLED;
     }
 
     public static boolean isTarget(int keyCode) {
@@ -99,6 +135,10 @@ public final class ControllerButtonMap {
     public int map(int keyCode) {
         Integer target = mappings.get(keyCode);
         return target == null ? UNMAPPED : target;
+    }
+
+    public int mapEvent(int keyCode, int scanCode) {
+        return map(sourceForKey(keyCode, scanCode));
     }
 
     public int mapButtonFlags(int flags, boolean flipFaceButtons) {

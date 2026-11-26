@@ -103,7 +103,8 @@ public final class FrontendSync {
                     }
                     Map<String, String> covers = store.covers(esde);
                     exporter.export(apps, roms, esde, covers);
-                    store.saveIfUnchanged(roms, esde, fingerprint, covers);
+                    String recordedFingerprint = esde == null || exporter.hasAllCachedCovers(apps) ? fingerprint : null;
+                    store.saveIfUnchanged(roms, esde, recordedFingerprint, covers);
                     LimeLog.info("Frontend sync wrote " + apps.size() + " games for " + launcher.label);
                 } catch (IOException | RuntimeException e) {
                     LimeLog.warning("Frontend sync for " + launcher.label + " stopped: " + e);

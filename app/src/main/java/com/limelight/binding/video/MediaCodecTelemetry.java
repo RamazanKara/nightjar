@@ -146,7 +146,7 @@ final class MediaCodecTelemetry {
             @Override
             public void run() {
                 try {
-                    openLatencyCsv();
+                    openLatencyCsv(true);
                 } catch (IOException e) {
                     LimeLog.warning("Unable to open latency CSV: " + e);
                     closeLatencyCsv();
@@ -166,10 +166,18 @@ final class MediaCodecTelemetry {
                     r.latencyHandler.removeCallbacks(r.updateLatencyStats);
                     r.frameLatencyStats.discardPending("stream_ended");
                     flushLatencyCsv();
-                    if (closeLatencyCsv() && !new File(r.context.getFilesDir(), MediaCodecDecoderRenderer.LATENCY_CSV_NAME + ".tmp")
-                            .renameTo(new File(r.context.getFilesDir(), MediaCodecDecoderRenderer.LATENCY_CSV_NAME))) {
-                        LimeLog.warning("Unable to save completed latency CSV");
+                    File dir = r.context.getFilesDir();
+                    File tmp = new File(dir, MediaCodecDecoderRenderer.LATENCY_CSV_NAME + ".tmp");
+                    File prev = new File(dir, MediaCodecDecoderRenderer.LATENCY_CSV_NAME + ".prev");
+                    File out = new File(dir, MediaCodecDecoderRenderer.LATENCY_CSV_NAME);
+                    if (closeLatencyCsv()) {
+                        File source = r.latencyCsvBytes <= FrameLatencyStats.CSV_HEADER.length() && prev.isFile() ? prev : tmp;
+                        if (!source.renameTo(out)) {
+                            LimeLog.warning("Unable to save completed latency CSV");
+                        }
                     }
+                    tmp.delete();
+                    prev.delete();
                     latencyThread.quitSafely();
                 }
             });
@@ -190,8 +198,16 @@ final class MediaCodecTelemetry {
     }
 
     void openLatencyCsv() throws IOException {
+        openLatencyCsv(false);
+    }
+
+    private void openLatencyCsv(boolean resetPrev) throws IOException {
+        File dir = r.context.getFilesDir();
+        if (resetPrev) {
+            new File(dir, MediaCodecDecoderRenderer.LATENCY_CSV_NAME + ".prev").delete();
+        }
         r.latencyCsv = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(
-                new File(r.context.getFilesDir(), MediaCodecDecoderRenderer.LATENCY_CSV_NAME + ".tmp")), StandardCharsets.UTF_8));
+                new File(dir, MediaCodecDecoderRenderer.LATENCY_CSV_NAME + ".tmp")), StandardCharsets.UTF_8));
         r.latencyCsv.write(FrameLatencyStats.CSV_HEADER);
         r.latencyCsvBytes = FrameLatencyStats.CSV_HEADER.length();
     }
@@ -201,7 +217,14 @@ final class MediaCodecTelemetry {
             try {
                 if (r.frameLatencyStats.hasCompletedFrames() && r.latencyCsvBytes >= MAX_LATENCY_CSV_BYTES) {
                     closeLatencyCsv();
-                    openLatencyCsv();
+                    File dir = r.context.getFilesDir();
+                    File tmp = new File(dir, MediaCodecDecoderRenderer.LATENCY_CSV_NAME + ".tmp");
+                    File prev = new File(dir, MediaCodecDecoderRenderer.LATENCY_CSV_NAME + ".prev");
+                    if (prev.exists()) prev.delete();
+                    if (!tmp.renameTo(prev)) {
+                        LimeLog.warning("Unable to rotate previous latency CSV");
+                    }
+                    openLatencyCsv(false);
                 }
                 r.latencyCsvBytes += r.frameLatencyStats.writeCsv(r.latencyCsv, r.hostFrameClock::clockOffset);
                 r.latencyCsv.flush();

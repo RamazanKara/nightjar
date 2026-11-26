@@ -549,8 +549,8 @@ public class HomeViewScreenTest {
         assertTrue(played.isChecked());
         assertEquals(home.getString(R.string.home_view_sort_last_played) + ", " + home.getString(R.string.home_view_order_descending),
                 played.getContentDescription().toString());
-        // Nothing is stored or rebuilt until the sheet closes.
-        assertNull(prefs.getString(HomeView.KEY_LAYOUT, null));
+        // Home view sheet persists choices immediately while deferring activity rebuild until the sheet closes.
+        assertEquals("rows", prefs.getString(HomeView.KEY_LAYOUT, null));
         sheet.dismiss();
         shadowOf(Looper.getMainLooper()).idle();
         assertEquals("rows", prefs.getString(HomeView.KEY_LAYOUT, null));

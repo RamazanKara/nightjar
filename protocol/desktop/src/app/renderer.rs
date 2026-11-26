@@ -303,13 +303,16 @@ impl App {
             return;
         }
         self.graphics_card_blocked = None;
+        // Persist the new card choice first: if saving fails, restart would re-launch on the old
+        // card while leaving Nightjar unexpectedly closed.
+        if let Err(e) = self.store.save_settings(&self.launcher.settings) {
+            eprintln!("nightjar: saving settings failed: {e}");
+            self.graphics_card = choice;
+            self.save_failed();
+            return;
+        }
         self.graphics_card = choice;
         if gpu_adapters::choose_now(choice, any_yuv444_asked(&self.store, &self.launcher.settings), self.store.dir()) {
-            // The new start reads the choice back, whatever order this frame's commands run in.
-            if let Err(e) = self.store.save_settings(&self.launcher.settings) {
-                eprintln!("nightjar: saving settings failed: {e}");
-                self.save_failed();
-            }
             self.running = false;
         }
     }
@@ -463,6 +466,7 @@ impl App {
         self.launcher.gpu_device = renderer_gpu_device(made).map(|d| d.0 as usize);
         self.color_probed = None;
         self.base_probed = None;
+        self.base_probe_retried = None;
         self.packed_probed = None;
         self.window_changed = true;
         let to = sdl::renderer_name(made);
@@ -669,6 +673,7 @@ impl App {
         // What the probes found was found on the old device, or its loss.
         self.color_probed = None;
         self.base_probed = None;
+        self.base_probe_retried = None;
         self.packed_probed = None;
         self.window_changed = true;
         let gpu = gpu_adapters::renderer_gpu(device).unwrap_or_else(|| "an unknown GPU".to_owned());

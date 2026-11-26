@@ -193,7 +193,7 @@ fn redeem_over(
         .map_err(|e| e.to_string())?;
     let mut last = String::new();
     let mut details = None;
-    for _ in 0..DETAILS_TRIES {
+    for attempt in 0..DETAILS_TRIES {
         let result = paired
             .server_info_https()
             .map_err(|e| e.to_string())
@@ -208,7 +208,14 @@ fn redeem_over(
                 details = Some(found);
                 break;
             }
-            Err(error) => last = error,
+            Err(error) => {
+                last = error;
+                if attempt + 1 < DETAILS_TRIES {
+                    std::thread::sleep(std::time::Duration::from_millis(
+                        200 * (attempt as u64 + 1),
+                    ));
+                }
+            }
         }
     }
     let (info, reply, own) = details.ok_or_else(|| {

@@ -48,4 +48,6 @@
     <string name="pin_key_delete">Xóa</string>
     <string name="pin_key_confirm">Xác nhận</string>
     <string name="pin_dots_description">Đã nhập %1$d trên %2$d chữ số</string>
+    <string name="pin_pcs_none_off">Chưa chọn PC nào; đã tắt khóa.</string>
+    <string name="pin_save_failed">Không thể lưu mã PIN. Hãy thử lại.</string>
 </resources>

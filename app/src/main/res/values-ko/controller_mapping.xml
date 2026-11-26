@@ -24,4 +24,5 @@
     <string name="controller_connect_as_automatic">자동</string>
     <string name="controller_connect_as_xbox_summary">Xbox (모션 센서 및 터치패드 없음)</string>
     <string name="pc_tap_to_pair">%1$s\n탭하여 페어링</string>
+    <string name="controller_button_scan">추가 버튼 %1$s</string>
 </resources>

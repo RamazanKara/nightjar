@@ -122,6 +122,9 @@ fn is_before16(x: u16, y: u16) -> bool {
     x.wrapping_sub(y) > 0x7FFF
 }
 
+pub(super) const INCOMPATIBLE_STREAK: u32 = 8;
+pub(super) const MAX_FEC_BLOCKS: usize = 64;
+
 pub(super) struct AudioQueue {
     /// Blocks in sequence order.
     blocks: VecDeque<FecBlock>,
@@ -133,6 +136,7 @@ pub(super) struct AudioQueue {
     received_oos_data: bool,
     synchronizing: bool,
     incompatible_server: bool,
+    incompatible_streak: u32,
     packet_duration: u32,
     /// AC3 and E-AC3 streams: a frame's chunks go out together, not one per packet duration.
     chunked: bool,
@@ -155,6 +159,7 @@ impl AudioQueue {
             received_oos_data: false,
             synchronizing: true,
             incompatible_server: !modern,
+            incompatible_streak: 0,
             packet_duration: packet_duration_ms,
             chunked: false,
             stats: AudioStats::default(),
@@ -255,9 +260,13 @@ impl AudioQueue {
                 return None;
             }
             if base_seq % DATA_SHARDS as u16 != 0 {
-                // Blocks must start on a 4-packet boundary (not so on GFE 3.13).
+                // Blocks must start on a 4-packet boundary (not so on GFE 3.13). Require a
+                // consecutive streak before latching so a stray malformed packet cannot shut FEC off.
                 self.stats.packet_count_fec_invalid += 1;
-                self.incompatible_server = true;
+                self.incompatible_streak = self.incompatible_streak.saturating_add(1);
+                if self.incompatible_streak >= INCOMPATIBLE_STREAK {
+                    self.incompatible_server = true;
+                }
                 return None;
             }
             block_size = (length - RTP_HEADER - FEC_HEADER) as u16;
@@ -269,6 +278,7 @@ impl AudioQueue {
         if self.synchronizing && self.oldest_rtp_base_seq == 0 {
             self.oldest_rtp_base_seq = base_seq.wrapping_add(DATA_SHARDS as u16);
             self.next_rtp_seq = self.oldest_rtp_base_seq;
+            self.incompatible_streak = 0;
             return None;
         }
 
@@ -282,9 +292,13 @@ impl AudioQueue {
                 if block.block_size != block_size {
                     // Hosts with variable packet sizes cannot use this FEC scheme.
                     self.stats.packet_count_fec_invalid += 1;
-                    self.incompatible_server = true;
+                    self.incompatible_streak = self.incompatible_streak.saturating_add(1);
+                    if self.incompatible_streak >= INCOMPATIBLE_STREAK {
+                        self.incompatible_server = true;
+                    }
                     return None;
                 }
+                self.incompatible_streak = 0;
                 return if block.fully_reassembled {
                     None
                 } else {
@@ -294,6 +308,11 @@ impl AudioQueue {
                 position = index;
                 break;
             }
+        }
+
+        self.incompatible_streak = 0;
+        if self.blocks.len() >= MAX_FEC_BLOCKS {
+            return None;
         }
 
         let mut block = self.allocate_block(block_size);

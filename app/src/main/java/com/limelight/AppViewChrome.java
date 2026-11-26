@@ -40,6 +40,7 @@ final class AppViewChrome {
     /** What the grid keeps free, as the chrome leaves it: start, end, foot. */
     private int gridStart, gridEnd, gridFoot;
     private int safeBottom, safeRight, safeLeft;
+    private int lastTvFocusDownId;
 
     AppViewChrome(AppView view) {
         this.view = view;
@@ -404,17 +405,20 @@ final class AppViewChrome {
         // The line stands between the top row and the grid: Down reaches its Retry before the games.
         if (GlassForm.of(view) == GlassForm.TELEVISION) {
             int down = inline && offered ? R.id.library_retry_banner : R.id.fragmentView;
-            for (int id : new int[] {R.id.library_back, R.id.library_options, R.id.library_search_button}) {
-                View top = view.findViewById(id);
-                if (top != null) top.setNextFocusDownId(down);
-            }
-            ViewGroup items = view.findViewById(R.id.shell_bar_items);
-            if (items != null) {
-                for (int i = 0; i < items.getChildCount(); i++) {
-                    items.getChildAt(i).setNextFocusDownId(down);
+            if (down != lastTvFocusDownId) {
+                lastTvFocusDownId = down;
+                for (int id : new int[] {R.id.library_back, R.id.library_options, R.id.library_search_button}) {
+                    View top = view.findViewById(id);
+                    if (top != null) top.setNextFocusDownId(down);
                 }
+                ViewGroup items = view.findViewById(R.id.shell_bar_items);
+                if (items != null) {
+                    for (int i = 0; i < items.getChildCount(); i++) {
+                        items.getChildAt(i).setNextFocusDownId(down);
+                    }
+                }
+                bannerRetry.setNextFocusDownId(R.id.fragmentView);
             }
-            bannerRetry.setNextFocusDownId(R.id.fragmentView);
         }
         // An empty grid has nothing for a remote to land on: what can be done about it takes the focus.
         View focused = view.getCurrentFocus();
@@ -447,6 +451,10 @@ final class AppViewChrome {
     }
 
     void navigateBack() {
+        View grid = view.findViewById(R.id.fragmentView);
+        if (grid instanceof com.limelight.ui.AdaptiveGridView && ((com.limelight.ui.AdaptiveGridView) grid).clearMarkedAction()) {
+            return;
+        }
         if (librarySearch != null && librarySearch.getVisibility() == View.VISIBLE) {
             librarySearch.setQuery("", false);
             librarySearch.clearFocus();

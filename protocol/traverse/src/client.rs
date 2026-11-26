@@ -167,6 +167,7 @@ struct Shared {
     status: Mutex<Status>,
     tunnel: Mutex<Option<Tunnel>>,
     node: Mutex<Option<Node>>,
+    ended_at: Mutex<Option<Instant>>,
     stop: AtomicBool,
 }
 
@@ -182,6 +183,7 @@ impl ClientTunnel {
             status: Mutex::new(Status::LookingUp),
             tunnel: Mutex::new(None),
             node: Mutex::new(None),
+            ended_at: Mutex::new(None),
             stop: AtomicBool::new(false),
         });
         let tunnel = Self { shared };
@@ -227,6 +229,10 @@ impl ClientTunnel {
 
     pub fn stop(&self) {
         self.shared.stop.store(true, Ordering::Release);
+        {
+            let mut ended = self.shared.ended_at.lock().unwrap();
+            ended.get_or_insert_with(Instant::now);
+        }
         if let Some(tunnel) = self.shared.tunnel.lock().unwrap().take() {
             tunnel.close("the device disconnected");
         }
@@ -236,10 +242,20 @@ impl ClientTunnel {
         self.set(Status::Stopped);
     }
 
+    pub fn ended_at(&self) -> Option<Instant> {
+        *self.shared.ended_at.lock().unwrap()
+    }
+
     fn set(&self, status: Status) {
+        let is_terminal = matches!(status, Status::Failed(_) | Status::Stopped);
         let mut current = self.shared.status.lock().unwrap();
         if *current != Status::Stopped {
             *current = status;
+        }
+        drop(current);
+        if is_terminal {
+            let mut ended = self.shared.ended_at.lock().unwrap();
+            ended.get_or_insert_with(Instant::now);
         }
     }
 
@@ -316,6 +332,7 @@ impl ClientTunnel {
         };
         let mut publication = self.publish(&node, &keys, &path, client_session, nat, &own, 0);
 
+        let mut closed_reason = None;
         while !self.stopped() {
             match path.tunnel.state() {
                 State::Connected(peer) => {
@@ -327,7 +344,10 @@ impl ClientTunnel {
                     path.tunnel.wait_closed();
                     return Ok(());
                 }
-                State::Closed(_) => break,
+                State::Closed(reason) => {
+                    closed_reason = Some(reason);
+                    break;
+                }
                 State::Punching => {}
             }
             let found = match lookup.as_ref().map(mpsc::Receiver::try_recv) {
@@ -363,17 +383,20 @@ impl ClientTunnel {
             return Ok(());
         }
         path.tunnel.close("no path");
-        Err(
-            if nat == Nat::Symmetric && path.target.nat == Nat::Symmetric {
+        Err(match closed_reason.as_deref() {
+            Some(reason) if reason != "no punch got through" => reason.to_owned(),
+            _ if nat == Nat::Symmetric && path.target.nat == Nat::Symmetric => {
                 "both networks give each destination another port (symmetric NAT), so no direct path opens; forward the ports on the PC's router, or use IPv6".to_owned()
-            } else if publication.confirmed == Some(0) {
+            }
+            _ if publication.confirmed == Some(0) => {
                 "this device's record could not be stored in the DHT, so the PC could not answer"
                     .to_owned()
-            } else {
+            }
+            _ => {
                 "the PC did not answer: it may be off or asleep, or its network blocks the path"
                     .to_owned()
-            },
-        )
+            }
+        })
     }
 
     /// Starts punching `target` and makes it the path the node's datagrams go to.

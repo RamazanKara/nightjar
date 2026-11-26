@@ -164,14 +164,34 @@ fn mouse_packet_and_tick_steps_match_java_semantics() {
     assert!(p2.scroll_down);
     assert!(p2.hscroll_left);
 
-    let t_right = mouse_tick_step(0x7FFE, 0, 0, -0x7FFE, ScrollStick::Right, 0);
-    assert!(t_right.has_move1 && !t_right.has_move2 && t_right.has_scroll);
-    assert_eq!((t_right.move1_x, t_right.move1_y), (64, 0));
-    assert_eq!((t_right.scroll_v, t_right.scroll_h), (-64, 0));
+    assert_eq!(MOUSE_EMULATION_REPORT_PERIOD_MS, 10);
+    assert!((MOUSE_EMULATION_TIME_COMPENSATION - 0.2).abs() < 1e-6);
+    assert_eq!(clamp_mouse_sensitivity_percent(5), MIN_MOUSE_SENSITIVITY_PERCENT);
+    assert_eq!(clamp_mouse_sensitivity_percent(500), MAX_MOUSE_SENSITIVITY_PERCENT);
+    assert_eq!(clamp_mouse_sensitivity_percent(135), 135);
 
-    let t_fixed = mouse_tick_step(0x7FFE, 0x7FFE, 0, 0, ScrollStick::None, 16);
+    let t_right = mouse_tick_step(0x7FFE, 0, 0, -0x7FFE, ScrollStick::Right, 0, 100);
+    assert!(t_right.has_move1 && !t_right.has_move2 && t_right.has_scroll);
+    assert!((t_right.move1_x - 12.8).abs() < 1e-4);
+    assert_eq!(t_right.move1_y, 0.0);
+    assert!((t_right.scroll_v + 12.8).abs() < 1e-4);
+    assert_eq!(t_right.scroll_h, 0.0);
+
+    // Sub-pixel pointer motion keeps fractional delta (< 1 px), while scroll preserves the 1 px gate.
+    let t_subpixel = mouse_tick_step(0x1800, 0, 0, 0x1800, ScrollStick::Right, 0, 100);
+    assert!(t_subpixel.has_move1);
+    assert!(t_subpixel.move1_x > 0.0 && t_subpixel.move1_x < 1.0);
+    assert!(!t_subpixel.has_scroll);
+
+    // Sensitivity scales pointer motion (including fixed-step) and leaves scroll untouched.
+    let t_scaled = mouse_tick_step(0x7FFE, 0, 0, -0x7FFE, ScrollStick::Right, 0, 50);
+    assert!((t_scaled.move1_x - 6.4).abs() < 1e-4);
+    assert!((t_scaled.scroll_v + 12.8).abs() < 1e-4);
+
+    let t_fixed = mouse_tick_step(0x7FFE, 0x7FFE, 0, 0, ScrollStick::None, 16, 150);
     assert!(t_fixed.has_move1);
-    assert_eq!((t_fixed.move1_x, t_fixed.move1_y), (16, -16));
+    assert!((t_fixed.move1_x - 4.8).abs() < 1e-4);
+    assert!((t_fixed.move1_y + 4.8).abs() < 1e-4);
 
     assert!(mouse_silenced(false, false));
     assert!(!mouse_silenced(false, true));

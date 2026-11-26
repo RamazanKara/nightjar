@@ -180,6 +180,7 @@ pub(crate) fn sending(host: u64, downloads: &Folder, here: &Folder) -> Page {
     until(&mut p, "the list", |p| p.list.is_some());
     *api.hold.lock().unwrap() = true;
     p.send(vec![here.file("a.txt", b"a")]);
+    until(&mut p, "stat", |p| p.stating == 0);
     assert!(p.transfers.is_active());
     p
 }
@@ -264,6 +265,7 @@ fn sent_files_go_one_at_a_time_and_the_folder_is_read_again() {
     let a = here.file("a.part", b"aaa");
     let b = here.file("b.txt", b"bbbb");
     p.send(vec![a, b, here.0.join("missing.txt"), here.0.clone()]);
+    until(&mut p, "stat", |p| p.stating == 0);
     let ids: Vec<u64> = p.transfers.items().iter().map(|t| t.id).collect();
     assert_eq!(ids.len(), 2, "what is not a file is not queued");
     assert_eq!(p.notices.len(), 2, "{:?}", p.notices);
@@ -396,6 +398,7 @@ fn a_refused_transfer_says_why_and_a_file_that_wont_open_fails_here() {
     until(&mut p, "the list", |p| p.list.is_some());
     *api.refuse.lock().unwrap() = Some(nightjar_policy::http::FileRefusal::InsufficientStorage);
     p.send(vec![here.file("big.bin", b"big")]);
+    until(&mut p, "stat", |p| p.stating == 0);
     let id = p.transfers.items()[0].id;
     until(&mut p, "refused", |p| state(p, id).is_finished());
     let transfer = p.transfers.get(id).unwrap();
@@ -419,6 +422,7 @@ fn leaving_the_page_keeps_what_runs_until_it_is_done() {
     until(p, "the list", |p| p.list.is_some());
     *api.hold.lock().unwrap() = true;
     p.send(vec![here.file("a.txt", b"a")]);
+    until(p, "stat", |p| p.stating == 0);
     let cancel = p.transfers.start_next();
     assert!(cancel.is_empty(), "already running");
     files.poll(Some(7));
@@ -454,6 +458,7 @@ fn a_transfer_that_fails_after_the_page_was_left_keeps_it_until_it_is_shown() {
     until(p, "the list", |p| p.list.is_some());
     *api.hold.lock().unwrap() = true;
     p.send(vec![here.file("a.txt", b"a"), here.file("b.txt", b"b")]);
+    until(p, "stat", |p| p.stating == 0);
     p.seen();
     // Left with both queued: the first fails on the way while the second still waits.
     files.poll(None);
@@ -492,6 +497,7 @@ fn a_failure_wins_the_button_over_transfers_still_running() {
     // An upload refused at once, then a download held running.
     *api.refuse.lock().unwrap() = Some(nightjar_policy::http::FileRefusal::InsufficientStorage);
     p.send(vec![here.file("a.txt", b"a")]);
+    until(p, "stat", |p| p.stating == 0);
     let upload = p.transfers.items()[0].id;
     until(p, "refused", |p| state(p, upload).is_finished());
     *api.hold.lock().unwrap() = true;
@@ -524,7 +530,7 @@ fn the_file_dialog_queues_what_was_chosen_and_says_when_it_failed() {
     files.choose(|_| opened += 1);
     assert_eq!(opened, 1, "one dialog at a time");
     let p = files.page.as_mut().unwrap();
-    until(p, "the choice", |p| !p.choosing);
+    until(p, "the choice", |p| !p.choosing && p.stating == 0);
     assert_eq!(p.transfers.items().len(), 1);
     files.choose(|done| done(Err("no portal".into())));
     let p = files.page.as_mut().unwrap();
@@ -576,4 +582,35 @@ fn every_problem_has_its_own_words() {
     crate::strings::with_lang(crate::strings::Lang::De, || {
         assert_eq!(tr(problem_text(Problem::NoSpace)), "Auf dem PC ist nicht genug Platz frei.");
     });
+}
+
+#[test]
+fn an_upload_that_grows_while_queued_sends_all_bytes_and_updates_total() {
+    let downloads = Folder::new("grow-dl");
+    let here = Folder::new("grow-here");
+    let api = fake(true, true);
+    *api.hold.lock().unwrap() = true;
+    let mut files = Files { page: Some(page(api.clone(), &downloads)) };
+    let p = files.page.as_mut().unwrap();
+    until(p, "the list", |p| p.list.is_some());
+
+    let blocker = here.file("first.txt", b"123");
+    let growing = here.file("grow.txt", b"abc");
+    p.send(vec![blocker, growing.clone()]);
+    until(p, "stat", |p| p.stating == 0);
+    std::fs::write(&growing, b"abcdefghij").unwrap();
+
+    *api.hold.lock().unwrap() = false;
+    until(p, "both uploaded", |p| p.transfers.items().iter().filter(|t| t.state.is_finished()).count() == 2);
+
+    let received = api.received.lock().unwrap().clone();
+    assert!(received.iter().any(|(n, data)| n == "grow.txt" && data == b"abcdefghij"), "{received:?}");
+    let grow_item = p.transfers.items().iter().find(|t| t.name == "grow.txt").expect("grow item");
+    assert!(matches!(grow_item.state, nightjar_policy::http::transfers::State::Done { size: 10, .. }), "{grow_item:?}");
+
+    drop(files);
+    let until_done = Instant::now() + Duration::from_secs(10);
+    while Arc::strong_count(&api) > 1 && Instant::now() < until_done {
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }

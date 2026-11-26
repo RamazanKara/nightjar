@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">Le coin où se place la superposition des performances.</string>
     <string name="summary_reset_all">Rétablit tous les paramètres par défaut ; les PC, jeux, profils et la langue sont conservés.</string>
     <string name="stream_controllers_off">Manettes est désactivé dans les Paramètres, donc aucune manette n’atteint le PC.</string>
+    <string name="title_compact_overlay_device_info">Afficher la batterie et l’horloge dans la superposition compacte</string>
+    <string name="summary_compact_overlay_device_info">Ajoute le pourcentage de batterie et l’heure locale de cet appareil à la superposition des performances compacte.</string>
 </resources>

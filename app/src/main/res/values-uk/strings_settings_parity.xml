@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">Кут, у якому розташований оверлей продуктивності.</string>
     <string name="summary_reset_all">Повертає всі налаштування до стандартних значень; ПК, ігри, профілі й мова зберігаються.</string>
     <string name="stream_controllers_off">«Контролери» вимкнено в налаштуваннях, тому жоден контролер не потрапляє на ПК.</string>
+    <string name="title_compact_overlay_device_info">Показувати заряд і годинник у компактному оверлеї</string>
+    <string name="summary_compact_overlay_device_info">Додає відсоток заряду батареї та місцевий час цього пристрою до компактного оверлея продуктивності.</string>
 </resources>

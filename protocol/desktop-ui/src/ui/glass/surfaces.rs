@@ -93,6 +93,16 @@ pub(super) fn window_resizing(ctx: &Context) -> bool {
     }
 }
 
+/// How many soft shadow/halo nine-slice bakes stay cached in `ctx.data` across window resizes.
+const SOFT_BAKES_KEPT: usize = 32;
+
+#[derive(Clone, Default)]
+struct SoftBakeOrder(std::collections::VecDeque<(Id, TextureId)>);
+
+fn soft_bake_order_id() -> Id {
+    Id::unique("nightjar-soft-order")
+}
+
 /// The bakes [`soft`] and [`soft_around`] draw with: shadows and halos, not what a page lays out.
 pub type SoftTextures = Arc<std::collections::HashSet<TextureId>>;
 
@@ -107,6 +117,7 @@ pub fn forget_soft(ctx: &Context) {
         d.remove_by_type::<TextureHandle>();
         d.remove_by_type::<(TextureHandle, Vec2)>();
         d.remove_by_type::<SoftTextures>();
+        d.remove_by_type::<SoftBakeOrder>();
     });
 }
 
@@ -167,6 +178,18 @@ fn soft_shape(
                         d.insert_temp(latest_id, (handle.clone(), baked));
                         let soft = d.get_temp_mut_or_default::<SoftTextures>(soft_textures_id());
                         Arc::make_mut(soft).insert(handle.id());
+                        let mut order = d.get_temp::<SoftBakeOrder>(soft_bake_order_id()).unwrap_or_default();
+                        order.0.push_back((id, handle.id()));
+                        while order.0.len() > SOFT_BAKES_KEPT {
+                            if let Some((evict_id, evict_tex)) = order.0.pop_front() {
+                                d.remove::<egui::TextureHandle>(evict_id);
+                                if !order.0.iter().any(|(_, tex)| *tex == evict_tex) {
+                                    let soft = d.get_temp_mut_or_default::<SoftTextures>(soft_textures_id());
+                                    Arc::make_mut(soft).remove(&evict_tex);
+                                }
+                            }
+                        }
+                        d.insert_temp(soft_bake_order_id(), order);
                     });
                     (handle, baked)
                 }
@@ -610,23 +633,53 @@ pub(super) fn deferred_id() -> Id {
     Id::unique("nightjar-glass-deferred")
 }
 
+fn deferred_sig_id() -> Id {
+    Id::unique("nightjar-glass-deferred-sig")
+}
+
+fn mix_deferred_sig(sig: u64, clip: Rect, shapes: &[Shape]) -> u64 {
+    let mut h = sig ^ (shapes.len() as u64).wrapping_mul(0x517cc1b727220a95);
+    for v in [clip.min.x, clip.min.y, clip.max.x, clip.max.y] {
+        h = (h.rotate_left(7) ^ u64::from(v.to_bits())).wrapping_mul(0x9e3779b97f4a7c15);
+    }
+    if let Some(first) = shapes.first() {
+        let r = match first {
+            Shape::Rect(r) => r.rect,
+            Shape::Mesh(m) => m.vertices.first().map_or(Rect::NOTHING, |v| Rect::from_min_max(v.pos, v.pos)),
+            other => other.visual_bounding_rect(),
+        };
+        for v in [r.min.x, r.min.y, r.max.x, r.max.y] {
+            h = (h.rotate_left(5) ^ u64::from(v.to_bits())).wrapping_mul(0x9e3779b97f4a7c15);
+        }
+    }
+    h
+}
+
+fn push_deferred(ui: &Ui, clip: Rect, shapes: Vec<Shape>) {
+    ui.ctx().data_mut(|d| {
+        let sig = d.get_temp::<u64>(deferred_sig_id()).unwrap_or(0);
+        d.insert_temp(deferred_sig_id(), mix_deferred_sig(sig, clip, &shapes));
+        d.get_temp_mut_or_default::<Vec<(Rect, Vec<Shape>)>>(deferred_id())
+            .push((clip, shapes));
+    });
+}
+
 /// Shapes to paint after the rest of the page: a lifted cover rises over its neighbours.
 pub fn defer(ui: &Ui, shapes: Vec<Shape>) {
-    let clip = ui.clip_rect();
-    ui.ctx().data_mut(|d| {
-        d.get_temp_mut_or_default::<Vec<(Rect, Vec<Shape>)>>(deferred_id())
-            .push((clip, shapes))
-    });
+    push_deferred(ui, ui.clip_rect(), shapes);
 }
 
 /// [`defer`] for what has the focus: its halo may reach past the scroll area, whose edge would cut it
 /// straight. A focused thing has been scrolled into view, so nothing else shows over its neighbours.
 pub fn defer_focused(ui: &Ui, shapes: Vec<Shape>) {
     let clip = ui.clip_rect().expand(t::FOCUS_HALO_BLUR + t::FOCUS_GAP + t::FOCUS_RING_WIDTH);
-    ui.ctx().data_mut(|d| {
-        d.get_temp_mut_or_default::<Vec<(Rect, Vec<Shape>)>>(deferred_id())
-            .push((clip, shapes))
-    });
+    push_deferred(ui, clip, shapes);
+}
+
+/// Lightweight fingerprint of deferred shapes pushed so far this pass (0 when none), without
+/// cloning the shape buffers.
+pub fn deferred_sig(ctx: &Context) -> u64 {
+    ctx.data(|d| d.get_temp(deferred_sig_id())).unwrap_or(0)
 }
 
 /// What is deferred so far, left in place.
@@ -638,6 +691,7 @@ pub fn deferred(ctx: &Context) -> Vec<(Rect, Vec<Shape>)> {
 #[cfg(test)]
 pub fn take_deferred(ui: &Ui) -> Vec<(Rect, Vec<Shape>)> {
     ui.ctx().data_mut(|d| {
+        d.remove::<u64>(deferred_sig_id());
         std::mem::take(d.get_temp_mut_or_default::<Vec<(Rect, Vec<Shape>)>>(deferred_id()))
     })
 }
@@ -645,6 +699,7 @@ pub fn take_deferred(ui: &Ui) -> Vec<(Rect, Vec<Shape>)> {
 /// Paints what was deferred, each in the clip it was asked for in.
 pub fn flush_deferred(ui: &Ui) {
     let deferred = ui.ctx().data_mut(|d| {
+        d.remove::<u64>(deferred_sig_id());
         std::mem::take(d.get_temp_mut_or_default::<Vec<(Rect, Vec<Shape>)>>(deferred_id()))
     });
     for (clip, shapes) in deferred {

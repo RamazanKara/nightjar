@@ -61,7 +61,12 @@ impl Gui {
         unsafe {
             let texture = match (delta.pos, self.textures.get(&id)) {
                 (Some(_), Some(&texture)) => texture,
-                _ => {
+                (Some(_), None) => {
+                    // Full texture creation failed earlier; wait for the next whole upload instead of
+                    // allocating a patch-sized texture at origin.
+                    return;
+                }
+                (None, _) => {
                     if let Some(old) = self.textures.remove(&id) {
                         SDL_DestroyTexture(old);
                     }
@@ -93,7 +98,13 @@ impl Gui {
                 w: w as i32,
                 h: h as i32,
             };
-            SDL_UpdateTexture(texture, &rect, image.pixels.as_ptr().cast(), (w * 4) as i32);
+            if !SDL_UpdateTexture(texture, &rect, image.pixels.as_ptr().cast(), (w * 4) as i32) {
+                eprintln!(
+                    "nightjar: SDL_UpdateTexture failed for {:?}: {}",
+                    id,
+                    crate::sdl::error()
+                );
+            }
         }
     }
 }

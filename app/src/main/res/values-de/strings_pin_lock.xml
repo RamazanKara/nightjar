@@ -49,4 +49,6 @@
     <string name="pin_key_delete">Löschen</string>
     <string name="pin_key_confirm">Bestätigen</string>
     <string name="pin_dots_description">%1$d von %2$d Ziffern eingegeben</string>
+    <string name="pin_pcs_none_off">Keine PCs ausgewählt; Sperre ausgeschaltet.</string>
+    <string name="pin_save_failed">Die PIN konnte nicht gespeichert werden. Versuche es erneut.</string>
 </resources>

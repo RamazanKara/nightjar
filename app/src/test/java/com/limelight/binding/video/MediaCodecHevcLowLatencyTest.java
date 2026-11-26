@@ -479,6 +479,48 @@ public class MediaCodecHevcLowLatencyTest {
         }
     }
 
+    @Test
+    @Config(sdk = 34)
+    public void powerVrGpuExcludesMediaTekRfiOutsideSeries6XtHevcAndKeepsQcom() {
+        List<String> origAvc = new ArrayList<>(ReflectionHelpers.<List<String>>getStaticField(
+                MediaCodecCapabilities.class, "refFrameInvalidationAvcPrefixes"));
+        List<String> origHevc = new ArrayList<>(ReflectionHelpers.<List<String>>getStaticField(
+                MediaCodecHelper.class, "refFrameInvalidationHevcPrefixes"));
+        try {
+            List<String> avc = ReflectionHelpers.getStaticField(
+                    MediaCodecCapabilities.class, "refFrameInvalidationAvcPrefixes");
+            List<String> hevc = ReflectionHelpers.getStaticField(
+                    MediaCodecHelper.class, "refFrameInvalidationHevcPrefixes");
+
+            avc.clear();
+            hevc.clear();
+            MediaCodecCapabilities.addMediaTekAndQcomRefFrameInvalidation(hevc, "PowerVR Rogue GE8320");
+            assertFalse(avc.contains("omx.mtk"));
+            assertFalse(avc.contains("c2.mtk"));
+            assertFalse(hevc.contains("omx.mtk"));
+            assertFalse(hevc.contains("c2.mtk"));
+            assertTrue(hevc.contains("c2.qcom"));
+
+            avc.clear();
+            hevc.clear();
+            MediaCodecCapabilities.addMediaTekAndQcomRefFrameInvalidation(hevc, "ARM Mali-G57");
+            assertTrue(avc.contains("omx.mtk"));
+            assertTrue(avc.contains("c2.mtk"));
+            assertTrue(hevc.contains("omx.mtk"));
+            assertTrue(hevc.contains("c2.mtk"));
+            assertTrue(hevc.contains("c2.qcom"));
+        } finally {
+            ReflectionHelpers.<List<String>>getStaticField(
+                    MediaCodecCapabilities.class, "refFrameInvalidationAvcPrefixes").clear();
+            ReflectionHelpers.<List<String>>getStaticField(
+                    MediaCodecCapabilities.class, "refFrameInvalidationAvcPrefixes").addAll(origAvc);
+            ReflectionHelpers.<List<String>>getStaticField(
+                    MediaCodecHelper.class, "refFrameInvalidationHevcPrefixes").clear();
+            ReflectionHelpers.<List<String>>getStaticField(
+                    MediaCodecHelper.class, "refFrameInvalidationHevcPrefixes").addAll(origHevc);
+        }
+    }
+
     private static MediaFormat tunedFormat(String name, String mime, boolean disableHevcLowLatency) {
         MediaFormat format = MediaFormat.createVideoFormat(mime, 1920, 1080);
         assertTrue(MediaCodecHelper.setDecoderLowLatencyOptions(format, decoder(name, mime), 0,

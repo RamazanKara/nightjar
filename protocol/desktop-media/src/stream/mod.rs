@@ -187,6 +187,7 @@ const MSG_REPORT_COPY_FAILED: &str = en("Could not copy the report.");
 const MSG_STATS_SAVED: &str = en("Statistics saved to {}");
 const MSG_STATS_SAVE_FAILED: &str = en("Could not save statistics: {}");
 const MSG_LOCAL_CLIPBOARD_READ_FAILED: &str = en("Could not read the local clipboard.");
+const MSG_LOCAL_CLIPBOARD_NO_TEXT: &str = en("The clipboard on this device holds no text.");
 const MSG_LOCAL_CLIPBOARD_NO_IMAGE: &str = en("The clipboard on this device holds no image.");
 const MSG_LOCAL_CLIPBOARD_IMAGE_READ_FAILED: &str = en("Could not read the image on this device’s clipboard: {}");
 const MSG_LOCAL_CLIPBOARD_PNG_FAILED: &str = en("Could not convert the image on this device’s clipboard to PNG: {}");
@@ -275,6 +276,8 @@ pub struct Streaming {
     skipped: present::SkippedPicture,
     /// That picture, counted as shown if it is drawn after all and as replaced if a newer one comes.
     skipped_picture: Option<present::Pending>,
+    /// `VideoTexture::destroy_epoch` when `skipped_picture` was uploaded (or drawn into it).
+    uploaded_epoch: u64,
     /// Finds pictures that missed their refresh, for `skipped`.
     miss_watch: present::MissWatch,
     /// How long a stream that skips keeps a new place from the host (`phase::SteadyReports`), from
@@ -498,6 +501,11 @@ pub struct Streaming {
 }
 
 impl Streaming {
+    /// Whether the compact overlay appends device battery percentage and local clock time.
+    pub fn compact_overlay_device_info(&self) -> bool {
+        self.settings.compact_overlay_device_info
+    }
+
     /// Whether the pictures are on a display plane now, so the overlay draws into its own plane.
     pub fn kms_engaged(&self) -> bool {
         #[cfg(target_os = "linux")]
@@ -554,11 +562,17 @@ impl Streaming {
         }
     }
 
-    fn clipboard_sync_step(&mut self, step: clipboard_sync::Step) {
-        if let Some(message) = step.send
-            && let Err(error) = self.session.send(message) {
-                eprintln!("nightjar: clipboard sync: could not send a copy: {error}");
+    fn clipboard_sync_step(&mut self, mut step: clipboard_sync::Step) {
+        if let Some(message) = step.send.clone() {
+            match self.session.send(message) {
+                Ok(()) => {
+                    if let Some(sync) = self.clipboard_sync.as_mut() {
+                        sync.confirm_sent(&mut step);
+                    }
+                }
+                Err(error) => eprintln!("nightjar: clipboard sync: could not send a copy: {error}"),
             }
+        }
         if let Some(toast) = step.toast {
             self.show_toast(toast);
         }

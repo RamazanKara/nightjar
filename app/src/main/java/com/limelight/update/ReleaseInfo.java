@@ -42,6 +42,7 @@ public final class ReleaseInfo {
     public final boolean draft;
     public final boolean prerelease;
     public final List<Asset> assets;
+    private transient String cachedJson;
 
     public ReleaseInfo(String tag, String body, boolean draft, boolean prerelease, List<Asset> assets) {
         this.tag = tag;
@@ -79,11 +80,13 @@ public final class ReleaseInfo {
     }
 
     String toJson() {
+        String cached = cachedJson;
+        if (cached != null) return cached;
         Json.Arr arr = Json.arr();
         for (Asset asset : assets) {
             arr.add(asset.toJsonObj());
         }
-        return Json.obj()
+        cached = Json.obj()
                 .put("tag", tag)
                 .put("body", body)
                 .put("html_url", "")
@@ -91,6 +94,8 @@ public final class ReleaseInfo {
                 .put("prerelease", prerelease)
                 .put("assets", arr)
                 .toString();
+        cachedJson = cached;
+        return cached;
     }
 
     /** The version without a leading v. */

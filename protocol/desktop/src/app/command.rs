@@ -60,7 +60,17 @@ impl App {
                         eprintln!("nightjar: could not save hidden games: {e}");
                     }
             }
-            Command::QuitApp(host) => self.hosts.quit_app(host),
+            Command::QuitApp { host, named } => {
+                let now = self.hosts.get(host).and_then(|h| h.running_app());
+                match console::recheck_running(named, now) {
+                    console::Running::Changed => self.launcher.message(
+                        tr("The running app changed"),
+                        tr("The PC runs another app now. Check the screen and try again."),
+                    ),
+                    console::Running::Gone => {}
+                    console::Running::Same => self.hosts.quit_app(host),
+                }
+            }
             Command::SetQuitOnLeave { host, uuid, id, enabled } => {
                 if let Some(h) = self.hosts.get_mut(host) {
                     h.record.set_quit_on_leave(&uuid, id, enabled);

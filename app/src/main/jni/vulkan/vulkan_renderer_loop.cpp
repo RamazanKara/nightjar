@@ -141,6 +141,7 @@ void VulkanRenderer::renderThreadMain() {
     if (!choreographer_) {
         ALOGE("No Choreographer on the render thread");
         ALooper_removeFd(looper, wakeFd_);
+        setFatal("No Choreographer on the render thread");
         return;
     }
     if (ndk_->AChoreographer_registerRefreshRateCallback) {

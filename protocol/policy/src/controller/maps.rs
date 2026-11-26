@@ -131,6 +131,8 @@ pub fn is_remappable_source(key_code: i32) -> bool {
         && key_code != keycode::BUTTON_R2)
         || (keycode::BUTTON_1..=keycode::BUTTON_16).contains(&key_code)
         || key_code == keycode::MEDIA_RECORD
+        || (0x30120..=0x3013f).contains(&key_code)
+        || (0x302c0..=0x302cf).contains(&key_code)
 }
 
 /// Rust codec matching `ControllerAxisMap` `SharedPreferences` serialization.

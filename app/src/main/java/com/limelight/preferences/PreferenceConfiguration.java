@@ -122,6 +122,8 @@ public class PreferenceConfiguration extends SettingsCatalogGen {
 
     /** The corner the performance overlay prefers: top_left, top_right, bottom_left or bottom_right. */
     public volatile String overlayPosition = "top_left";
+    /** Append this device's battery percentage and local clock time to the compact performance overlay. */
+    public volatile boolean compactOverlayDeviceInfo;
     public boolean enableLatencyToast;
     public boolean experimentalPacked444;
     /** Shifts each picture by the camera turn the host has not drawn yet (docs/frame-warp.md). */
@@ -132,6 +134,7 @@ public class PreferenceConfiguration extends SettingsCatalogGen {
     public boolean bindAllUsb;
     public boolean mouseEmulation;
     public boolean mouseEmulationFixedStep;
+    public int mouseEmulationSensitivity = DEFAULT_MOUSE_EMULATION_SENSITIVITY;
     public boolean disableRumble;
     /** The rumble response curve ({@code list_rumble_feel}): "standard", "strong" or "subtle". */
     public String rumbleFeel = "standard";

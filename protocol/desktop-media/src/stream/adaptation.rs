@@ -131,9 +131,11 @@ impl Streaming {
         let fps = if self.settings.fps == 0 { (display.refresh_hz * 1000.0).round() as u32 } else { self.quality_ceiling.fps_millihz };
         let Some(request) = quality::target(width, height, fps) else { return; };
         if request == self.quality_ceiling { return; }
-        self.quality_ceiling = request;
-        if self.quality_mode == QualityMode::Off { self.request_mode(request); }
-        else if let Some(policy) = &mut self.quality_policy {
+        if self.quality_mode == QualityMode::Off {
+            if self.request_mode(request) {
+                self.quality_ceiling = request;
+            }
+        } else if let Some(policy) = &mut self.quality_policy {
             let started = match policy.rebase(request, self.started.elapsed().as_millis() as u64) {
                 Ok(Some(request)) => self.request_mode(request),
                 other => {
@@ -142,7 +144,9 @@ impl Streaming {
                     false
                 }
             };
-            if !started {
+            if started {
+                self.quality_ceiling = request;
+            } else {
                 self.quality_policy = None;
                 self.quality_mode = QualityMode::Off;
             }

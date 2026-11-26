@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">性能叠加层所在的角落。</string>
     <string name="summary_reset_all">将所有设置恢复为默认值；电脑、游戏、配置和语言会保留。</string>
     <string name="stream_controllers_off">“手柄”在设置中已关闭，因此没有手柄能连到 PC。</string>
+    <string name="title_compact_overlay_device_info">在精简叠加层中显示电量和时钟</string>
+    <string name="summary_compact_overlay_device_info">将此设备的电池电量和本地时间添加到精简性能叠加层中。</string>
 </resources>

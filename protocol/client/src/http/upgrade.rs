@@ -8,6 +8,7 @@ use super::transport::{
 use super::transport::abort_blocked_io;
 use super::wire::{Reader, read_body, read_head};
 use rustls::{ClientConnection, StreamOwned};
+use socket2::{SockRef, TcpKeepalive};
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::sync::Mutex;
@@ -83,8 +84,14 @@ pub(crate) fn upgrade(
         // Whatever the host sent after its head is the new protocol's.
         let early = std::mem::take(&mut reader.buffer);
         let StreamOwned { conn, sock } = stream;
+        // USB devices legitimately sit idle between transfers; use TCP keepalive instead of a
+        // short read timeout so dead half-open peers are still detected without breaking idle USB.
         sock.set_read_timeout(None)?;
-        sock.set_write_timeout(None)?;
+        sock.set_write_timeout(Some(write_timeout(request)))?;
+        let keepalive = TcpKeepalive::new()
+            .with_time(Duration::from_secs(15))
+            .with_interval(Duration::from_secs(5));
+        let _ = SockRef::from(&sock).set_tcp_keepalive(&keepalive);
         Ok(Ok(Upgraded {
             socket: sock.try_clone()?,
             writing: Mutex::new(()),

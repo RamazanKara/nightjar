@@ -255,13 +255,16 @@ impl Bridge {
     }
 }
 
-pub(crate) fn key16(env: &mut JNIEnv, array: &JByteArray) -> [u8; 16] {
-    let mut out = [0u8; 16];
-    if let Ok(bytes) = env.convert_byte_array(array) {
-        let n = bytes.len().min(16);
-        out[..n].copy_from_slice(&bytes[..n]);
+fn exact_key16(bytes: Vec<u8>) -> Option<[u8; 16]> {
+    bytes.try_into().ok()
+}
+
+pub(crate) fn key16(env: &mut JNIEnv, array: &JByteArray) -> Option<[u8; 16]> {
+    if array.is_null() {
+        return None;
     }
-    out
+    let bytes = env.convert_byte_array(array).ok()?;
+    exact_key16(bytes)
 }
 
 pub(crate) fn jbool(value: bool) -> jboolean {
@@ -273,4 +276,17 @@ pub(crate) fn string(env: &mut JNIEnv, value: &jni::objects::JString) -> Option<
         return None;
     }
     env.get_string(value).ok().map(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::exact_key16;
+
+    #[test]
+    fn key16_accepts_only_exact_16_bytes() {
+        assert_eq!(exact_key16(vec![7u8; 16]), Some([7u8; 16]));
+        assert_eq!(exact_key16(vec![7u8; 15]), None);
+        assert_eq!(exact_key16(vec![7u8; 17]), None);
+        assert_eq!(exact_key16(Vec::new()), None);
+    }
 }

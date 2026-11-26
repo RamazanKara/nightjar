@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">L’angolo in cui si trova l’overlay prestazioni.</string>
     <string name="summary_reset_all">Riporta ogni impostazione al valore predefinito; PC, giochi, profili e lingua restano.</string>
     <string name="stream_controllers_off">Controller è disattivato nelle Impostazioni, quindi nessun controller raggiunge il PC.</string>
+    <string name="title_compact_overlay_device_info">Mostra batteria e orologio nell’overlay compatto</string>
+    <string name="summary_compact_overlay_device_info">Aggiunge la percentuale di batteria e l’ora locale di questo dispositivo all’overlay prestazioni compatto.</string>
 </resources>

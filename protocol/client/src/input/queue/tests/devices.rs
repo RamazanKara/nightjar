@@ -362,3 +362,83 @@ fn touchpad_silence_cancels_buttons_and_queue_full_preserves_button_state() {
     assert_eq!(drained.len(), 1);
     assert_eq!(drained[0].delivery, Delivery::Reliable);
 }
+
+#[test]
+fn touchpad_frame_only_host_never_gets_0x55000009_on_silence_cancel() {
+    let caps = HostCapabilities {
+        feature_flags: feature::TOUCHPAD_FRAME_EVENTS,
+        ..sunshine()
+    };
+    let mut q = queue(&caps);
+    let t0 = Instant::now();
+    let up = TouchpadContact {
+        event: touch_event::UP,
+        pointer_id: 1,
+        x: 0.5,
+        y: 0.5,
+        pressure: 0.0,
+    };
+    q.send_touchpad_frame(&[up], touchpad::BUTTON_PRIMARY, 100, 70)
+        .unwrap();
+    let mut out = Vec::new();
+    q.poll(t0, true, &mut out);
+    assert!(out.is_empty());
+    q.poll(t0, false, &mut out);
+    assert_eq!(out.len(), 1);
+    assert_eq!(out[0].delivery, Delivery::Reliable);
+    assert_eq!(
+        u32::from_le_bytes(out[0].data[4..8].try_into().unwrap()),
+        magic::TOUCHPAD_FRAME
+    );
+    assert_eq!(out[0].data[8], 1, "single synthetic CANCEL_ALL contact");
+    assert_eq!(out[0].data[9], 0, "buttons cleared on cancel");
+    assert_eq!(out[0].data[16], touch_event::CANCEL_ALL);
+}
+
+#[test]
+fn touchpad_frame_finger_up_with_button_held_uses_release_reserve() {
+    let caps = HostCapabilities {
+        feature_flags: feature::TOUCHPAD_FRAME_EVENTS,
+        ..sunshine()
+    };
+    let mut q = queue(&caps);
+    for i in 0..MAX_QUEUED {
+        q.send_mouse_button(1, i % 2 == 0).unwrap();
+    }
+    let move_contact = TouchpadContact {
+        event: touch_event::MOVE,
+        pointer_id: 1,
+        x: 0.5,
+        y: 0.5,
+        pressure: 0.5,
+    };
+    assert_eq!(
+        q.send_touchpad_frame(&[move_contact], 0, 100, 70),
+        Err(InputError::QueueFull),
+        "moves without a held button must not consume release reserve"
+    );
+    let up_contact = TouchpadContact {
+        event: touch_event::UP,
+        ..move_contact
+    };
+    q.send_touchpad_frame(&[up_contact], touchpad::BUTTON_PRIMARY, 100, 70)
+        .expect("finger release fits the release reserve even while a button stays held");
+}
+
+#[test]
+fn controller_coalescing_does_not_overwrite_changed_active_mask() {
+    let mut q = queue(&sunshine());
+    let t0 = Instant::now();
+    // Unplug controller 0 (active_mask = 0), then re-plug it (active_mask = 1) before polling.
+    q.send_controller(0, 0, 0, 0, 0, (0, 0), (0, 0)).unwrap();
+    q.send_controller(0, 1, 0, 0, 0, (10, 20), (0, 0)).unwrap();
+    let sent = take(&mut q, t0);
+    let masks: Vec<(u16, i16)> = sent
+        .iter()
+        .map(|i| match i {
+            Input::Controller { active, sticks, .. } => (*active, sticks[0]),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(masks, [(0, 0), (1, 10)]);
+}

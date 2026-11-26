@@ -184,20 +184,20 @@ pub fn fill(hosts: &mut Hosts, launcher: &mut Launcher, ctx: &egui::Context) {
     let pc = &mut hosts.list[0];
     pc.reach = Reach::Online;
     pc.info = Some(answer(true, FIRST_APP as i32 + RUNNING as i32));
-    pc.native.library = Some(Library {
+    pc.native.library = Some(Arc::new(Library {
         revision: "demo".into(),
         games,
-    });
-    pc.apps = Apps::Loaded(apps);
+    }));
+    pc.apps = Apps::Loaded(Arc::new(apps));
     covers(hosts, ctx);
     let idle = &mut hosts.list[1];
     idle.reach = Reach::Online;
     idle.info = Some(answer(true, 0));
-    idle.native.library = Some(Library {
+    idle.native.library = Some(Arc::new(Library {
         revision: "demo".into(),
         games: Vec::new(),
-    });
-    idle.apps = Apps::Loaded(Vec::new());
+    }));
+    idle.apps = Apps::Loaded(Arc::new(Vec::new()));
     hosts.list[2].reach = Reach::Offline;
     hosts.list[3].reach = Reach::Online;
     hosts.list[3].info = Some(answer(false, 0));
@@ -223,9 +223,9 @@ pub fn covers(hosts: &mut Hosts, ctx: &egui::Context) {
             &image,
         );
         let ambient = crate::ambient::bake(&image);
-        pc.ambient_glow
+        Arc::make_mut(&mut pc.ambient_glow)
             .insert(app, crate::ambient::glow_of(&ambient));
-        pc.ambient.insert(
+        Arc::make_mut(&mut pc.ambient).insert(
             app,
             ctx.load_texture(
                 format!("demo-ambient-{n}"),
@@ -233,7 +233,7 @@ pub fn covers(hosts: &mut Hosts, ctx: &egui::Context) {
                 egui::TextureOptions::LINEAR,
             ),
         );
-        pc.art.insert(
+        Arc::make_mut(&mut pc.art).insert(
             app,
             Art::Ready(ctx.load_texture(
                 format!("demo-cover-{n}"),

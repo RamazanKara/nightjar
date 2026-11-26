@@ -154,60 +154,82 @@ final class ControllerUsbRouter {
                                float rightStickX, float rightStickY,
                                float leftTrigger, float rightTrigger) {
         ControllerHandler.UsbDeviceContext context = handler.usbDeviceContexts.get(controllerId);
-        if (context != null) {
+        if (context == null) {
+            return;
+        }
+        synchronized (context.usbSendLock) {
+            boolean sendCancelPreviousTap = false;
+            boolean sendChordGuide = false;
+            int chordQuitButtons = 0;
+            Runnable canceledTapEnd = null;
+            boolean cancelHoldRunnable = false;
             synchronized (context) {
                 if (context.guideTapping && (buttonFlags & ControllerPacket.SPECIAL_BUTTON_FLAG) != 0) {
-                    // A new Guide press arrived while the previous tap is still held: end that tap first
-                    // so its delayed release cannot cut the new press short and the host sees a distinct press.
-                    Runnable end = context.guideTapEnd;
+                    canceledTapEnd = context.guideTapEnd;
                     context.guideTapEnd = null;
                     context.guideTapping = false;
-                    if (end != null) {
-                        handler.mainThreadHandler.removeCallbacks(end);
-                    }
-                    reportUsbControllerState(controllerId, buttonFlags & ~ControllerPacket.SPECIAL_BUTTON_FLAG,
-                            leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
+                    sendCancelPreviousTap = true;
                 }
                 if (context.guideDown && (buttonFlags & ControllerPacket.SPECIAL_BUTTON_FLAG) != 0 &&
                         (buttonFlags & ~ControllerPacket.SPECIAL_BUTTON_FLAG) != 0 && context.guideHold.chord()) {
-                    // A button joined a waiting Guide (a chord such as Guide+RB): Guide goes out first, with
-                    // the buttons held before, then this report.
-                    handler.mainThreadHandler.removeCallbacks(context.guideHoldRunnable);
-                    reportUsbControllerState(controllerId, context.quitButtons, leftStickX, leftStickY,
-                            rightStickX, rightStickY, leftTrigger, rightTrigger);
+                    cancelHoldRunnable = true;
+                    sendChordGuide = true;
+                    chordQuitButtons = context.quitButtons;
                 }
-                reportUsbControllerState(controllerId, buttonFlags, leftStickX, leftStickY, rightStickX, rightStickY,
-                        leftTrigger, rightTrigger);
+            }
+            if (canceledTapEnd != null) {
+                handler.mainThreadHandler.removeCallbacks(canceledTapEnd);
+            }
+            if (sendCancelPreviousTap) {
+                reportUsbControllerState(controllerId, buttonFlags & ~ControllerPacket.SPECIAL_BUTTON_FLAG,
+                        leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
+            }
+            if (cancelHoldRunnable) {
+                handler.mainThreadHandler.removeCallbacks(context.guideHoldRunnable);
+            }
+            if (sendChordGuide) {
+                reportUsbControllerState(controllerId, chordQuitButtons, leftStickX, leftStickY,
+                        rightStickX, rightStickY, leftTrigger, rightTrigger);
+            }
+            reportUsbControllerState(controllerId, buttonFlags, leftStickX, leftStickY, rightStickX, rightStickY,
+                    leftTrigger, rightTrigger);
+            Runnable scheduleEnd = null;
+            synchronized (context) {
                 if (context.guideTapping && context.guideTapEnd == null && !handler.stopped) {
-                    // A short Guide tap went out with this report: schedule its release after the
-                    // minimum press without blocking the driver's input thread.
-                    Runnable end = new Runnable() {
+                    scheduleEnd = new Runnable() {
                         @Override
                         public void run() {
-                            synchronized (context) {
-                                if (context.guideTapEnd != this) {
-                                    return;
+                            synchronized (context.usbSendLock) {
+                                int rawButtons;
+                                float lsX, lsY, rsX, rsY, lt, rt;
+                                synchronized (context) {
+                                    if (context.guideTapEnd != this) {
+                                        return;
+                                    }
+                                    context.guideTapEnd = null;
+                                    context.guideTapping = false;
+                                    if (handler.stopped || handler.usbDeviceContexts.get(controllerId) != context) {
+                                        return;
+                                    }
+                                    rawButtons = context.lastRawButtons;
+                                    lsX = context.lastRawLeftStickX;
+                                    lsY = context.lastRawLeftStickY;
+                                    rsX = context.lastRawRightStickX;
+                                    rsY = context.lastRawRightStickY;
+                                    lt = context.lastRawLeftTrigger;
+                                    rt = context.lastRawRightTrigger;
                                 }
-                                context.guideTapEnd = null;
-                                context.guideTapping = false;
-                                if (handler.stopped || handler.usbDeviceContexts.get(controllerId) != context) {
-                                    return;
-                                }
-                                reportUsbControllerState(controllerId, context.lastRawButtons,
-                                        context.lastRawLeftStickX, context.lastRawLeftStickY,
-                                        context.lastRawRightStickX, context.lastRawRightStickY,
-                                        context.lastRawLeftTrigger, context.lastRawRightTrigger);
+                                reportUsbControllerState(controllerId, rawButtons, lsX, lsY, rsX, rsY, lt, rt);
                             }
                         }
                     };
-                    context.guideTapEnd = end;
-                    handler.mainThreadHandler.postDelayed(end, ControllerHandler.MINIMUM_BUTTON_DOWN_TIME_MS);
+                    context.guideTapEnd = scheduleEnd;
                 }
             }
-            return;
+            if (scheduleEnd != null) {
+                handler.mainThreadHandler.postDelayed(scheduleEnd, ControllerHandler.MINIMUM_BUTTON_DOWN_TIME_MS);
+            }
         }
-        reportUsbControllerState(controllerId, buttonFlags, leftStickX, leftStickY, rightStickX, rightStickY,
-                leftTrigger, rightTrigger);
     }
 
     private void reportUsbControllerState(int controllerId, int buttonFlags,
@@ -218,58 +240,74 @@ final class ControllerUsbRouter {
         if (handler.stopped || context == null) {
             return;
         }
-        context.lastRawButtons = buttonFlags;
-        context.lastRawLeftStickX = leftStickX;
-        context.lastRawLeftStickY = leftStickY;
-        context.lastRawRightStickX = rightStickX;
-        context.lastRawRightStickY = rightStickY;
-        context.lastRawLeftTrigger = leftTrigger;
-        context.lastRawRightTrigger = rightTrigger;
-        // The driver's own flags are the physical buttons, before mapping and face-button flipping;
-        // the quit combo arms as it comes together, not again for a chord held from the menu.
-        boolean quitChanged = buttonFlags != context.quitButtons;
-        context.quitButtons = buttonFlags;
-        buttonFlags = guideHoldButtons(context, buttonFlags);
-        int buttons = context.buttonMap.mapButtonFlags(buttonFlags, handler.prefConfig.flipFaceButtons);
-        if (!handler.inputEnabled) {
-            // Android sees no key events from a pad this driver owns: it steers the menu from here.
-            steerMenu(controllerId, context, buttons);
-            return;
-        }
-        ControllerHandler.PadCapture capture = handler.padCapture;
-        if (capture != null) {
-            capturePad(controllerId, context, capture, buttons, leftStickX, leftStickY);
-            return;
-        }
-        buttons = NightjarInputJni.usbFilterGameButtons(handler.usbInputStateHandle, controllerId, buttons);
-
-        NightjarInputJni.normalizeUsbAxes(
-                leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger,
-                context.leftStickDeadzoneRadius, context.rightStickDeadzoneRadius,
-                context.triggerDeadzone, context.usbAxesOut);
-        context.leftStickX = (short) context.usbAxesOut[0];
-        context.leftStickY = (short) context.usbAxesOut[1];
-        context.rightStickX = (short) context.usbAxesOut[2];
-        context.rightStickY = (short) context.usbAxesOut[3];
-        context.leftTrigger = (byte) context.usbAxesOut[4];
-        context.rightTrigger = (byte) context.usbAxesOut[5];
-
-        context.inputMap = context.clickpadButtons(buttons);
-
-        // The same menu combination as on an Android-mapped pad, opened once all four are let go so
-        // it cannot activate a menu item.
-        if (NightjarInputJni.shouldArmMenuCombo(buttons)) {
-            context.menuComboPending = true;
-        }
-        if (quitChanged) handler.buttons.holdQuitCombo(context, buttonFlags);
-
-        handler.sendControllerInputPacket(context);
-
-        if (context.menuComboPending && buttons == 0) {
-            context.menuComboPending = false;
-            if (handler.activityContext instanceof Game) {
-                ((Game) handler.activityContext).showStreamMenuFromController();
+        boolean steerMenuNow = false;
+        ControllerHandler.PadCapture captureNow = null;
+        int capturedButtons = 0;
+        boolean sendGameInput = false;
+        boolean quitChanged = false;
+        boolean openMenuNow = false;
+        synchronized (context) {
+            if (handler.stopped) {
+                return;
             }
+            context.lastRawButtons = buttonFlags;
+            context.lastRawLeftStickX = leftStickX;
+            context.lastRawLeftStickY = leftStickY;
+            context.lastRawRightStickX = rightStickX;
+            context.lastRawRightStickY = rightStickY;
+            context.lastRawLeftTrigger = leftTrigger;
+            context.lastRawRightTrigger = rightTrigger;
+            quitChanged = buttonFlags != context.quitButtons;
+            context.quitButtons = buttonFlags;
+            buttonFlags = guideHoldButtons(context, buttonFlags);
+            int buttons = context.buttonMap.mapButtonFlags(buttonFlags, handler.prefConfig.flipFaceButtons);
+            if (!handler.inputEnabled) {
+                steerMenuNow = true;
+                capturedButtons = buttons;
+            } else {
+                captureNow = handler.padCapture;
+                if (captureNow != null) {
+                    capturedButtons = buttons;
+                } else {
+                    buttons = NightjarInputJni.usbFilterGameButtons(handler.usbInputStateHandle, controllerId, buttons);
+                    NightjarInputJni.normalizeUsbAxes(
+                            leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger,
+                            context.leftStickDeadzoneRadius, context.rightStickDeadzoneRadius,
+                            context.triggerDeadzone, context.usbAxesOut);
+                    context.leftStickX = (short) context.usbAxesOut[0];
+                    context.leftStickY = (short) context.usbAxesOut[1];
+                    context.rightStickX = (short) context.usbAxesOut[2];
+                    context.rightStickY = (short) context.usbAxesOut[3];
+                    context.leftTrigger = (byte) context.usbAxesOut[4];
+                    context.rightTrigger = (byte) context.usbAxesOut[5];
+                    context.inputMap = context.clickpadButtons(buttons);
+                    if (NightjarInputJni.shouldArmMenuCombo(buttons)) {
+                        context.menuComboPending = true;
+                    }
+                    if (quitChanged) handler.buttons.holdQuitCombo(context, buttonFlags);
+                    if (context.menuComboPending && buttons == 0) {
+                        context.menuComboPending = false;
+                        openMenuNow = true;
+                    }
+                    sendGameInput = true;
+                }
+            }
+        }
+        // Perform network sends and UI/handler callbacks outside synchronized(context).
+        if (steerMenuNow) {
+            steerMenu(controllerId, context, capturedButtons);
+            return;
+        }
+        if (captureNow != null) {
+            capturePad(controllerId, context, captureNow, capturedButtons, leftStickX, leftStickY);
+            return;
+        }
+        if (!sendGameInput) {
+            return;
+        }
+        handler.sendControllerInputPacket(context);
+        if (openMenuNow && handler.activityContext instanceof Game) {
+            ((Game) handler.activityContext).showStreamMenuFromController();
         }
         handler.buttons.releaseQuitCombo(context, buttonFlags);
     }
@@ -289,8 +327,10 @@ final class ControllerUsbRouter {
             stickChanged = context.captureOut[3];
         }
         if (entered != 0) {
-            context.menuComboPending = false;
-            context.quitComboPending = false;
+            synchronized (context) {
+                context.menuComboPending = false;
+                context.quitComboPending = false;
+            }
             // The game's last state is cleared here, on the thread that sends this pad's reports.
             handler.gamepad.releaseUsbInput(context);
         }
@@ -306,20 +346,27 @@ final class ControllerUsbRouter {
     // While the stream menu or one of its dialogs has focus, a newly pressed D-pad direction, A or B
     // of a USB-driver pad moves, chooses or goes back there.
     private void steerMenu(int controllerId, ControllerHandler.UsbDeviceContext context, int buttons) {
+        int count;
+        int[] keys;
         synchronized (context) {
-            int count = NightjarInputJni.usbSteerMenuStep(
+            count = NightjarInputJni.usbSteerMenuStep(
                     handler.usbInputStateHandle, controllerId, buttons, context.steerKeysOut);
             if (context.steerKeysOut[0] != 0) {
                 context.menuComboPending = false;
                 context.quitComboPending = false;
             }
-            if (count <= 0 || !(handler.activityContext instanceof Game)) {
+            if (count <= 0) {
                 return;
             }
-            Game game = (Game) handler.activityContext;
-            for (int i = 1; i <= count; i++) {
-                game.steerStreamMenu(context.steerKeysOut[i]);
-            }
+            keys = new int[count];
+            System.arraycopy(context.steerKeysOut, 1, keys, 0, count);
+        }
+        if (!(handler.activityContext instanceof Game)) {
+            return;
+        }
+        Game game = (Game) handler.activityContext;
+        for (int key : keys) {
+            game.steerStreamMenu(key);
         }
     }
 
@@ -386,8 +433,8 @@ final class ControllerUsbRouter {
                         0, 0, 0, 0);
             }
             handler.slots.releaseControllerNumber(context);
+            handler.usbDeviceContexts.remove(controller.getControllerId(), context);
             context.destroy();
-            handler.usbDeviceContexts.remove(controller.getControllerId());
             if (context.assignedControllerNumber) handler.slots.announceBuiltInControls(context.controllerNumber);
         }
         handler.slots.announcePresence();

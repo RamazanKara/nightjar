@@ -48,4 +48,6 @@
     <string name="pin_key_delete">刪除</string>
     <string name="pin_key_confirm">確認</string>
     <string name="pin_dots_description">已輸入 %1$d / %2$d 位</string>
+    <string name="pin_pcs_none_off">未選取任何電腦；已關閉鎖定。</string>
+    <string name="pin_save_failed">無法儲存 PIN。請重試。</string>
 </resources>

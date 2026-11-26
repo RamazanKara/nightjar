@@ -53,6 +53,20 @@ public class ConsoleSeedTest {
         assertTrue("the host is claimed before the library is read", tried.contains(uuid));
     }
 
+    @Test
+    public void missingEndpointAllowsSeedRetryAfterFailure() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        String uuid = "unseeded-host";
+        ConsoleSeed.seedOnce(context, "unique", onlineNativeHost(uuid), () -> { });
+        Set<String> tried = ReflectionHelpers.getStaticField(ConsoleSeed.class, "TRIED");
+        // Seed worker completes without storing a library when host address/cert is missing; TRIED must clear.
+        long deadline = System.currentTimeMillis() + 5000;
+        while (tried.contains(uuid) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10);
+        }
+        assertTrue("failed seed removes uuid from TRIED", !tried.contains(uuid));
+    }
+
     private static ComputerDetails onlineNativeHost(String uuid) {
         ComputerDetails computer = new ComputerDetails();
         computer.uuid = uuid;

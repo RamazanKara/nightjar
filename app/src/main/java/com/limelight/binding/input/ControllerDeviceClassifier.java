@@ -529,6 +529,9 @@ final class ControllerDeviceClassifier {
         boolean[] buttons = dev.hasKeys(KeyEvent.KEYCODE_BUTTON_MODE, KeyEvent.KEYCODE_BUTTON_SELECT, KeyEvent.KEYCODE_BACK, 0);
         context.hasMode = buttons[0];
         context.hasSelect = buttons[1] || buttons[2];
+        boolean[] dpadButtons = dev.hasKeys(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT);
+        context.hasHardwareDpadKeys = dpadButtons[0] || dpadButtons[1] || dpadButtons[2] || dpadButtons[3];
 
         context.touchpadXRange = dev.getMotionRange(MotionEvent.AXIS_X, InputDevice.SOURCE_TOUCHPAD);
         context.touchpadYRange = dev.getMotionRange(MotionEvent.AXIS_Y, InputDevice.SOURCE_TOUCHPAD);

@@ -56,11 +56,21 @@ impl Element {
 
     /// NvHTTP.getXmlString: the text of the first element with this name that has text.
     pub fn find_text(&self, name: &str) -> Option<String> {
-        self.descendants()
-            .into_iter()
-            .filter(|e| e.name == name)
-            .map(Element::text)
-            .find(|t| !t.is_empty())
+        fn walk(e: &Element, name: &str) -> Option<String> {
+            for child in e.elements() {
+                if child.name == name {
+                    let text = child.text();
+                    if !text.is_empty() {
+                        return Some(text);
+                    }
+                }
+                if let Some(found) = walk(child, name) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        walk(self, name)
     }
 
     pub fn required_text(&self, name: &str) -> Result<String, Error> {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the decode-only FFmpeg that the Windows and Linux packages ship (README: "Building").
 #
-#   protocol/desktop/ffmpeg-decode-only.sh <ffmpeg source dir> <prefix>
+#   protocol/desktop-media/ffmpeg-decode-only.sh <ffmpeg source dir> <prefix>
 #
 # Windows: run it in an MSYS2 UCRT64 shell (gcc, make, nasm, pkgconf, mingw-w64-ucrt-x86_64-dav1d), or
 # for ARM64 in a CLANGARM64 one (clang, make, pkgconf, mingw-w64-clang-aarch64-dav1d).
@@ -131,7 +131,7 @@ cat >"$prefix/licenses-ffmpeg/SOURCE.txt" <<EOF
 FFmpeg $ffmpeg_release, LGPL v2.1 or later, linked dynamically ($shipped).
 Source: https://ffmpeg.org/releases/ffmpeg-$ffmpeg_release.tar.xz
 SHA-256: ${FFMPEG_SHA256:-not recorded}
-Built $built by protocol/desktop/ffmpeg-decode-only.sh of the Nightjar repository
+Built $built by protocol/desktop-media/ffmpeg-decode-only.sh of the Nightjar repository
 (https://github.com/RamazanKara/nightjar), which has the configure options.
 EOF
 
@@ -178,7 +178,10 @@ cp -r "$msys/include/opus" "$prefix/include/"
 cp "$msys/lib/libopus.dll.a" "$prefix/lib/"
 cp "$msys/bin/libopus-0.dll" "$prefix/bin/"
 # The DLL's soname number changes with dav1d's ABI (libdav1d-7.dll today), so find it.
-dav1d=$(ls "$msys"/bin/libdav1d-*.dll 2>/dev/null | head -n 1)
+dav1d=
+for candidate in "$msys"/bin/libdav1d-*.dll; do
+  [ -f "$candidate" ] && dav1d=$candidate && break
+done
 [ -n "$dav1d" ] || { echo "no libdav1d-*.dll in $msys/bin (pacman -S mingw-w64-ucrt-x86_64-dav1d)" >&2; exit 1; }
 cp "$dav1d" "$prefix/bin/"
 [ -f "$msys/share/licenses/dav1d/COPYING" ] || { echo "no $msys/share/licenses/dav1d/COPYING" >&2; exit 1; }

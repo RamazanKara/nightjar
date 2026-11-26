@@ -370,7 +370,10 @@ final class StreamSettingsChrome {
                 .remove(PreferenceConfiguration.CONTENT_RATE_FRAME_RATE_PREF_STRING)
                 .commit();
         PreferenceManager.setDefaultValues(context, R.xml.preferences, true);
-        PreferenceConfiguration.migrateToNativeDefaults(context);
+        // Reset global defaults only; keep legacy PC profiles from re-running one-time migration.
+        PreferenceMigrations.migrateToNativeDefaults(prefs, PreferenceResolution.nativeResolution(context),
+                PreferenceResolution.panelMaxRefreshRate(context));
+        prefs.edit().putInt(SettingsCatalogGen.PREFS_VERSION_PREF_STRING, SettingsCatalogGen.PROFILE_NATIVE_VERSION).apply();
         FoldedChoice.migrate(prefs);
         // The XML default just came back: where Android's low-latency mode can corrupt the picture it starts off again.
         PreferenceConfiguration.migrateCodecLowLatencyCorruption(prefs);

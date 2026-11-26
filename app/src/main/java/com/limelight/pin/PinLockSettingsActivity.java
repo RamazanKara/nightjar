@@ -265,12 +265,17 @@ public class PinLockSettingsActivity extends NightjarActivity {
             }
             UiHelper.showDialog(activity, new NavigationDialogBuilder(activity).setTitle(R.string.pin_mode_title)
                     .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                        store.setMode(MODES[which]);
+                        PinStore.Mode chosenMode = MODES[which];
+                        dialog.dismiss();
+                        if (chosenMode == PinStore.Mode.SELECTED && store.pcs().isEmpty()) {
+                            // Never commit SELECTED while no PCs are picked, otherwise nothing would be locked.
+                            pickPcs(true);
+                            return;
+                        }
+                        store.setMode(chosenMode);
                         // Turning the app lock on while using the app must not lock it on the spot.
                         PinGate.unlockApp();
-                        dialog.dismiss();
                         refresh();
-                        if (MODES[which] == PinStore.Mode.SELECTED && store.pcs().isEmpty()) pickPcs();
                     }).setNegativeButton(android.R.string.cancel, null).create());
         }
 
@@ -292,6 +297,10 @@ public class PinLockSettingsActivity extends NightjarActivity {
         }
 
         private void pickPcs() {
+            pickPcs(false);
+        }
+
+        private void pickPcs(boolean activateSelectedMode) {
             PinStore store = activity.store;
             List<String> uuids = new ArrayList<>();
             List<CharSequence> names = new ArrayList<>();
@@ -306,6 +315,7 @@ public class PinLockSettingsActivity extends NightjarActivity {
             }
             if (uuids.isEmpty()) {
                 Toast.makeText(activity, R.string.pin_pcs_empty, Toast.LENGTH_LONG).show();
+                refresh();
                 return;
             }
             Set<String> chosen = new HashSet<>();
@@ -321,6 +331,15 @@ public class PinLockSettingsActivity extends NightjarActivity {
                         Set<String> picked = new HashSet<>();
                         for (int i = 0; i < checked.length; i++) if (checked[i]) picked.add(uuids.get(i));
                         store.setPcs(picked);
+                        if (picked.isEmpty()) {
+                            if (store.mode() == PinStore.Mode.SELECTED || activateSelectedMode) {
+                                store.setMode(PinStore.Mode.OFF);
+                                Toast.makeText(activity, R.string.pin_pcs_none_off, Toast.LENGTH_LONG).show();
+                            }
+                        } else if (activateSelectedMode) {
+                            store.setMode(PinStore.Mode.SELECTED);
+                            PinGate.unlockApp();
+                        }
                         refresh();
                     }).setNegativeButton(android.R.string.cancel, null).create());
         }

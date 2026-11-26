@@ -186,6 +186,14 @@ public class UnusedSettingTagsTest {
     }
 
     @Test
+    @Config(sdk = 29)
+    public void upscalingIsUnusedWithFrameWarpAsWellAsVulkan() {
+        assertTrue(SettingRules.upscalingApplies(prefs));
+        prefs.edit().putBoolean(PreferenceConfiguration.FRAME_WARP_PREF_STRING, true).commit();
+        assertFalse(SettingRules.upscalingApplies(prefs));
+    }
+
+    @Test
     public void fractionalVsyncRowStaysAndSaysWhy() {
         // The PC's frame times: a first start's defaults rewrite the pacing itself (NATIVE_DEFAULTS_VERSION).
         prefs.edit().putBoolean("checkbox_host_frame_times", true).commit();

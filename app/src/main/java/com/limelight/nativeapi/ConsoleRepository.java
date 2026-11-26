@@ -149,6 +149,7 @@ public final class ConsoleRepository {
     }
 
     private static void migrateLegacy(Context app, long h) {
+        if (h == 0L) return;
         SharedPreferences recPrefs = app.getSharedPreferences(LEGACY_RECENTS_PREFS, Context.MODE_PRIVATE);
         String rawRecents = recPrefs.getString(LEGACY_RECENTS_KEY, null);
         String recentsPayload = "";
@@ -164,7 +165,13 @@ public final class ConsoleRepository {
         }
 
         if (!recentsPayload.isEmpty() || !favsPayload.isEmpty()) {
-            NightjarConsoleJni.repoImportLegacy(h, recentsPayload, favsPayload, "");
+            try {
+                NightjarConsoleJni.repoImportLegacy(h, recentsPayload, favsPayload, "");
+            } catch (RuntimeException | UnsatisfiedLinkError e) {
+                LimeLog.warning("Legacy console import failed: " + e.getMessage());
+                HiddenStore.Preferences.migrateLegacy(app, h);
+                return;
+            }
             if (rawRecents != null) recPrefs.edit().remove(LEGACY_RECENTS_KEY).commit();
             if (rawFavs != null) favPrefs.edit().remove(LEGACY_FAVOURITES_KEY).commit();
         }
@@ -434,7 +441,13 @@ public final class ConsoleRepository {
         };
         String hostJson = hostDescriptor(computer, endpoint, false, null).toString();
         String reply = NightjarConsoleJni.repoAddToLibrary(handle, hostJson, gameId, certDer, keyPkcs8, uniqueId, cb);
-        Json.Obj env = Json.parseObject(reply);
+        Json.Obj env;
+        try {
+            env = Json.parseObject(reply);
+        } catch (RuntimeException e) {
+            throw new NativeApiException(NativeApiException.Kind.MALFORMED,
+                    "Malformed add-to-library reply: " + e.getMessage());
+        }
         Json.Obj err = env.optObject("error");
         if (err != null) {
             throw new NativeApiException(NativeApiException.Kind.of(err.optString("kind", "api")),
@@ -453,15 +466,31 @@ public final class ConsoleRepository {
                 .put("app_id", app.getAppId())
                 .put("title", app.getAppName())
                 .put("at", clock.nowMs());
-        NightjarConsoleJni.repoRecordLaunch(handle, entry.toString());
+        if (handle == 0L) return;
+        try {
+            NightjarConsoleJni.repoRecordLaunch(handle, entry.toString());
+        } catch (RuntimeException | UnsatisfiedLinkError e) {
+            LimeLog.warning("Console recordLaunch failed: " + e.getMessage());
+        }
     }
 
     public void forgetHost(String hostUuid) {
-        NightjarConsoleJni.repoForgetHost(handle, hostUuid);
+        if (handle == 0L) return;
+        try {
+            NightjarConsoleJni.repoForgetHost(handle, hostUuid);
+        } catch (RuntimeException | UnsatisfiedLinkError e) {
+            LimeLog.warning("Console forgetHost failed: " + e.getMessage());
+        }
     }
 
     public boolean isFavourite(String hostUuid, String key, int appId) {
-        return NightjarConsoleJni.repoIsFavourite(handle, hostUuid, key == null ? "" : key, appId);
+        if (handle == 0L) return false;
+        try {
+            return NightjarConsoleJni.repoIsFavourite(handle, hostUuid, key == null ? "" : key, appId);
+        } catch (RuntimeException | UnsatisfiedLinkError e) {
+            LimeLog.warning("Console isFavourite failed: " + e.getMessage());
+            return false;
+        }
     }
 
     public boolean isFavourite(String hostUuid, int appId) {
@@ -469,12 +498,19 @@ public final class ConsoleRepository {
     }
 
     public void setFavourite(String hostUuid, String hostName, String key, int appId, String title, boolean starred) {
+        if (handle == 0L) return;
         Json.Obj entry = Json.obj()
                 .put("host", hostUuid)
                 .put("install_id", key == null ? "" : key)
                 .put("app_id", appId)
                 .put("title", title == null ? "" : title);
-        NightjarConsoleJni.repoSetFavourite(handle, entry.toString(), starred);
+        try {
+            if (!NightjarConsoleJni.repoSetFavourite(handle, entry.toString(), starred)) {
+                LimeLog.warning("Console setFavourite rejected write");
+            }
+        } catch (RuntimeException | UnsatisfiedLinkError e) {
+            LimeLog.warning("Console setFavourite failed: " + e.getMessage());
+        }
     }
 
     public void setFavourite(String hostUuid, String hostName, int appId, String title, boolean starred) {
@@ -482,6 +518,7 @@ public final class ConsoleRepository {
     }
 
     public void setHidden(List<ConsoleSnapshot.Source> copies, boolean hide) {
+        if (handle == 0L) return;
         Json.Arr keys = Json.arr();
         for (ConsoleSnapshot.Source copy : copies) {
             keys.add(Json.obj()
@@ -490,7 +527,11 @@ public final class ConsoleRepository {
                     .put("app_id", copy.appId)
                     .put("title", copy.title));
         }
-        NightjarConsoleJni.repoSetHidden(handle, keys.toString(), hide);
+        try {
+            NightjarConsoleJni.repoSetHidden(handle, keys.toString(), hide);
+        } catch (RuntimeException | UnsatisfiedLinkError e) {
+            LimeLog.warning("Console setHidden failed: " + e.getMessage());
+        }
     }
 
     public String projectHome(List<ComputerDetails> computers, String filterJson, String query,

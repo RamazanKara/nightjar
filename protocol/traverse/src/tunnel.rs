@@ -24,7 +24,7 @@ use std::{
     io::{self, Read, Write},
     net::{IpAddr, Shutdown, SocketAddr, TcpListener, TcpStream, UdpSocket},
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         mpsc, Arc, Condvar, Mutex, RwLock,
     },
     thread,
@@ -94,8 +94,30 @@ pub enum State {
     Closed(String),
 }
 
+/// Maximum unread incoming bytes buffered across local connection writers before applying
+/// backpressure to the reliable receive window.
+pub(super) const MAX_RECEIVE_QUEUE: usize = crate::stream::SEND_BUFFER;
+
+struct QueuedData {
+    data: Vec<u8>,
+    queued: Arc<AtomicUsize>,
+}
+
+impl QueuedData {
+    fn new(data: Vec<u8>, queued: Arc<AtomicUsize>) -> Self {
+        queued.fetch_add(data.len(), Ordering::AcqRel);
+        Self { data, queued }
+    }
+}
+
+impl Drop for QueuedData {
+    fn drop(&mut self) {
+        self.queued.fetch_sub(self.data.len(), Ordering::Release);
+    }
+}
+
 enum Outgoing {
-    Data(Vec<u8>),
+    Data(QueuedData),
     Finish,
     Reset,
 }
@@ -145,6 +167,7 @@ struct Shared {
     #[cfg(test)]
     rounds: AtomicU64,
     stopped: AtomicBool,
+    queued: Arc<AtomicUsize>,
     /// The device's media sockets, and where its client last sent from on each.
     media: Vec<Option<MediaEnd>>,
     listeners: Mutex<Vec<SocketAddr>>,
@@ -232,6 +255,7 @@ impl Tunnel {
             #[cfg(test)]
             rounds: AtomicU64::new(0),
             stopped: AtomicBool::new(false),
+            queued: Arc::new(AtomicUsize::new(0)),
             media,
             listeners: Mutex::new(Vec::new()),
         });
@@ -503,6 +527,9 @@ impl Tunnel {
     /// Hands the reliable layer's events to the connections.
     fn dispatch(&self) {
         loop {
+            if self.shared.queued.load(Ordering::Acquire) >= MAX_RECEIVE_QUEUE {
+                break;
+            }
             let event = {
                 let mut inner = self.shared.inner.lock().unwrap();
                 match inner.reliable.poll_event() {
@@ -512,7 +539,10 @@ impl Tunnel {
             };
             match event {
                 Event::Opened { stream, target } => self.opened(stream, target),
-                Event::Data { stream, data } => self.to_connection(stream, Outgoing::Data(data)),
+                Event::Data { stream, data } => {
+                    let chunk = QueuedData::new(data, self.shared.queued.clone());
+                    self.to_connection(stream, Outgoing::Data(chunk));
+                }
                 Event::Finished { stream } => {
                     self.to_connection(stream, Outgoing::Finish);
                     let mut inner = self.shared.inner.lock().unwrap();
@@ -591,7 +621,9 @@ impl Tunnel {
                 }
             });
         if spawned.is_err() {
-            self.shared.inner.lock().unwrap().reliable.reset(stream);
+            let mut inner = self.shared.inner.lock().unwrap();
+            inner.connections.remove(&stream);
+            inner.reliable.reset(stream);
         }
     }
 }

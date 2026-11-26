@@ -167,6 +167,8 @@ pub struct VideoTexture {
     /// The session negotiated HDR (asked for it and got a 10-bit format), for pictures before or
     /// without the host's HDR mode; a 10-bit SDR stream is not HDR.
     hdr_stream: bool,
+    /// Incremented on each `destroy()`, so callers holding a picture's epoch notice texture resets.
+    destroy_epoch: u64,
     /// The texture's planes are imported DMA-BUFs (`crate::dmabuf`): its NV12 shader reads the
     /// chroma plane as red-green, where uploaded chroma is luminance-alpha.
     #[cfg(unix)]
@@ -287,6 +289,7 @@ impl Default for VideoTexture {
             hdr_mode: None,
             hdr_metadata: None,
             hdr_stream: false,
+            destroy_epoch: 0,
             #[cfg(unix)]
             imported: false,
             #[cfg(unix)]
@@ -365,6 +368,10 @@ impl VideoTexture {
     /// `hdr_stream`: the session negotiated HDR.
     pub fn new(_direct_packed: bool, hdr_stream: bool) -> Self {
         Self { #[cfg(windows)] direct_packed: _direct_packed, hdr_stream, ..Default::default() }
+    }
+
+    pub fn destroy_epoch(&self) -> u64 {
+        self.destroy_epoch
     }
 
     pub fn set_hdr_mode(
@@ -622,9 +629,11 @@ impl VideoTexture {
         }
         // The stage timers belong to the whole stream, not to one texture.
         let stages = std::mem::replace(&mut self.pyrowave_stages, super::stage_times::Stages::new(super::pyrowave_gpu::UPLOAD_AND_PASSES));
+        let next_epoch = self.destroy_epoch.wrapping_add(1);
         *self = Self {
             #[cfg(windows)]
             direct_packed: self.direct_packed,
+            destroy_epoch: next_epoch,
             failure: self.failure.take(),
             hdr_mode: self.hdr_mode,
             hdr_metadata: self.hdr_metadata,

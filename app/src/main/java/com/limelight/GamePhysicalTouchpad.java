@@ -33,6 +33,11 @@ final class GamePhysicalTouchpad {
     private float[] nativeTouchpadYs = new float[16];
     private float[] nativeTouchpadPressures = new float[16];
 
+    private boolean activeFallbackTouchpad;
+    private int nativeRangeDeviceId = -2;
+    private float nativeXMin, nativeXMax, nativeYMin, nativeYMax;
+    private short nativeXLenMm, nativeYLenMm;
+
     GamePhysicalTouchpad(Game game) {
         this.game = game;
     }
@@ -46,13 +51,17 @@ final class GamePhysicalTouchpad {
             touchpadContextMap[i] = touchpad;
         }
         touchpadResolutionDevice = -2;
+        nativeRangeDeviceId = -2;
+        activeFallbackTouchpad = false;
     }
 
     boolean handleFingerEvent(MotionEvent event) {
         // Like the mouse case, ignore the touchpad while we aren't capturing it; returning
         // true keeps Android from turning the touches into d-pad events.
         if (!game.inputCaptureProvider.isCapturingActive()) {
-            cancelTouchpad();
+            if (nativeTouchpadHeld || activeFallbackTouchpad) {
+                cancelTouchpad();
+            }
             return true;
         }
         if (nativeTouchpad()) {
@@ -114,6 +123,7 @@ final class GamePhysicalTouchpad {
     /** Cancels both native touchpad frames and fallback touchpad mouse gestures (capture or focus lost). */
     void cancelTouchpad() {
         cancelNativeTouchpad();
+        activeFallbackTouchpad = false;
         for (TrackpadContext context : touchpadContextMap) {
             if (context != null) {
                 context.cancelTouch();
@@ -143,54 +153,74 @@ final class GamePhysicalTouchpad {
         float[] xs = nativeTouchpadXs;
         float[] ys = nativeTouchpadYs;
         float[] pressures = nativeTouchpadPressures;
-        InputDevice device = event.getDevice();
-        InputDevice.MotionRange xRange = device != null ? device.getMotionRange(MotionEvent.AXIS_X, InputDevice.SOURCE_TOUCHPAD) : null;
-        InputDevice.MotionRange yRange = device != null ? device.getMotionRange(MotionEvent.AXIS_Y, InputDevice.SOURCE_TOUCHPAD) : null;
+        int deviceId = event.getDeviceId();
+        if (deviceId != nativeRangeDeviceId) {
+            InputDevice device = event.getDevice();
+            if (device != null || deviceId != 0) {
+                nativeRangeDeviceId = deviceId;
+            }
+            InputDevice.MotionRange xRange = device != null ? device.getMotionRange(MotionEvent.AXIS_X, InputDevice.SOURCE_TOUCHPAD) : null;
+            InputDevice.MotionRange yRange = device != null ? device.getMotionRange(MotionEvent.AXIS_Y, InputDevice.SOURCE_TOUCHPAD) : null;
+            nativeXMin = xRange != null ? xRange.getMin() : 0;
+            nativeXMax = xRange != null ? xRange.getMax() : 0;
+            nativeXLenMm = TouchpadSurface.lengthMm(xRange != null ? xRange.getRange() : 0, xRange != null ? xRange.getResolution() : 0);
+            nativeYMin = yRange != null ? yRange.getMin() : 0;
+            nativeYMax = yRange != null ? yRange.getMax() : 0;
+            nativeYLenMm = TouchpadSurface.lengthMm(yRange != null ? yRange.getRange() : 0, yRange != null ? yRange.getResolution() : 0);
+        }
         int count = 0;
         for (int i = 0; i < pointers; i++) {
             if (i == lifted) {
                 continue;
             }
             ids[count] = event.getPointerId(i);
-            xs[count] = TouchpadSurface.unit(event.getX(i), xRange != null ? xRange.getMin() : 0, xRange != null ? xRange.getMax() : 0);
-            ys[count] = TouchpadSurface.unit(event.getY(i), yRange != null ? yRange.getMin() : 0, yRange != null ? yRange.getMax() : 0);
+            xs[count] = TouchpadSurface.unit(event.getX(i), nativeXMin, nativeXMax);
+            ys[count] = TouchpadSurface.unit(event.getY(i), nativeYMin, nativeYMax);
             pressures[count] = Math.max(0f, Math.min(1f, event.getPressure(i)));
             count++;
         }
         boolean button = (event.getButtonState() & MotionEvent.BUTTON_PRIMARY) != 0;
         nativeTouchpadHeld = count > 0 || button;
-        game.conn.sendTouchpadFrame(event.getDeviceId(), ids, xs, ys, pressures, count, button,
-                TouchpadSurface.lengthMm(xRange != null ? xRange.getRange() : 0, xRange != null ? xRange.getResolution() : 0),
-                TouchpadSurface.lengthMm(yRange != null ? yRange.getRange() : 0, yRange != null ? yRange.getResolution() : 0));
+        game.conn.sendTouchpadFrame(deviceId, ids, xs, ys, pressures, count, button,
+                nativeXLenMm, nativeYLenMm);
     }
 
     private boolean handleTouchpadTouch(MotionEvent event) {
         updateTouchpadResolution(event);
         int actionIndex = event.getActionIndex();
         int pointerCount = event.getPointerCount();
-        TouchContext context = actionIndex < touchpadContextMap.length ? touchpadContextMap[actionIndex] : null;
-        if (context == null) {
-            return false;
-        }
+        TrackpadContext context = actionIndex < touchpadContextMap.length ? touchpadContextMap[actionIndex] : null;
 
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_POINTER_DOWN:
             case MotionEvent.ACTION_DOWN:
+                activeFallbackTouchpad = true;
                 for (TouchContext touchContext : touchpadContextMap) {
                     touchContext.setPointerCount(pointerCount);
+                }
+                if (context == null) {
+                    return false;
                 }
                 context.touchDownEvent((int) event.getX(actionIndex), (int) event.getY(actionIndex), event.getEventTime(), true);
                 break;
             case MotionEvent.ACTION_POINTER_UP:
             case MotionEvent.ACTION_UP:
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && (event.getFlags() & MotionEvent.FLAG_CANCELED) != 0) {
-                    context.cancelTouch();
-                }
-                else {
-                    context.touchUpEvent((int) event.getX(actionIndex), (int) event.getY(actionIndex), event.getEventTime());
+                if (context != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && (event.getFlags() & MotionEvent.FLAG_CANCELED) != 0) {
+                        context.cancelTouch();
+                    }
+                    else {
+                        context.touchUpEvent((int) event.getX(actionIndex), (int) event.getY(actionIndex), event.getEventTime());
+                    }
                 }
                 for (TouchContext touchContext : touchpadContextMap) {
                     touchContext.setPointerCount(pointerCount - 1);
+                }
+                if (pointerCount <= 1) {
+                    activeFallbackTouchpad = false;
+                }
+                if (context == null) {
+                    return false;
                 }
                 if (actionIndex == 0 && pointerCount > 1 && !context.isCancelled()) {
                     // The original secondary touch now becomes primary
@@ -198,6 +228,9 @@ final class GamePhysicalTouchpad {
                 }
                 break;
             case MotionEvent.ACTION_MOVE:
+                if (context == null) {
+                    return false;
+                }
                 // ACTION_MOVE always has actionIndex 0, so call the move handler of every finger
                 for (int i = 0; i < event.getHistorySize(); i++) {
                     for (TouchContext touchContext : touchpadContextMap) {
@@ -215,6 +248,7 @@ final class GamePhysicalTouchpad {
                 }
                 break;
             case MotionEvent.ACTION_CANCEL:
+                activeFallbackTouchpad = false;
                 for (TouchContext touchContext : touchpadContextMap) {
                     touchContext.cancelTouch();
                     touchContext.setPointerCount(0);

@@ -638,10 +638,10 @@ pub fn rim(
 mod surfaces;
 
 pub use surfaces::{
-    control, cover_finish, cover_glow, defer, defer_focused, deferred, feel, flush_deferred,
-    focus, forget_soft, group, hud_recipe, hud_surface, menu_surface, on_play, play, soft,
-    soft_around, soft_textures, surface, tinted, with_halo_reach, without_backdrop, Feel,
-    SoftTextures,
+    control, cover_finish, cover_glow, defer, defer_focused, deferred, deferred_sig, feel,
+    flush_deferred, focus, forget_soft, group, hud_recipe, hud_surface, menu_surface, on_play,
+    play, soft, soft_around, soft_textures, surface, tinted, with_halo_reach, without_backdrop,
+    Feel, SoftTextures,
 };
 use surfaces::uv_in;
 #[cfg(test)]

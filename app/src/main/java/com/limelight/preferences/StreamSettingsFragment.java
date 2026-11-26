@@ -61,6 +61,7 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
     int displayedResultCount;
     int codecSummaryGeneration;
     Thread decoderProbe;
+    boolean dualSenseConsentShowing;
     private com.limelight.binding.audio.MicProcessing.Availability micEffects;
 
     /** Attaching or removing a mouse, keyboard or touchpad shows or hides their rows at once. */
@@ -158,6 +159,7 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
         boolean controllerMouse = SettingRules.controllerMouseApplies(prefs);
         setShown("analog_scrolling", controllerMouse);
         setShown("checkbox_mouse_emulation_fixed_step", controllerMouse);
+        setShown(PreferenceConfiguration.MOUSE_EMULATION_SENSITIVITY_PREF_STRING, controllerMouse);
         setShown("checkbox_usb_bind_all", prefs.getBoolean("checkbox_usb_driver", true));
         setShown("checkbox_usb_dualsense_haptics", prefs.getBoolean("checkbox_usb_dualsense", false));
         boolean onScreen = SettingRules.onScreenControlsOn(prefs);
@@ -428,6 +430,8 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        dualSenseConsentShowing = savedInstanceState != null
+                && savedInstanceState.getBoolean("dualsense_consent_showing", false);
 
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(getActivity());
         // Before the lists read their values, so an older Close game choice shows as Quit game.
@@ -470,5 +474,11 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
         refreshState();
         screen.removeAll();
         filterPreferences();
+    }
+
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putBoolean("dualsense_consent_showing", dualSenseConsentShowing);
     }
 }

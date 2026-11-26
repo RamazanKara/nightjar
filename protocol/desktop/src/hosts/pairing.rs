@@ -140,9 +140,24 @@ impl Hosts {
             _ => Vec::new(),
         };
         let Some(identity) = self.identity.clone() else {
+            let _ = self.sender.send(Event::Paired {
+                id,
+                request,
+                result: Err(tr(
+                    "This device’s pairing key is not ready yet. Try again in a moment.",
+                )
+                .to_owned()),
+            });
+            (self.waker)();
             return;
         };
         let Some(host) = self.get(id) else {
+            let _ = self.sender.send(Event::Paired {
+                id,
+                request,
+                result: Err(tr("This PC is no longer in your list.").to_owned()),
+            });
+            (self.waker)();
             return;
         };
         let mut record = host.connect_record();
@@ -155,6 +170,7 @@ impl Hosts {
                     request,
                     result: Err(e),
                 });
+                (self.waker)();
                 return;
             }
         };
@@ -253,12 +269,12 @@ impl Hosts {
         let Some(host) = self.get_mut(id) else { return };
         host.record.server_certificate = None;
         host.apps = Apps::NotLoaded;
-        host.art.clear();
-        host.ambient.clear();
-        host.ambient_glow.clear();
-        host.art_versions.clear();
-        host.art_sized.clear();
-        host.art_retry.clear();
+        Arc::make_mut(&mut host.art).clear();
+        Arc::make_mut(&mut host.ambient).clear();
+        Arc::make_mut(&mut host.ambient_glow).clear();
+        Arc::make_mut(&mut host.art_versions).clear();
+        Arc::make_mut(&mut host.art_sized).clear();
+        Arc::make_mut(&mut host.art_retry).clear();
         host.native = Native::default();
         host.set_classic_apps(None);
         host.native_epoch += 1;

@@ -227,7 +227,10 @@ impl HostStore {
         let path = self.path();
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Vec::new(),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                self.unreadable.clear(&path);
+                return Vec::new();
+            }
             Err(e) => {
                 eprintln!(
                     "nightjar: cannot read {} ({e}); it is left as it is",
@@ -238,17 +241,29 @@ impl HostStore {
             }
         };
         if let Ok(list) = serde_json::from_str::<Vec<T>>(&text) {
+            self.unreadable.clear(&path);
             return list;
         }
         eprintln!("nightjar: {} can't be read whole", path.display());
-        if !self.read_only
+        let backup_failed = if !self.read_only
             && let Err(e) = back_up(&path, "bad")
         {
             eprintln!("nightjar: could not keep a copy of {}: {e}", path.display());
-        }
+            true
+        } else {
+            false
+        };
         let Ok(mut value) = serde_json::from_str::<Value>(&text) else {
+            if self.read_only || backup_failed {
+                self.unreadable.leave_as_it_is(&path);
+            }
             return Vec::new();
         };
+        if backup_failed {
+            self.unreadable.leave_as_it_is(&path);
+        } else {
+            self.unreadable.clear(&path);
+        }
         keep_readable_hosts(&mut value, &mut keep_settings, |entry| {
             serde_json::from_value::<T>(entry.clone()).is_ok()
         });
@@ -305,12 +320,14 @@ impl HostStore {
     /// when the entry is new or its persistent fields changed. Preserves Desktop-owned
     /// `SharedHostFields`, `pinned_endpoint`, `alias`, and `extra` when incoming leaves them empty.
     pub fn upsert(&self, entry: HostEntry) -> io::Result<bool> {
+        if entry.shared.unique_id.is_empty() {
+            return Ok(false);
+        }
         let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         let mut entries: Vec<HostEntry> = self.read_kept_unlocked(|_| {});
-        if !entry.shared.unique_id.is_empty()
-            && let Some(existing) = entries
-                .iter_mut()
-                .find(|e| e.shared.unique_id == entry.shared.unique_id)
+        if let Some(existing) = entries
+            .iter_mut()
+            .find(|e| e.shared.unique_id == entry.shared.unique_id)
         {
             let merged = merge_preserving_desktop(existing, entry);
             if *existing == merged {
@@ -330,12 +347,14 @@ impl HostStore {
     /// `shared.server_certificate`, and `shared.internet_play` while preserving unknown `extra`
     /// JSON keys from an existing entry.
     pub fn replace_entry(&self, mut entry: HostEntry) -> io::Result<bool> {
+        if entry.shared.unique_id.is_empty() {
+            return Ok(false);
+        }
         let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         let mut entries: Vec<HostEntry> = self.read_kept_unlocked(|_| {});
-        if !entry.shared.unique_id.is_empty()
-            && let Some(existing) = entries
-                .iter_mut()
-                .find(|e| e.shared.unique_id == entry.shared.unique_id)
+        if let Some(existing) = entries
+            .iter_mut()
+            .find(|e| e.shared.unique_id == entry.shared.unique_id)
         {
             for (key, value) in &existing.extra {
                 entry
@@ -386,7 +405,21 @@ impl HostStore {
         if self.read_only {
             return Ok(false);
         }
+        let path = self.path();
+        if path.exists() {
+            let text =
+                fs::read_to_string(&path).inspect_err(|_| self.unreadable.leave_as_it_is(&path))?;
+            if serde_json::from_str::<Value>(&text).is_err() {
+                let _ = back_up(&path, "bad");
+                self.unreadable.leave_as_it_is(&path);
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("{} is unreadable; refusing to finalize migration", path.display()),
+                ));
+            }
+        }
         let mut entries: Vec<HostEntry> = self.read_kept_unlocked(|_| {});
+        self.unreadable.check_writable(&path)?;
         let mut changed = false;
         for host in legacy_hosts {
             if host.shared.unique_id.is_empty()
@@ -399,10 +432,8 @@ impl HostStore {
             entries.push(host);
             changed = true;
         }
-        if changed || !self.path().exists() {
+        if changed || !path.exists() {
             self.write_unlocked(&entries)?;
-        } else {
-            self.unreadable.check_writable(&self.path())?;
         }
         write_atomic(&marker, b"1\n", true)?;
         Ok(changed)

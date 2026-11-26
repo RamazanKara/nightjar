@@ -22,25 +22,32 @@ fn plugged(busid: &str, vid: u16, pid: u16, blocked: Option<Blocked>) -> Local {
 }
 
 #[test]
-fn automatic_devices_attach_once_per_plug_in_on_any_port() {
+fn automatic_devices_attach_once_per_plug_in_on_any_port_and_retry_failures() {
+    use std::time::{Duration, Instant};
+
     assert_eq!(auto_key(0x28de, 0x1304), "28de:1304");
     let auto = vec![auto_key(0x28de, 0x1304), auto_key(0x045e, 0x0719)];
     let puck = plugged("1-2", 0x28de, 0x1304, None);
     let receiver = plugged("1-3", 0x045e, 0x0719, Some(Blocked::NoWinUsb("xusb22".into())));
     let tablet = plugged("1-4", 0x056a, 0x0374, None);
-    let mut tried = Vec::new();
+    let mut tried = HashMap::new();
     let local = [puck.clone(), receiver, tablet];
+    let t0 = Instant::now();
     // Only the listed one that can be forwarded; not the unlisted tablet or the blocked receiver.
-    assert_eq!(auto_due(&local, &auto, |_| false, &mut tried), vec![puck]);
-    // Not again while it stays plugged in, whatever became of it.
-    assert!(auto_due(&local, &auto, |_| false, &mut tried).is_empty());
-    // Unplugged, then plugged into another port: attached again.
-    assert!(auto_due(&[], &auto, |_| false, &mut tried).is_empty());
+    assert_eq!(auto_due(&local, &auto, |_| false, &mut tried, t0), vec![puck.clone()]);
+    // Not again while it stays plugged in and attach succeeded / was user-detached.
+    assert!(auto_due(&local, &auto, |_| false, &mut tried, t0 + Duration::from_secs(30)).is_empty());
+    // Failed automatic attach retries after cooldown while staying plugged in.
+    tried.insert("1-2".into(), Some(t0 + Duration::from_secs(10)));
+    assert!(auto_due(&local, &auto, |_| false, &mut tried, t0 + Duration::from_secs(5)).is_empty());
+    assert_eq!(auto_due(&local, &auto, |_| false, &mut tried, t0 + Duration::from_secs(10)), vec![puck]);
+    // Unplugged, then plugged into another port: attached again immediately.
+    assert!(auto_due(&[], &auto, |_| false, &mut tried, t0).is_empty());
     let moved = plugged("2-1", 0x28de, 0x1304, None);
-    assert_eq!(auto_due(std::slice::from_ref(&moved), &auto, |_| false, &mut tried), std::slice::from_ref(&moved));
+    assert_eq!(auto_due(std::slice::from_ref(&moved), &auto, |_| false, &mut tried, t0), std::slice::from_ref(&moved));
     // One the user attached already is left alone.
-    let mut fresh = Vec::new();
-    assert!(auto_due(&[moved], &auto, |busid| busid == "2-1", &mut fresh).is_empty());
+    let mut fresh = HashMap::new();
+    assert!(auto_due(&[moved], &auto, |busid| busid == "2-1", &mut fresh, t0).is_empty());
 }
 
 /// The native answer with these features and the usb permission.
@@ -403,4 +410,178 @@ fn iso_reply_packing_for_libusb_and_winusb_satisfies_usbip_wire_invariants() {
         win_out.iso.iter().map(|p| p.actual_length).collect::<Vec<_>>(),
         vec![4, 4, 2]
     );
+}
+
+#[test]
+fn winusb_iso_out_packet_table_validation_rejects_unexpressible_layouts() {
+    use nightjar_core::usb::IsoPacket;
+    use super::winusb::validate_winusb_iso_out_table;
+
+    let pkt = |offset, length| IsoPacket { offset, length, actual_length: 0, status: 0 };
+
+    // Expressible: single packet <= max_bytes_per_interval, or full chunks with optional trailing short packet.
+    assert_eq!(validate_winusb_iso_out_table(&[pkt(0, 128)], 512), Ok(128));
+    assert_eq!(validate_winusb_iso_out_table(&[pkt(0, 512), pkt(512, 512), pkt(1024, 192)], 512), Ok(1216));
+    assert_eq!(validate_winusb_iso_out_table(&[pkt(0, 2048), pkt(2048, 256)], 2048), Ok(2304));
+
+    // Unexpressible: interior short packet (UAC 48kHz audio in 256-byte pipe), zero-length gap,
+    // oversized packet, non-contiguous offsets, or unknown pipe interval cap (0).
+    assert_eq!(validate_winusb_iso_out_table(&[pkt(0, 192), pkt(192, 192)], 256), Err(wire::EINVAL));
+    assert_eq!(validate_winusb_iso_out_table(&[pkt(0, 512), pkt(512, 128), pkt(640, 512)], 512), Err(wire::EINVAL));
+    assert_eq!(validate_winusb_iso_out_table(&[pkt(0, 512), pkt(512, 0), pkt(512, 512)], 512), Err(wire::EINVAL));
+    assert_eq!(validate_winusb_iso_out_table(&[pkt(0, 513)], 512), Err(wire::EINVAL));
+    assert_eq!(validate_winusb_iso_out_table(&[pkt(0, 512), pkt(600, 512)], 512), Err(wire::EINVAL));
+    assert_eq!(validate_winusb_iso_out_table(&[pkt(0, 512)], 0), Err(wire::EINVAL));
+    assert_eq!(validate_winusb_iso_out_table(&[], 512), Err(wire::EINVAL));
+}
+
+#[test]
+fn winusb_overlapped_cancel_preserves_econnreset_and_error_87_does_not_retry() {
+    use std::sync::{Arc, Mutex};
+    use super::winusb::iso_coord::{submit_pipelined, IsoEndpointState};
+    use super::winusb::overlapped_error_to_errno;
+
+    // R1-DM2: cancel must surface as ECONNRESET even if kernel completed abort with non-995 error.
+    assert_eq!(overlapped_error_to_errno(995, None), wire::ECONNRESET);
+    assert_eq!(overlapped_error_to_errno(995, Some(wire::ETIMEDOUT)), wire::ETIMEDOUT);
+    assert_eq!(overlapped_error_to_errno(31, Some(wire::ECONNRESET)), wire::ECONNRESET);
+    assert_eq!(overlapped_error_to_errno(1167, None), wire::ENODEV);
+    assert_eq!(overlapped_error_to_errno(31, None), wire::EPIPE);
+
+    // Concurrent pipelined iso submissions start ContinueStream=false then true without gaps.
+    let ep = Arc::new(Mutex::new(IsoEndpointState::default()));
+    let submitted = Arc::new(Mutex::new(Vec::<bool>::new()));
+    let gate = Arc::new(std::sync::Barrier::new(3));
+    std::thread::scope(|s| {
+        for _ in 0..3 {
+            let (ep, submitted, gate) = (ep.clone(), submitted.clone(), gate.clone());
+            s.spawn(move || {
+                gate.wait();
+                let (_, ticket) = submit_pipelined(&ep, |cont| {
+                    submitted.lock().unwrap().push(cont);
+                    Ok(())
+                }).unwrap();
+                ep.lock().unwrap().finish(ticket, true);
+            });
+        }
+    });
+    let flags = submitted.lock().unwrap();
+    assert_eq!(flags.as_slice(), &[false, true, true], "only first submission resets ContinueStream; followers pipeline without gaps");
+
+    // Lapse (21 or 59) retries with ContinueStream=false; ERROR_INVALID_PARAMETER (87) fails immediately (R1-DM1).
+    let mut attempts = Vec::new();
+    let (_, ticket_21) = submit_pipelined(&ep, |cont| {
+        attempts.push(cont);
+        if cont { Err((21, wire::EPROTO)) } else { Ok(()) }
+    }).unwrap();
+    assert_eq!(attempts, vec![true, false]);
+    ep.lock().unwrap().finish(ticket_21, true);
+
+    let mut attempts_87 = Vec::new();
+    let err = submit_pipelined(&ep, |cont| -> Result<(), (u32, i32)> {
+        attempts_87.push(cont);
+        Err((87, wire::EINVAL))
+    });
+    assert_eq!(err, Err(wire::EINVAL));
+    assert_eq!(attempts_87, vec![true], "error 87 must not be retried as stream lapse");
+
+    // Stale completion failure from old reset epoch does not clear a reset/restarted stream.
+    let (_, stale_ticket) = submit_pipelined(&ep, |_| Ok(())).unwrap();
+    ep.lock().unwrap().reset();
+    let (_, new_ticket) = submit_pipelined(&ep, |_| Ok(())).unwrap();
+    ep.lock().unwrap().finish(stale_ticket, false);
+    assert!(ep.lock().unwrap().is_streaming(), "stale completion must not reset active epoch");
+    ep.lock().unwrap().finish(new_ticket, false);
+    assert!(!ep.lock().unwrap().is_streaming());
+}
+
+#[test]
+fn winusb_port_reset_restores_alt_zero_endpoints_and_resets_streams() {
+    use std::sync::{Arc, Mutex};
+    use super::winusb::iso_coord::{
+        winusb_reset_port, EndpointInfo, IsoEndpointState, ResettableState, WinUsbPortReset,
+    };
+
+    struct FakePortReset {
+        log: Mutex<Vec<String>>,
+        fail_alt: bool,
+    }
+    impl WinUsbPortReset for FakePortReset {
+        fn reset_pipe(&self, interface: u8, endpoint: u8) -> Result<(), i32> {
+            self.log.lock().unwrap().push(format!("reset_pipe({interface},{endpoint:#x})"));
+            Ok(())
+        }
+        fn set_alt(&self, interface: u8, setting: u8) -> Result<(), i32> {
+            self.log.lock().unwrap().push(format!("set_alt({interface},{setting})"));
+            if self.fail_alt { Err(wire::EPIPE) } else { Ok(()) }
+        }
+    }
+
+    let alt0 = vec![(0x81u8, 64u16, 64u32)];
+    let alt1 = vec![(0x81u8, 512u16, 1024u32), (0x02u8, 512u16, 512u32)];
+    let resettable = Arc::new(Mutex::new(ResettableState {
+        interfaces: vec![0, 1],
+        endpoints: HashMap::from([
+            (0x81, EndpointInfo { interface: 1, max_packet: 512, max_bytes_per_interval: 1024 }),
+            (0x02, EndpointInfo { interface: 1, max_packet: 512, max_bytes_per_interval: 512 }),
+        ]),
+        alt_endpoints: HashMap::from([((0, 0), alt0.clone()), ((1, 0), vec![]), ((1, 1), alt1)]),
+    }));
+    let stream = Arc::new(Mutex::new(IsoEndpointState::default()));
+    let streams = Mutex::new(HashMap::from([(0x81u8, stream.clone())]));
+    let _ = super::winusb::iso_coord::submit_pipelined(&stream, |_| Ok(())).unwrap();
+    assert!(stream.lock().unwrap().is_streaming());
+
+    let fake = FakePortReset { log: Mutex::new(Vec::new()), fail_alt: false };
+    let reply = winusb_reset_port(&fake, &resettable, &streams);
+    assert_eq!(reply.status, 0);
+    assert!(!stream.lock().unwrap().is_streaming(), "iso stream cleared on port reset");
+    {
+        let guard = resettable.lock().unwrap();
+        let endpoints = &guard.endpoints;
+        assert_eq!(endpoints.get(&0x81).map(|e| (e.interface, e.max_packet)), Some((0, 64)));
+        assert!(!endpoints.contains_key(&0x02), "alt > 0 endpoint removed after port reset");
+    }
+    let log = fake.log.lock().unwrap();
+    assert!(log.contains(&"set_alt(0,0)".to_owned()) && log.contains(&"set_alt(1,0)".to_owned()));
+
+    let fail = FakePortReset { log: Mutex::new(Vec::new()), fail_alt: true };
+    assert_eq!(winusb_reset_port(&fail, &resettable, &streams).status, wire::EPIPE);
+}
+
+#[test]
+fn winusb_iso_pool_rejects_stale_slots_across_set_interface_and_reset_port() {
+    use super::winusb::iso_coord::IsoPoolState;
+
+    let mut pool = IsoPoolState::<&'static str>::default();
+    let (ep0_gen, missing) = pool.take(0x81, 0, |_| true);
+    assert_eq!(missing, None);
+    let (ep1_gen, _) = pool.take(0x82, 1, |_| true);
+
+    // Concurrent `set_interface(1)` invalidates interface 1 before & after updating alt endpoints.
+    assert!(pool.release(0x81, 0, ep0_gen, "iface0-idle", 8).is_none());
+    let (inflight_gen, _) = pool.take(0x82, 1, |_| true);
+    assert!(pool.invalidate(Some(1)).is_empty());
+    assert!(pool.invalidate(Some(1)).is_empty());
+
+    // Pre-alt-switch slot returned after alt-0 repopulated `0x82` on interface 1 is rejected.
+    assert_eq!(pool.release(0x82, 1, inflight_gen, "stale-pre-set-alt", 8), Some("stale-pre-set-alt"));
+    assert_eq!(pool.release(0x82, 1, ep1_gen, "older-stale", 8), Some("older-stale"));
+    // Unaffected interface 0 kept its idle slot until `reset_port`.
+    assert_eq!(pool.take(0x81, 0, |_| true), (ep0_gen, Some("iface0-idle")));
+
+    // Re-insert `0x81` before `reset_port` bumps the global epoch across every interface.
+    let (before_reset_gen, _) = pool.take(0x81, 0, |_| true);
+    assert!(pool.release(0x81, 0, before_reset_gen, "idle-before-reset", 8).is_none());
+    let (inflight_reset_gen, taken) = pool.take(0x81, 0, |_| true);
+    assert_eq!(taken, Some("idle-before-reset"));
+    assert!(pool.invalidate(None).is_empty());
+    assert!(pool.invalidate(None).is_empty());
+    assert_eq!(pool.release(0x81, 0, inflight_reset_gen, "stale-pre-reset", 8), Some("stale-pre-reset"));
+
+    let (post_reset_gen, empty) = pool.take(0x81, 0, |_| true);
+    assert!(post_reset_gen > inflight_reset_gen);
+    assert_eq!(empty, None);
+    assert!(pool.release(0x81, 0, post_reset_gen, "fresh-post-reset", 8).is_none());
+    assert_eq!(pool.take(0x81, 0, |_| true), (post_reset_gen, Some("fresh-post-reset")));
 }

@@ -333,3 +333,297 @@ fn three_plus_endpoints_preserved_in_other_addresses_and_probed() {
     srv.join().unwrap();
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn meta_and_wake_stores_refuse_corrupt_overwrite_and_clear_guard_after_good_read() {
+    let dir = temp_dir("store-guard-clear");
+
+    // HostStore: corrupt `hosts.json` prevents migration from falsely completing, then valid JSON
+    // clears unreadable state.
+    let hosts = HostStore::open(&dir);
+    std::fs::write(dir.join("hosts.json"), b"{corrupt").unwrap();
+    assert!(hosts.import_legacy_if_needed(Vec::new()).is_err());
+    assert!(!hosts.has_migrated_legacy());
+    std::fs::write(dir.join("hosts.json"), b"[]").unwrap();
+    assert!(hosts.all().is_empty());
+    assert!(hosts.save_records::<HostEntry>(&[]).is_ok());
+
+    // HostMetaStore: unreadable file refuses overwrite, good read clears guard.
+    let meta = HostMetaStore::open(&dir);
+    std::fs::write(meta.path(), b"not json").unwrap();
+    assert!(meta.get_alias("u1").is_none());
+    assert!(meta.set_alias("u1", Some("Rig")).is_err());
+    std::fs::write(meta.path(), b"{}").unwrap();
+    assert!(meta.get_alias("u1").is_none());
+    assert!(meta.set_alias("u1", Some("Rig")).unwrap());
+    assert_eq!(meta.get_alias("u1").as_deref(), Some("Rig"));
+
+    // WakeTargetsStore: unreadable file refuses overwrite, NotFound/good read clears guard.
+    let wol = crate::wol::WakeTargetsStore::open(&dir);
+    std::fs::write(wol.path(), b"{bad").unwrap();
+    assert!(wol.manual("u1").is_empty());
+    assert!(wol.store_manual("u1", &["aa:bb:cc:dd:ee:01".into()]).is_err());
+    std::fs::remove_file(wol.path()).unwrap();
+    assert!(wol.manual("u1").is_empty());
+    assert!(wol.store_manual("u1", &["aa:bb:cc:dd:ee:01".into()]).is_ok());
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn add_invited_computer_preserves_internet_play_and_path_on_existing_host() {
+    let dir = temp_dir("invite-existing");
+    let cert_pem = fixture().certificate_pem().to_owned();
+    let mgr = HostManager::open(&dir, Some(Arc::new(fixture()))).unwrap();
+
+    let mut existing = HostEntry::default();
+    existing.shared.unique_id = "pc-inv".into();
+    existing.shared.name = "Existing".into();
+    existing.local_endpoint = EndpointSlot::new("192.168.1.50", 47989);
+    existing.shared.server_certificate = Some(cert_pem.clone());
+    existing.sync_shared_from_slots();
+    mgr.store().upsert(existing.clone()).unwrap();
+    mgr.upsert_tuple(existing);
+
+    let mut invited = HostEntry::default();
+    invited.shared.unique_id = "pc-inv".into();
+    invited.shared.name = "Existing".into();
+    invited.shared.server_certificate = Some(cert_pem);
+    let reply = r#"{"version":1,"servers":[{"host":"relay.example","port":47989}]}"#;
+    assert!(mgr.add_invited_computer(invited, reply).unwrap());
+
+    let snap = mgr.get_snapshot("pc-inv").unwrap();
+    assert_eq!(snap.entry.shared.internet_play.as_deref(), Some(reply));
+    assert!(snap.internet_path.is_some());
+    assert!(snap.paired);
+
+    let saved = mgr.store().get_by_uuid("pc-inv").unwrap();
+    assert_eq!(saved.shared.internet_play.as_deref(), Some(reply));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn pinned_add_refuses_unpinned_impostor_when_https_verification_fails() {
+    let dir = temp_dir("pinned-add-impostor");
+    let cert_pem = fixture().certificate_pem().to_owned();
+    let mgr = HostManager::open(&dir, Some(Arc::new(fixture()))).unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    // Unused closed port for HTTPS so pinned HTTPS re-poll fails cleanly.
+    let closed_https = TcpListener::bind("127.0.0.1:0").unwrap();
+    let https_port = closed_https.local_addr().unwrap().port();
+    drop(closed_https);
+
+    let mut known = HostEntry::default();
+    known.shared.unique_id = "pc-known".into();
+    known.shared.name = "RealRig".into();
+    known.local_endpoint = EndpointSlot::new("10.0.0.99", 47989);
+    known.shared.server_certificate = Some(cert_pem);
+    known.sync_shared_from_slots();
+    mgr.upsert_tuple(known);
+
+    let srv = std::thread::spawn(move || {
+        for _ in 0..2 {
+            let (mut sock, _) = listener.accept().unwrap();
+            reply_http_xml(
+                &mut sock,
+                &format!(
+                    r#"<root status_code="200"><hostname>FakeRig</hostname><uniqueid>pc-known</uniqueid><state>MJ_SERVER_FREE</state><PairStatus>0</PairStatus><HttpsPort>{https_port}</HttpsPort><LocalIP>127.0.0.1</LocalIP></root>"#
+                ),
+            );
+        }
+    });
+
+    let mut cand = HostEntry::default();
+    cand.shared.http_port = port;
+    cand.local_endpoint = EndpointSlot::new("127.0.0.1", port);
+    cand.sync_shared_from_slots();
+    assert!(mgr.add_computer_blocking(cand.clone()).is_none());
+
+    let cert_sha = crate::http::certificate_sha256_der(fixture().certificate_der());
+    let (outcome, snap) = mgr.add_computer_for_link(cand, cert_sha);
+    assert_eq!(outcome, super::manager::LinkAddOutcome::Unreachable);
+    assert!(snap.is_none());
+
+    let still = mgr.get_snapshot("pc-known").unwrap();
+    assert_eq!(still.entry.shared.name, "RealRig");
+    assert_eq!(
+        still.entry.local_endpoint,
+        EndpointSlot::new("10.0.0.99", 47989)
+    );
+    srv.join().unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn poll_commits_before_blocking_stun_drops_locks_for_listener_and_backs_off_stun() {
+    let dir = temp_dir("poll-stun-backoff");
+    let mgr = HostManager::open(&dir, Some(Arc::new(fixture()))).unwrap();
+    mgr.set_allow_loopback_stun_for_test(true);
+
+    let (stun_entered_tx, stun_entered_rx) = mpsc::channel();
+    let online_seen = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let online_flag = Arc::clone(&online_seen);
+    let mgr_for_cb = mgr.clone();
+    mgr.set_listener(Some(Arc::new(move |snap: &super::manager::HostSnapshot| {
+        if snap.state == HostReachState::Online {
+            // Re-entering public snapshot/removal paths inside listener must not deadlock.
+            assert!(mgr_for_cb.get_snapshot(&snap.entry.shared.unique_id).is_some());
+            online_flag.store(true, std::sync::atomic::Ordering::Release);
+        }
+    })));
+
+    let stun_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let stun_calls_cb = Arc::clone(&stun_calls);
+    let online_in_stun = Arc::clone(&online_seen);
+    mgr.set_stun_resolver(Arc::new(move |_| {
+        stun_calls_cb.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let _ = stun_entered_tx.send(online_in_stun.load(std::sync::atomic::Ordering::Acquire));
+        None
+    }));
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let srv = std::thread::spawn(move || {
+        for _ in 0..2 {
+            let (mut sock, _) = listener.accept().unwrap();
+            reply_http_xml(
+                &mut sock,
+                r#"<root status_code="200"><hostname>LanBox</hostname><uniqueid>pc-stun</uniqueid><state>MJ_SERVER_FREE</state><PairStatus>0</PairStatus><HttpsPort>47984</HttpsPort><ExternalPort>47989</ExternalPort></root>"#,
+            );
+        }
+    });
+
+    let mut entry = HostEntry::default();
+    entry.shared.unique_id = "pc-stun".into();
+    entry.shared.name = "LanBox".into();
+    entry.shared.http_port = port;
+    entry.local_endpoint = EndpointSlot::new("127.0.0.1", port);
+    entry.sync_shared_from_slots();
+    mgr.upsert_tuple(entry);
+
+    assert!(mgr.poll_host("pc-stun", true));
+    assert!(
+        stun_entered_rx.recv_timeout(Duration::from_secs(2)).unwrap(),
+        "listener must see Online before blocking STUN resolver runs"
+    );
+    assert_eq!(stun_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+
+    // Second immediate poll hits STUN failure backoff and skips STUN.
+    let _ = mgr.poll_host("pc-stun", true);
+    assert_eq!(stun_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+
+    srv.join().unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn applist_poller_reports_updated_unchanged_failed_and_stops_promptly() {
+    use super::applist::{ApplistPollOutcome, ApplistPollerHandle};
+    use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+    use std::io::{Read, Write};
+
+    let host_id = fixture();
+    let cert_der = host_id.certificate_der().to_vec();
+    let tls_cfg = Arc::new(
+        rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(
+                vec![CertificateDer::from(cert_der.clone())],
+                PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
+                    host_id.private_key_pkcs8().to_vec(),
+                )),
+            )
+            .unwrap(),
+    );
+
+    let pool = Arc::new(HostClientPool::new(Arc::new(fixture())));
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let srv = std::thread::spawn(move || {
+        let xml = r#"<root status_code="200"><App><AppTitle>Alpha</AppTitle><ID>1</ID></App></root>"#;
+        let reply = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{xml}",
+            xml.len()
+        );
+        // 1st & 2nd polls: valid TLS XML replies (Updated then Unchanged).
+        for _ in 0..2 {
+            if let Ok((mut s, _)) = listener.accept() {
+                let mut conn = rustls::ServerConnection::new(Arc::clone(&tls_cfg)).unwrap();
+                let mut tls = rustls::Stream::new(&mut conn, &mut s);
+                let mut buf = [0u8; 512];
+                let _ = tls.read(&mut buf);
+                let _ = tls.write_all(reply.as_bytes());
+                let _ = tls.flush();
+            }
+        }
+        // 3rd poll: non-TLS close triggers Failed immediately without blocking 5s.
+        if let Ok((mut s, _)) = listener.accept() {
+            let _ = s.write_all(b"NOT_TLS\r\n");
+        }
+        // 4th poll: stalled socket to prove `stop()` returns promptly.
+        if let Ok((_stalled, _)) = listener.accept() {
+            std::thread::sleep(Duration::from_millis(600));
+        }
+    });
+
+    let (tx, rx) = mpsc::channel();
+    let handle = ApplistPollerHandle::start_with_outcomes(
+        pool,
+        "127.0.0.1".into(),
+        port,
+        port,
+        cert_der,
+        Box::new(move |ev| {
+            let _ = tx.send(ev);
+        }),
+    );
+
+    assert!(matches!(
+        rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+        ApplistPollOutcome::Updated(ref u) if u.apps.len() == 1
+    ));
+    handle.poll_now();
+    assert!(matches!(
+        rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+        ApplistPollOutcome::Unchanged
+    ));
+    handle.poll_now();
+    assert!(matches!(
+        rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+        ApplistPollOutcome::Failed(_)
+    ));
+
+    handle.poll_now();
+    std::thread::sleep(Duration::from_millis(40));
+    let started = Instant::now();
+    handle.stop();
+    assert!(started.elapsed() < Duration::from_secs(1), "stop took {:?}", started.elapsed());
+    let _ = srv.join();
+}
+
+#[test]
+fn store_ignores_empty_unique_id_and_cleans_stale_tmp_files() {
+    let dir = temp_dir("empty_id_and_stale_tmp");
+    let store = HostStore::open(&dir);
+    let mut empty = HostEntry::default();
+    empty.shared.name = "Alpha".into();
+    assert!(!store.upsert(empty.clone()).unwrap());
+    assert!(!store.replace_entry(empty).unwrap());
+    assert!(store.all().is_empty());
+
+    let stale = dir.join("hosts.json.99999.0.tmp");
+    std::fs::write(&stale, b"stale").unwrap();
+    let mut valid = HostEntry::default();
+    valid.shared.unique_id = "pc-alpha".into();
+    valid.shared.name = "Alpha".into();
+    valid.local_endpoint = EndpointSlot::new("10.0.0.1", 47989);
+    valid.sync_shared_from_slots();
+    // Fresh tmp (< STALE_TMP_AGE) stays untouched; an entry save only prunes aged tmps safely.
+    assert!(store.upsert(valid).unwrap());
+    assert_eq!(store.all().len(), 1);
+    assert!(stale.exists());
+    let _ = std::fs::remove_dir_all(dir);
+}

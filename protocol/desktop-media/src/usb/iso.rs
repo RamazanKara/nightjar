@@ -25,10 +25,10 @@ const ISO_TIMEOUT_MS: c_uint = 5_000;
 /// Event-loop poll interval so cancellation and close wake promptly.
 // Linux and macOS (unix): libusb_handle_events_timeout_completed takes a libc::timeval slice.
 #[cfg(unix)]
-const POLL_SLICE_US: i64 = 50_000;
+const POLL_SLICE_US: i64 = 2_000;
 // Windows (non-unix): rusb::Context::handle_events takes a Duration.
 #[cfg(not(unix))]
-const POLL_SLICE: Duration = Duration::from_millis(10);
+const POLL_SLICE: Duration = Duration::from_millis(2);
 
 const _: () = assert!(std::mem::size_of::<AtomicI32>() == std::mem::size_of::<c_int>());
 

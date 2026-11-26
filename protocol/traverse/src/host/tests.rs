@@ -39,6 +39,8 @@ fn a_device_that_is_not_trying_is_looked_for_less_often() {
         keys,
         device,
         published: None,
+        publish_retry_at: None,
+        publish_failures: 0,
         last_poll: None,
         polling: false,
         heard: None,
@@ -332,4 +334,56 @@ fn a_host_on_one_address_serves_one_device_at_a_time() {
     assert_eq!(paths[0].device, "Tablet");
     assert!(host.status().path_errors.is_empty());
     host.stop();
+}
+
+#[test]
+fn an_ended_session_cannot_be_reopened_until_stamp_expires() {
+    let host = HostService::start(config()).unwrap();
+    let device = Device {
+        id: "a".into(),
+        name: "Phone".into(),
+        secret: [3; 32],
+    };
+    host.set_devices(vec![device.clone()]);
+    let probe = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let from = probe.local_addr().unwrap();
+    let now = unix_now();
+    let punch_msg = |session: [u8; 16], stamp: Option<u64>| {
+        let path = Keys::new(device.secret).path(&host.session(), &session);
+        let payload = stamp.map(wire::punch_stamp);
+        wire::Sealer::new(&path.client_to_host, path.tag, session).seal(
+            wire::Kind::Punch,
+            0,
+            payload.as_ref().map_or(&[][..], |b| &b[..]),
+        )
+    };
+
+    host.receive(&mut punch_msg([9; 16], Some(now)), from);
+    assert_eq!(paths(&host, 1).len(), 1);
+
+    for (_, tunnel) in host.shared.tunnels.read().unwrap().values() {
+        tunnel.close("ended");
+    }
+    host.prune_closed();
+    assert!(host.shared.tunnels.read().unwrap().is_empty());
+
+    // Replaying the closed session's punch (with or without stamp) must not reopen it.
+    host.receive(&mut punch_msg([9; 16], Some(now)), from);
+    host.receive(&mut punch_msg([9; 16], None), from);
+    thread::sleep(Duration::from_millis(150));
+    assert!(host.shared.tunnels.read().unwrap().is_empty());
+
+    // A fresh session for the same device opens normally.
+    host.receive(&mut punch_msg([8; 16], Some(now)), from);
+    assert_eq!(paths(&host, 1).len(), 1);
+    host.stop();
+}
+
+#[test]
+fn stun_retry_backs_off_on_failure_and_resets_on_success() {
+    assert_eq!(worker::stun_retry_delay(false, 0), (5_000, 1));
+    assert_eq!(worker::stun_retry_delay(false, 1), (10_000, 2));
+    assert_eq!(worker::stun_retry_delay(false, 2), (20_000, 3));
+    assert_eq!(worker::stun_retry_delay(false, 10), (STUN_EVERY, 11));
+    assert_eq!(worker::stun_retry_delay(true, 4), (STUN_EVERY, 0));
 }

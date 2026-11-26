@@ -116,9 +116,7 @@ impl GpuDecoder {
                 let why = diagnose_vulkan(&luid);
                 return Err(format!("no PyroWave Vulkan device for the display adapter (PyroWave error {result}, {}): {why}", result_name(result)));
             }
-            if !(s.api.device_confirm_interop_support)(s.device) {
-                return Err("the Vulkan driver cannot share D3D11 textures and fences with the PyroWave device (external memory and semaphore interop are missing)".into());
-            }
+            let interop_confirmed = (s.api.device_confirm_interop_support)(s.device);
             // Before the decoder, so nothing of it is made for the other queue. The planes are
             // acquired from QUEUE_FAMILY_IGNORED and released to QUEUE_FAMILY_EXTERNAL by the decode
             // itself, and the decode fence orders D3D11 after it, on either queue.
@@ -132,15 +130,24 @@ impl GpuDecoder {
                 return Err(decoder_refused(result, &diagnose_vulkan(&luid)));
             }
             for _ in 0..config.slots {
-                let slot = s.create_slot(d3d)?;
+                let slot = s.create_slot(d3d).map_err(|e| format!("{e} ({})", diagnose_interop(&luid, config.ten_bit)))?;
                 s.slots.push(slot);
             }
-            let (fence, sync) = s.shared_fence(&device5, "decode")?;
+            let (fence, sync) = s.shared_fence(&device5, "decode").map_err(|e| format!("{e} ({})", diagnose_interop(&luid, config.ten_bit)))?;
             s.fence = Some(fence);
             s.sync = sync;
-            let (fence, sync) = s.shared_fence(&device5, "reuse")?;
+            let (fence, sync) = s.shared_fence(&device5, "reuse").map_err(|e| format!("{e} ({})", diagnose_interop(&luid, config.ten_bit)))?;
             s.reuse_fence = Some(fence);
             s.reuse_sync = sync;
+            if !interop_confirmed {
+                static LOGGED_PARTIAL_INTEROP: std::sync::Once = std::sync::Once::new();
+                LOGGED_PARTIAL_INTEROP.call_once(|| {
+                    eprintln!(
+                        "nightjar: pyrowave: broad SDK interop check returned false, but D3D11_TEXTURE + D3D12_FENCE interop succeeded ({})",
+                        diagnose_interop(&luid, config.ten_bit)
+                    );
+                });
+            }
         }
         Ok(s)
     }
@@ -470,9 +477,52 @@ pub fn default_device() -> Result<ID3D11Device, String> {
     device.ok_or_else(|| "cannot create a D3D11 device: none returned".to_owned())
 }
 
-/// Why the SDK may have refused a Vulkan device for this adapter, read from the driver directly:
-/// the first requirement of the decoder that the adapter's Vulkan device does not meet.
-pub fn diagnose_vulkan(luid: &Luid) -> String {
+pub(super) struct InteropReport<'a> {
+    pub(super) name: &'a str,
+    pub(super) major: u32,
+    pub(super) minor: u32,
+    pub(super) ten_bit: bool,
+    pub(super) ext_memory_win32: bool,
+    pub(super) ext_semaphore_win32: bool,
+    pub(super) d3d11_storage_src: Result<u32, vk::Result>,
+    pub(super) d3d11_storage_sampled: Result<u32, vk::Result>,
+    pub(super) d3d11_kmt_storage_sampled: Result<u32, vk::Result>,
+    pub(super) d3d12_fence_default: u32,
+    pub(super) d3d12_fence_timeline: u32,
+    pub(super) opaque_win32_binary: u32,
+    pub(super) opaque_win32_timeline: u32,
+}
+
+fn format_image_probe(probe: Result<u32, vk::Result>) -> String {
+    match probe {
+        Ok(bits) => format!("{bits:#x}"),
+        Err(err) => format!("Err({err:?})"),
+    }
+}
+
+pub(super) fn format_interop_report(report: &InteropReport<'_>) -> String {
+    let fmt = if report.ten_bit { "R16_UNORM" } else { "R8_UNORM" };
+    format!(
+        "{} Vulkan {}.{} {fmt}: VK_KHR_external_memory_win32={}, VK_KHR_external_semaphore_win32={}; image D3D11_TEXTURE(STORAGE|TRANSFER_SRC)={}, D3D11_TEXTURE(STORAGE|SAMPLED)={}, D3D11_TEXTURE_KMT(STORAGE|SAMPLED)={}; semaphore D3D12_FENCE(null)={:#x}, D3D12_FENCE(TIMELINE)={:#x}, OPAQUE_WIN32(BINARY)={:#x}, OPAQUE_WIN32(TIMELINE)={:#x}",
+        report.name,
+        report.major,
+        report.minor,
+        report.ext_memory_win32,
+        report.ext_semaphore_win32,
+        format_image_probe(report.d3d11_storage_src),
+        format_image_probe(report.d3d11_storage_sampled),
+        format_image_probe(report.d3d11_kmt_storage_sampled),
+        report.d3d12_fence_default,
+        report.d3d12_fence_timeline,
+        report.opaque_win32_binary,
+        report.opaque_win32_timeline,
+    )
+}
+
+fn with_adapter(
+    luid: &Luid,
+    inspect: impl FnOnce(&ash::Instance, vk::PhysicalDevice, &vk::PhysicalDeviceProperties) -> String,
+) -> String {
     // SAFETY: Plain Vulkan calls on handles made here; the instance is destroyed before returning.
     unsafe {
         let entry = match ash::Entry::load() {
@@ -484,59 +534,127 @@ pub fn diagnose_vulkan(luid: &Luid) -> String {
             Ok(instance) => instance,
             Err(e) => return format!("the Vulkan loader cannot create an instance ({e})"),
         };
-        let found = describe_adapter(&instance, luid);
+        let found = (|| {
+            let devices = match instance.enumerate_physical_devices() {
+                Ok(devices) => devices,
+                Err(e) => return format!("Vulkan lists no devices ({e})"),
+            };
+            let mut names = Vec::new();
+            for device in devices {
+                let mut id = vk::PhysicalDeviceIDProperties::default();
+                let mut properties = vk::PhysicalDeviceProperties2::default().push_next(&mut id);
+                instance.get_physical_device_properties2(device, &mut properties);
+                let properties = properties.properties;
+                let name = properties.device_name_as_c_str().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                if id.device_luid_valid == vk::FALSE || id.device_luid != luid.luid {
+                    names.push(name);
+                    continue;
+                }
+                return inspect(&instance, device, &properties);
+            }
+            format!("Vulkan lists no device with this adapter's LUID (it lists {})", if names.is_empty() { "none".to_owned() } else { names.join(", ") })
+        })();
         instance.destroy_instance(None);
         found
     }
 }
 
-unsafe fn describe_adapter(instance: &ash::Instance, luid: &Luid) -> String {
-    // SAFETY: caller guarantees `instance` is a live Vulkan instance.
-    unsafe {
-        let devices = match instance.enumerate_physical_devices() {
-            Ok(devices) => devices,
-            Err(e) => return format!("Vulkan lists no devices ({e})"),
-        };
-        let mut names = Vec::new();
-        for device in devices {
-            let mut id = vk::PhysicalDeviceIDProperties::default();
-            let mut subgroup = vk::PhysicalDeviceSubgroupProperties::default();
-            let mut properties = vk::PhysicalDeviceProperties2::default().push_next(&mut id).push_next(&mut subgroup);
-            instance.get_physical_device_properties2(device, &mut properties);
-            let properties = properties.properties;
-            let name = properties.device_name_as_c_str().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            if id.device_luid_valid == vk::FALSE || id.device_luid != luid.luid {
-                names.push(name);
-                continue;
-            }
-            let version = properties.api_version;
-            if version < vk::make_api_version(0, 1, 3, 0) {
-                return format!("{name} supports Vulkan {}.{}, the decoder needs 1.3", vk::api_version_major(version), vk::api_version_minor(version));
-            }
-            let needed = vk::SubgroupFeatureFlags::BASIC
-                | vk::SubgroupFeatureFlags::VOTE
-                | vk::SubgroupFeatureFlags::ARITHMETIC
-                | vk::SubgroupFeatureFlags::BALLOT
-                | vk::SubgroupFeatureFlags::SHUFFLE
-                | vk::SubgroupFeatureFlags::SHUFFLE_RELATIVE;
-            let missing = needed & !subgroup.supported_operations;
-            if !missing.is_empty() {
-                return format!("{name} lacks subgroup operations (missing bits {:#x} of VkSubgroupFeatureFlags)", missing.as_raw());
-            }
-            let mut v13 = vk::PhysicalDeviceVulkan13Features::default();
-            let mut features = vk::PhysicalDeviceFeatures2::default().push_next(&mut v13);
-            instance.get_physical_device_features2(device, &mut features);
-            if v13.subgroup_size_control == vk::FALSE {
-                return format!("{name} lacks subgroup size control");
-            }
-            let extensions = instance.enumerate_device_extension_properties(device).unwrap_or_default();
-            for required in [c"VK_KHR_external_memory_win32", c"VK_KHR_external_semaphore_win32"] {
-                if !extensions.iter().any(|e| e.extension_name_as_c_str().is_ok_and(|n| n == required)) {
-                    return format!("{name} lacks {}", required.to_string_lossy());
-                }
-            }
-            return format!("{name} meets the decoder's Vulkan requirements, but the SDK still refused it");
+/// Why the SDK may have refused a Vulkan device for this adapter, read from the driver directly:
+/// the first requirement of the decoder that the adapter's Vulkan device does not meet.
+pub fn diagnose_vulkan(luid: &Luid) -> String {
+    with_adapter(luid, |instance, device, properties| unsafe {
+        describe_adapter(instance, device, properties)
+    })
+}
+
+/// Inspects the adapter's Vulkan external D3D11 texture and D3D12 fence interop capabilities.
+pub fn diagnose_interop(luid: &Luid, ten_bit: bool) -> String {
+    with_adapter(luid, |instance, device, properties| {
+        let name = properties.device_name_as_c_str().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let (major, minor) = (vk::api_version_major(properties.api_version), vk::api_version_minor(properties.api_version));
+        if properties.api_version < vk::make_api_version(0, 1, 1, 0) {
+            return format!("{name} supports Vulkan {major}.{minor}, below Vulkan 1.1 external interop queries");
         }
-        format!("Vulkan lists no device with this adapter's LUID (it lists {})", if names.is_empty() { "none".to_owned() } else { names.join(", ") })
+        // SAFETY: `instance` and `device` are live Vulkan 1.1+ handles from `with_adapter`.
+        unsafe {
+            let extensions = instance.enumerate_device_extension_properties(device).unwrap_or_default();
+            let has_ext = |wanted: &CStr| extensions.iter().any(|e| e.extension_name_as_c_str().is_ok_and(|n| n == wanted));
+            let vk_format = if ten_bit { vk::Format::R16_UNORM } else { vk::Format::R8_UNORM };
+            let probe_image = |handle_type, usage| {
+                let mut ext_info = vk::PhysicalDeviceExternalImageFormatInfo::default().handle_type(handle_type);
+                let format_info = vk::PhysicalDeviceImageFormatInfo2::default()
+                    .format(vk_format)
+                    .ty(vk::ImageType::TYPE_2D)
+                    .tiling(vk::ImageTiling::OPTIMAL)
+                    .usage(usage)
+                    .push_next(&mut ext_info);
+                let mut ext_props = vk::ExternalImageFormatProperties::default();
+                let mut props = vk::ImageFormatProperties2::default().push_next(&mut ext_props);
+                instance.get_physical_device_image_format_properties2(device, &format_info, &mut props)
+                    .map(|()| ext_props.external_memory_properties.external_memory_features.as_raw())
+            };
+            let probe_semaphore = |handle_type, sem_type: Option<vk::SemaphoreType>| {
+                let mut type_info = sem_type.map(|t| vk::SemaphoreTypeCreateInfo::default().semaphore_type(t));
+                let mut info = vk::PhysicalDeviceExternalSemaphoreInfo::default().handle_type(handle_type);
+                if let Some(next) = &mut type_info {
+                    info = info.push_next(next);
+                }
+                let mut props = vk::ExternalSemaphoreProperties::default();
+                instance.get_physical_device_external_semaphore_properties(device, &info, &mut props);
+                props.external_semaphore_features.as_raw()
+            };
+            format_interop_report(&InteropReport {
+                name: &name,
+                major,
+                minor,
+                ten_bit,
+                ext_memory_win32: has_ext(c"VK_KHR_external_memory_win32"),
+                ext_semaphore_win32: has_ext(c"VK_KHR_external_semaphore_win32"),
+                d3d11_storage_src: probe_image(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE, vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_SRC),
+                d3d11_storage_sampled: probe_image(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE, vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED),
+                d3d11_kmt_storage_sampled: probe_image(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT, vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED),
+                d3d12_fence_default: probe_semaphore(vk::ExternalSemaphoreHandleTypeFlags::D3D12_FENCE, None),
+                d3d12_fence_timeline: probe_semaphore(vk::ExternalSemaphoreHandleTypeFlags::D3D12_FENCE, Some(vk::SemaphoreType::TIMELINE)),
+                opaque_win32_binary: probe_semaphore(vk::ExternalSemaphoreHandleTypeFlags::OPAQUE_WIN32, Some(vk::SemaphoreType::BINARY)),
+                opaque_win32_timeline: probe_semaphore(vk::ExternalSemaphoreHandleTypeFlags::OPAQUE_WIN32, Some(vk::SemaphoreType::TIMELINE)),
+            })
+        }
+    })
+}
+
+unsafe fn describe_adapter(instance: &ash::Instance, device: vk::PhysicalDevice, properties: &vk::PhysicalDeviceProperties) -> String {
+    // SAFETY: caller guarantees `instance` and `device` are live Vulkan handles.
+    unsafe {
+        let name = properties.device_name_as_c_str().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let version = properties.api_version;
+        if version < vk::make_api_version(0, 1, 3, 0) {
+            return format!("{name} supports Vulkan {}.{}, the decoder needs 1.3", vk::api_version_major(version), vk::api_version_minor(version));
+        }
+        let mut subgroup = vk::PhysicalDeviceSubgroupProperties::default();
+        let mut props2 = vk::PhysicalDeviceProperties2::default().push_next(&mut subgroup);
+        instance.get_physical_device_properties2(device, &mut props2);
+        let needed = vk::SubgroupFeatureFlags::BASIC
+            | vk::SubgroupFeatureFlags::VOTE
+            | vk::SubgroupFeatureFlags::ARITHMETIC
+            | vk::SubgroupFeatureFlags::BALLOT
+            | vk::SubgroupFeatureFlags::SHUFFLE
+            | vk::SubgroupFeatureFlags::SHUFFLE_RELATIVE;
+        let missing = needed & !subgroup.supported_operations;
+        if !missing.is_empty() {
+            return format!("{name} lacks subgroup operations (missing bits {:#x} of VkSubgroupFeatureFlags)", missing.as_raw());
+        }
+        let mut v13 = vk::PhysicalDeviceVulkan13Features::default();
+        let mut features = vk::PhysicalDeviceFeatures2::default().push_next(&mut v13);
+        instance.get_physical_device_features2(device, &mut features);
+        if v13.subgroup_size_control == vk::FALSE {
+            return format!("{name} lacks subgroup size control");
+        }
+        let extensions = instance.enumerate_device_extension_properties(device).unwrap_or_default();
+        for required in [c"VK_KHR_external_memory_win32", c"VK_KHR_external_semaphore_win32"] {
+            if !extensions.iter().any(|e| e.extension_name_as_c_str().is_ok_and(|n| n == required)) {
+                return format!("{name} lacks {}", required.to_string_lossy());
+            }
+        }
+        format!("{name} meets the decoder's Vulkan requirements, but the SDK still refused it")
     }
 }

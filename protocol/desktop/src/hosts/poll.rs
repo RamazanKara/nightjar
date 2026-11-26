@@ -2,6 +2,7 @@
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::mpsc::channel;
+use std::sync::Arc;
 use std::time::Instant;
 
 use nightjar_core::http::native_api::session::{ActionId, Session};
@@ -193,14 +194,17 @@ impl Hosts {
         }
         let sender = self.sender.clone();
         let waker = self.waker.clone();
-        let _ = std::thread::Builder::new()
+        if let Err(e) = std::thread::Builder::new()
             .name(name.into())
             .spawn(move || {
                 if let Some(event) = work() {
                     let _ = sender.send(event);
                     waker();
                 }
-            });
+            })
+        {
+            eprintln!("nightjar: cannot start {name} worker: {e}");
+        }
     }
 
     /// Runs `work` on PC `id`'s worker for `lane`, started on its first request: the lane's
@@ -484,9 +488,9 @@ impl Hosts {
     /// old one and load again from the art cache as they are asked for ([`Self::request_art`]).
     pub fn renderer_changed(&mut self) {
         for host in &mut self.list {
-            host.art.retain(|_, art| !matches!(art, Art::Ready(_)));
-            host.ambient.clear();
-            host.art_sized.clear();
+            Arc::make_mut(&mut host.art).retain(|_, art| !matches!(art, Art::Ready(_)));
+            Arc::make_mut(&mut host.ambient).clear();
+            Arc::make_mut(&mut host.art_sized).clear();
         }
         self.art_used.clear();
     }
@@ -502,7 +506,7 @@ pub(super) fn punches_now(away: bool, tunnel_up: impl FnOnce() -> bool) -> bool 
 }
 
 /// The addresses a poll tries in turn.
-pub(super) fn poll_addresses(record: &HostRecord) -> Vec<String> {
+pub(crate) fn poll_addresses(record: &HostRecord) -> Vec<String> {
     nightjar_core::hosts::poll::desktop_poll_addresses(
         &record.to_shared_fields(),
         internet_reply(record).as_ref(),

@@ -3,6 +3,7 @@ package com.limelight;
 import android.app.Application;
 import android.view.InputDevice;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 
 import com.limelight.binding.input.capture.InputCaptureProvider;
 import com.limelight.nvstream.NvConnection;
@@ -98,8 +99,64 @@ public class GameMouseInputTest {
         return new KeyEvent(0, 10, action, KeyEvent.KEYCODE_BACK, 0, 0, -1, 0, 0, source);
     }
 
+    @Test
+    public void fractionalScrollAccumulatesSkipsZeroAxesAndResetsWhenCaptureStops() {
+        RecordingConnection connection = new RecordingConnection();
+        boolean[] capturing = {true};
+        Game game = Robolectric.buildActivity(Game.class).get();
+        ReflectionHelpers.setField(game, "conn", connection);
+        ReflectionHelpers.setField(game, "prefConfig", new PreferenceConfiguration());
+        ReflectionHelpers.setField(game, "inputCaptureProvider", new InputCaptureProvider() {
+            @Override public boolean isCapturingActive() { return capturing[0]; }
+        });
+        ReflectionHelpers.setField(game, "grabbedInput", true);
+        ReflectionHelpers.setField(game, "connected", true);
+        GameMouseInput mouse = new GameMouseInput(game);
+
+        MotionEvent.PointerProperties[] props = {new MotionEvent.PointerProperties()};
+        props[0].id = 0;
+        props[0].toolType = MotionEvent.TOOL_TYPE_MOUSE;
+        MotionEvent.PointerCoords[] coords = {new MotionEvent.PointerCoords()};
+        coords[0].setAxisValue(MotionEvent.AXIS_VSCROLL, 0.003f);
+        coords[0].setAxisValue(MotionEvent.AXIS_HSCROLL, 0f);
+        MotionEvent e1 = MotionEvent.obtain(1000, 1000, MotionEvent.ACTION_SCROLL, 1, props, coords,
+                0, 0, 1, 1, 0, 0, InputDevice.SOURCE_MOUSE, 0);
+        MotionEvent e2 = MotionEvent.obtain(1000, 1010, MotionEvent.ACTION_SCROLL, 1, props, coords,
+                0, 0, 1, 1, 0, 0, InputDevice.SOURCE_MOUSE, 0);
+        try {
+            mouse.handleMouseOrStylusEvent(null, e1, InputDevice.SOURCE_MOUSE, null);
+            assertEquals("0.003 * 120 = 0.36 stays sub-unit until second scroll", 0, connection.vScrolls.size());
+            mouse.handleMouseOrStylusEvent(null, e2, InputDevice.SOURCE_MOUSE, null);
+            assertEquals(Arrays.asList((short) 1), connection.vScrolls);
+            assertTrue("Zero horizontal axis must not send packet", connection.hScrolls.isEmpty());
+
+            // Leave fractional remainder pending, press button, then drop capture: button up and reset occur.
+            mouse.handleMouseOrStylusEvent(null, e1, InputDevice.SOURCE_MOUSE, null);
+            MotionEvent down = MotionEvent.obtain(1000, 1020, MotionEvent.ACTION_BUTTON_PRESS, 1, props, coords,
+                    0, MotionEvent.BUTTON_SECONDARY, 1, 1, 0, 0, InputDevice.SOURCE_MOUSE, 0);
+            try {
+                mouse.handleMouseOrStylusEvent(null, down, InputDevice.SOURCE_MOUSE, null);
+            } finally {
+                down.recycle();
+            }
+            capturing[0] = false;
+            mouse.handleMouseOrStylusEvent(null, e1, InputDevice.SOURCE_MOUSE, null);
+            assertEquals(Arrays.asList(true, false), connection.rightButton);
+            // Re-enable capture: leftover 0.6 fraction was discarded, so one 0.005f event does not fire yet.
+            capturing[0] = true;
+            connection.vScrolls.clear();
+            mouse.handleMouseOrStylusEvent(null, e1, InputDevice.SOURCE_MOUSE, null);
+            assertTrue(connection.vScrolls.isEmpty());
+        } finally {
+            e1.recycle();
+            e2.recycle();
+        }
+    }
+
     private static class RecordingConnection extends NvConnection {
         final List<Boolean> rightButton = new ArrayList<>();
+        final List<Short> vScrolls = new ArrayList<>();
+        final List<Short> hScrolls = new ArrayList<>();
 
         RecordingConnection() {
             super(null, new ComputerDetails.AddressTuple("127.0.0.1", 47989), 47984, "test",
@@ -113,5 +170,7 @@ public class GameMouseInputTest {
         @Override public void sendMouseButtonUp(byte button) {
             if (button == MouseButtonPacket.BUTTON_RIGHT) rightButton.add(false);
         }
+        @Override public void sendMouseHighResScroll(short amount) { vScrolls.add(amount); }
+        @Override public void sendMouseHighResHScroll(short amount) { hScrolls.add(amount); }
     }
 }

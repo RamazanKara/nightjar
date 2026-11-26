@@ -64,6 +64,7 @@ Tier: Main rows show when a section opens; More rows fold behind the section's l
 | Controller mouse mode<br>`checkbox_mouse_emulation` | More | On | On; Off | Leave on to toggle controller mouse mode by holding Start. |
 | Stick for scrolling<br>`analog_scrolling` | More | Right analog stick | Both sticks move the mouse; Right analog stick; Left analog stick | Choose which stick scrolls in controller mouse mode. The other moves the pointer; with None, both move it. Shown while Controller mouse mode is On. |
 | Precise controller mouse<br>`checkbox_mouse_emulation_fixed_step` | More | Off | On; Off | Enable for precise pointing in controller mouse mode: hold X while moving the stick to move a fixed step; Y doubles the step from 1 to 128 pixels, then wraps to 1. Shown while Controller mouse mode is On. |
+| Controller mouse sensitivity<br>`seekbar_mouse_emulation_sensitivity` | More | 100% | 25%–200%; step 5%; buttons 5% | Adjust how fast the sticks move the pointer in controller mouse mode; 100% is default sensitivity. Shown while Controller mouse mode is On. |
 | Controller touchpad as mouse<br>`checkbox_gamepad_touchpad_as_mouse` | More | Off | On; Off | Enable to always move the host pointer with the controller touchpad instead of forwarding native touchpad input. |
 
 #### Stream menu
@@ -265,6 +266,7 @@ Tier: Main rows show when a section opens; More rows fold behind the section's l
 
 | Setting / preference key | Tier | Default | Choices and units | When to change or use |
 | --- | --- | --- | --- | --- |
+| Show battery and clock in compact overlay<br>`checkbox_compact_overlay_device_info` | More | Off | On; Off | Off by default, under Streaming's More rows. Adds this device's battery percentage and local clock time to the compact performance overlay. |
 | Dual screen mode<br>`checkbox_dual_screen` | More | Off | On; Off | Enable on a device with a second screen to stream the same game to both: the second screen gets a stream of its own at its own resolution, while sound, controllers and microphone stay with the first and a touch mode change on either screen applies to both. The second stream is the same device as the first, so the PC pairs once. It needs a Rubylight host that supports it, which decides which of its screens each stream shows. Applies to the next stream. |
 | Second screen resolution<br>`list_resolution_screen2` | More | Second screen’s own size | Second screen’s own size; 360p; 480p; 720p; 1080p; 1440p; 4K | The resolution of the second screen's stream in Dual screen mode, apart from the first screen's: the second screen's own full size, or a standard size. Applies to the next stream. In the list only while Dual screen mode is on, or while it holds another value than its default; search finds it either way. |
 | Picture in picture<br>`checkbox_enable_pip` | More | Off | On; Off | Enable to keep a small video window when leaving the app. Input and overlay are hidden there; requires device support. |
@@ -502,7 +504,7 @@ A PC's, game's or profile's settings show the same rows, except the App section,
 | Active profile | The profile streams use, or **Main settings**. While a profile is active, the main settings say so at the top. |
 | New profile | Asks for a name and opens the new, empty profile's settings. |
 | Choose automatically | Picks a profile when a stream starts, by network: **Mobile or metered**, **Home Wi-Fi** and **Other Wi-Fi**. A network left at **Active profile** follows the active profile. |
-| Home Wi-Fi names | **Add** a typed name, or **Add current Wi-Fi**; **Remove** takes one off. Up to 50 names of up to 32 characters; names are case-sensitive and stay on this device. |
+| Home Wi-Fi names | **Add** a typed name, or **Add current Wi-Fi**; **Remove** takes one off. Up to 50 names of up to 32 characters; names are case-sensitive and stay on this device. **Home Wi-Fi** matching works on Android, Windows, and Linux; macOS restricts Wi-Fi SSIDs without Location Services permission, so Wi-Fi connections there match **Other Wi-Fi** (existing saved entries can still be removed). |
 | Mobile data bitrate limit | 0–500000 kbps; 0 means no limit. Caps the bitrate on mobile data and on metered Wi-Fi or Ethernet, after all profile, PC and game values. **Video → Bitrate on mobile data** sets the same limit. |
 | Saved profiles → Edit / More | Edit opens the profile's settings; More holds Rename, Duplicate and Delete. |
 

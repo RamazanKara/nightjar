@@ -151,12 +151,42 @@ pub(super) fn exclusive_fullscreen(renderer: *mut SDL_Renderer) -> bool {
 }
 
 impl Streaming {
+    pub(in crate::stream) fn init_usb(
+        avail: nightjar_core::http::Availability,
+        settings: &Settings,
+        shared: &pipeline::Shared,
+        session: &mut Session,
+    ) -> (Option<crate::usb::Panel>, Option<&'static str>) {
+        let usb_refused = if settings.usb_forwarding { crate::usb::refusal(avail) } else { None };
+        if let Some(why) = usb_refused {
+            eprintln!("nightjar: USB forwarding is on, but no USB devices are offered: {why}");
+        }
+        let usb = if settings.usb_forwarding && usb_refused.is_none() {
+            lock(&shared.host_client).clone()
+        } else {
+            None
+        }
+        .map(|host| crate::usb::Panel::new(session.usb_forwarder(host, || {}), settings.usb_auto.clone()));
+        (usb, usb_refused)
+    }
+
     /// Moves decoded pictures into the pacer; sends a clock sync probe when due.
     pub fn pump(&mut self) {
         // The keyboard hook keeps the shell's keys only while this loop runs.
         system_keys::alive();
         self.cursor.tick(Instant::now());
         self.release_shortcut_when_due(Instant::now());
+        if self.shared.usb_pending.load(std::sync::atomic::Ordering::Acquire)
+            && let Some(native) = lock(&self.shared.usb_native).take()
+        {
+            self.shared.usb_pending.store(false, std::sync::atomic::Ordering::Release);
+            let avail = crate::usb::availability(&self.plan.info.capabilities, Some(native));
+            self.facts.usb = avail;
+            let (usb, usb_refused) = Self::init_usb(avail, &self.settings, &self.shared, &mut self.session);
+            self.usb = usb;
+            self.usb_refused = usb_refused;
+            self.needs_redraw = true;
+        }
         if let Some(Err(error)) = self.microphone.as_mut().map(microphone::Microphone::poll) {
             self.shared.notify(Notice::MicrophoneFailed(error));
         }

@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">Róg, w którym znajduje się nakładka wydajności.</string>
     <string name="summary_reset_all">Przywraca domyślne wartości wszystkich ustawień; komputery, gry, profile i język zostają.</string>
     <string name="stream_controllers_off">Kontrolery są wyłączone w Ustawieniach, więc żaden kontroler nie trafia do PC.</string>
+    <string name="title_compact_overlay_device_info">Pokaż baterię i zegar w kompaktowej nakładce</string>
+    <string name="summary_compact_overlay_device_info">Dodaje poziom naładowania baterii i czas lokalny tego urządzenia do kompaktowej nakładki wydajności.</string>
 </resources>

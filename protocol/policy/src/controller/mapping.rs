@@ -274,10 +274,6 @@ pub fn remap_key_event(
         out.key_code = keycode::BUTTON_1;
         return out;
     }
-    if vendor_id == 0x2dc8 && scan_code == 306 {
-        out.key_code = keycode::BUTTON_MODE;
-        return out;
-    }
     if ((vendor_id == 0x057e && product_id == 0x2009 && sdk_int < 29)
         || (vendor_id == 0x0f0d && product_id == 0x00c1))
         && let Some(mapped) = match scan_code {

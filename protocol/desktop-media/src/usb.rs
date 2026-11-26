@@ -6,8 +6,10 @@
 //! ([`usb_linux`](crate::usb_linux)) when available and fall back to libusb's asynchronous
 //! isochronous transfers ([`iso`]) otherwise; macOS serves all devices through libusb ([`iso`]).
 
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use nightjar_core::control::SendError;
 use nightjar_core::http::{Availability, Feature, HostCapabilities, NativeCapabilities, Reason};
@@ -121,6 +123,12 @@ fn sysfs_name(busid: &str) -> Option<String> {
 /// The devices plugged in here, hubs left out, without opening any of them.
 pub fn list() -> Result<Vec<Local>, String> {
     let context = rusb::Context::new().map_err(|e| trf("USB devices could not be listed: {}", &[&e]))?;
+    list_with(&context)
+}
+
+/// Enumerates devices using a caller-owned `rusb::Context` so background polling avoids
+/// creating a fresh context and hotplug thread on every tick.
+fn list_with(context: &rusb::Context) -> Result<Vec<Local>, String> {
     let devices = context.devices().map_err(|e| trf("USB devices could not be listed: {}", &[&e]))?;
     #[cfg(windows)]
     let nodes = crate::usb_winusb::nodes()?;
@@ -199,15 +207,20 @@ fn open_error(e: rusb::Error) -> String {
 
 /// The stream controls' USB section: the devices plugged in here, and what the PC made of
 /// each one the user attached.
+type ListedResult = Option<Result<Vec<Local>, String>>;
+
+/// Local USB devices the user attaches and detaches from the stream controls.
 pub struct Panel {
     forwarder: Arc<Forwarder>,
-    /// Listed when the section is first drawn and on Refresh.
+    /// Listed in the background when the section is first drawn and on Refresh.
     local: Option<Vec<Local>>,
     /// The last thing that failed, until the next action.
     pub error: Option<String>,
-    /// Devices being opened on their own thread (Linux's usbip-host asks for the password),
-    /// and what failed there, until the next draw shows it.
+    /// Devices being opened on their own thread, and what failed there, until the next draw shows it.
     opening: Arc<Mutex<Opening>>,
+    /// Background device enumeration in flight (`refresh` / `local`).
+    listing: Arc<AtomicBool>,
+    listed: Arc<Mutex<ListedResult>>,
     /// The devices (by [`auto_key`]) attached whenever they are plugged in during a stream.
     auto: Arc<Mutex<Vec<String>>>,
     /// Set when the user changed `auto`, until the settings are saved.
@@ -251,6 +264,8 @@ impl Drop for OpeningGuard<'_> {
 
 /// How often the automatic attach looks for newly plugged-in devices.
 const AUTO_POLL: Duration = Duration::from_secs(2);
+/// Wait before retrying an automatic attach that failed while still plugged in.
+const AUTO_RETRY_COOLDOWN: Duration = Duration::from_secs(10);
 
 /// What the automatic list remembers a device by: its vendor and product id, so that it
 /// matches on any port (Android's UsbForwarding.autoKey writes the same).
@@ -259,25 +274,41 @@ pub fn auto_key(vid: u16, pid: u16) -> String {
 }
 
 /// The devices of `local` to attach automatically now: on the list, forwardable, not attached
-/// or being opened, and not tried since they were plugged in. `tried` forgets the unplugged.
-fn auto_due(local: &[Local], auto: &[String], busy: impl Fn(&str) -> bool, tried: &mut Vec<String>) -> Vec<Local> {
-    tried.retain(|busid| local.iter().any(|l| l.busid == *busid));
+/// or being opened, and either unseen since plug-in (`tried` has no entry) or past their failed
+/// retry cooldown (`Some(retry_at) <= now`). `tried` forgets unplugged devices.
+fn auto_due(
+    local: &[Local],
+    auto: &[String],
+    busy: impl Fn(&str) -> bool,
+    tried: &mut HashMap<String, Option<Instant>>,
+    now: Instant,
+) -> Vec<Local> {
+    tried.retain(|busid, _| local.iter().any(|l| l.busid == *busid));
     let mut due = Vec::new();
     for device in local {
         if device.blocked.is_some() || !auto.contains(&auto_key(device.vid, device.pid)) { continue; }
-        if tried.contains(&device.busid) || busy(&device.busid) { continue; }
-        tried.push(device.busid.clone());
+        if busy(&device.busid) { continue; }
+        match tried.get(&device.busid) {
+            Some(None) => continue,
+            Some(Some(retry_at)) if now < *retry_at => continue,
+            _ => {}
+        }
+        tried.insert(device.busid.clone(), None);
         due.push(device.clone());
     }
     due
 }
 
-/// Opens and attaches `local`, which the caller marked as being opened; a failure shows on the panel.
-fn attach_tracked(forwarder: &Forwarder, opening: &Mutex<Opening>, local: &Local) {
+/// Opens and attaches `local`, which the caller marked as being opened; returns whether attach
+/// succeeded, and records any failure on the panel.
+fn attach_tracked(forwarder: &Forwarder, opening: &Mutex<Opening>, local: &Local) -> bool {
     let _guard = OpeningGuard { opening, busid: local.busid.clone() };
-    let attached = attach_now(forwarder, local);
-    if let Err(e) = attached {
-        opening.lock().unwrap_or_else(PoisonError::into_inner).failed = Some(e);
+    match attach_now(forwarder, local) {
+        Ok(_) => true,
+        Err(e) => {
+            opening.lock().unwrap_or_else(PoisonError::into_inner).failed = Some(e);
+            false
+        }
     }
 }
 
@@ -286,6 +317,7 @@ impl Panel {
     pub fn new(forwarder: Forwarder, auto: Vec<String>) -> Self {
         let mut panel = Self {
             forwarder: Arc::new(forwarder), local: None, error: None, opening: Arc::default(),
+            listing: Arc::new(AtomicBool::new(false)), listed: Arc::default(),
             auto: Arc::new(Mutex::new(auto)), auto_changed: false, auto_thread: None,
         };
         panel.start_auto();
@@ -324,24 +356,39 @@ impl Panel {
         let (stop, stopped) = std::sync::mpsc::channel::<()>();
         let (forwarder, opening, auto) = (self.forwarder.clone(), self.opening.clone(), self.auto.clone());
         let spawned = std::thread::Builder::new().name("usb-auto".into()).spawn(move || {
-            let mut tried = Vec::new();
+            let mut tried = HashMap::new();
+            let mut context: Option<rusb::Context> = None;
             loop {
                 let wanted = auto.lock().unwrap_or_else(PoisonError::into_inner).clone();
-                match list() {
-                    Ok(local) => {
-                        let busy = |busid: &str| {
-                            opening.lock().unwrap_or_else(PoisonError::into_inner).busids.iter().any(|b| b == busid)
-                                || forwarder.list().iter().any(|a| a.is_active() && a.busid == busid)
-                        };
-                        for device in auto_due(&local, &wanted, busy, &mut tried) {
-                            if !opening.lock().unwrap_or_else(PoisonError::into_inner).try_start(&device.busid) {
-                                continue;
+                if context.is_none() {
+                    match rusb::Context::new() {
+                        Ok(c) => context = Some(c),
+                        Err(e) => eprintln!("nightjar: USB: {}", trf("USB devices could not be listed: {}", &[&e])),
+                    }
+                }
+                if let Some(ctx) = context.as_ref() {
+                    match list_with(ctx) {
+                        Ok(local) => {
+                            let busy = |busid: &str| {
+                                opening.lock().unwrap_or_else(PoisonError::into_inner).busids.iter().any(|b| b == busid)
+                                    || forwarder.list().iter().any(|a| a.is_active() && a.busid == busid)
+                            };
+                            let now = Instant::now();
+                            for device in auto_due(&local, &wanted, busy, &mut tried, now) {
+                                if !opening.lock().unwrap_or_else(PoisonError::into_inner).try_start(&device.busid) {
+                                    continue;
+                                }
+                                eprintln!("nightjar: USB {}: attaching {} automatically", device.busid, device.name);
+                                if !attach_tracked(&forwarder, &opening, &device) {
+                                    tried.insert(device.busid, Some(Instant::now() + AUTO_RETRY_COOLDOWN));
+                                }
                             }
-                            eprintln!("nightjar: USB {}: attaching {} automatically", device.busid, device.name);
-                            attach_tracked(&forwarder, &opening, &device);
+                        }
+                        Err(e) => {
+                            eprintln!("nightjar: USB: {e}");
+                            context = None;
                         }
                     }
-                    Err(e) => eprintln!("nightjar: USB: {e}"),
                 }
                 // The channel closes with the panel: the stream ended.
                 if !matches!(stopped.recv_timeout(AUTO_POLL), Err(std::sync::mpsc::RecvTimeoutError::Timeout)) { return; }
@@ -362,20 +409,49 @@ impl Panel {
         self.opening().busids.contains(&local.busid)
     }
 
-    /// The devices here, listed now if they haven't been.
+    fn apply_listed(&mut self) {
+        if let Some(result) = self.listed.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            match result {
+                Ok(local) => self.local = Some(local),
+                Err(e) => {
+                    eprintln!("nightjar: USB: {e}");
+                    self.local.get_or_insert_with(Vec::new);
+                    self.error = Some(e);
+                }
+            }
+        }
+    }
+
+    /// The devices here, triggering a background list if they haven't been listed yet.
     pub fn local(&mut self) -> &[Local] {
+        self.apply_listed();
         if self.local.is_none() { self.refresh(); }
         self.local.as_deref().unwrap_or_default()
     }
 
+    /// Starts enumerating plugged-in USB devices on a background thread (coalescing concurrent clicks).
     pub fn refresh(&mut self) {
-        match list() {
-            Ok(local) => self.local = Some(local),
-            Err(e) => {
-                eprintln!("nightjar: USB: {e}");
-                self.local = Some(Vec::new());
-                self.error = Some(e);
+        self.apply_listed();
+        if self.listing.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
+            return;
+        }
+        let listing = self.listing.clone();
+        let listed = self.listed.clone();
+        let spawned = std::thread::Builder::new().name("usb-list".into()).spawn(move || {
+            struct Clear<'a>(&'a AtomicBool);
+            impl Drop for Clear<'_> {
+                fn drop(&mut self) { self.0.store(false, Ordering::Release); }
             }
+            let _clear = Clear(&listing);
+            let result = list();
+            *listed.lock().unwrap_or_else(PoisonError::into_inner) = Some(result);
+        });
+        if let Err(e) = spawned {
+            self.listing.store(false, Ordering::Release);
+            let message = trf("USB devices could not be listed: {}", &[&e]);
+            eprintln!("nightjar: USB: {message}");
+            self.local.get_or_insert_with(Vec::new);
+            self.error = Some(message);
         }
     }
 
@@ -411,15 +487,12 @@ impl Panel {
     pub fn attach(&mut self, local: &Local) {
         self.error = None;
         if !self.opening().try_start(&local.busid) { return; }
-        if !local.kernel {
-            let _guard = OpeningGuard { opening: &self.opening, busid: local.busid.clone() };
-            if let Err(e) = attach_now(&self.forwarder, local) { self.error = Some(e); }
-            return;
-        }
-        // Binding waits for the password: off the drawing thread.
+        // Opening devices (SetupAPI/libusb string reads, WinUSB handles, usbip-host bind) runs off the drawing thread.
         let busid = local.busid.clone();
         let (forwarder, opening, local) = (self.forwarder.clone(), self.opening.clone(), local.clone());
-        let spawned = std::thread::Builder::new().name("usb-open".into()).spawn(move || attach_tracked(&forwarder, &opening, &local));
+        let spawned = std::thread::Builder::new().name("usb-open".into()).spawn(move || {
+            let _ = attach_tracked(&forwarder, &opening, &local);
+        });
         if let Err(e) = spawned {
             self.opening().finish(&busid);
             self.error = Some(trf("The device could not be opened: {}", &[&e]));

@@ -221,3 +221,49 @@ fn controller_poller_relaxes_when_idle_and_speeds_up_on_input() {
     assert_eq!(poller_sleep_ns(2_000_000, 1_000_001), POLL_ACTIVE_NS, "just inside the 1 s hold");
     assert_eq!(poller_sleep_ns(2_000_000, 1_000_000), POLL_IDLE_NS, "idle after 1 s relaxes to 125 Hz");
 }
+
+mod pad_jitter_tests {
+    use super::super::*;
+
+    fn ev(kind: SDL_EventType) -> SDL_Event {
+        let mut e: SDL_Event = unsafe { std::mem::zeroed() };
+        e.r#type = kind.0;
+        e
+    }
+
+    fn axis_ev(pad: u32, axis: u8, value: i16) -> SDL_Event {
+        let mut e = ev(SDL_EVENT_GAMEPAD_AXIS_MOTION);
+        (e.gaxis.which, e.gaxis.axis, e.gaxis.value) = (SDL_JoystickID(pad), axis, value);
+        e
+    }
+
+    fn sensor_ev(sensor: SDL_SensorType, data: [f32; 3]) -> SDL_Event {
+        let mut e = ev(SDL_EVENT_GAMEPAD_SENSOR_UPDATE);
+        e.gsensor.sensor = sensor.0;
+        e.gsensor.data = data;
+        e
+    }
+
+    #[test]
+    fn sub_threshold_stick_drift_and_sensors_do_not_keep_poller_hot() {
+        let mut act = PadActivity::default();
+        for drift in [1, -1, 64, -128, 256, -256, 0] {
+            assert!(!act.is_active(&axis_ev(1, 0, drift)));
+        }
+        assert!(!act.is_active(&ev(SDL_EVENT_GAMEPAD_SENSOR_UPDATE)));
+        assert!(!act.is_active(&sensor_ev(SDL_SENSOR_ACCEL, [0.0, 9.81, 0.0])));
+        assert!(!act.is_active(&sensor_ev(SDL_SENSOR_GYRO, [0.02, -0.03, 0.01])));
+        assert!(!act.is_active(&sensor_ev(SDL_SENSOR_GYRO, [f32::NAN, 0.5, 0.0])));
+        assert!(!act.is_active(&sensor_ev(SDL_SENSOR_GYRO, [f32::INFINITY, 0.0, 0.0])));
+        assert!(act.is_active(&sensor_ev(SDL_SENSOR_GYRO, [0.0, -0.05, 0.0])));
+        assert!(!act.is_active(&ev(SDL_EVENT_JOYSTICK_BATTERY_UPDATED)));
+        assert!(act.is_active(&axis_ev(1, 0, 4000)));
+        for drift in [3900, 4150, 3750, 4250] {
+            assert!(!act.is_active(&axis_ev(1, 0, drift)));
+        }
+        assert!(act.is_active(&axis_ev(1, 0, 0)));
+        assert!(act.is_active(&ev(SDL_EVENT_GAMEPAD_BUTTON_DOWN)));
+        act.remove_pad(1);
+        assert!(act.last_axis.is_empty());
+    }
+}

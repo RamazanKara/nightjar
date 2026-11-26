@@ -15,8 +15,7 @@ impl Launcher {
         // stream menu): Clear all clears those too.
         let rows = SECTION_KEYS.iter().flat_map(|keys| keys.iter());
         let in_rows = rows.clone().filter(|keys| self.edit_overrides.has(keys)).count();
-        let values = serde_json::to_value(&self.edit_overrides).expect("overrides serialize");
-        let without_row = values.as_object().map_or(0, |values| values.keys().filter(|key| !rows.clone().any(|keys| keys.contains(&key.as_str()))).count());
+        let without_row = self.edit_overrides.keys().filter(|key| !rows.clone().any(|keys| keys.contains(key))).count();
         let set = in_rows + without_row;
         let count = match set {
             0 => tr("Nothing is set here yet.").to_owned(),
@@ -217,15 +216,22 @@ pub(in crate::ui) fn setting_row(
     control: impl FnOnce(&mut Ui, &mut Settings) -> Response,
 ) -> Option<Response> {
     let (action, mut note, room) = (rows.action.take(), rows.note.take(), std::mem::take(&mut rows.room));
-    let (reason, held, defer_reset) = (rows.idle.take(), std::mem::take(&mut rows.held), std::mem::take(&mut rows.defer_reset));
+    let (reason, held, defer_reset, custom_reset) = (
+        rows.idle.take(),
+        std::mem::take(&mut rows.held),
+        std::mem::take(&mut rows.defer_reset),
+        rows.custom_reset.take(),
+    );
     // A row that does nothing now still shows while it holds another value than its default, or
     // the PC's, game's or profile's layer sets it, so the value can be seen and set back.
     // Worked out only for a row that does nothing now: it formats both values.
     let changed = reason.is_some()
         && (held
-            || keys.first().is_some_and(|key| {
-                value_text(key, settings, &rows.display, rows.style) != value_text(key, &rows.defaults, &rows.display, rows.style)
-            })
+            || custom_reset.is_some_and(|(_, differs)| differs)
+            || (custom_reset.is_none()
+                && keys.first().is_some_and(|key| {
+                    value_text(key, settings, &rows.display, rows.style) != value_text(key, &rows.defaults, &rows.display, rows.style)
+                }))
             || rows.layer.as_ref().is_some_and(|(_, overrides)| !keys.is_empty() && overrides.has(keys)));
     let id = keys.first().copied().or(action).unwrap_or_default();
     // A row whose own control had focus or was dragged when last drawn stays while that control still
@@ -267,7 +273,8 @@ pub(in crate::ui) fn setting_row(
                     ui.set_width(CONTROL_W);
                     // Choosing another value ticks the box, opening a menu and leaving it changes
                     // nothing. Read before the control: a number field consumes the arrow keys that step it.
-                    let (before, chose) = (settings.clone(), chosen(ui));
+                    let chose = chosen(ui);
+                    let before = chose.then(|| settings.clone());
                     let value = control(ui, settings);
                     name_for_readers(ui, &value, label, description);
                     // The box on the row's last line, beside where its value comes from, however
@@ -276,13 +283,14 @@ pub(in crate::ui) fn setting_row(
                     if room > 0.0 && room.is_finite() {
                         ui.add_space(room);
                     }
-                    let mut ticked = own || (*settings != before && chose);
+                    let changed = before.as_ref().is_some_and(|before| *settings != *before);
+                    let mut ticked = own || changed;
                     let boxed = layer_box(ui, &mut ticked, box_label);
                     name_for_readers(ui, &boxed, box_label, label);
                     if boxed.changed() && !ticked {
                         overrides.clear(keys);
                         *settings = overrides.apply(inherited);
-                    } else if ticked && (boxed.changed() || *settings != before) {
+                    } else if ticked && (boxed.changed() || changed) {
                         // Only on a change: a row over several keys leaves a layer that holds some
                         // of them, as older versions saved it, as it is until a value is chosen.
                         // Ticking the box takes the whole row; a chosen value, the keys it sets.
@@ -293,8 +301,14 @@ pub(in crate::ui) fn setting_row(
             })
         }
         (None, Some(key)) => {
-            let default = value_text(key, &rows.defaults, &rows.display, rows.style);
-            let differs = !second && value_text(key, settings, &rows.display, rows.style) != default;
+            let (default, differs) = match custom_reset {
+                Some((default, differs)) => (tr(default).to_owned(), differs),
+                None => {
+                    let default = value_text(key, &rows.defaults, &rows.display, rows.style);
+                    let differs = !second && value_text(key, settings, &rows.display, rows.style) != default;
+                    (default, differs)
+                }
+            };
             let reset_w = ui.painter().layout_no_wrap(tr("Reset").to_owned(), semibold(text::LABEL), *ON_SURFACE).size().x + 24.0;
             let mut reset = false;
             let response = settings_row(ui, label, description, note, None, false, reset_w + room, |ui| {
@@ -346,16 +360,15 @@ pub(in crate::ui) fn setting_row(
     Some(response)
 }
 
-/// A row: its label on the left, the control with the value on the right. The hint shows under
-/// the label while the pointer is over the row or focus is in it: one line, cut, with the whole
-/// text as a tooltip, or wrapped whole (the row grows for it) for a row keys or a controller
-/// focused. A note shows
-/// always. A row a PC, game or profile sets has an amber bar at its left edge and, under its
-/// label, where its value comes from beside the layer's box. `reset_w` keeps room left of the
-/// control for a Reset, so the text never moves when it comes and goes.
 /// Where the settings page says whether keys or a controller are in the hand, for [`settings_row`].
 pub(super) const KEYS_IN_HAND: &str = "settings-keys-in-hand";
 
+/// A row: its label on the left, the control with the value on the right. The hint shows under
+/// the label while the pointer is over the row or focus is in it: one line, cut, with the whole
+/// text as a tooltip, or wrapped whole (the row grows for it) for a row keys or a controller
+/// focused. A note shows always. A row a PC, game or profile sets has an amber bar at its left
+/// edge and, under its label, where its value comes from beside the layer's box. `reset_w` keeps
+/// room left of the control for a Reset, so the text never moves when it comes and goes.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn settings_row(
     ui: &mut Ui,

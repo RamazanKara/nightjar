@@ -457,3 +457,41 @@ fn submits(kernel: &FakeKernel) -> Vec<String> {
         .filter(|e| e.starts_with("submit"))
         .collect()
 }
+
+#[test]
+fn seqnum_reused_after_unlink_keeps_new_flight_unlinked_properly() {
+    let kernel = FakeKernel::new();
+    let (mut driver, served) = serving(&kernel);
+    let reused = 77u32;
+    driver.submit_with_seqnum(reused, 1, wire::DIR_IN, 4, [0; 8], &[], &[]);
+    kernel.wait_parked(1);
+    let first_urb = kernel.machine().parked.remove(0);
+
+    // Unlink removes `seqnum -> id` so submitting the same seqnum immediately associates the new URB.
+    let unlink = driver.unlink(reused);
+    assert_eq!(
+        status_of(&driver.reply(false).0),
+        (unlink, wire::ECONNRESET)
+    );
+    driver.submit_with_seqnum(reused, 1, wire::DIR_IN, 4, [0; 8], &[], &[]);
+    kernel.wait_parked(1);
+    let second_urb = kernel.machine().parked[0];
+
+    // Reaping the first URB later must NOT remove the second URB's seqnum mapping.
+    {
+        let mut machine = kernel.machine();
+        kernel.finish(&mut machine, first_urb as *mut Urb, -2, 0);
+    }
+    std::thread::sleep(Duration::from_millis(20));
+
+    // A second unlink targets `second_urb` via `seqnums` and discards it cleanly.
+    let unlink2 = driver.unlink(reused);
+    assert_eq!(
+        status_of(&driver.reply(false).0),
+        (unlink2, wire::ECONNRESET)
+    );
+    assert!(kernel.machine().parked.is_empty());
+    let _ = second_urb;
+    drop(driver);
+    served.join().unwrap().unwrap();
+}

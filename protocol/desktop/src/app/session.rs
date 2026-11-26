@@ -329,7 +329,7 @@ impl App {
         if second_screen::this_process() {
             // SAFETY: a window call on the main thread.
             unsafe { SDL_SetWindowFullscreen(self.window, false); }
-        } else {
+        } else if restores_launcher_window_mode_on_exit(reconnect.is_some()) {
             self.apply_launcher_window_mode();
         }
         self.set_render_vsync(1);
@@ -611,6 +611,12 @@ pub(crate) fn stream_window_mode(mode: WindowMode, gamescope: bool, kms: bool) -
         WindowMode::Fullscreen if gamescope => WindowMode::Borderless,
         mode => mode,
     }
+}
+
+/// Whether leaving a session should restore the launcher's own window mode: an automatic
+/// reconnect immediately launches the next stream on the same fullscreen/borderless surface.
+pub(crate) fn restores_launcher_window_mode_on_exit(reconnecting: bool) -> bool {
+    !reconnecting
 }
 
 /// A setting that needs the GPU renderer, off for a stream straight to the display where the

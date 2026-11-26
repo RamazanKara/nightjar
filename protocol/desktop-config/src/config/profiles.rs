@@ -27,14 +27,20 @@ impl Overrides {
         self.0.is_empty()
     }
 
+    pub fn keys(&self) -> impl Iterator<Item = &str> {
+        self.0.keys().map(String::as_str)
+    }
+
     pub fn has(&self, keys: &[&str]) -> bool {
         keys.iter().any(|key| self.0.contains_key(*key))
     }
 
     pub fn capture(&mut self, settings: &Settings, keys: &[&str]) {
-        let values = serde_json::to_value(settings).expect("settings serialize");
         for key in keys {
-            self.0.insert((*key).to_owned(), values[*key].clone());
+            self.0.insert(
+                (*key).to_owned(),
+                super::override_fields::capture_field(settings, key),
+            );
         }
     }
 
@@ -45,14 +51,26 @@ impl Overrides {
     }
 
     pub fn apply(&self, base: &Settings) -> Settings {
-        let mut values = serde_json::to_value(base).expect("settings serialize");
-        values.as_object_mut().unwrap().extend(self.0.clone());
-        // A value this version cannot read is left out with the base's own, not a panic on the
-        // UI thread: a file from a newer Nightjar, or a hand edit, costs its entry alone.
-        serde_json::from_value(values).unwrap_or_else(|e| {
-            eprintln!("nightjar: ignoring settings overrides this version cannot read: {e}");
-            base.clone()
-        })
+        if self.0.is_empty() {
+            return base.clone();
+        }
+        let mut applied = base.clone();
+        for (key, value) in &self.0 {
+            if let Err(e) = super::override_fields::apply_field(&mut applied, key, value) {
+                // A value this version cannot read is left out with the base's own, not a panic
+                // on the UI thread: a file from a newer Nightjar, or a hand edit, costs its entry.
+                eprintln!("nightjar: ignoring settings overrides this version cannot read: {e}");
+                return base.clone();
+            }
+        }
+        // Resolution spans `width`, `height`, and `native_scale`: pre-6.4.1 layers that set pixel
+        // dimensions without `native_scale` must keep full 100% scale rather than inheriting main's.
+        if (self.0.contains_key("width") || self.0.contains_key("height"))
+            && !self.0.contains_key("native_scale")
+        {
+            applied.native_scale = 100;
+        }
+        applied
     }
 
     pub fn needs_gpu(&self) -> bool {

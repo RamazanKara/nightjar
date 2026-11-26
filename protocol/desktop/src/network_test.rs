@@ -17,7 +17,7 @@ pub use nightjar_desktop_ui::network_test::Verdict;
 
 use crate::config::PaceCalibration;
 use crate::network::Network;
-use crate::strings::en;
+use crate::strings::{en, tr, trf};
 
 pub enum Outcome {
     Connection(Connection),
@@ -60,7 +60,8 @@ impl Test {
         let cancelled = Arc::new(AtomicBool::new(false));
         let stop = cancelled.clone();
         let (tx, events) = channel();
-        std::thread::spawn(move || {
+        let tx_err = tx.clone();
+        if let Err(e) = std::thread::Builder::new().name("network-test".into()).spawn(move || {
             let result = (|| -> Result<Outcome, String> {
                 if !calibrate {
                     let progress = |stage: &str| {
@@ -81,11 +82,11 @@ impl Test {
                     || !info.capabilities.has(Feature::PyroWave)
                     || !info.pyrowave_burst_probe
                 {
-                    return Err("This paired PC does not support PyroWave pace calibration.".into());
+                    return Err(tr("This paired PC does not support PyroWave pace calibration.").into());
                 }
                 let link = calibration_link(network.link_mbps, info.pyrowave_host_link_mbps);
                 if link == 0 {
-                    return Err("Neither endpoint reports a link speed. No calibration was saved.".into());
+                    return Err(tr("Neither endpoint reports a link speed. No calibration was saved.").into());
                 }
                 let (bitrate, fps) = mode;
                 let packet_size = if jumbo_frames {
@@ -102,15 +103,15 @@ impl Test {
                 );
                 let floor = kbps / 4 * 5;
                 if floor >= link * 1000 {
-                    return Err("The stream's wire bitrate is too high for this link. Lower its bitrate before calibrating.".into());
+                    return Err(tr("The stream’s wire bitrate is too high for this link. Lower its bitrate before calibrating.").into());
                 }
                 let outcome = pace::search(
                     link * 1000,
                     floor,
                     |pace_kbps| {
-                        let _ = tx.send(Event::Progress(format!(
+                        let _ = tx.send(Event::Progress(trf(
                             "Testing {} Mbps frame pace",
-                            pace_kbps / 1000
+                            &[&(pace_kbps / 1000)],
                         )));
                         waker();
                         worker.probe_pace(kbps, packet_size, fps.clamp(10, 500), pace_kbps.max(kbps))
@@ -118,7 +119,7 @@ impl Test {
                     || stop.load(Ordering::Acquire),
                 )
                 .map_err(|e| e.to_string())?
-                .ok_or("No usable pace was measured. The PC will keep its default.")?;
+                .ok_or_else(|| tr("No usable pace was measured. The PC will keep its default.").to_owned())?;
                 Ok(Outcome::Pace(
                     PaceCalibration {
                         pace_mbps: outcome.pace_kbps / 1000,
@@ -135,7 +136,9 @@ impl Test {
                 let _ = tx.send(Event::Done(result));
                 waker();
             }
-        });
+        }) {
+            let _ = tx_err.send(Event::Done(Err(trf("Could not start network test: {}", &[&e]))));
+        }
         Self {
             host,
             calibrate,

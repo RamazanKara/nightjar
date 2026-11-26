@@ -314,18 +314,15 @@ void VulkanRenderer::stop() {
 
 void VulkanRenderer::setHdrMode(bool enabled, const uint8_t* metadata, size_t metadataLength) {
     HdrMetadata parsed;
-    if (metadata && metadataLength >= 24) {
-        uint16_t v[12];
+    const bool hasRawMetadata = metadata && metadataLength >= 24;
+    uint16_t v[12] = {};
+    if (hasRawMetadata) {
         memcpy(v, metadata, sizeof(v));
-        ALOGI("HDR metadata: max %u nits, min %.4f nits, MaxCLL %u, MaxFALL %u", v[8], v[9] * 0.0001f, v[10], v[11]);
 
         // A 10000 nit peak is the top of the PQ range, which hosts send when they don't know
         // the display's real peak. Passed on, it has the compositor squeeze everything above
         // the panel's own peak into a sliver, flattening the host's luminance, so leave it out.
-        if (v[8] >= 10000) {
-            ALOGI("Ignoring placeholder HDR metadata");
-        }
-        else {
+        if (v[8] < 10000) {
             // Layout of SS_HDR_METADATA: R, G, B primaries and white point in 0.00002 units,
             // max display luminance in nits, min display luminance in 0.0001 nits, then MaxCLL
             // and MaxFALL in nits
@@ -351,12 +348,39 @@ void VulkanRenderer::setHdrMode(bool enabled, const uint8_t* metadata, size_t me
         }
     }
 
+    auto metadataEqual = [](const HdrMetadata& a, const HdrMetadata& b) {
+        return a.vk.sType == b.vk.sType
+            && a.vk.pNext == b.vk.pNext
+            && a.vk.displayPrimaryRed.x == b.vk.displayPrimaryRed.x
+            && a.vk.displayPrimaryRed.y == b.vk.displayPrimaryRed.y
+            && a.vk.displayPrimaryGreen.x == b.vk.displayPrimaryGreen.x
+            && a.vk.displayPrimaryGreen.y == b.vk.displayPrimaryGreen.y
+            && a.vk.displayPrimaryBlue.x == b.vk.displayPrimaryBlue.x
+            && a.vk.displayPrimaryBlue.y == b.vk.displayPrimaryBlue.y
+            && a.vk.whitePoint.x == b.vk.whitePoint.x
+            && a.vk.whitePoint.y == b.vk.whitePoint.y
+            && a.vk.maxLuminance == b.vk.maxLuminance
+            && a.vk.minLuminance == b.vk.minLuminance
+            && a.vk.maxContentLightLevel == b.vk.maxContentLightLevel
+            && a.vk.maxFrameAverageLightLevel == b.vk.maxFrameAverageLightLevel
+            && a.contentPeakNits == b.contentPeakNits;
+    };
+
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (enabled == hdrEnabled_ && metadataEqual(hdrMetadata_, parsed)) {
+            return;
+        }
         hdrEnabled_ = enabled;
         hdrMetadata_ = parsed;
         contentPeakNits_.store(parsed.contentPeakNits, std::memory_order_relaxed);
         hdrChanged_ = true;
+    }
+    if (hasRawMetadata) {
+        ALOGI("HDR metadata: max %u nits, min %.4f nits, MaxCLL %u, MaxFALL %u", v[8], v[9] * 0.0001f, v[10], v[11]);
+        if (v[8] >= 10000) {
+            ALOGI("Ignoring placeholder HDR metadata");
+        }
     }
     wake(kWakeHdr);
 }

@@ -24,7 +24,7 @@ use queue::{Backlog, FrameReturns, RETURN_BATCH};
 use refresh::KeyFrameRequests;
 use sink::{fec_status, Direct, Sink};
 
-use super::net::{self, NextSocket, PingHandle, Pinger, REBIND_WAIT, UDP_RECV_POLL_TIMEOUT};
+use super::net::{self, NextSocket, PingHandle, Pinger, REBIND_WAIT};
 use super::trace::{PacketTrace, Stream};
 use super::{error, now_us, DecodeStatus, Shared, VideoDecoder};
 use crate::control::driver::ControlHandle;
@@ -165,36 +165,7 @@ pub struct VideoStream {
     decode: Option<JoinHandle<Box<dyn VideoDecoder>>>,
 }
 
-/// RAII guard ensuring an unstarted [`VideoDecoder`] still runs `stop()` + `cleanup()` if
-/// `try_clone` or `thread::Builder::spawn` fails before the worker thread takes ownership.
-pub(super) struct DecoderCleanupGuard(Option<Box<dyn VideoDecoder>>);
-
-impl DecoderCleanupGuard {
-    pub(super) fn new(decoder: Box<dyn VideoDecoder>) -> Self {
-        Self(Some(decoder))
-    }
-
-    pub(super) const fn empty() -> Self {
-        Self(None)
-    }
-
-    pub(super) fn is_armed(&self) -> bool {
-        self.0.is_some()
-    }
-
-    pub(super) fn take(&mut self) -> Option<Box<dyn VideoDecoder>> {
-        self.0.take()
-    }
-}
-
-impl Drop for DecoderCleanupGuard {
-    fn drop(&mut self) {
-        if let Some(mut decoder) = self.0.take() {
-            decoder.stop();
-            decoder.cleanup();
-        }
-    }
-}
+pub(super) type DecoderCleanupGuard = super::shared::CleanupGuard<Box<dyn VideoDecoder>>;
 
 impl VideoStream {
     /// Starts the receive thread (and the decoder thread without direct submission), then
@@ -324,7 +295,7 @@ fn receive_thread(
     coalescing: bool,
 ) -> Option<Box<dyn VideoDecoder>> {
     let mut signals = Vec::new();
-    let mut waiting = Duration::ZERO;
+    let waiting_since = Instant::now();
     let mut first_data: Option<Instant> = None;
     let (encrypted, max_datagram) = {
         let receiver = lock(&shared.receiver);
@@ -375,13 +346,10 @@ fn receive_thread(
                 {
                     route(&control, &mut signals);
                 }
-                if first_data.is_none() {
-                    waiting += UDP_RECV_POLL_TIMEOUT;
-                    if waiting >= FIRST_FRAME_TIMEOUT {
-                        session.log("Terminating connection due to lack of video traffic");
-                        session.terminate(error::NO_VIDEO_TRAFFIC);
-                        break;
-                    }
+                if first_data.is_none() && waiting_since.elapsed() >= FIRST_FRAME_TIMEOUT {
+                    session.log("Terminating connection due to lack of video traffic");
+                    session.terminate(error::NO_VIDEO_TRAFFIC);
+                    break;
                 }
                 continue;
             }
@@ -408,7 +376,7 @@ fn receive_thread(
         let first = *first_data.get_or_insert_with(|| {
             session.log(&format!(
                 "Received first video packet after {} ms",
-                waiting.as_millis()
+                waiting_since.elapsed().as_millis()
             ));
             Instant::now()
         });

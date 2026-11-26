@@ -65,6 +65,7 @@ final class RadeonPanelView {
             keyCommit = null;
         }
         editing = false;
+        deferred = null;
     }
 
     void show(NativeMenuController.State state) {
@@ -311,6 +312,11 @@ final class RadeonPanelView {
         }
         editing = false;
         send(row, (long) slider.getValue());
+        NativeMenuController.State pending = deferred;
+        deferred = null;
+        if (pending != null) {
+            show(pending);
+        }
     }
 
     private void send(RadeonPanelModel.Row row, Object value) {

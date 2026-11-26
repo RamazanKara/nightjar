@@ -82,9 +82,20 @@ pub fn hide_keys(sources: &[Source<'_>], host: u64, app_id: u32) -> Vec<Favourit
         if copy.host_uid.is_empty() {
             continue;
         }
+        let ambiguous = sources
+            .iter()
+            .find(|s| s.id == copy.host)
+            .is_some_and(|s| is_ambiguous_install_id(s, &copy.install_id));
+        if ambiguous && copy.host == host && copy.app_id != app_id {
+            continue;
+        }
         let fav = Favourite {
             host: copy.host_uid.clone(),
-            install_id: copy.install_id.clone(),
+            install_id: if ambiguous {
+                String::new()
+            } else {
+                copy.install_id.clone()
+            },
             app_id: copy.app_id,
             title: entry.title.clone(),
         };
@@ -113,12 +124,28 @@ fn hide_keys_in_source(source: &Source<'_>, app_id: u32) -> Vec<Favourite> {
     let Some(game) = lib.games.iter().find(|g| g.app_id == app_id) else {
         return Vec::new();
     };
+    let ambiguous = is_ambiguous_install_id(source, &game.install_id);
     vec![Favourite {
         host: source.unique_id.to_owned(),
-        install_id: game.install_id.clone(),
+        install_id: if ambiguous {
+            String::new()
+        } else {
+            game.install_id.clone()
+        },
         app_id: game.app_id,
         title: game.title.clone(),
     }]
+}
+
+fn is_ambiguous_install_id(source: &Source<'_>, install_id: &str) -> bool {
+    !install_id.is_empty()
+        && source.library.is_some_and(|l| {
+            l.games
+                .iter()
+                .filter(|g| g.install_id.eq_ignore_ascii_case(install_id))
+                .count()
+                > 1
+        })
 }
 
 /// Whether `(source, install_id, app_id)` is matched by any entry in `hidden`.
@@ -134,15 +161,7 @@ pub fn is_hidden(
     if source.unique_id.is_empty() {
         return false;
     }
-    let ambiguous_id = !install_id.is_empty()
-        && source.library.is_some_and(|l| {
-            l.games
-                .iter()
-                .filter(|g| g.install_id.eq_ignore_ascii_case(install_id))
-                .count()
-                > 1
-        });
-    if ambiguous_id {
+    if is_ambiguous_install_id(source, install_id) {
         return hidden.iter().any(|h| {
             h.host == source.unique_id
                 && h.install_id.is_empty()

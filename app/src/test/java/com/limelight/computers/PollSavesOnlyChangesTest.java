@@ -304,4 +304,19 @@ public class PollSavesOnlyChangesTest {
         assertTrue(hostsDir.isDirectory());
         assertFalse(new File(context.getFilesDir(), ".hosts_migrated").exists());
     }
+
+    @Test
+    public void corruptComputers4DbDefersMigrationWithoutMarkingDone() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        File v4Db = context.getDatabasePath("computers4.db");
+        v4Db.getParentFile().mkdirs();
+        // Write non-SQLite bytes so opening computers4.db raises SQLiteException.
+        java.nio.file.Files.write(v4Db.toPath(), "not-a-sqlite-database".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        ComputerDatabaseManager mgr = new ComputerDatabaseManager(context);
+        mgr.close();
+
+        assertFalse("migration must not be marked complete when computers4.db fails to read",
+                new File(context.getFilesDir(), ".hosts_migrated").exists());
+    }
 }

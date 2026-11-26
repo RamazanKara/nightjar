@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
 use nightjar_core::hosts::client_pool::PooledHostClient;
@@ -45,8 +45,9 @@ pub use covers::*;
 pub use host::{Host, NativeRead};
 pub use poll::Event;
 use poll::{away_address, internet_reply, public_ipv4};
+pub(crate) use poll::poll_addresses;
 #[cfg(test)]
-use poll::{poll_addresses, punches_now};
+use poll::punches_now;
 pub use native::*;
 pub use pairing::*;
 pub use power::*;
@@ -131,17 +132,32 @@ pub struct Hosts {
     /// demo, which stay offline.
     game_info: Option<crate::game_info::Shared>,
     /// The facts known for each game, by its lookup key ([`crate::game_info::entry_key`]).
-    facts: HashMap<String, nightjar_policy::game_info::cache::Facts>,
+    facts: Arc<HashMap<String, nightjar_policy::game_info::cache::Facts>>,
     /// The games whose facts were asked for since the keys last changed.
-    facts_asked: std::collections::HashSet<String>,
+    facts_asked: Arc<std::collections::HashSet<String>>,
     /// The worker that looks facts up, one game at a time.
     facts_worker: Option<Sender<nightjar_policy::game_info::job::Game>>,
     /// The worker that fetches SteamGridDB covers for the gaps the cover workers found, so a
     /// lookup waiting on the services never holds a cover worker.
     cover_worker: Option<Sender<game_info::CoverJob>>,
+    /// Old host IDs replaced by a `unique_id` merge, mapped to the surviving host ID.
+    merged_into: HashMap<u64, u64>,
+    /// In-flight `/cancel` requests so shutdown can wait for quit-on-leave to finish.
+    pending_quits: Vec<Arc<(Mutex<bool>, Condvar)>>,
     /// The demo's PCs while a first-run page shows a shorter list.
     #[cfg(feature = "demo-library")]
     pub(crate) demo_shelf: Vec<Host>,
+}
+
+struct QuitGuard(Arc<(Mutex<bool>, Condvar)>);
+
+impl Drop for QuitGuard {
+    fn drop(&mut self) {
+        let (lock, cvar) = &*self.0;
+        let mut done = lock.lock().unwrap_or_else(|e| e.into_inner());
+        *done = true;
+        cvar.notify_all();
+    }
 }
 
 /// The HTTP port a saved or sighted `port` means: 0 is the default one.
@@ -260,10 +276,12 @@ impl Hosts {
             discovering: false,
             pc_workers: HashMap::new(),
             game_info: None,
-            facts: HashMap::new(),
-            facts_asked: std::collections::HashSet::new(),
+            facts: Arc::new(HashMap::new()),
+            facts_asked: Arc::new(std::collections::HashSet::new()),
             facts_worker: None,
             cover_worker: None,
+            merged_into: HashMap::new(),
+            pending_quits: Vec::new(),
             #[cfg(feature = "demo-library")]
             demo_shelf: Vec::new(),
         };
@@ -291,12 +309,12 @@ impl Hosts {
             reach: Reach::Unknown,
             info: None,
             apps: Apps::NotLoaded,
-            art: HashMap::new(),
-            ambient: HashMap::new(),
-            ambient_glow: HashMap::new(),
-            art_versions: HashMap::new(),
-            art_sized: HashMap::new(),
-            art_retry: HashMap::new(),
+            art: Arc::new(HashMap::new()),
+            ambient: Arc::new(HashMap::new()),
+            ambient_glow: Arc::new(HashMap::new()),
+            art_versions: Arc::new(HashMap::new()),
+            art_sized: Arc::new(HashMap::new()),
+            art_retry: Arc::new(HashMap::new()),
             native: Native::default(),
             classic_apps: None,
             classic: None,
@@ -385,6 +403,7 @@ impl Hosts {
                 .to_owned()),
                 id: None,
             });
+            (self.waker)();
             return;
         };
         self.spawn("invite", move || {
@@ -459,7 +478,12 @@ impl Hosts {
     /// as a PC is an address and a port: a PC listed there under another port is another PC.
     pub fn add_manual(&mut self, address: &str, port: Option<u16>) -> u64 {
         let wanted = http_port(port.unwrap_or(DEFAULT_HTTP_PORT));
-        let here = |h: &Host| h.record.address.eq_ignore_ascii_case(address);
+        let here = |h: &Host| {
+            h.record.address.eq_ignore_ascii_case(address)
+                || h.record.other_addresses.iter().any(|a| a.eq_ignore_ascii_case(address))
+                || h.record.pinned_address.as_deref().is_some_and(|a| a.eq_ignore_ascii_case(address))
+                || h.record.remote_address.as_deref().is_some_and(|a| a.eq_ignore_ascii_case(address))
+        };
         let listed = self
             .list
             .iter()
@@ -497,9 +521,6 @@ impl Hosts {
         true
     }
 
-    /// Pins the PC to one of its known addresses (`Some`), which then is the only one polled and
-    /// streamed to, or brings back the automatic pick (`None`), as Moonlight V+ PC's
-    /// `pinAddress` and `resetToAutomaticAddress`. False for an unknown PC or address.
     /// Keeps the MACs the user added to wake the PC by. False for an unknown PC.
     pub fn set_own_wake_macs(&mut self, id: u64, macs: Vec<String>) -> bool {
         let Some(host) = self.get_mut(id) else {
@@ -509,6 +530,9 @@ impl Hosts {
         true
     }
 
+    /// Pins the PC to one of its known addresses (`Some`), which then is the only one polled and
+    /// streamed to, or brings back the automatic pick (`None`), as Moonlight V+ PC's
+    /// `pinAddress` and `resetToAutomaticAddress`. False for an unknown PC or address.
     pub fn pin_address(&mut self, id: u64, address: Option<&str>) -> bool {
         let Some(host) = self.get_mut(id) else {
             return false;
@@ -533,7 +557,29 @@ impl Hosts {
     pub fn remove(&mut self, id: u64) {
         self.list.retain(|h| h.id != id);
         self.link_claims.remove(&id);
+        self.merged_into.retain(|&k, &mut v| k != id && v != id);
         self.drop_workers(id);
+    }
+
+    /// Follows any `unique_id` merges so an old host ID resolves to the surviving PC record.
+    pub fn canonical_id(&self, mut id: u64) -> u64 {
+        for _ in 0..8 {
+            let Some(&next) = self.merged_into.get(&id) else {
+                break;
+            };
+            id = next;
+        }
+        id
+    }
+
+    /// Records that `gone` was merged into `keep`, updating any transitive chain.
+    pub(super) fn record_merge(&mut self, gone: u64, keep: u64) {
+        for target in self.merged_into.values_mut() {
+            if *target == gone {
+                *target = keep;
+            }
+        }
+        self.merged_into.insert(gone, keep);
     }
 }
 
@@ -580,8 +626,8 @@ impl Hosts {
         let mut out = nightjar_desktop_ui::hosts_model::Hosts::without_discovery(Vec::new(), self.waker.clone());
         out.discovering = self.discovering;
         out.has_identity = self.identity.is_some();
-        out.facts = self.facts.clone();
-        out.facts_asked = self.facts_asked.clone();
+        out.facts = Arc::clone(&self.facts);
+        out.facts_asked = Arc::clone(&self.facts_asked);
         out.set_facts_source(Some(Arc::new(HostFactsSource(self.facts_offered()))));
         out.list = self.list.iter().map(Host::ui_view).collect();
         out
@@ -620,7 +666,11 @@ impl Hosts {
             return;
         };
         let record = host.connect_record();
+        let pending = Arc::new((Mutex::new(false), Condvar::new()));
+        self.pending_quits.push(Arc::clone(&pending));
+        let guard = QuitGuard(pending);
         self.spawn("cancel", move || {
+            let _guard = guard;
             let result = client_for(&identity, &record, &record.address).and_then(|c| match c.cancel() {
                 Ok(true) => Ok(()),
                 Ok(false) => Err(en("The PC declined to quit the app.").into()),
@@ -629,6 +679,32 @@ impl Hosts {
             });
             Some(Event::Quit { id, result })
         });
+    }
+
+    /// Whether any `/cancel` quit request is still in flight.
+    pub(crate) fn has_pending_quits(&mut self) -> bool {
+        self.pending_quits.retain(|p| !*p.0.lock().unwrap_or_else(|e| e.into_inner()));
+        !self.pending_quits.is_empty()
+    }
+
+    /// Waits up to `timeout` for any in-flight `/cancel` quit requests to finish before exit.
+    pub(crate) fn wait_quits(&mut self, timeout: Duration) {
+        let deadline = Instant::now() + timeout;
+        for pending in self.pending_quits.drain(..) {
+            let (lock, cvar) = &*pending;
+            let mut done = lock.lock().unwrap_or_else(|e| e.into_inner());
+            while !*done {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    break;
+                }
+                let (guard, result) = cvar.wait_timeout(done, remaining).unwrap_or_else(|e| e.into_inner());
+                done = guard;
+                if result.timed_out() && !*done {
+                    break;
+                }
+            }
+        }
     }
 }
 

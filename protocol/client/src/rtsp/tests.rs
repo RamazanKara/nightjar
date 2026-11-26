@@ -267,6 +267,38 @@ fn the_asked_hdr_format_reaches_the_announce_and_the_outcome() {
     }
 }
 
+/// nightjar#193: host 6.4.1 sends no RPUs on a full-range stream.
+#[test]
+fn a_dolby_vision_announce_is_limited_range_whatever_was_asked() {
+    use crate::sdp::{COLOR_RANGE_FULL, COLOR_RANGE_LIMITED};
+    use rubylight_protocol::hdr::{DV_81, DV_84, HLG, PQ};
+    for (asked, range) in [
+        (DV_81, COLOR_RANGE_LIMITED),
+        (DV_84, COLOR_RANGE_LIMITED),
+        (HLG, COLOR_RANGE_FULL),
+        (PQ, COLOR_RANGE_FULL),
+        (0, COLOR_RANGE_FULL),
+    ] {
+        let mut p = params(None);
+        p.config.hdr_format = asked;
+        p.config.color_range = COLOR_RANGE_FULL;
+        let csc = (p.config.color_space << 1) | range;
+        let mut handshake = Handshake::new(p).unwrap();
+        run(&mut handshake, |method, target| match method {
+            "DESCRIBE" => ok(2, "", &format!("{DESCRIBE}a=x-rl-video.hdrFormats:15\r\n")),
+            _ => sunshine_host(method, target),
+        });
+        let outcome = handshake.finish().unwrap();
+        assert_eq!(outcome.hdr_format, asked);
+        assert_eq!(outcome.config.color_range, range, "{asked}");
+        assert!(
+            outcome.sdp.contains(&format!("encoderCscMode:{csc} ")),
+            "{asked}: {}",
+            outcome.sdp
+        );
+    }
+}
+
 #[test]
 fn microphone_refusals_cost_only_the_microphone() {
     let mut handshake = Handshake::new(params(None)).unwrap();
@@ -411,15 +443,31 @@ fn encrypted_rtsp_round_trip_and_framing() {
     handshake.next_request().unwrap();
     handshake.handle_response(&response).unwrap();
     assert!(handshake.next_request().unwrap().unwrap()[4..8] == 2u32.to_be_bytes());
-    // Replaying the OPTIONS encrypted response (sequence 0) for DESCRIBE must fail.
+    let rl_describe = format!(
+        "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Length: {}\r\n\r\n{DESCRIBE}",
+        DESCRIBE.len()
+    );
+    // Replaying the OPTIONS encrypted sequence (0) for a Rubylight DESCRIBE must fail.
     assert!(matches!(
-        handshake.handle_response(&response),
+        handshake.handle_response(&seal(0, rl_describe.as_bytes())),
         Err(RtspError::Encryption(_))
     ));
-    // A fresh sequence with a mismatched CSeq must also fail.
-    let bad_cseq = seal(1, b"RTSP/1.0 200 OK\r\nCSeq: 1\r\n\r\n");
+
+    // After a valid Rubylight DESCRIBE, mismatched CSeq and replayed sequence on SETUP must fail.
+    let mut handshake = Handshake::new(params(Some("rtspenc://192.168.1.20:48011"))).unwrap();
+    handshake.next_request().unwrap();
+    handshake.handle_response(&response).unwrap();
+    handshake.next_request().unwrap();
+    handshake
+        .handle_response(&seal(1, rl_describe.as_bytes()))
+        .unwrap();
+    assert!(handshake.next_request().unwrap().unwrap()[4..8] == 3u32.to_be_bytes());
     assert!(matches!(
-        handshake.handle_response(&bad_cseq),
+        handshake.handle_response(&seal(1, b"RTSP/1.0 200 OK\r\nCSeq: 3\r\nTransport: server_port=48000\r\nSession: ABC\r\n\r\n")),
+        Err(RtspError::Encryption(_))
+    ));
+    assert!(matches!(
+        handshake.handle_response(&seal(2, b"RTSP/1.0 200 OK\r\nCSeq: 1\r\nTransport: server_port=48000\r\nSession: ABC\r\n\r\n")),
         Err(RtspError::Malformed(_))
     ));
     let mut handshake = Handshake::new(params(Some("rtspenc://192.168.1.20:48011"))).unwrap();
@@ -430,6 +478,79 @@ fn encrypted_rtsp_round_trip_and_framing() {
             .is_err(),
         "plain text is refused"
     );
+}
+
+#[test]
+fn third_party_hosts_omitting_or_repeating_cseq_and_sequence_still_complete_handshake() {
+    let third_party_describe = "a=x-ss-general.featureFlags:3\r\nsprop-parameter-sets=AAAAAU\r\n\
+        a=fmtp:97 surround-params=21101\r\n";
+
+    // Plaintext third-party host omitting CSeq and repeating CSeq: 1 across requests.
+    let mut p = params(None);
+    p.config.microphone = false;
+    let mut handshake = Handshake::new(p).unwrap();
+    while let Some(request) = handshake.next_plain_request().unwrap() {
+        let resp = match (request.method.as_str(), request.target.as_str()) {
+            ("OPTIONS", _) => b"RTSP/1.0 200 OK\r\n\r\n".to_vec(),
+            ("DESCRIBE", _) => format!(
+                "RTSP/1.0 200 OK\r\nCSeq: 1\r\nContent-Length: {}\r\n\r\n{third_party_describe}",
+                third_party_describe.len()
+            )
+            .into_bytes(),
+            ("SETUP", t) if t.contains("audio") => {
+                ok(1, "Session: DEADBEEFCAFE\r\nTransport: server_port=48100\r\n", "")
+            }
+            ("SETUP", _) => ok(1, "Transport: server_port=48098\r\n", ""),
+            _ => b"RTSP/1.0 200 OK\r\n\r\n".to_vec(),
+        };
+        handshake
+            .handle_plain_response(&parse_response(&resp).unwrap())
+            .unwrap();
+    }
+    handshake.finish().unwrap();
+
+    // Encrypted third-party host repeating sequence 0 and CSeq: 1.
+    let mut p = params(Some("rtspenc://192.168.1.20:48011"));
+    p.config.microphone = false;
+    let key = aead::LessSafeKey::new(aead::UnboundKey::new(&aead::AES_128_GCM, &[7; 16]).unwrap());
+    let seal = |sequence: u32, plain: &[u8]| {
+        let mut body = plain.to_vec();
+        let tag = key
+            .seal_in_place_separate_tag(rtsp_iv(sequence, b'H'), aead::Aad::empty(), &mut body)
+            .unwrap();
+        let mut out = (ENCRYPTED_RTSP_BIT | plain.len() as u32)
+            .to_be_bytes()
+            .to_vec();
+        out.extend_from_slice(&sequence.to_be_bytes());
+        out.extend_from_slice(tag.as_ref());
+        out.extend_from_slice(&body);
+        out
+    };
+    let mut handshake = Handshake::new(p).unwrap();
+    while let Some(wire) = handshake.next_request().unwrap() {
+        let req_seq = u32::from_be_bytes(wire[4..8].try_into().unwrap());
+        let mut body = wire[24..].to_vec();
+        body.extend_from_slice(&wire[8..24]);
+        let plain = key
+            .open_in_place(rtsp_iv(req_seq, b'C'), aead::Aad::empty(), &mut body)
+            .unwrap();
+        let line = std::str::from_utf8(plain).unwrap().lines().next().unwrap();
+        let resp = if line.starts_with("DESCRIBE ") {
+            format!(
+                "RTSP/1.0 200 OK\r\nContent-Length: {}\r\n\r\n{third_party_describe}",
+                third_party_describe.len()
+            )
+            .into_bytes()
+        } else if line.starts_with("SETUP streamid=audio") {
+            ok(1, "Session: DEADBEEFCAFE\r\nTransport: server_port=48100\r\n", "")
+        } else if line.starts_with("SETUP ") {
+            ok(1, "Transport: server_port=48098\r\n", "")
+        } else {
+            ok(1, "", "")
+        };
+        handshake.handle_response(&seal(0, &resp)).unwrap();
+    }
+    handshake.finish().unwrap();
 }
 
 #[test]
@@ -559,4 +680,30 @@ fn surround_714_handshake_succeeds() {
         outcome.opus.normal.channel_count,
         rubylight_protocol::audio_ext::CHANNELS_714
     );
+}
+
+#[test]
+fn transact_aborts_promptly_when_interrupted_during_retry_or_wait() {
+    use std::net::TcpListener;
+    use std::sync::atomic::AtomicBool;
+    use std::time::{Duration, Instant};
+
+    // Connection refused retries abort well before 500ms * 20 retries.
+    let closed_port = {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap()
+    };
+    let interrupted = AtomicBool::new(false);
+    let flag = &interrupted;
+    let start = Instant::now();
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            std::thread::sleep(Duration::from_millis(60));
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        });
+        let err = super::transport::transact(closed_port, b"OPTIONS * RTSP/1.0\r\n\r\n", flag, false, |_| {})
+            .unwrap_err();
+        assert!(matches!(err, RtspError::Interrupted), "{err:?}");
+    });
+    assert!(start.elapsed() < Duration::from_secs(1));
 }

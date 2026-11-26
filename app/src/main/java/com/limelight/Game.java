@@ -86,6 +86,44 @@ public class Game extends Activity implements SurfaceHolder.Callback, TextureVie
     private final GameOnscreenControls onscreenControls = new GameOnscreenControls(this);
     private final GameStreamLoops streamLoops = new GameStreamLoops(this);
     private final GameLifecycle lifecycle = new GameLifecycle(this);
+    private final RumbleLogFilter rumbleLogFilter = new RumbleLogFilter();
+
+    static final class RumbleLogFilter {
+        private static final int FIXED_SLOTS = 16;
+        private final long[] motors = new long[FIXED_SLOTS];
+        private final long[] triggers = new long[FIXED_SLOTS];
+        private java.util.HashMap<Short, Long> extraMotors;
+        private java.util.HashMap<Short, Long> extraTriggers;
+
+        RumbleLogFilter() {
+            java.util.Arrays.fill(motors, -1L);
+            java.util.Arrays.fill(triggers, -1L);
+        }
+
+        synchronized boolean shouldLogMotor(short controller, short low, short high) {
+            return record(motors, false, controller, low, high);
+        }
+
+        synchronized boolean shouldLogTriggers(short controller, short left, short right) {
+            return record(triggers, true, controller, left, right);
+        }
+
+        private boolean record(long[] slots, boolean isTriggers, short controller, short first, short second) {
+            long packed = (((long) first & 0xFFFFL) << 16) | ((long) second & 0xFFFFL);
+            if (controller >= 0 && controller < slots.length) {
+                if (slots[controller] == packed) return false;
+                slots[controller] = packed;
+                return true;
+            }
+            java.util.HashMap<Short, Long> map = isTriggers ? extraTriggers : extraMotors;
+            if (map == null) {
+                map = new java.util.HashMap<>();
+                if (isTriggers) extraTriggers = map; else extraMotors = map;
+            }
+            Long prev = map.put(controller, packed);
+            return prev == null || prev != packed;
+        }
+    }
 
     TrackpadPointer trackpadPointer;
     // Set while the host sends its cursor shapes for the Local cursor; read on the control thread.
@@ -289,6 +327,7 @@ public class Game extends Activity implements SurfaceHolder.Callback, TextureVie
     WifiManager.WifiLock lowLatencyWifiLock;
 
     boolean usbDriverServiceBound;
+    boolean usbDriverReleased;
     UsbDriverService.UsbDriverBinder usbDriverBinder;
     ServiceConnection usbDriverServiceConnection = streamLoops.usbDriverServiceConnection();
     java.util.concurrent.ScheduledExecutorService nativeMenuThread;
@@ -578,13 +617,17 @@ public class Game extends Activity implements SurfaceHolder.Callback, TextureVie
 
     @Override
     public void rumble(short controllerNumber, short lowFreqMotor, short highFreqMotor) {
-        LimeLog.info(String.format((Locale)null, "Rumble on gamepad %d: %04x %04x", controllerNumber, lowFreqMotor, highFreqMotor));
+        if (rumbleLogFilter.shouldLogMotor(controllerNumber, lowFreqMotor, highFreqMotor)) {
+            LimeLog.info(String.format((Locale)null, "Rumble on gamepad %d: %04x %04x", controllerNumber, lowFreqMotor, highFreqMotor));
+        }
         controllerHandler.handleRumble(controllerNumber, lowFreqMotor, highFreqMotor);
     }
 
     @Override
     public void rumbleTriggers(short controllerNumber, short leftTrigger, short rightTrigger) {
-        LimeLog.info(String.format((Locale)null, "Rumble on gamepad triggers %d: %04x %04x", controllerNumber, leftTrigger, rightTrigger));
+        if (rumbleLogFilter.shouldLogTriggers(controllerNumber, leftTrigger, rightTrigger)) {
+            LimeLog.info(String.format((Locale)null, "Rumble on gamepad triggers %d: %04x %04x", controllerNumber, leftTrigger, rightTrigger));
+        }
         controllerHandler.handleRumbleTriggers(controllerNumber, leftTrigger, rightTrigger);
     }
 

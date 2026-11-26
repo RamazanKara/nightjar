@@ -4,8 +4,9 @@
 //! A copy the Windows setup installed runs the new setup silently and exits; the setup replaces
 //! the files in the same folder and starts Nightjar again (/RELAUNCH in nightjar.iss). A copy run
 //! as an AppImage has its file replaced atomically and starts the new one. Every other copy has no
-//! Update now: a Windows copy the setup didn't install keeps the link to the release page, and a
-//! deb, rpm, Flatpak or archive doesn't check at all, as its package manager or its user updates it.
+//! Update now: a Windows copy the setup didn't install and macOS copies keep the link to the release
+//! page, and a deb, rpm, Flatpak or archive on Linux doesn't check at all, as its package manager or
+//! its user updates it.
 //! Either way the next Nightjar can start while this one is still leaving, so what it reads is saved
 //! before the hand-over (save_for_next_run in app.rs).
 //!
@@ -168,7 +169,11 @@ fn native_machine() -> Option<u16> {
 pub fn current() -> &'static CopyKind {
     static COPY: OnceLock<CopyKind> = OnceLock::new();
     COPY.get_or_init(|| {
-        let fallback = if cfg!(windows) { CopyKind::Portable } else { CopyKind::Managed };
+        let fallback = if cfg!(windows) || cfg!(target_os = "macos") {
+            CopyKind::Portable
+        } else {
+            CopyKind::Managed
+        };
         let copy = match std::env::current_exe() {
             Ok(exe) => detect(&exe),
             Err(e) => {
@@ -183,6 +188,7 @@ pub fn current() -> &'static CopyKind {
 
 fn detect(exe: &Path) -> CopyKind {
     if cfg!(windows) { return windows_copy(exe, install_location().as_deref()); }
+    if cfg!(target_os = "macos") { return CopyKind::Portable; }
     let env = |name| std::env::var_os(name).map(PathBuf::from);
     appimage_copy(env("APPIMAGE").as_deref(), env("APPDIR").as_deref(), exe)
 }

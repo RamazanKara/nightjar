@@ -50,4 +50,5 @@
     <string name="gyro_diag_share_title">Hareket değerlerini paylaş</string>
     <string name="gyro_diag_hide">Gizle</string>
     <string name="gyro_diag_show">Göster</string>
+    <string name="gyro_diag_cap_reached">Kayıt %1$d satırda durduruldu.</string>
 </resources>

@@ -78,10 +78,14 @@ jobs:
           gh run list -R "$GITHUB_REPOSITORY" --workflow release.yml --limit 30 --json databaseId,headBranch,status --jq '.[] | select(.status != "completed" and (.headBranch | test("^v[0-9]+[.][0-9]+[.][0-9]+-rc[.][0-9]+$"))) | .databaseId' |
             while read -r run; do gh run cancel "$run" -R "$GITHUB_REPOSITORY" || true; done
           gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$COMMIT" > /dev/null
-          if ! gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --draft --prerelease \
-            --title "Nightjar $VERSION" --notes-file "$RUNNER_TEMP/notes.md"; then
-            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" || true # no tag without a release
+          if ! {
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --draft --prerelease \
+              --title "Nightjar $VERSION" --notes-file "$RUNNER_TEMP/notes.md" &&
+            gh workflow run release.yml -R "$GITHUB_REPOSITORY" --ref "$TAG" -f dry_run=false
+          }; then
+            gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" |
+              while read -r id; do gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id" || true; done
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" || true # no tag or draft without a started build
             exit 1
           fi
-          gh workflow run release.yml -R "$GITHUB_REPOSITORY" --ref "$TAG" -f dry_run=false
           echo "::notice::release.yml builds $TAG ($COMMIT, from $SHA)"

@@ -236,7 +236,13 @@ impl HostClient {
     /// Quits the running app. Ok(false) when the host declined; a 599 status when the host
     /// still runs a game afterwards (it belongs to another client).
     pub fn cancel(&self) -> Result<bool, Error> {
-        let raw = self.request_text(Scheme::Https, "cancel", None, LONG_CONNECT_TIMEOUT, None)?;
+        let raw = self.request_text(
+            Scheme::Https,
+            "cancel",
+            None,
+            LONG_CONNECT_TIMEOUT,
+            Some(READ_TIMEOUT),
+        )?;
         if xml::parse_reply(&raw)?.required_text("cancel")? == "0" {
             return Ok(false);
         }

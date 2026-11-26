@@ -136,13 +136,21 @@ final class StreamGuests {
         });
     }
 
-    private void askAbout(NativeGuests.Request request) {
+    static final long JOIN_PROMPT_INPUT_GUARD_MS = 1000L;
+
+    interface Clock {
+        long uptimeMs();
+    }
+
+    Clock clock = android.os.SystemClock::uptimeMillis;
+
+    void askAbout(NativeGuests.Request request) {
         asked.add(request.id);
         promptFor = request.id;
         prompt = new NavigationDialogBuilder(game)
                 .setMessage(game.getString(R.string.guests_wants_to_join, request.name))
-                .setPositiveButton(R.string.guests_let_in, (dialog, which) -> act("approve", request.id, null))
-                .setNegativeButton(R.string.guests_deny, (dialog, which) -> act("deny", request.id, null))
+                .setPositiveButton(R.string.guests_let_in, null)
+                .setNegativeButton(R.string.guests_deny, null)
                 .create();
         prompt.setOnDismissListener(dialog -> {
             if (prompt == dialog) {
@@ -151,8 +159,24 @@ final class StreamGuests {
             }
         });
         prompt.setOnShowListener(shown -> {
-            android.view.View action = prompt.getButton(DialogInterface.BUTTON_POSITIVE);
-            if (action != null && !action.requestFocus()) action.requestFocusFromTouch();
+            long shownAtMs = clock.uptimeMs();
+            android.widget.Button approve = prompt.getButton(DialogInterface.BUTTON_POSITIVE);
+            android.widget.Button deny = prompt.getButton(DialogInterface.BUTTON_NEGATIVE);
+            if (approve != null) {
+                approve.setOnClickListener(v -> {
+                    if (clock.uptimeMs() - shownAtMs < JOIN_PROMPT_INPUT_GUARD_MS) return;
+                    prompt.dismiss();
+                    act("approve", request.id, null);
+                });
+            }
+            if (deny != null) {
+                deny.setOnClickListener(v -> {
+                    if (clock.uptimeMs() - shownAtMs < JOIN_PROMPT_INPUT_GUARD_MS) return;
+                    prompt.dismiss();
+                    act("deny", request.id, null);
+                });
+                if (!deny.requestFocus()) deny.requestFocusFromTouch();
+            }
         });
         prompt.show();
     }

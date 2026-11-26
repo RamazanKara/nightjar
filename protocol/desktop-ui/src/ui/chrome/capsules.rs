@@ -2,6 +2,17 @@
 
 use super::*;
 
+fn search_shortcut_label() -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        "⌘K"
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        "Ctrl K"
+    }
+}
+
 impl Launcher {
     pub(super) fn search_capsule(
         &mut self,
@@ -90,8 +101,9 @@ impl Launcher {
                 regular(TAB_FONT),
                 ink,
             );
+            let keycap = search_shortcut_label();
             let keys = ui.painter().layout_no_wrap(
-                "Ctrl K".to_owned(),
+                keycap.to_owned(),
                 regular(t::TYPE_CAPTION_SIZE),
                 ink.gamma_multiply(0.75),
             );
@@ -510,5 +522,6 @@ mod tests {
         assert_eq!(page_margin(1280.0), 48.0);
         assert_eq!(page_margin(640.0), 24.0);
         assert_eq!(page_margin(3840.0), (3840.0 - CONTENT_MAX) / 2.0);
+        assert_eq!(search_shortcut_label(), if cfg!(target_os = "macos") { "\u{2318}K" } else { "Ctrl K" });
     }
 }

@@ -102,6 +102,7 @@ impl Hosts {
                     if request != self.pairing_generation {
                         continue;
                     }
+                    let id = self.canonical_id(id);
                     self.pairing = None;
                     if let (Ok(pem), Some(host)) = (&result, self.get_mut(id)) {
                         host.record.server_certificate = Some(pem.clone());
@@ -124,7 +125,7 @@ impl Hosts {
                                 } else if host.native_api() {
                                     save = host.set_classic_apps(None);
                                 }
-                                Apps::Loaded(apps)
+                                Apps::Loaded(Arc::new(apps))
                             }
                             Err(e) => Apps::Failed(e),
                         };
@@ -137,7 +138,7 @@ impl Hosts {
                     if let Some(host) = self.get_mut(id).filter(|h| h.art_versions.get(&app) == Some(&version)) {
                         // As a cover that was never asked for: the pages ask when the PC is up.
                         if matches!(host.art.get(&app), Some(Art::Loading)) {
-                            host.art.remove(&app);
+                            Arc::make_mut(&mut host.art).remove(&app);
                         }
                     }
                 }
@@ -145,8 +146,8 @@ impl Hosts {
                     if let Some(host) = self.get_mut(id).filter(|h| h.art_versions.get(&app) == Some(&version)) {
                         // The title for now, and the cover asked for again once the wait is over.
                         if matches!(host.art.get(&app), Some(Art::Loading)) {
-                            host.art.insert(app, Art::Missing);
-                            host.art_retry.insert(app, Instant::now() + ART_RETRY_INTERVAL);
+                            Arc::make_mut(&mut host.art).insert(app, Art::Missing);
+                            Arc::make_mut(&mut host.art_retry).insert(app, Instant::now() + ART_RETRY_INTERVAL);
                         }
                     }
                 }
@@ -162,14 +163,19 @@ impl Hosts {
                             continue;
                         }
                     // Still the cover it was loaded again for: one given up or replaced since is not.
-                    let Some(Art::Ready(texture)) = host.art.get_mut(&app) else { continue };
+                    if !matches!(host.art.get(&app), Some(Art::Ready(_))) {
+                        continue;
+                    }
+                    let Some(Art::Ready(texture)) = Arc::make_mut(&mut host.art).get_mut(&app) else {
+                        unreachable!()
+                    };
                     *texture = ctx.load_texture(format!("art-{id}-{app}"), image, egui::TextureOptions::LINEAR);
                     match sized {
                         Some(sized) => {
-                            host.art_sized.insert(app, sized);
+                            Arc::make_mut(&mut host.art_sized).insert(app, sized);
                         }
                         None => {
-                            host.art_sized.remove(&app);
+                            Arc::make_mut(&mut host.art_sized).remove(&app);
                         }
                     }
                     self.art_used.insert(texture.id(), frame);
@@ -185,12 +191,12 @@ impl Hosts {
                     if let Some(host) = self.get_mut(id).filter(|h| h.art_versions.get(&app) == Some(&version) && !keeps(h)) {
                         match ambient {
                             Some(ambient) => {
-                                host.ambient_glow.insert(app, crate::ambient::glow_of(&ambient));
-                                host.ambient.insert(app, ctx.load_texture(format!("ambient-{id}-{app}"), ambient, egui::TextureOptions::LINEAR));
+                                Arc::make_mut(&mut host.ambient_glow).insert(app, crate::ambient::glow_of(&ambient));
+                                Arc::make_mut(&mut host.ambient).insert(app, ctx.load_texture(format!("ambient-{id}-{app}"), ambient, egui::TextureOptions::LINEAR));
                             }
                             None => {
-                                host.ambient_glow.remove(&app);
-                                host.ambient.remove(&app);
+                                Arc::make_mut(&mut host.ambient_glow).remove(&app);
+                                Arc::make_mut(&mut host.ambient).remove(&app);
                             }
                         }
                         let art = match image {
@@ -201,10 +207,10 @@ impl Hosts {
                             }
                             None => Art::Missing,
                         };
-                        host.art.insert(app, art);
-                        host.art_sized.remove(&app);
+                        Arc::make_mut(&mut host.art).insert(app, art);
+                        Arc::make_mut(&mut host.art_sized).remove(&app);
                         if let Some(sized) = sized.filter(|_| landed.is_some()) {
-                            host.art_sized.insert(app, sized);
+                            Arc::make_mut(&mut host.art_sized).insert(app, sized);
                         }
                     }
                     // It was asked for because it is on screen: not the first to go for room.
@@ -242,14 +248,14 @@ impl Hosts {
                                     // The classic list a launch goes through follows the library.
                                     reload_apps = !host.native.library_live
                                         || host.native.library.as_ref().is_none_or(|old| old.revision != library.revision);
-                                    save = host.native.library.as_ref() != Some(&library)
-                                        || host.native.last_played != last_played
-                                        || host.native.playtime_minutes != playtime_minutes
-                                        || host.native.collections != collections;
-                                    host.native.library = Some(library);
-                                    host.native.last_played = last_played;
-                                    host.native.playtime_minutes = playtime_minutes;
-                                    host.native.collections = collections;
+                                    save = host.native.library.as_deref() != Some(&library)
+                                        || host.native.last_played.as_ref() != &last_played
+                                        || host.native.playtime_minutes.as_ref() != &playtime_minutes
+                                        || host.native.collections.as_ref() != &collections;
+                                    host.native.library = Some(Arc::new(library));
+                                    host.native.last_played = Arc::new(last_played);
+                                    host.native.playtime_minutes = Arc::new(playtime_minutes);
+                                    host.native.collections = Arc::new(collections);
                                     host.native.library_live = true;
                                 }
                                 match read.session {
@@ -367,9 +373,6 @@ impl Hosts {
         }
     }
 
-    /// Asks a paired Sunshine-family PC once whether it has Foundation Sunshine's bandwidth test,
-    /// so Test speed is offered only where it runs. A request that did not get through is asked
-    /// again after the next poll.
     /// Reads the PC's internet play reply while it is reached on its own network and offers
     /// it, at most every `INTERNET_READ_INTERVAL`: the device keeps it for when it is away.
     fn follow_internet_play(&mut self, id: u64) {
@@ -445,10 +448,21 @@ impl Hosts {
                     self.drop_link_claiming_known_pc(id);
                     return true;
                 }
+            let colliding_certs = |a: &Host, b: &Host| {
+                matches!(
+                    (&a.record.server_certificate, &b.record.server_certificate),
+                    (Some(ca), Some(cb)) if ca != cb
+                )
+            };
             if let Some(other) = self
                 .list
                 .iter()
-                .position(|h| h.id != id && !h.record.unique_id.is_empty() && h.record.unique_id == info.unique_id)
+                .position(|h| {
+                    h.id != id
+                        && !h.record.unique_id.is_empty()
+                        && h.record.unique_id == info.unique_id
+                        && !colliding_certs(h, &self.list[index])
+                })
             {
                 let (keep, drop) = if self.list[other].record.server_certificate.is_some()
                     || !self.list[index].record.server_certificate.is_some()
@@ -460,6 +474,9 @@ impl Hosts {
                 let dropped = self.list[drop].record.clone();
                 let keep_id = self.list[keep].id;
                 let kept = &mut self.list[keep].record;
+                if kept.server_certificate.is_none() {
+                    kept.server_certificate = dropped.server_certificate;
+                }
                 // The PC keeps the port it is listed under. It answered on the dropped one's too,
                 // so a sighting there is that PC from now on, also after Nightjar restarts.
                 let own = http_port(kept.http_port);
@@ -498,6 +515,15 @@ impl Hosts {
                     kept.remote_address = dropped.remote_address;
                 }
                 let gone = self.list.remove(drop).id;
+                self.record_merge(gone, keep_id);
+                if let Some((pair_id, _)) = &mut self.pairing
+                    && *pair_id == gone
+                {
+                    *pair_id = keep_id;
+                }
+                if let Some(claim) = self.link_claims.remove(&gone) {
+                    self.link_claims.entry(keep_id).or_insert(claim);
+                }
                 self.drop_workers(gone);
                 changed = true;
                 let index = self.list.iter().position(|h| h.id == keep_id).unwrap_or(0);

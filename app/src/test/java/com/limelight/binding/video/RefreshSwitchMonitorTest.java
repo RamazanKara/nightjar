@@ -93,6 +93,22 @@ public class RefreshSwitchMonitorTest {
         assertNull(monitor.lastSettled());
     }
 
+    @Test public void holdingRateSkipsModeListAndConditionReadsWhileClearingState() {
+        RefreshSwitchMonitor monitor = new RefreshSwitchMonitor(context);
+        assertNull(monitor.poll(0, display, 120f, true));
+        assertNotNull(monitor.poll(SETTLE, display, 120f, true));
+        assertNotNull(monitor.lastSettled());
+
+        FakePanel.setActive(mode(3, 120f, 60f, 90f));
+        FakePanel.supportedModesCalls = 0;
+        assertNull(monitor.poll(SETTLE + 1_000, display, 120f, true));
+        assertNull(monitor.lastSettled());
+        assertEquals("Holding rate must skip reading supported modes", 0, FakePanel.supportedModesCalls);
+        // A whole multiple (120 Hz screen for 60 Hz vote) also holds without polling modes.
+        assertNull(monitor.poll(SETTLE + 2_000, display, 60f, true));
+        assertEquals(0, FakePanel.supportedModesCalls);
+    }
+
     @Test public void batterySaverIsNamedWhenItIsOn() {
         shadowOf((PowerManager) context.getSystemService(Context.POWER_SERVICE)).setIsPowerSaveMode(true);
         assertEquals(context.getString(R.string.refresh_diag_battery_saver, "120", "60"), settled(120f));
@@ -214,12 +230,14 @@ public class RefreshSwitchMonitorTest {
     public static class FakePanel extends ShadowDisplay {
         private static Display.Mode active;
         private static final List<Display.Mode> supported = new ArrayList<>();
+        static int supportedModesCalls;
         @RealObject private Display display;
 
         public static void set(Display.Mode activeMode, Display.Mode... modes) {
             active = activeMode;
             supported.clear();
             supported.addAll(Arrays.asList(modes));
+            supportedModesCalls = 0;
         }
 
         static void setActive(Display.Mode mode) {
@@ -229,6 +247,7 @@ public class RefreshSwitchMonitorTest {
         public static void clear() {
             active = null;
             supported.clear();
+            supportedModesCalls = 0;
         }
 
         @Implementation protected Display.Mode getMode() {
@@ -236,6 +255,7 @@ public class RefreshSwitchMonitorTest {
         }
 
         @Implementation protected Display.Mode[] getSupportedModes() {
+            supportedModesCalls++;
             return active != null ? supported.toArray(new Display.Mode[0]) :
                     Shadow.directlyOn(display, Display.class, "getSupportedModes");
         }

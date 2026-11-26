@@ -181,7 +181,13 @@ impl Streaming {
         let Some(client) = self.audio_client() else { return };
         let (offered, shared) = (self.host_audio.offered.clone(), self.shared.clone());
         self.host_audio.busy = true;
-        std::thread::spawn(move || shared.notify(Notice::HostAudio(read_host_audio(&client, offered))));
+        if let Err(error) = std::thread::Builder::new()
+            .name("host-audio-read".into())
+            .spawn(move || shared.notify(Notice::HostAudio(read_host_audio(&client, offered))))
+        {
+            self.host_audio.busy = false;
+            eprintln!("nightjar: could not read PC audio switches: {error}");
+        }
     }
 
     /// Turns a switch on or off for this stream; the PC's answer sets what the menu shows.
@@ -190,10 +196,13 @@ impl Streaming {
         let Some(client) = self.audio_client() else { return };
         let shared = self.shared.clone();
         self.host_audio.busy = true;
-        std::thread::spawn(move || {
+        if let Err(error) = std::thread::Builder::new().name("host-audio-write".into()).spawn(move || {
             let answer = client.write_audio(&audio_write(id, on)).map_err(|e| e.to_string());
             shared.notify(Notice::HostAudio(AudioAnswer::Changed(answer)));
-        });
+        }) {
+            self.host_audio.busy = false;
+            self.shared.notify(Notice::HostAudio(AudioAnswer::Changed(Err(error.to_string()))));
+        }
     }
 }
 

@@ -62,17 +62,23 @@ pub fn tunnel(host_id: &str, info: &InternetPlay) -> Result<ClientTunnel, String
     let secret = info.secret.ok_or_else(|| {
         "connect once on the PC's network with Play over the internet on".to_owned()
     })?;
-    let mut tunnels = TUNNELS.lock().unwrap();
-    if let Some(entry) = tunnels.get(host_id) {
-        if entry.tunnel.is_active() {
-            return Ok(entry.tunnel.clone());
+    let expired = {
+        let mut tunnels = TUNNELS.lock().unwrap();
+        if let Some(entry) = tunnels.get(host_id) {
+            if entry.tunnel.is_active() {
+                return Ok(entry.tunnel.clone());
+            }
+            let cooldown_since = entry.tunnel.ended_at().unwrap_or(entry.started);
+            if cooldown_since.elapsed() < RETRY_AFTER {
+                return Err(match entry.tunnel.status() {
+                    Status::Failed(reason) => reason,
+                    _ => "stopped".into(),
+                });
+            }
         }
-        if entry.started.elapsed() < RETRY_AFTER {
-            return Err(match entry.tunnel.status() {
-                Status::Failed(reason) => reason,
-                _ => "stopped".into(),
-            });
-        }
+        tunnels.remove(host_id)
+    };
+    if let Some(entry) = expired {
         entry.tunnel.stop();
     }
     let tunnel = ClientTunnel::start(ClientConfig {
@@ -88,6 +94,15 @@ pub fn tunnel(host_id: &str, info: &InternetPlay) -> Result<ClientTunnel, String
             .map(|node| (*node).to_owned())
             .collect(),
     });
+    let mut tunnels = TUNNELS.lock().unwrap();
+    if let Some(entry) = tunnels.get(host_id)
+        && entry.tunnel.is_active()
+    {
+        let existing = entry.tunnel.clone();
+        drop(tunnels);
+        tunnel.stop();
+        return Ok(existing);
+    }
     tunnels.insert(
         host_id.to_owned(),
         Entry {
@@ -160,14 +175,16 @@ pub fn is_tunnel(address: IpAddr) -> bool {
 
 /// Ends `host_id`'s tunnel.
 pub fn stop(host_id: &str) {
-    if let Some(entry) = TUNNELS.lock().unwrap().remove(host_id) {
+    let removed = TUNNELS.lock().unwrap().remove(host_id);
+    if let Some(entry) = removed {
         entry.tunnel.stop();
     }
 }
 
 /// Ends every tunnel (the app closes, or the user turned Play over the internet off).
 pub fn stop_all() {
-    for (_, entry) in TUNNELS.lock().unwrap().drain() {
+    let removed: Vec<Entry> = TUNNELS.lock().unwrap().drain().map(|(_, e)| e).collect();
+    for entry in removed {
         entry.tunnel.stop();
     }
 }

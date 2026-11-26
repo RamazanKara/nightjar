@@ -4,7 +4,7 @@ use super::*;
 #[test]
 fn a_d3d11_444_surface_has_a_full_chroma_layout_of_its_depth() {
     let info = |kind, ten_bit| FrameInfo { width: 64, height: 32, kind, ten_bit, pts: 0, data: [std::ptr::null_mut(); 3],
-        linesize: [0; 3], color_space: 1, color_range: 1, color_trc: 1 };
+        linesize: [0; 3], color_space: 1, color_range: 1, color_trc: 1, centred_chroma: false };
     for ten_bit in [0, 1] {
         assert_eq!(PlanarLayout::of_d3d11(&info(FRAME_D3D11_444, ten_bit)),
             Some(PlanarLayout { width: 64, height: 32, chroma444: true, ten_bit: ten_bit != 0 }));
@@ -771,6 +771,19 @@ fn a_held_device_outlives_the_renderers_release() {
     assert!(copy.holds(raw));
     assert!(DeviceRef::of(Hardware::None).holds(std::ptr::null_mut()));
     assert!(DeviceRef::of_device(std::ptr::null_mut()).holds(std::ptr::null_mut()));
+}
+
+#[test]
+fn d3d11_bridge_uses_smaller_ffmpeg_pool_than_vaapi_videotoolbox_or_shared_d3d11() {
+    use crate::media::hardware::{decoder_extra_hw_frames, BRIDGE_EXTRA_HW_FRAMES};
+    let pictures = Pictures { waiting: 3, ..Pictures::default() };
+    assert_eq!(decoder_extra_hw_frames(Hardware::D3d11(std::ptr::null_mut()), true, pictures), BRIDGE_EXTRA_HW_FRAMES);
+    let expected = pool_extra(pictures.waiting);
+    assert_eq!(decoder_extra_hw_frames(Hardware::D3d11(std::ptr::null_mut()), false, pictures), expected);
+    assert_eq!(decoder_extra_hw_frames(Hardware::Vaapi, false, pictures), expected);
+    #[cfg(target_os = "macos")]
+    assert_eq!(decoder_extra_hw_frames(Hardware::VideoToolbox, false, pictures), expected);
+    assert_eq!(decoder_extra_hw_frames(Hardware::Vulkan(std::ptr::null_mut()), false, pictures), expected);
 }
 
 #[test]

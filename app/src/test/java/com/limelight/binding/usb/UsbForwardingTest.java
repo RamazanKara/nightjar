@@ -516,4 +516,38 @@ public class UsbForwardingTest {
         forwarding.setAuto(Collections.singletonList(tablet), new boolean[]{false});
         assertFalse(filterEnabled());
     }
+
+    @Test
+    public void driverReleaseWaitDefaultsToFourSecondsAndTimeoutFailsVisiblyWithoutAttaching() throws Exception {
+        assertEquals(4000L, forwarding.releaseWaitMs);
+        forwarding.releaseWaitMs = 20L;
+
+        UsbDevice busy = device("/dev/bus/usb/001/070", "Busy Pad", 0, 0x054c, 0x0ce6);
+        shadowUsb().addOrUpdateUsbDevice(busy, true);
+        java.util.concurrent.CountDownLatch gate = new java.util.concurrent.CountDownLatch(1);
+        com.limelight.binding.input.driver.AbstractController blocker =
+                new com.limelight.binding.input.driver.AbstractController(
+                        99, null, 0x054c, 0x0ce6, busy.getDeviceName()) {
+                    @Override public boolean start() { return true; }
+                    @Override public void stop() {
+                        runOnUsbWorker(() -> {
+                            try { gate.await(5, TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+                        });
+                    }
+                    @Override public void rumble(short lowFreqMotor, short highFreqMotor) { }
+                    @Override public void rumbleTriggers(short leftTrigger, short rightTrigger) { }
+                };
+        blocker.stop();
+        try {
+            forwarding.choose(busy);
+            worker.runAll();
+            assertTrue("attach must not run when driver release timed out", bridge.attached.isEmpty());
+            assertFalse(forwarding.isForwarded(busy));
+            assertEquals(1, connections.get(0).closes);
+            assertEquals(text(R.string.usb_forwarding_failed, "Busy Pad",
+                    context.getString(R.string.usb_forwarding_code_busy)), messages.get(messages.size() - 1));
+        } finally {
+            gate.countDown();
+        }
+    }
 }

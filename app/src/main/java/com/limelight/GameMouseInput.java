@@ -24,6 +24,8 @@ final class GameMouseInput {
     private int lastButtonState = 0;
     private final MouseDeltaAccumulator mouseDeltaX = new MouseDeltaAccumulator();
     private final MouseDeltaAccumulator mouseDeltaY = new MouseDeltaAccumulator();
+    private final MouseDeltaAccumulator mouseScrollV = new MouseDeltaAccumulator();
+    private final MouseDeltaAccumulator mouseScrollH = new MouseDeltaAccumulator();
 
     private long lastAbsTouchUpTime = 0;
     private long lastAbsTouchDownTime = 0;
@@ -85,7 +87,14 @@ final class GameMouseInput {
 
         // Ignore mouse input if we're not capturing from our input source
         if (!game.inputCaptureProvider.isCapturingActive()) {
-            // We return true here because otherwise the events may end up causing
+            if (lastButtonState != 0) {
+                releaseMouseButtons();
+            }
+            mouseDeltaX.reset();
+            mouseDeltaY.reset();
+            mouseScrollV.reset();
+            mouseScrollH.reset();
+            // We return here because otherwise the events may end up causing
             // Android to synthesize d-pad events.
             return;
         }
@@ -150,9 +159,14 @@ final class GameMouseInput {
         }
 
         if (event.getActionMasked() == MotionEvent.ACTION_SCROLL) {
-            // Send the vertical scroll packet
-            game.conn.sendMouseHighResScroll((short)(event.getAxisValue(MotionEvent.AXIS_VSCROLL) * 120));
-            game.conn.sendMouseHighResHScroll((short)(event.getAxisValue(MotionEvent.AXIS_HSCROLL) * 120));
+            int vScroll = mouseScrollV.scale(event.getAxisValue(MotionEvent.AXIS_VSCROLL), 120f);
+            if (vScroll != 0) {
+                game.conn.sendMouseHighResScroll((short) vScroll);
+            }
+            int hScroll = mouseScrollH.scale(event.getAxisValue(MotionEvent.AXIS_HSCROLL), 120f);
+            if (hScroll != 0) {
+                game.conn.sendMouseHighResHScroll((short) hScroll);
+            }
         }
 
         if ((changedButtons & MotionEvent.BUTTON_PRIMARY) != 0) {

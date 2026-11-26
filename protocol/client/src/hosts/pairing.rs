@@ -14,14 +14,20 @@ use crate::http::{
     certificate_sha256_pem, pem_decode_certificate,
 };
 
+/// Cryptographically random 4-digit pairing PIN (`"0000"`..`"9999"`), returning an error if
+/// the OS random source fails.
+pub fn try_random_pin() -> Result<String, &'static str> {
+    let mut bytes = [0u8; 4];
+    SystemRandom::new()
+        .fill(&mut bytes)
+        .map_err(|_| "system RNG failed while generating pairing PIN")?;
+    let val = u32::from_le_bytes(bytes) % 10_000;
+    Ok(format!("{val:04}"))
+}
+
 /// Cryptographically random 4-digit pairing PIN (`"0000"`..`"9999"`).
 pub fn random_pin() -> String {
-    let mut bytes = [0u8; 4];
-    if SystemRandom::new().fill(&mut bytes).is_ok() {
-        let val = u32::from_le_bytes(bytes) % 10_000;
-        return format!("{val:04}");
-    }
-    "0000".into()
+    try_random_pin().expect("system RNG failed while generating pairing PIN")
 }
 
 /// Whether `server_certificate_pem` is present and pins a certificate whose SHA-256 differs from

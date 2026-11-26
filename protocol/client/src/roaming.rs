@@ -369,6 +369,7 @@ impl Roaming {
 
     /// Ends the running attempt: the host was heard on the old path.
     pub fn cancel(&mut self, now: Instant) {
+        self.outgoing.clear();
         if let Some(attempt) = self.attempt.take() {
             let elapsed = now.saturating_duration_since(attempt.started);
             self.events.push(RoamEvent::Unneeded { elapsed });
@@ -527,6 +528,7 @@ impl Roaming {
     }
 
     fn fail(&mut self, now: Instant) -> Option<Instant> {
+        self.outgoing.clear();
         if let Some(attempt) = self.attempt.take() {
             let elapsed = now.saturating_duration_since(attempt.started);
             self.events.push(RoamEvent::Failed {

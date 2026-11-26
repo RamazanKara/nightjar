@@ -152,6 +152,14 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarJni_startConnecti
             server_codec_mode_support as u32
         },
     };
+    let Some(ri_key) = bridge::key16(&mut env, &ri_aes_key) else {
+        platform::error("startConnection: invalid remote input AES key length");
+        return -1;
+    };
+    let Some(ri_iv) = bridge::key16(&mut env, &ri_aes_iv) else {
+        platform::error("startConnection: invalid remote input AES IV length");
+        return -1;
+    };
     let mut stream = engine::stream_config(
         width,
         height,
@@ -161,8 +169,8 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarJni_startConnecti
         audio_configuration,
         supported_video_formats,
         client_refresh_rate_x100,
-        bridge::key16(&mut env, &ri_aes_key),
-        bridge::key16(&mut env, &ri_aes_iv),
+        ri_key,
+        ri_iv,
         video_capabilities,
         color_space,
         color_range,

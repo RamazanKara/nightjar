@@ -43,8 +43,8 @@ public class SettingsRowCountTest {
         context().getSharedPreferences("SettingsScreenState", Context.MODE_PRIVATE).edit().clear().commit();
     }
 
-    /** Settings' rows at the defaults, every More row open, the new Show debug settings included. */
-    static final int ROWS_AT_DEFAULTS = 112;
+    /** Settings' rows at the defaults, every More row open, the new Show debug settings, NJ#187 controller mouse sensitivity, and NJ#191 compact overlay device info included. */
+    static final int ROWS_AT_DEFAULTS = 114;
 
     @Test
     public void rowCountsAtTheDefaults() {

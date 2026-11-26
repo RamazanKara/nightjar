@@ -61,6 +61,33 @@ impl ClipboardItem {
     }
 }
 
+/// A prepared outbound clipboard frame waiting to be committed once the transport sends it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PendingLocal {
+    item: ClipboardItem,
+    token: u32,
+    now: Instant,
+    message: ClientMessage,
+}
+
+impl PendingLocal {
+    pub fn message(&self) -> &ClientMessage {
+        &self.message
+    }
+
+    pub fn into_message(self) -> ClientMessage {
+        self.message
+    }
+}
+
+/// Decision of [`ClipboardSync::prepare_local`] before `sent`/`last` are committed.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PreparedLocal {
+    Send(PendingLocal),
+    Skip,
+    TooLarge(usize),
+}
+
 /// What to do with a copy on the device.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Local {
@@ -144,17 +171,19 @@ impl ClipboardSync {
         self.last = item;
     }
 
-    /// A copy on the device at `now`.
-    pub fn local(&mut self, item: ClipboardItem, now: Instant) -> Local {
+    /// Prepares an outbound frame for a copy on the device at `now` without recording `sent` or
+    /// `last` yet. Call [`Self::confirm_local`] only once transport delivery succeeds so failed sends
+    /// stay retryable.
+    pub fn prepare_local(&mut self, item: ClipboardItem, now: Instant) -> PreparedLocal {
         let empty = match &item {
             ClipboardItem::Text(text) => text.is_empty() || text.contains('\0'),
             ClipboardItem::Png(png) => png.is_empty() || !self.images,
         };
         if empty || item.is_last(&self.last) {
-            return Local::Skip;
+            return PreparedLocal::Skip;
         }
         if item.len() > MAX_PAYLOAD_BYTES {
-            return Local::TooLarge(item.len());
+            return PreparedLocal::TooLarge(item.len());
         }
         self.prune(now);
         let token = loop {
@@ -164,20 +193,42 @@ impl ClipboardSync {
                 break token;
             }
         };
-        if self.sent.len() == ECHO_TOKENS {
-            self.sent.pop_front();
-        }
-        self.sent.push_back((token, now));
         let (kind, payload) = match item.clone() {
             ClipboardItem::Text(text) => (KIND_TEXT, text.into_bytes()),
             ClipboardItem::Png(png) => (KIND_PNG, png),
         };
-        self.last = Some(item);
-        Local::Send(ClientMessage::ClipboardSync(Frame {
-            kind,
+        PreparedLocal::Send(PendingLocal {
+            item,
             token,
-            payload,
-        }))
+            now,
+            message: ClientMessage::ClipboardSync(Frame {
+                kind,
+                token,
+                payload,
+            }),
+        })
+    }
+
+    /// Commits a frame prepared by [`Self::prepare_local`] after transport delivery succeeds.
+    pub fn confirm_local(&mut self, pending: &PendingLocal) {
+        self.prune(pending.now);
+        if self.sent.len() == ECHO_TOKENS {
+            self.sent.pop_front();
+        }
+        self.sent.push_back((pending.token, pending.now));
+        self.last = Some(pending.item.clone());
+    }
+
+    /// A copy on the device at `now`, committing immediately for callers that do not check send success.
+    pub fn local(&mut self, item: ClipboardItem, now: Instant) -> Local {
+        match self.prepare_local(item, now) {
+            PreparedLocal::Send(pending) => {
+                self.confirm_local(&pending);
+                Local::Send(pending.into_message())
+            }
+            PreparedLocal::Skip => Local::Skip,
+            PreparedLocal::TooLarge(bytes) => Local::TooLarge(bytes),
+        }
     }
 
     /// A frame from the host at `now`.
@@ -393,6 +444,44 @@ mod tests {
         assert_eq!(
             images.received(from_host(KIND_PNG, 1, &[0x89]), now),
             Received::Apply(ClipboardItem::Png(vec![0x89]))
+        );
+    }
+
+    #[test]
+    fn failed_send_keeps_copy_retryable_until_confirmed() {
+        let now = Instant::now();
+        let mut sync = ClipboardSync::new(false);
+        let PreparedLocal::Send(first) = sync.prepare_local(text("retry me"), now) else {
+            panic!("expected Send");
+        };
+        // Without confirm_local (send failed), preparing the same text again must still produce Send.
+        let PreparedLocal::Send(retry) = sync.prepare_local(text("retry me"), now) else {
+            panic!("failed send must not suppress retry");
+        };
+        sync.confirm_local(&retry);
+        assert_eq!(
+            sync.prepare_local(text("retry me"), now),
+            PreparedLocal::Skip
+        );
+        // Only confirmed tokens count as echoes: move `self.last` to a different host copy
+        // first so deduplication does not mask the echo check, then verify `first`'s token
+        // applies while `retry`'s confirmed token is suppressed as an echo.
+        assert_eq!(
+            sync.received(from_host(KIND_TEXT, 999, b"from host"), now),
+            Received::Apply(text("from host"))
+        );
+        let ClientMessage::ClipboardSync(unconfirmed_frame) = first.into_message() else {
+            panic!();
+        };
+        if retry.token != unconfirmed_frame.token {
+            assert_eq!(
+                sync.received(unconfirmed_frame, now),
+                Received::Apply(text("retry me"))
+            );
+        }
+        assert_eq!(
+            sync.received(from_host(KIND_TEXT, retry.token, b"echo"), now),
+            Received::Nothing
         );
     }
 }

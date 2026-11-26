@@ -12,6 +12,7 @@ impl Launcher {
         flow: &mut DialogFlow,
     ) -> bool {
         let focus_first = flow.focus_first;
+        let keys_on_screen = flow.keys_on_screen;
         let bitrate_kbps = flow.bitrate_kbps;
         let mut close = false;
         let mut next: Option<Dialog> = None;
@@ -120,8 +121,14 @@ impl Launcher {
                     ui.label(RichText::new(tr("Pair another device")).font(semibold(text::SECTION)));
                     let waiting: Vec<_> = view.hosts.list.iter().filter(|h| only.is_none_or(|id| h.id == id)).flat_map(|h| h.waiting_to_pair().iter().map(move |r| (h, r))).collect();
                     if waiting.is_empty() {
-                        let pc = only.and_then(|id| view.hosts.get(id)).map_or("", |h| h.display_name());
-                        ui.label(RichText::new(trf("On the new device, select {} in Nightjar or Moonlight.", &[&pc])).color(ON_SURFACE_VARIANT));
+                        let prompt = match only.and_then(|id| view.hosts.get(id)) {
+                            Some(host) => trf(
+                                "On the new device, select {} in Nightjar or Moonlight.",
+                                &[&host.display_name()],
+                            ),
+                            None => tr("On the new device, select this PC in Nightjar or Moonlight.").to_owned(),
+                        };
+                        ui.label(RichText::new(prompt).color(ON_SURFACE_VARIANT));
                     }
                     ui.add_space(space::S);
                     for (index, (host, request)) in waiting.iter().enumerate() {
@@ -304,9 +311,25 @@ impl Launcher {
                     ui.label(RichText::new(if id.is_some() { tr("Edit shortcut") } else { tr("New shortcut") }).font(semibold(text::SECTION)));
                     ui.add_space(space::S);
                     let edit = dialog_field(ui, egui::TextEdit::singleline(name).hint_text(hint(tr("Shortcut name"), regular(text::BODY))));
-                    if focus_first { edit.request_focus(); focused = true; }
-                    dialog_field(ui, egui::TextEdit::singleline(chord).hint_text(hint("CTRL + ALT + DELETE", regular(text::BODY))));
+                    let chord_edit = dialog_field(ui, egui::TextEdit::singleline(chord).hint_text(hint("CTRL + ALT + DELETE", regular(text::BODY))));
                     ui.label(RichText::new(tr("Use letters, digits, F1–F24, CTRL, SHIFT, ALT, WIN, TAB, ENTER, ESC, arrows or other key names.")).font(regular(text::CAPTION)).color(ON_SURFACE_VARIANT));
+                    let pad_target_id = Id::unique("shortcut-pad-target");
+                    let mut target = ui.data(|d| d.get_temp::<u8>(pad_target_id)).unwrap_or(0);
+                    if edit.gained_focus() || edit.clicked() {
+                        target = 0;
+                    }
+                    if chord_edit.gained_focus() || chord_edit.clicked() {
+                        target = 1;
+                    }
+                    ui.data_mut(|d| d.insert_temp(pad_target_id, target));
+                    if keys_on_screen {
+                        ui.add_space(space::S);
+                        let first = if target == 0 { text_pad(ui, name, None) } else { text_pad(ui, chord, None) };
+                        if focus_first { first.request_focus(); focused = true; }
+                    } else if focus_first {
+                        edit.request_focus();
+                        focused = true;
+                    }
                     if let Some(error) = error { ui.label(RichText::new(error.as_str()).color(ERROR)); }
                     dialog_buttons(ui, |ui| {
                         if primary_button(ui, "Save").clicked() {
@@ -321,7 +344,7 @@ impl Launcher {
             }
             Dialog::StreamHotkey { id, error } => {
                 let id = *id;
-                // The keys come from SDL before egui ([`Launcher::hotkey_key_down`]).
+                // The keys come from SDL before egui while Dialog::StreamHotkey is active.
                 let title = crate::shortcuts::Action::from_hotkey(id).map_or(id, |action| tr(action.label()));
                 modal(ctx, "stream-hotkey", |ui| {
                     ui.set_width(420.0);
@@ -377,7 +400,14 @@ impl Launcher {
                     ui.label(RichText::new(if id.is_some() { tr("Rename profile") } else { tr("New profile") }).font(semibold(text::SECTION)));
                     ui.add_space(space::S);
                     let edit = dialog_field(ui, egui::TextEdit::singleline(name).hint_text(hint(tr("Profile name"), regular(text::BODY))));
-                    if focus_first { edit.request_focus(); focused = true; }
+                    if keys_on_screen {
+                        ui.add_space(space::S);
+                        let first = text_pad(ui, name, None);
+                        if focus_first { first.request_focus(); focused = true; }
+                    } else if focus_first {
+                        edit.request_focus();
+                        focused = true;
+                    }
                     if let Some(error) = error { ui.label(RichText::new(error.as_str()).color(ERROR)); }
                     let submitted = edit.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
                     dialog_buttons(ui, |ui| {

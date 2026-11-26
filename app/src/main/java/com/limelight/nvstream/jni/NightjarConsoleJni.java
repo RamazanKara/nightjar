@@ -51,7 +51,7 @@ public final class NightjarConsoleJni {
 
     // Favourites, recents, hidden state & cleanup
     public static native boolean repoToggleFavourite(long handle, String entryJson);
-    public static native void repoSetFavourite(long handle, String entryJson, boolean starred);
+    public static native boolean repoSetFavourite(long handle, String entryJson, boolean starred);
     public static native boolean repoIsFavourite(
             long handle,
             String hostId,
@@ -75,7 +75,7 @@ public final class NightjarConsoleJni {
             int appId);
     public static native String repoHiddenOf(long handle, String hostId);
     public static native String repoHiddenIds(long handle, String hostId);
-    public static native void repoHiddenSetApp(
+    public static native boolean repoHiddenSetApp(
             long handle,
             String hostId,
             int appId,

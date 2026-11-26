@@ -136,7 +136,8 @@ fn a_list_line_names_the_store_and_when_the_game_was_last_played() {
     let one = [a3];
     let merged = merge_library(&one);
     let dota3 = merged.iter().find(|e| e.title == "Dota 2").expect("Dota 2");
-    assert_eq!(last_played(dota3, &one, &recents), Some(0), "the PC says never played");
+    assert_eq!(last_played(dota3, &one, &[]), Some(0), "the PC says never played when no newer recent exists");
+    assert_eq!(last_played(dota3, &one, &recents), Some(5_000), "a newer local recent overrides a stale store timestamp");
     let store = dota.best().store_name.clone();
     let line = |played, now| list_line(dota, played, now);
     let with_store = |when: &str| match &store { Some(s) => format!("{s} · {when}"), None => when.to_owned() };
@@ -146,6 +147,12 @@ fn a_list_line_names_the_store_and_when_the_game_was_last_played() {
     assert_eq!(line(Some(5_000), 5_000 + 86_400 + 60), with_store("Played yesterday"));
     assert_eq!(line(Some(5_000), 5_000 + 9 * 86_400), with_store("Played 9 days ago"));
     assert_eq!(line(Some(9_000), 5_000), with_store("Played today"), "a clock that went back reads as today");
+    // Calendar day boundary: 23:55 yesterday to 00:05 today is 10 minutes apart, yet yesterday.
+    assert_eq!(
+        list_line_with_day(dota, Some(86_100), 86_700, |secs| (secs / 86_400) as i64),
+        with_store("Played yesterday"),
+        "crossing midnight switches to yesterday even within 24 hours"
+    );
 }
 
 #[test]
@@ -292,10 +299,14 @@ fn sources_of(pcs: &[Pc]) -> Vec<Source<'_>> {
             online: pc.online,
             paired: pc.paired,
             library: pc.library.as_ref(),
+            shared_library: None,
             classic: pc.classic,
             last_played: pc.last_played.as_ref(),
+            shared_last_played: None,
             playtime_minutes: pc.playtime_minutes.as_ref(),
+            shared_playtime_minutes: None,
             collections: pc.collections.as_ref(),
+            shared_collections: None,
             session: pc.session.as_ref(),
             host_control: pc.host_control,
         })
@@ -520,4 +531,23 @@ fn play_time_is_offered_only_while_some_pc_sends_it() {
     let settings = crate::config::Settings { home_sort: HomeSort::Playtime, home_order: HomeOrder::Descending, ..Default::default() };
     assert_eq!(Sort::shown(&settings, &timed), Sort { by: HomeSort::Playtime, order: HomeOrder::Descending });
     assert_eq!(Sort::shown(&settings, &untimed), Sort { by: HomeSort::Title, order: HomeOrder::Descending }, "the choice stays for when it does");
+}
+
+#[test]
+fn library_memo_reuses_shared_host_arcs_until_library_mutates() {
+    let mut host = crate::hosts_model::Host::new(1, crate::config::HostRecord::default());
+    host.reach = Reach::Online;
+    host.native.library = Some(std::sync::Arc::new(library()));
+
+    let memo = LibraryMemo::default();
+    let first = memo.get(&[Source::of(&host)], &[]);
+    let second = memo.get(&[Source::of(&host)], &[]);
+    assert_eq!(memo.merges(), 1);
+    assert!(std::rc::Rc::ptr_eq(&first, &second));
+
+    std::sync::Arc::make_mut(host.native.library.as_mut().unwrap()).games[0].title = "Updated Title".into();
+    let third = memo.get(&[Source::of(&host)], &[]);
+    assert_eq!(memo.merges(), 2);
+    assert!(!std::rc::Rc::ptr_eq(&second, &third));
+    assert!(third.all().iter().any(|entry| entry.title == "Updated Title"));
 }

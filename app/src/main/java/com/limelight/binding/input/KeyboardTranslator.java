@@ -134,6 +134,21 @@ public class KeyboardTranslator implements InputManager.InputDeviceListener {
      */
     @SuppressLint("InlinedApi")
     public short translate(int keycode, int deviceId) {
+        return translate(keycode, 0, deviceId);
+    }
+
+    /** Translates a key event's keycode and Linux scan code into a host Windows virtual key. */
+    @SuppressLint("InlinedApi")
+    public short translate(int keycode, int scanCode, int deviceId) {
+        // Linux KEY_102ND (scan code 86) maps to KEYCODE_BACKSLASH in Android's Generic.kl; preserve ISO 102nd key.
+        if (keycode == KeyEvent.KEYCODE_BACKSLASH && scanCode == 86) {
+            return (short) ((KEY_PREFIX << 8) | 0xE2);
+        }
+        return translateInternal(keycode, deviceId);
+    }
+
+    @SuppressLint("InlinedApi")
+    private short translateInternal(int keycode, int deviceId) {
 
         // If a device ID was provided, look up the keyboard mapping
         if (deviceId >= 0) {
@@ -457,6 +472,48 @@ public class KeyboardTranslator implements InputManager.InputDeviceListener {
 
             case KeyEvent.KEYCODE_SCREENSHOT:
                 translated = 0x2C;
+                break;
+
+            case KeyEvent.KEYCODE_MEDIA_NEXT:
+                translated = 0xB0;
+                break;
+
+            case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+                translated = 0xB1;
+                break;
+
+            case KeyEvent.KEYCODE_MEDIA_STOP:
+                translated = 0xB2;
+                break;
+
+            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+            case KeyEvent.KEYCODE_MEDIA_PLAY:
+            case KeyEvent.KEYCODE_MEDIA_PAUSE:
+                translated = 0xB3;
+                break;
+
+            case KeyEvent.KEYCODE_KANA:
+                translated = 0x15;
+                break;
+
+            case KeyEvent.KEYCODE_HENKAN:
+                translated = 0x1C;
+                break;
+
+            case KeyEvent.KEYCODE_MUHENKAN:
+                translated = 0x1D;
+                break;
+
+            case KeyEvent.KEYCODE_EISU:
+                translated = 0xF0;
+                break;
+
+            case KeyEvent.KEYCODE_KATAKANA_HIRAGANA:
+                translated = 0xF2;
+                break;
+
+            case KeyEvent.KEYCODE_ZENKAKU_HANKAKU:
+                translated = 0xF3;
                 break;
 
             default:

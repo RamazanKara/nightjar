@@ -88,7 +88,8 @@ impl App {
         self.pads.close_all();
         self.gui.destroy();
         let teardowns_pending = self.teardowns_busy();
-        if self.attempts.is_busy() || self.probe.is_some() || !self.ending_probes.is_empty() || teardowns_pending {
+        let quits_pending = self.hosts.has_pending_quits();
+        if self.attempts.is_busy() || self.probe.is_some() || !self.ending_probes.is_empty() || teardowns_pending || quits_pending {
             // Ending a launch or its decoder checks can take seconds: the window goes now rather
             // than sitting frozen meanwhile.
             // SAFETY: the window run() created, still alive.
@@ -133,6 +134,7 @@ impl App {
             }
         });
         for stop in abr_stops { stop.wait(); }
+        self.hosts.wait_quits(deadline.saturating_duration_since(Instant::now()));
     }
 
     /// Drops the saved library of a PC that is unpaired or removed.
@@ -317,10 +319,6 @@ pub(crate) const GAMEPAD_ACTIVITY_AXIS_THRESHOLD: u16 = 1024;
 /// `wait_launcher_events` when no navigation stick is held (~12%, filters stick drift, #179).
 pub(crate) const LAUNCHER_AXIS_WAKE_THRESHOLD: u16 = 4000;
 
-/// Minimum gyro angular velocity (rad/s, ~14 deg/s) treated as real controller motion; passive
-/// resting gyro bias and accelerometer gravity ticks do not hold 500 Hz polling active (#179).
-pub(crate) const GAMEPAD_ACTIVITY_GYRO_THRESHOLD: f32 = 0.25;
-
 /// Pure classification for [`is_gamepad_activity`], testable without constructing raw SDL unions.
 pub(crate) fn is_gamepad_activity_parts(
     kind: SDL_EventType,
@@ -337,9 +335,7 @@ pub(crate) fn is_gamepad_activity_parts(
         SDL_EVENT_GAMEPAD_AXIS_MOTION => {
             axis_value.is_some_and(|v| v.unsigned_abs() > GAMEPAD_ACTIVITY_AXIS_THRESHOLD)
         }
-        SDL_EVENT_GAMEPAD_SENSOR_UPDATE => {
-            gyro_peak.is_some_and(|peak| peak.is_finite() && peak > GAMEPAD_ACTIVITY_GYRO_THRESHOLD)
-        }
+        SDL_EVENT_GAMEPAD_SENSOR_UPDATE => stream::direct_motion::is_gyro_peak_active(gyro_peak),
         _ => false,
     }
 }
@@ -357,7 +353,13 @@ pub(crate) fn is_gamepad_activity(event: &SDL_Event) -> bool {
         };
         let gyro_peak = (kind == SDL_EVENT_GAMEPAD_SENSOR_UPDATE
             && SDL_SensorType(event.gsensor.sensor) == SDL_SENSOR_GYRO)
-            .then(|| event.gsensor.data.into_iter().map(f32::abs).fold(0.0_f32, f32::max));
+            .then(|| {
+                if event.gsensor.data.iter().all(|v| v.is_finite()) {
+                    event.gsensor.data.into_iter().map(f32::abs).fold(0.0_f32, f32::max)
+                } else {
+                    f32::NAN
+                }
+            });
         is_gamepad_activity_parts(kind, axis_value, gyro_peak)
     }
 }
@@ -517,6 +519,15 @@ pub(crate) fn stream_sleep(duration: Duration, precise: bool, pad_wait: Option<D
 }
 
 impl App {
+    fn poll_launcher_event(&mut self, event: &SDL_Event) -> bool {
+        let controller_test =
+            self.launcher.screen == Screen::Controllers && self.launcher.controller_test;
+        let woke = launcher_event_wakes_frame(event, controller_test, self.stick_held);
+        self.latency_input(event);
+        self.handle_launcher_event(event);
+        woke
+    }
+
     /// Polls launcher events with adaptive joystick cadence instead of SDL's 1000 Hz wakeup.
     /// Loops internally across 16 ms joystick poll slices until either a waking event arrives or
     /// `timeout` elapses, avoiding redundant launcher redraws while a controller sits idle (#179).
@@ -534,15 +545,11 @@ impl App {
                 unsafe { SDL_UpdateJoysticks() };
                 self.pad_poll.polled(now);
             }
-            let controller_test =
-                self.launcher.screen == Screen::Controllers && self.launcher.controller_test;
             // SAFETY: event polling on the main thread.
             let mut event: SDL_Event = unsafe { std::mem::zeroed() };
             let mut woke = false;
             while unsafe { SDL_PollEvent(&mut event) } {
-                woke |= launcher_event_wakes_frame(&event, controller_test, self.stick_held);
-                self.latency_input(&event);
-                self.handle_launcher_event(&event);
+                woke |= self.poll_launcher_event(&event);
             }
             if woke || !self.running {
                 return;
@@ -562,17 +569,9 @@ impl App {
             let slice = launcher_wait_slice_ms(remaining, pad_wait).max(1);
             // SAFETY: event polling on the main thread.
             if unsafe { SDL_WaitEventTimeout(&mut event, slice) } {
-                let controller_test =
-                    self.launcher.screen == Screen::Controllers && self.launcher.controller_test;
-                woke |= launcher_event_wakes_frame(&event, controller_test, self.stick_held);
-                self.latency_input(&event);
-                self.handle_launcher_event(&event);
+                woke |= self.poll_launcher_event(&event);
                 while unsafe { SDL_PollEvent(&mut event) } {
-                    let controller_test =
-                        self.launcher.screen == Screen::Controllers && self.launcher.controller_test;
-                    woke |= launcher_event_wakes_frame(&event, controller_test, self.stick_held);
-                    self.latency_input(&event);
-                    self.handle_launcher_event(&event);
+                    woke |= self.poll_launcher_event(&event);
                 }
                 if woke || !self.running {
                     return;

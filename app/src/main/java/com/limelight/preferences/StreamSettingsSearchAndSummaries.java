@@ -14,6 +14,7 @@ import android.preference.SwitchPreference;
 import android.text.TextUtils;
 import android.widget.TextView;
 
+import com.limelight.LimeLog;
 import com.limelight.R;
 import com.limelight.binding.input.touch.TouchMode;
 import com.limelight.binding.video.DecoderBenchmark;
@@ -150,15 +151,15 @@ final class StreamSettingsSearchAndSummaries {
             }
             String reason = SettingRules.whenReason(activity, key, prefs, activity.devices());
             if (pref instanceof android.preference.TwoStatePreference) {
-                pref.setSummary(reason);
+                setSummaryIfChanged(pref, reason);
             } else if (SettingRules.IGDB_SECRET.equals(key)) {
                 String help = fragment.getString(R.string.game_info_igdb_secret_summary);
-                pref.setSummary(reason == null ? help : help + "\n" + reason);
+                setSummaryIfChanged(pref, reason == null ? help : help + "\n" + reason);
             } else if (reason != null) {
                 CharSequence value = pref.getSummary();
                 String summary = TextUtils.isEmpty(value) ? reason : fragment.getString(R.string.settings_joined, value, reason);
                 // A list formats its summary (updateValueSummaries).
-                pref.setSummary(pref instanceof ListPreference ? summary.replace("%", "%%") : summary);
+                setSummaryIfChanged(pref, pref instanceof ListPreference ? summary.replace("%", "%%") : summary);
             }
         }
     }
@@ -229,31 +230,31 @@ final class StreamSettingsSearchAndSummaries {
                 value = fragment.getString(fragment.customizeOpen() ? R.string.low_latency_customize_open : R.string.low_latency_customize_closed);
             } else if (Arrays.asList(PreferenceConfiguration.LOW_LATENCY_DECODING_KEYS).contains(pref.getKey())) {
                 // The master switch and profiles write preferences without going through these views.
-                ((SwitchPreference) pref).setChecked(prefs.getBoolean(pref.getKey(), true));
+                setCheckedIfChanged((SwitchPreference) pref, prefs.getBoolean(pref.getKey(), true));
                 continue;
             } else if (StreamSettings.LOW_LATENCY_DECODING_KEY.equals(pref.getKey())) {
                 // On only when every part is on; individual switches below can partially disable it.
                 int on = PreferenceConfiguration.lowLatencyDecodingCount(prefs);
-                ((SwitchPreference) pref).setChecked(on == PreferenceConfiguration.LOW_LATENCY_DECODING_KEYS.length);
+                setCheckedIfChanged((SwitchPreference) pref, on == PreferenceConfiguration.LOW_LATENCY_DECODING_KEYS.length);
                 boolean partial = on > 0 && (on < PreferenceConfiguration.LOW_LATENCY_DECODING_KEYS.length ||
                         prefs.getBoolean(PreferenceConfiguration.DISABLE_HEVC_LOW_LATENCY_PREF_STRING, false));
-                pref.setSummary(partial ? fragment.getString(R.string.settings_low_latency_partial) : null);
+                setSummaryIfChanged(pref, partial ? fragment.getString(R.string.settings_low_latency_partial) : null);
                 continue;
             } else if (StreamSettings.AUTOMATIC_BITRATE_KEY.equals(pref.getKey())) {
                 // Off once the slider is moved; profiles and presets write the flag without this view.
-                ((SwitchPreference) pref).setChecked(!PreferenceConfiguration.isBitrateUserSet(prefs));
+                setCheckedIfChanged((SwitchPreference) pref, !PreferenceConfiguration.isBitrateUserSet(prefs));
                 continue;
             } else if (SettingRules.TAGGED_SWITCHES.contains(pref.getKey())) {
                 // A switch has no value line; where it does nothing with the other settings it says why.
-                pref.setSummary(SettingRules.unusedReason(activity, pref.getKey(), prefs));
+                setSummaryIfChanged(pref, SettingRules.unusedReason(activity, pref.getKey(), prefs));
                 continue;
             } else if ("checkbox_display_queue_recovery".equals(pref.getKey())) {
                 // A switch has no value line; where the take-back does nothing it says why.
-                pref.setSummary(SettingRules.displayQueueRecoveryUnused(activity, prefs));
+                setSummaryIfChanged(pref, SettingRules.displayQueueRecoveryUnused(activity, prefs));
                 continue;
             } else if (SettingRules.micEffect(pref.getKey()) != null && !(pref instanceof ListPreference)) {
                 // The switches have no value line; it says when the device lacks the effect.
-                pref.setSummary(SettingRules.micEffectMissing(pref.getKey(), prefs, fragment.micEffects()) ?
+                setSummaryIfChanged(pref, SettingRules.micEffectMissing(pref.getKey(), prefs, fragment.micEffects()) ?
                         fragment.getString(R.string.mic_effect_not_on_device) : null);
                 continue;
             } else if ("gpu_driver".equals(pref.getKey())) {
@@ -299,8 +300,21 @@ final class StreamSettingsSearchAndSummaries {
                 value = fragment.getString(R.string.settings_joined, value, fragment.getString(R.string.mic_effect_not_on_device));
             }
             if (value != null) {
-                pref.setSummary(pref instanceof ListPreference ? value.toString().replace("%", "%%") : value);
+                CharSequence nextSummary = pref instanceof ListPreference ? value.toString().replace("%", "%%") : value;
+                setSummaryIfChanged(pref, nextSummary);
             }
+        }
+    }
+
+    private static void setSummaryIfChanged(Preference pref, CharSequence summary) {
+        if (!TextUtils.equals(pref.getSummary(), summary)) {
+            pref.setSummary(summary);
+        }
+    }
+
+    private static void setCheckedIfChanged(SwitchPreference pref, boolean checked) {
+        if (pref.isChecked() != checked) {
+            pref.setChecked(checked);
         }
     }
 
@@ -310,7 +324,13 @@ final class StreamSettingsSearchAndSummaries {
             Activity activity = fragment.getActivity();
             setCodecSummary(fragment, codec, fragment.getString(R.string.pyrowave_checking));
             new Thread(() -> {
-                int summary = PyroWaveDecoderRenderer.getReadinessSummary(activity.getApplicationContext(), hdr);
+                int summary;
+                try {
+                    summary = PyroWaveDecoderRenderer.getReadinessSummary(activity.getApplicationContext(), hdr);
+                } catch (RuntimeException e) {
+                    LimeLog.warning("GPU capability check failed: " + e.getMessage());
+                    return;
+                }
                 activity.runOnUiThread(() -> {
                     if (fragment.isAdded() && fragment.getActivity() == activity && !activity.isFinishing() &&
                             generation == fragment.codecSummaryGeneration) {

@@ -39,10 +39,24 @@ public class ControllerMappingActivity extends NightjarActivity {
     private ControllerAxisMap axisMap;
     private MaterialButton axisButton;
     private boolean capturing;
+    private final androidx.activity.OnBackPressedCallback captureBack =
+            new androidx.activity.OnBackPressedCallback(false) {
+                @Override
+                public void handleOnBackPressed() {
+                    setCapturing(false);
+                    refresh();
+                }
+            };
+
+    private void setCapturing(boolean active) {
+        capturing = active;
+        captureBack.setEnabled(active);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getOnBackPressedDispatcher().addCallback(this, captureBack);
         UiHelper.setLocale(this);
         android.widget.FrameLayout page = TopAppBar.setUpPage(this, R.string.controller_mapping_title, this::finish);
 
@@ -67,7 +81,7 @@ public class ControllerMappingActivity extends NightjarActivity {
         capture.setId(R.id.controller_mapping_capture);
         capture.setText(R.string.controller_mapping_capture);
         capture.setOnClickListener(v -> {
-            capturing = true;
+            setCapturing(true);
             deviceView.setText(R.string.controller_mapping_press);
         });
         root.addView(capture);
@@ -282,25 +296,35 @@ public class ControllerMappingActivity extends NightjarActivity {
     }
 
     private static boolean isControllerEvent(KeyEvent event) {
-        return (event.getSource() & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
-                (event.getSource() & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
+        int source = event.getSource();
+        if ((source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+                (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) {
+            return true;
+        }
+        InputDevice dev = event.getDevice();
+        return dev != null &&
+                ((dev.getSources() & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+                        (dev.getSources() & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) &&
+                ControllerButtonMap.isScanCodeSource(
+                        ControllerButtonMap.sourceForKey(event.getKeyCode(), event.getScanCode()));
     }
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (capturing && (event.getKeyCode() == KeyEvent.KEYCODE_BACK || event.getKeyCode() == KeyEvent.KEYCODE_ESCAPE)) {
             if (event.getAction() == KeyEvent.ACTION_UP) {
-                capturing = false;
+                setCapturing(false);
                 refresh();
             }
             return true;
         }
-        if (!capturing || !isControllerEvent(event) || !ControllerButtonMap.isRemappableSource(event.getKeyCode())) {
+        int source = ControllerButtonMap.sourceForKey(event.getKeyCode(), event.getScanCode());
+        if (!capturing || !isControllerEvent(event) || !ControllerButtonMap.isRemappableSource(source)) {
             return super.dispatchKeyEvent(event);
         }
         // Act on release so the press cannot leak into the dialog that opens next
         if (event.getAction() == KeyEvent.ACTION_UP) {
-            capturing = false;
+            setCapturing(false);
             InputDevice device = event.getDevice();
             if (device != null) {
                 select(device.getVendorId(), device.getProductId(), device.getName());
@@ -309,7 +333,7 @@ public class ControllerMappingActivity extends NightjarActivity {
                 select(0, 0, null);
             }
             refresh();
-            chooseTarget(event.getKeyCode());
+            chooseTarget(source);
         }
         return true;
     }
@@ -374,6 +398,18 @@ public class ControllerMappingActivity extends NightjarActivity {
             default:
                 if (keyCode >= KeyEvent.KEYCODE_BUTTON_1 && keyCode <= KeyEvent.KEYCODE_BUTTON_16) {
                     return getString(R.string.controller_button_number, keyCode - KeyEvent.KEYCODE_BUTTON_1 + 1);
+                }
+                int scanCode = ControllerButtonMap.scanCodeOf(keyCode);
+                if (scanCode != 0) {
+                    switch (scanCode) {
+                        case 306: return "C";
+                        case 309: return "Z";
+                        case 0x2c0: return "L4";
+                        case 0x2c1: return "R4";
+                        default:
+                            return getString(R.string.controller_button_scan,
+                                    String.format(java.util.Locale.ROOT, "0x%x", scanCode));
+                    }
                 }
                 return KeyEvent.keyCodeToString(keyCode);
         }

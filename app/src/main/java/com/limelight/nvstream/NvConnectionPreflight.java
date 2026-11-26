@@ -56,15 +56,42 @@ import javax.net.ssl.SSLException;
 final class NvConnectionPreflight {
     private NvConnectionPreflight() {}
 
-    private static InetAddress resolveServerAddress(ConnectionContext context) throws IOException {
-        InetAddress[] addrs = InetAddress.getAllByName(context.serverAddress.address);
-        for (InetAddress addr : addrs) {
+    interface AddressLookup {
+        InetAddress[] resolveAll(String host) throws java.net.UnknownHostException;
+        boolean probeReachable(InetAddress addr, int port, int timeoutMs);
+    }
+
+    private static final AddressLookup DEFAULT_ADDRESS_LOOKUP = new AddressLookup() {
+        @Override
+        public InetAddress[] resolveAll(String host) throws java.net.UnknownHostException {
+            return InetAddress.getAllByName(host);
+        }
+
+        @Override
+        public boolean probeReachable(InetAddress addr, int port, int timeoutMs) {
             try (Socket s = new Socket()) {
                 s.setSoLinger(true, 0);
-                s.connect(new InetSocketAddress(addr, context.serverAddress.port), 1000);
-                return addr;
+                s.connect(new InetSocketAddress(addr, port), timeoutMs);
+                return true;
             } catch (IOException e) {
                 e.printStackTrace();
+                return false;
+            }
+        }
+    };
+
+    static InetAddress resolveServerAddress(ConnectionContext context) throws IOException {
+        return resolveServerAddress(context, DEFAULT_ADDRESS_LOOKUP);
+    }
+
+    static InetAddress resolveServerAddress(ConnectionContext context, AddressLookup lookup) throws IOException {
+        InetAddress[] addrs = lookup.resolveAll(context.serverAddress.address);
+        if (addrs.length == 1) {
+            return addrs[0];
+        }
+        for (InetAddress addr : addrs) {
+            if (lookup.probeReachable(addr, context.serverAddress.port, 1000)) {
+                return addr;
             }
         }
         if (addrs.length > 0) return addrs[0];
@@ -276,7 +303,10 @@ final class NvConnectionPreflight {
             if (notices != null) {
                 applyNegotiationNotices(appContext, context, details, renderer, notices, packedHdrDrop);
             }
-        } catch (JSONException ignored) {}
+        } catch (JSONException e) {
+            LimeLog.severe("Malformed media negotiation reply: " + e.getMessage());
+            throw new IllegalStateException("Malformed media negotiation reply", e);
+        }
     }
 
     static boolean startApp(NvConnection conn, VideoDecoderRenderer renderer)
@@ -576,6 +606,7 @@ final class NvConnectionPreflight {
                                 context.negotiatedHdr, conn.packedHdrDropAtLaunch, videoDecoderRenderer.packedHdrDropReason());
                     }
                     conn.nativeConnected = true;
+        started = true;
                     if (context.jumboFallback) {
                         context.connListener.displayTransientMessage(appContext.getString(R.string.jumbo_frames_fallback));
                     }

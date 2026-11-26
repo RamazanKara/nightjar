@@ -111,17 +111,22 @@ public class GlassSurface extends FrameLayout {
         return null;
     }
 
+    private final android.view.ViewTreeObserver.OnScrollChangedListener scrollListener = this::updateHostLocation;
+
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         host = findHost();
         if (host != null) host.register(this);
+        getViewTreeObserver().addOnScrollChangedListener(scrollListener);
         onTierChanged();
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        android.view.ViewTreeObserver observer = getViewTreeObserver();
+        if (observer.isAlive()) observer.removeOnScrollChangedListener(scrollListener);
         if (host != null) host.unregister(this);
         host = null;
         glassNode = null;
@@ -152,6 +157,10 @@ public class GlassSurface extends FrameLayout {
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
+        updateHostLocation();
+    }
+
+    private void updateHostLocation() {
         if (host == null) return;
         getLocationInWindow(at);
         host.getLocationInWindow(hostAt);

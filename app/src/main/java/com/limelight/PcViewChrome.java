@@ -32,6 +32,16 @@ final class PcViewChrome {
     private com.limelight.console.PageChrome chrome;
     /** What the list keeps free under its last row. */
     private int listFoot;
+    private final androidx.activity.OnBackPressedCallback unmarkBack =
+            new androidx.activity.OnBackPressedCallback(false) {
+                @Override
+                public void handleOnBackPressed() {
+                    if (pcList instanceof com.limelight.ui.AdaptiveGridView) {
+                        ((com.limelight.ui.AdaptiveGridView) pcList).clearMarkedAction();
+                    }
+                    setEnabled(false);
+                }
+            };
 
     PcViewChrome(PcView view) {
         this.view = view;
@@ -370,7 +380,15 @@ final class PcViewChrome {
             return true;
         });
         if (listView instanceof com.limelight.ui.AdaptiveGridView) {
-            ((com.limelight.ui.AdaptiveGridView) listView).setEndFocusTarget(view.findViewById(R.id.manuallyAddPc));
+            com.limelight.ui.AdaptiveGridView grid = (com.limelight.ui.AdaptiveGridView) listView;
+            grid.setEndFocusTarget(view.findViewById(R.id.manuallyAddPc));
+            unmarkBack.remove();
+            unmarkBack.setEnabled(grid.isActionMarked());
+            grid.setOnMarkChanged(() -> unmarkBack.setEnabled(pcList instanceof com.limelight.ui.AdaptiveGridView
+                    && ((com.limelight.ui.AdaptiveGridView) pcList).isActionMarked()));
+            view.getOnBackPressedDispatcher().addCallback(view, unmarkBack);
+        } else {
+            unmarkBack.setEnabled(false);
         }
         listView.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> placeListFooter());
         listView.setOnScrollListener(new AbsListView.OnScrollListener() {

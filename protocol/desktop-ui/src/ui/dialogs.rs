@@ -410,8 +410,18 @@ impl Launcher {
                 }
             }
             HostOption::PairAnother => return Some(Dialog::PairRequests { only: Some(id) }),
-            HostOption::Files => commands.push(Command::OpenFiles(id)),
-            HostOption::Settings => commands.push(Command::HostSettings(id)),
+            HostOption::Files => {
+                if let Some(save) = self.screen.save_command() {
+                    commands.push(save);
+                }
+                commands.push(Command::OpenFiles(id));
+            }
+            HostOption::Settings => {
+                if let Some(save) = self.screen.save_command() {
+                    commands.push(save);
+                }
+                commands.push(Command::HostSettings(id));
+            }
             HostOption::Details => self.open(Screen::HostDetails(id)),
             HostOption::Rename => return Some(Dialog::Rename { host: id, text: host.rename_prefill().to_owned() }),
             HostOption::Unpair => return Some(Dialog::ConfirmUnpair { host: id, name }),
@@ -607,16 +617,12 @@ impl Launcher {
     /// The bitrate a stream to PC `host` asks for, worked out as a launch does: the profile in use,
     /// then the PC's own settings. The one set, else the default for their size and rate (1080p
     /// and 60 when they follow the screen).
-    fn stream_bitrate_kbps(&self, hosts: &Hosts, host: Option<u64>) -> u32 {
+    pub(super) fn stream_bitrate_kbps(&self, hosts: &Hosts, host: Option<u64>) -> u32 {
         let mut s = self.profiles.settings(&self.settings, self.network.kind(&self.profiles.home_wifi));
         if let Some(host) = host.and_then(|id| hosts.get(id)) {
             s = host.record.settings(&s);
         }
-        if s.bitrate_kbps != 0 {
-            return s.bitrate_kbps;
-        }
-        let (width, height) = if s.width == 0 || s.height == 0 { (1920, 1080) } else { (s.width, s.height) };
-        crate::config::default_bitrate_kbps(width, height, if s.fps == 0 { 60 } else { s.fps })
+        crate::stream_types::stream_mode(&s, self.display).3
     }
 
     /// Shows why pairing failed, with a way to try again.

@@ -208,6 +208,25 @@ public class RecentStreamRowTest {
                 "| dropped catch_up 2, replaced 1, other 3 |"}) {
             assertTrue(part + " in " + section, section.contains(part));
         }
+        String log = com.limelight.LimeLog.getRedactedLog();
+        assertTrue(log, log.contains("Stream summary: "));
+        assertTrue(log, log.contains("| dropped catch_up 2, replaced 1, other 3 |"));
+    }
+
+    @Test
+    public void pacingDropsOverlayLineFormatsDropsAndSharedSlots() {
+        assertNull(MediaCodecOverlayReport.formatPacingDropsLine("none", 0));
+        assertNull(MediaCodecOverlayReport.formatPacingDropsLine(null, 0));
+        assertNull(MediaCodecOverlayReport.formatPacingDropsLine("", 0));
+        assertNull(MediaCodecOverlayReport.formatPacingDropsLine("none", -1));
+        assertEquals("Discarded before display: catch_up 4",
+                MediaCodecOverlayReport.formatPacingDropsLine("catch_up 4", 0));
+        assertEquals("Discarded before display: catch_up 4, replaced 1 | shared refresh 2",
+                MediaCodecOverlayReport.formatPacingDropsLine("catch_up 4, replaced 1", 2));
+        assertEquals("Shared refresh slots: 3",
+                MediaCodecOverlayReport.formatPacingDropsLine("none", 3));
+        assertEquals("Shared refresh slots: 1",
+                MediaCodecOverlayReport.formatPacingDropsLine(null, 1));
     }
 
     @Test

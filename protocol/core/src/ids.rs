@@ -142,14 +142,13 @@ pub const INPUT_MAGICS: &[(u32, &str)] = &[
         "Steam Controller attributes",
     ),
     (pen::PEN_BARREL_ROLL_MAGIC, "pen with barrel roll"),
+    (0x5500_0009, "touchpad contact"),
+    (0x5500_000A, "touchpad frame"),
     (
         controller_identity::CONTROLLER_IDENTITY_MAGIC,
         "controller identity",
     ),
 ];
-
-/// Input magics other clients use for touchpad packets.
-pub const RESERVED_INPUT_MAGICS: [u32; 2] = pen::RESERVED_MAGICS;
 
 #[cfg(test)]
 mod tests {
@@ -225,15 +224,10 @@ mod tests {
 
     #[test]
     fn input_magics_are_unique() {
-        let mut magics: Vec<u32> = INPUT_MAGICS
-            .iter()
-            .map(|(magic, _)| *magic)
-            .chain(RESERVED_INPUT_MAGICS)
-            .collect();
+        let mut magics: Vec<u32> = INPUT_MAGICS.iter().map(|(magic, _)| *magic).collect();
         let count = magics.len();
         magics.sort_unstable();
         magics.dedup();
         assert_eq!(magics.len(), count, "an input magic is listed twice");
-        assert_eq!(RESERVED_INPUT_MAGICS, [0x5500_0009, 0x5500_000A]);
     }
 }

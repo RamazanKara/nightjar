@@ -30,14 +30,20 @@ public final class TouchLayout {
     /** Grid steps in tenths of a percent of the shorter edge; 0 is off. */
     public static final int[] SNAP_GRIDS = {0, 25, 50, 100};
     public final List<Button> buttons;
+    private final boolean unreadable;
 
     public TouchLayout(List<Button> buttons) {
+        this(buttons, false);
+    }
+
+    private TouchLayout(List<Button> buttons, boolean unreadable) {
         if (buttons == null || buttons.size() > MAX_BUTTONS) throw new InvalidLayoutException(InvalidLayoutException.Reason.TOO_LARGE, 0, null);
         Set<String> ids = new HashSet<>();
         for (Button button : buttons) {
             if (!ids.add(button.id)) throw new InvalidLayoutException(InvalidLayoutException.Reason.DUPLICATE, 0, button.id);
         }
         this.buttons = java.util.Collections.unmodifiableList(new ArrayList<>(buttons));
+        this.unreadable = unreadable;
     }
 
     /** Why a layout was rejected; {@code control} counts from 1 and is 0 for the whole document. */
@@ -178,12 +184,14 @@ public final class TouchLayout {
         return host.length() + ":" + host + app;
     }
 
-    public static TouchLayout empty() { return new TouchLayout(new ArrayList<>()); }
+    public static TouchLayout empty() { return new TouchLayout(new ArrayList<>(), false); }
+    public boolean isUnreadable() { return unreadable; }
     public static TouchLayout load(Context context, String profile) {
         try { return parse(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(profile, "{\"version\":1,\"buttons\":[]}")); }
-        catch (IllegalArgumentException e) { return empty(); }
+        catch (IllegalArgumentException e) { return new TouchLayout(new ArrayList<>(), true); }
     }
     public void save(Context context, String profile) {
+        if (unreadable) return;
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(profile, encode()).apply();
     }
     public static boolean enabled(Context context, String profile) {

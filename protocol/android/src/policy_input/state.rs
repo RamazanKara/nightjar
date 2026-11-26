@@ -1,17 +1,18 @@
 //! JNI exports for `nightjar_policy::controller::state_machine` and mouse fixed-step curves.
 
 use jni::JNIEnv;
-use jni::objects::{JBooleanArray, JClass, JIntArray, JShortArray, JString};
+use jni::objects::{JBooleanArray, JClass, JFloatArray, JIntArray, JShortArray, JString};
 use jni::sys::{JNI_FALSE, jboolean, jdouble, jfloat, jint, jintArray, jlong, jshort};
 use nightjar_policy::controller::deadzone::{fixed_step_delta, fixed_step_next};
 use nightjar_policy::controller::state_machine::{
-    CAPTURED_BUTTONS, GuideOp, ScrollStick, UsbInputStates, guide_hold_step, hold_quit_combo,
-    mouse_packet_step, mouse_silenced, mouse_tick_step, pick_menu_mouse_target, quit_button_flag,
-    quit_combo_mask, release_quit_combo, should_arm_menu_combo, should_open_menu_on_release,
-    start_long_press_toggles_mouse, tap_hold_remaining_ms, usb_guide_hold_step,
+    CAPTURED_BUTTONS, GuideOp, MouseTickPlan, ScrollStick, UsbInputStates, guide_hold_step,
+    hold_quit_combo, mouse_packet_step, mouse_silenced, mouse_tick_step, pick_menu_mouse_target,
+    quit_button_flag, quit_combo_mask, release_quit_combo, should_arm_menu_combo,
+    should_open_menu_on_release, start_long_press_toggles_mouse, tap_hold_remaining_ms,
+    usb_guide_hold_step,
 };
 
-use super::{USB_STATE_SLAB, jbool, write_ints};
+use super::{USB_STATE_SLAB, jbool, write_floats, write_ints};
 use crate::policy::int_array;
 use crate::string;
 
@@ -407,8 +408,14 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_mousePac
     );
 }
 
+fn mouse_tick_flags(plan: MouseTickPlan) -> i32 {
+    i32::from(plan.has_move1)
+        | (i32::from(plan.has_move2) << 1)
+        | (i32::from(plan.has_scroll) << 2)
+}
+
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_mouseTickStep(
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_mouseTickStepFloat(
     mut env: JNIEnv,
     _: JClass,
     lx: jshort,
@@ -417,8 +424,9 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_mouseTic
     ry: jshort,
     scroll_stick_mode: jint,
     fixed_step: jint,
-    out: JIntArray,
-) {
+    sensitivity_percent: jint,
+    out: JFloatArray,
+) -> jint {
     let plan = mouse_tick_step(
         lx,
         ly,
@@ -426,28 +434,58 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_mouseTic
         ry,
         ScrollStick::from_i32(scroll_stick_mode),
         fixed_step,
+        sensitivity_percent,
     );
-    let flags = i32::from(plan.has_move1)
-        | (i32::from(plan.has_move2) << 1)
-        | (i32::from(plan.has_scroll) << 2);
-    write_ints(
+    write_floats(
         &mut env,
         &out,
         &[
-            flags,
-            i32::from(plan.move1_x),
-            i32::from(plan.move1_y),
-            i32::from(plan.move2_x),
-            i32::from(plan.move2_y),
-            i32::from(plan.scroll_v),
-            i32::from(plan.scroll_h),
+            plan.move1_x,
+            plan.move1_y,
+            plan.move2_x,
+            plan.move2_y,
+            plan.scroll_v,
+            plan.scroll_h,
         ],
     );
+    mouse_tick_flags(plan)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mouse_tick_step_float_handles_subpixel_moves_sensitivity_and_scroll() {
+        // Sub-pixel deflection returns non-zero fractional delta instead of zeroing out.
+        let slow = mouse_tick_step(2000, 0, 0, 0, ScrollStick::None, 0, 100);
+        assert!(slow.has_move1);
+        assert!(slow.move1_x > 0.0 && slow.move1_x < 1.0);
+        assert_eq!(slow.move1_y, 0.0);
+        assert_eq!(mouse_tick_flags(slow), 1);
+
+        // Clamped sensitivity scales movement without affecting scroll.
+        let clamped_low = mouse_tick_step(0x7FFE, 0, 0, 0x7FFE, ScrollStick::Right, 0, 1);
+        let at_25 = mouse_tick_step(0x7FFE, 0, 0, 0x7FFE, ScrollStick::Right, 0, 25);
+        assert_eq!(clamped_low, at_25);
+        let at_200 = mouse_tick_step(0x7FFE, 0, 0, 0x7FFE, ScrollStick::Right, 0, 500);
+        assert!((at_200.move1_x - at_25.move1_x * 8.0).abs() < 1e-4);
+        assert!(at_200.has_scroll && at_25.has_scroll);
+        assert_eq!(at_200.scroll_v, at_25.scroll_v);
+        assert_eq!(mouse_tick_flags(at_200), 1 | 4);
+
+        // Scroll keeps mag < 1.0 gate even when movement is sub-pixel active.
+        let gated_scroll = mouse_tick_step(0, 0, 2000, 0, ScrollStick::Right, 0, 100);
+        assert!(!gated_scroll.has_scroll);
+        assert_eq!(gated_scroll.scroll_v, 0.0);
+        assert_eq!(gated_scroll.scroll_h, 0.0);
+
+        // Fixed step scales by 0.2 * sensitivity and tracks negative Y sign.
+        let fixed = mouse_tick_step(0x7FFE, -0x7FFE, 0, 0, ScrollStick::None, 20, 150);
+        assert!(fixed.has_move1);
+        assert!((fixed.move1_x - 6.0).abs() < 1e-4);
+        assert!((fixed.move1_y - 6.0).abs() < 1e-4);
+    }
 
     #[test]
     fn invalid_and_destroyed_usb_state_handles_zero_outputs() {

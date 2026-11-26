@@ -24,4 +24,5 @@
     <string name="controller_connect_as_automatic">Otomatik</string>
     <string name="controller_connect_as_xbox_summary">Xbox (hareket sensörü ve dokunmatik yüzey yok)</string>
     <string name="pc_tap_to_pair">%1$s\nEşleştirmek için dokunun</string>
+    <string name="controller_button_scan">Ek düğme %1$s</string>
 </resources>

@@ -83,9 +83,18 @@ impl Driver {
         iso: &[IsoPacket],
     ) -> u32 {
         self.seqnum += 1;
+        self.submit_with_seqnum(self.seqnum, ep, direction, length, setup, data, iso);
+        self.seqnum
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn submit_with_seqnum(
+        &mut self,
+        seqnum: u32, ep: u32, direction: u32, length: u32, setup: [u8; 8], data: &[u8], iso: &[IsoPacket],
+    ) {
         let header = Header::Submit {
             base: Base {
-                seqnum: self.seqnum,
+                seqnum,
                 devid: 0x0001_0002,
                 direction,
                 ep,
@@ -107,7 +116,6 @@ impl Driver {
             message.extend_from_slice(&packet.encode());
         }
         self.stream.write_all(&message).unwrap();
-        self.seqnum
     }
 
     pub(crate) fn unlink(&mut self, target: u32) -> u32 {
@@ -573,6 +581,215 @@ fn transfers_that_would_buffer_too_much_together_hear_enomem_until_one_is_unlink
     let again = driver.submit(1, wire::DIR_IN, 1, [0; 8], &[], &[]);
     assert_eq!(status_of(&driver.reply(true).0), (again, wire::ENOMEM));
     assert_eq!(device.kept.lock().unwrap().len(), whole + 1);
+    drop(driver);
+    served.join().unwrap().unwrap();
+}
+
+fn submit_with_seqnum(
+    driver: &mut Driver,
+    seqnum: u32,
+    ep: u32,
+    direction: u32,
+    length: u32,
+    iso: &[IsoPacket],
+) {
+    let header = Header::Submit {
+        base: Base {
+            seqnum,
+            devid: 0x0001_0002,
+            direction,
+            ep,
+        },
+        flags: 0,
+        length,
+        start_frame: 0,
+        packets: if iso.is_empty() {
+            wire::NOT_ISO
+        } else {
+            iso.len() as u32
+        },
+        interval: 1,
+        setup: [0; 8],
+    };
+    let mut message = header.encode().to_vec();
+    for packet in iso {
+        message.extend_from_slice(&packet.encode());
+    }
+    driver.stream.write_all(&message).unwrap();
+}
+
+#[test]
+fn seqnum_reused_after_unlink_is_not_settled_by_stale_completion() {
+    let (device, mut driver, served) = keeping();
+    let reused = 42u32;
+    submit_with_seqnum(&mut driver, reused, 1, wire::DIR_IN, 4, &[]);
+    while device.kept.lock().unwrap().is_empty() {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let stale = device.kept.lock().unwrap().remove(0);
+    let unlink = driver.unlink(reused);
+    assert_eq!(
+        status_of(&driver.reply(false).0),
+        (unlink, wire::ECONNRESET)
+    );
+
+    // Re-submit with the exact same seqnum while `stale` is still held by the device.
+    submit_with_seqnum(&mut driver, reused, 1, wire::DIR_IN, 4, &[]);
+    while device.kept.lock().unwrap().is_empty() {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let fresh = device.kept.lock().unwrap().remove(0);
+
+    // Stale completion must be ignored; fresh completion must settle the reused seqnum.
+    stale.complete(Reply::read(vec![1, 2, 3, 4]));
+    fresh.complete(Reply::read(vec![9, 8, 7, 6]));
+    let (header, data, _) = driver.reply(true);
+    assert_eq!(status_of(&header), (reused, 0));
+    assert_eq!(data, vec![9, 8, 7, 6]);
+    drop(driver);
+    served.join().unwrap().unwrap();
+}
+
+#[test]
+fn non_zero_status_keeps_partial_data_and_ep0_iso_is_protocol_error() {
+    struct Partial;
+    impl UsbDevice for Partial {
+        fn describe(&self) -> wire::Device {
+            wire::Device {
+                busid: "1-1".into(),
+                ..wire::Device::default()
+            }
+        }
+        fn submit(&self, _: Transfer, done: Completion) {
+            done.complete(Reply {
+                status: -121, // -EREMOTEIO
+                data: vec![0xAA, 0xBB],
+                ..Reply::default()
+            });
+        }
+        fn unlink(&self, _: u32) {}
+        fn close(&self) {}
+    }
+    let (tunnel, mut driver) = pipe();
+    let served = std::thread::spawn(move || serve(tunnel, Arc::new(Partial)));
+    driver.import("1-1").unwrap();
+    let seq = driver.submit(1, wire::DIR_IN, 8, [0; 8], &[], &[]);
+    let (header, data, _) = driver.reply(true);
+    assert_eq!(status_of(&header), (seq, -121));
+    assert_eq!(data, vec![0xAA, 0xBB]);
+    drop(driver);
+    served.join().unwrap().unwrap();
+
+    let (_device, mut driver, served) = keeping();
+    let bad = [IsoPacket {
+        offset: 0,
+        length: 8,
+        actual_length: 0,
+        status: 0,
+    }];
+    driver.submit(0, wire::DIR_IN, 8, [0; 8], &[], &bad);
+    assert!(matches!(served.join().unwrap(), Err(ServeError::Protocol(_))));
+}
+
+#[test]
+fn blocking_pipelines_iso_in_flight_in_order_and_cleans_up_on_panic() {
+    use std::sync::atomic::AtomicUsize;
+
+    struct IsoPiped {
+        active: AtomicUsize,
+        peak: AtomicUsize,
+        both_in: Arc<(Mutex<usize>, Condvar)>,
+    }
+    impl crate::usb::BlockingDevice for IsoPiped {
+        fn describe(&self) -> wire::Device {
+            wire::Device {
+                busid: "1-1".into(),
+                ..wire::Device::default()
+            }
+        }
+        fn transfer(&self, transfer: &Transfer, _: &AtomicBool) -> Reply {
+            let now = self.active.fetch_add(1, Ordering::SeqCst) + 1;
+            self.peak.fetch_max(now, Ordering::SeqCst);
+            let (lock, cv) = &*self.both_in;
+            let mut count = lock.lock().unwrap();
+            *count += 1;
+            cv.notify_all();
+            let seq = transfer.seqnum;
+            if seq == 1 {
+                // First transfer stalls until second has entered concurrently, so second finishes
+                // execution before first — Blocking must still complete seq 1 ahead of seq 2.
+                let (guard, _) = cv
+                    .wait_timeout_while(count, Duration::from_secs(2), |n| *n < 2)
+                    .unwrap();
+                drop(guard);
+                std::thread::sleep(Duration::from_millis(40));
+            } else {
+                drop(count);
+            }
+            self.active.fetch_sub(1, Ordering::SeqCst);
+            Reply {
+                data: vec![seq as u8],
+                iso: vec![IsoPacket {
+                    offset: 0,
+                    length: 1,
+                    actual_length: 1,
+                    status: 0,
+                }],
+                ..Reply::default()
+            }
+        }
+    }
+    let dev = Arc::new(Blocking::new(IsoPiped {
+        active: AtomicUsize::new(0),
+        peak: AtomicUsize::new(0),
+        both_in: Arc::new((Mutex::new(0), Condvar::new())),
+    }));
+    let (tunnel, mut driver) = pipe();
+    let served = {
+        let dev = dev.clone();
+        std::thread::spawn(move || serve(tunnel, dev))
+    };
+    driver.import("1-1").unwrap();
+    let iso = [IsoPacket {
+        offset: 0,
+        length: 1,
+        actual_length: 0,
+        status: 0,
+    }];
+    submit_with_seqnum(&mut driver, 1, 3, wire::DIR_IN, 1, &iso);
+    submit_with_seqnum(&mut driver, 2, 3, wire::DIR_IN, 1, &iso);
+    let (h1, d1, _) = driver.reply(true);
+    let (h2, d2, _) = driver.reply(true);
+    assert_eq!((status_of(&h1), d1), ((1, 0), vec![1]));
+    assert_eq!((status_of(&h2), d2), ((2, 0), vec![2]));
+    assert!(dev.device().peak.load(Ordering::SeqCst) >= 2);
+    drop(driver);
+    served.join().unwrap().unwrap();
+
+    // Panic in BlockingDevice::transfer cleans up `running` so unlink returns promptly.
+    struct Panicker;
+    impl crate::usb::BlockingDevice for Panicker {
+        fn describe(&self) -> wire::Device {
+            wire::Device {
+                busid: "1-1".into(),
+                ..wire::Device::default()
+            }
+        }
+        fn transfer(&self, _: &Transfer, _: &AtomicBool) -> Reply {
+            panic!("simulated driver panic");
+        }
+    }
+    let (tunnel, mut driver) = pipe();
+    let dev = Arc::new(Blocking::new(Panicker));
+    let served = {
+        let dev = dev.clone();
+        std::thread::spawn(move || serve(tunnel, dev))
+    };
+    driver.import("1-1").unwrap();
+    let p = driver.submit(1, wire::DIR_IN, 4, [0; 8], &[], &[]);
+    assert_eq!(status_of(&driver.reply(true).0), (p, wire::ESHUTDOWN));
+    // Unlink after panic must return at once instead of hanging.
+    dev.unlink(p);
     drop(driver);
     served.join().unwrap().unwrap();
 }

@@ -37,6 +37,7 @@ final class ControllerGamepadRouter {
         }
         for (ControllerHandler.InputDeviceContext context : handler.inputDeviceContexts.values()) {
             releaseInput(context);
+            cancelInputTouchpad(context);
             if (context.assignedControllerNumber && context.gyroListener != null) {
                 // Motion stops with the rest of the input; a held angular velocity keeps turning the camera.
                 handler.motion.sendGyroAtRest(context.controllerNumber);
@@ -51,7 +52,21 @@ final class ControllerGamepadRouter {
         handler.layoutLeftTrigger = handler.layoutRightTrigger = 0;
         handler.layoutLeftStickX = handler.layoutLeftStickY = handler.layoutRightStickX = handler.layoutRightStickY = 0;
         releaseInput(handler.defaultContext);
-        if (handler.handheldContext != handler.defaultContext) releaseInput(handler.handheldContext);
+        cancelInputTouchpad(handler.defaultContext);
+        if (handler.handheldContext != handler.defaultContext) {
+            releaseInput(handler.handheldContext);
+            cancelInputTouchpad(handler.handheldContext);
+        }
+    }
+
+    private void cancelInputTouchpad(ControllerHandler.InputDeviceContext context) {
+        if (!handler.prefConfig.sendControllers || !context.assignedControllerNumber) {
+            return;
+        }
+        if ((context.reportedCapabilities & MoonBridge.LI_CCAP_TOUCHPAD) != 0 || context.isDualShockStandaloneTouchpad) {
+            handler.conn.sendControllerTouchEvent((byte) context.controllerNumber, MoonBridge.LI_TOUCH_EVENT_CANCEL_ALL,
+                    0, 0, 0, 0);
+        }
     }
 
     void releaseUsbInput(ControllerHandler.UsbDeviceContext context) {
@@ -546,6 +561,12 @@ final class ControllerGamepadRouter {
         return NightjarInputJni.mouseSilenced(handler.prefConfig.sendControllers, context == handler.defaultContext);
     }
 
+    private java.util.function.LongSupplier nanoClock = System::nanoTime;
+
+    void setNanoClockForTest(java.util.function.LongSupplier clock) {
+        this.nanoClock = clock != null ? clock : System::nanoTime;
+    }
+
     void runMouseEmulationTick(ControllerHandler.GenericControllerContext context, Runnable self) {
         if (!context.mouseEmulationActive) {
             return;
@@ -555,24 +576,55 @@ final class ControllerGamepadRouter {
         }
 
         int fixedStep;
+        float dtScale;
         synchronized (context.mousePacketLock) {
             fixedStep = context.mouseEmulationFixedStepHeld ? context.mouseEmulationStep : 0;
+            long nowNs = nanoClock.getAsLong();
+            dtScale = ControllerMouseTick.dtCompensation(
+                    context.mouseEmulationLastTickNs, nowNs, context.mouseEmulationReportPeriod);
+            context.mouseEmulationLastTickNs = nowNs;
         }
         int scrollStickMode = handler.prefConfig.analogStickForScrolling == PreferenceConfiguration.AnalogStickForScrolling.RIGHT ? 1
                 : handler.prefConfig.analogStickForScrolling == PreferenceConfiguration.AnalogStickForScrolling.LEFT ? 2 : 0;
-        NightjarInputJni.mouseTickStep(
+        int flags = ControllerMouseTick.compute(
                 context.leftStickX, context.leftStickY, context.rightStickX, context.rightStickY,
-                scrollStickMode, fixedStep, context.mouseTickOut);
-        int flags = context.mouseTickOut[0];
+                scrollStickMode, fixedStep, handler.prefConfig.mouseEmulationSensitivity,
+                context.mouseTickFloatOut);
         if ((flags & 1) != 0) {
-            handler.conn.sendMouseMove((short) context.mouseTickOut[1], (short) context.mouseTickOut[2]);
+            short dx;
+            short dy;
+            synchronized (context.mousePacketLock) {
+                dx = (short) context.mouseMoveAccumX.scale(context.mouseTickFloatOut[0], dtScale);
+                dy = (short) context.mouseMoveAccumY.scale(context.mouseTickFloatOut[1], dtScale);
+            }
+            if (dx != 0 || dy != 0) {
+                handler.conn.sendMouseMove(dx, dy);
+            }
         }
         if ((flags & 2) != 0) {
-            handler.conn.sendMouseMove((short) context.mouseTickOut[3], (short) context.mouseTickOut[4]);
+            short dx;
+            short dy;
+            synchronized (context.mousePacketLock) {
+                dx = (short) context.mouseMoveAccumX.scale(context.mouseTickFloatOut[2], dtScale);
+                dy = (short) context.mouseMoveAccumY.scale(context.mouseTickFloatOut[3], dtScale);
+            }
+            if (dx != 0 || dy != 0) {
+                handler.conn.sendMouseMove(dx, dy);
+            }
         }
         if ((flags & 4) != 0) {
-            handler.conn.sendMouseHighResScroll((short) context.mouseTickOut[5]);
-            handler.conn.sendMouseHighResHScroll((short) context.mouseTickOut[6]);
+            short sv;
+            short sh;
+            synchronized (context.mousePacketLock) {
+                sv = (short) context.mouseScrollVAccum.scale(context.mouseTickFloatOut[4], dtScale);
+                sh = (short) context.mouseScrollHAccum.scale(context.mouseTickFloatOut[5], dtScale);
+            }
+            if (sv != 0) {
+                handler.conn.sendMouseHighResScroll(sv);
+            }
+            if (sh != 0) {
+                handler.conn.sendMouseHighResHScroll(sh);
+            }
         }
 
         // Requeue the callback
@@ -587,11 +639,15 @@ final class ControllerGamepadRouter {
         handler.mainThreadHandler.removeCallbacks(context.mouseEmulationRunnable);
         boolean active = !context.mouseEmulationActive;
         context.mouseEmulationActive = active;
+        context.resetMouseEmulationState();
         releaseMouseButtons(context);
         Toast.makeText(handler.activityContext, active ? R.string.stream_mouse_mode_on :
                 R.string.stream_mouse_mode_off, Toast.LENGTH_SHORT).show();
 
         if (active) {
+            synchronized (context.mousePacketLock) {
+                context.mouseEmulationLastTickNs = nanoClock.getAsLong();
+            }
             handler.mainThreadHandler.postDelayed(context.mouseEmulationRunnable, context.mouseEmulationReportPeriod);
         }
     }

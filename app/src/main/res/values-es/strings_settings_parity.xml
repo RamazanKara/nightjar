@@ -47,4 +47,6 @@
     <string name="hint_overlay_position">La esquina en la que se muestra la superposición de rendimiento.</string>
     <string name="summary_reset_all">Devuelve todos los ajustes a su valor predeterminado; se conservan los PC, juegos, perfiles e idioma.</string>
     <string name="stream_controllers_off">Mandos está desactivado en Ajustes, así que ningún mando llega al PC.</string>
+    <string name="title_compact_overlay_device_info">Mostrar batería y reloj en la superposición compacta</string>
+    <string name="summary_compact_overlay_device_info">Añade el porcentaje de batería y la hora local de este dispositivo a la superposición de rendimiento compacta.</string>
 </resources>

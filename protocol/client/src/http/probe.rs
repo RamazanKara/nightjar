@@ -415,7 +415,9 @@ fn receive(
                     std::io::ErrorKind::TimedOut
                         | std::io::ErrorKind::WouldBlock
                         | std::io::ErrorKind::Interrupted
-                ) => {}
+                        | std::io::ErrorKind::ConnectionReset
+                        | std::io::ErrorKind::ConnectionRefused
+                ) || (cfg!(windows) && e.raw_os_error() == Some(10052)) => {}
             Err(e) => return Err(e.into()),
         }
     }

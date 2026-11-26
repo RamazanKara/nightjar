@@ -285,6 +285,7 @@ public class SettingsKeysTest {
         reads.put("checkbox_mouse_emulation", new Read(true, false, c -> c.mouseEmulation));
         reads.put("analog_scrolling", new Read("right", "left", c -> c.analogStickForScrolling));
         reads.put("checkbox_mouse_emulation_fixed_step", new Read(false, true, c -> c.mouseEmulationFixedStep));
+        reads.put("seekbar_mouse_emulation_sensitivity", new Read(100, 150, c -> c.mouseEmulationSensitivity));
         reads.put("checkbox_back_as_meta", new Read(false, true, c -> c.backAsMeta));
         reads.put("checkbox_back_opens_menu", new Read(false, true, c -> c.backOpensMenu));
         reads.put("list_rumble_feel", new Read("standard", "strong", c -> c.disableRumble ? "off" : c.rumbleFeel));
@@ -356,6 +357,7 @@ public class SettingsKeysTest {
         reads.put("list_resolution_screen2", new Read("native", "1920x1080", c -> c.secondScreenResolution));
         reads.put("checkbox_enable_perf_overlay", new Read(false, true, c -> c.enablePerfOverlay));
         reads.put("performance_overlay_position", new Read("top_left", "bottom_right", c -> c.overlayPosition));
+        reads.put("checkbox_compact_overlay_device_info", new Read(false, true, c -> c.compactOverlayDeviceInfo));
         reads.put("checkbox_enable_pip", new Read(false, true, c -> c.enablePip));
         reads.put("checkbox_auto_reconnect", new Read(false, true, c -> c.autoReconnect));
         reads.put("list_network_grace", new Read("0", "30", c -> c.networkGraceSeconds));

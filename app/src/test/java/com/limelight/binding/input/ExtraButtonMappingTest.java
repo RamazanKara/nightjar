@@ -514,4 +514,96 @@ public class ExtraButtonMappingTest {
             }
         }
     }
+
+    @Test
+    public void eightBitDoExtraButtonsDoNotForceGuideAndAreFullyRemappable() {
+        ControllerInputReleaseTest.MenuGame activity = Robolectric.buildActivity(ControllerInputReleaseTest.MenuGame.class).get();
+        Connection connection = new Connection();
+        ControllerHandler handler = new ControllerHandler(activity, connection, null, new PreferenceConfiguration());
+        ControllerHandler.InputDeviceContext context = ReflectionHelpers.getField(handler, "defaultContext");
+        context.assignedControllerNumber = true;
+        context.vendorId = 0x2dc8;
+        context.productId = 0x310a;
+        context.hasHardwareDpadKeys = true;
+        context.hatXAxis = -1;
+        context.hatYAxis = -1;
+        try {
+            // NJ#184: unmapped 8BitDo BTN_C (scanCode 306) must NOT be forced to Guide (BUTTON_MODE / SPECIAL).
+            int before = connection.buttons.size();
+            assertFalse(handler.handleButtonDown(new KeyEvent(1000, 1000, KeyEvent.ACTION_DOWN,
+                    KeyEvent.KEYCODE_BUTTON_C, 0, 0, 0, 306)));
+            assertEquals("unmapped 8BitDo BTN_C must not emit Guide or button flags", before, connection.buttons.size());
+            assertEquals(0, context.inputMap & ControllerPacket.SPECIAL_BUTTON_FLAG);
+
+            // D-pad hardware keys without HAT axes must not trigger QUIRK_NO_HAT Select/Start suppression.
+            assertTrue(handler.handleButtonDown(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_UP, 1010)));
+            assertEquals(ControllerPacket.UP_FLAG, connection.last());
+            assertTrue(handler.handleButtonUp(key(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_UP, 1210)));
+            assertEquals(0, connection.last());
+
+            // Mapping BTN_C (scanCode 306), BTN_Z (309), raw L4 (0x2c0), and raw R4 (0x2c1) works end-to-end.
+            ControllerButtonMap map = new ControllerButtonMap();
+            map.put(KeyEvent.KEYCODE_BUTTON_C, ControllerButtonMap.TARGET_PADDLE1);
+            map.put(KeyEvent.KEYCODE_BUTTON_Z, ControllerButtonMap.TARGET_PADDLE2);
+            map.put(ControllerButtonMap.sourceForKey(KeyEvent.KEYCODE_UNKNOWN, 0x2c0), ControllerButtonMap.TARGET_PADDLE3);
+            map.put(ControllerButtonMap.sourceForKey(KeyEvent.KEYCODE_UNKNOWN, 0x2c1), ControllerButtonMap.TARGET_PADDLE4);
+            context.buttonMap = map;
+
+            assertTrue(handler.handleButtonDown(new KeyEvent(2000, 2000, KeyEvent.ACTION_DOWN,
+                    KeyEvent.KEYCODE_BUTTON_C, 0, 0, 0, 306)));
+            assertEquals(ControllerPacket.PADDLE1_FLAG, connection.last());
+            assertTrue(handler.handleButtonUp(new KeyEvent(2000, 2200, KeyEvent.ACTION_UP,
+                    KeyEvent.KEYCODE_BUTTON_C, 0, 0, 0, 306)));
+            assertEquals(0, connection.last());
+
+            assertTrue(handler.handleButtonDown(new KeyEvent(3000, 3000, KeyEvent.ACTION_DOWN,
+                    KeyEvent.KEYCODE_BUTTON_Z, 0, 0, 0, 309)));
+            assertEquals(ControllerPacket.PADDLE2_FLAG, connection.last());
+            assertTrue(handler.handleButtonUp(new KeyEvent(3000, 3200, KeyEvent.ACTION_UP,
+                    KeyEvent.KEYCODE_BUTTON_Z, 0, 0, 0, 309)));
+
+            assertTrue(handler.handleButtonDown(new KeyEvent(4000, 4000, KeyEvent.ACTION_DOWN,
+                    KeyEvent.KEYCODE_UNKNOWN, 0, 0, 0, 0x2c0)));
+            assertEquals(ControllerPacket.PADDLE3_FLAG, connection.last());
+            assertTrue(handler.handleButtonUp(new KeyEvent(4000, 4200, KeyEvent.ACTION_UP,
+                    KeyEvent.KEYCODE_UNKNOWN, 0, 0, 0, 0x2c0)));
+
+            assertTrue(handler.handleButtonDown(new KeyEvent(5000, 5000, KeyEvent.ACTION_DOWN,
+                    KeyEvent.KEYCODE_UNKNOWN, 0, 0, 0, 0x2c1)));
+            assertEquals(ControllerPacket.PADDLE4_FLAG, connection.last());
+            assertTrue(handler.handleButtonUp(new KeyEvent(5000, 5200, KeyEvent.ACTION_UP,
+                    KeyEvent.KEYCODE_UNKNOWN, 0, 0, 0, 0x2c1)));
+            assertEquals(0, connection.last());
+        } finally {
+            handler.destroy();
+        }
+    }
+
+    @Test
+    public void controllerMappingActivityFormatsAndCapturesScanCodeExtraButtons() {
+        try (ActivityController<com.limelight.preferences.ControllerMappingActivity> mapping =
+                     Robolectric.buildActivity(com.limelight.preferences.ControllerMappingActivity.class).setup()) {
+            com.limelight.preferences.ControllerMappingActivity activity = mapping.get();
+            assertEquals("C", ReflectionHelpers.callInstanceMethod(activity, "buttonName",
+                    ReflectionHelpers.ClassParameter.from(int.class, ControllerButtonMap.sourceForKey(0, 306))));
+            assertEquals("Z", ReflectionHelpers.callInstanceMethod(activity, "buttonName",
+                    ReflectionHelpers.ClassParameter.from(int.class, ControllerButtonMap.sourceForKey(0, 309))));
+            assertEquals("L4", ReflectionHelpers.callInstanceMethod(activity, "buttonName",
+                    ReflectionHelpers.ClassParameter.from(int.class, ControllerButtonMap.sourceForKey(0, 0x2c0))));
+            assertEquals("R4", ReflectionHelpers.callInstanceMethod(activity, "buttonName",
+                    ReflectionHelpers.ClassParameter.from(int.class, ControllerButtonMap.sourceForKey(0, 0x2c1))));
+
+            // Capture an unmapped kernel scan-code release event with gamepad source.
+            ReflectionHelpers.setField(activity, "capturing", true);
+            KeyEvent l4Up = new KeyEvent(0, 100, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_UNKNOWN, 0, 0, 0, 0x2c0,
+                    0, android.view.InputDevice.SOURCE_GAMEPAD);
+            assertTrue(activity.dispatchKeyEvent(l4Up));
+            assertFalse("capturing clears once L4 release opens target chooser",
+                    ReflectionHelpers.getField(activity, "capturing"));
+            org.robolectric.shadows.ShadowLooper.idleMainLooper();
+            android.app.Dialog dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog();
+            assertNotNull(dialog);
+            assertTrue(dialog.isShowing());
+        }
+    }
 }

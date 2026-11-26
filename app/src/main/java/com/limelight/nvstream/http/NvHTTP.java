@@ -47,6 +47,21 @@ public class NvHTTP implements AutoCloseable {
         NightjarHttpJni.setAppVersion(BuildConfig.VERSION_NAME);
     }
 
+    @FunctionalInterface
+    interface SnapshotParser {
+        String parse(String serverInfoXml, int httpPort, boolean strict);
+    }
+
+    private static final class ParsedSnapshotCache {
+        final String xml;
+        final Json.Obj snapshot;
+
+        ParsedSnapshotCache(String xml, Json.Obj snapshot) {
+            this.xml = xml;
+            this.snapshot = snapshot;
+        }
+    }
+
     private final long handle;
     private final HandleReaper.Token reaper;
     private final int httpPort;
@@ -54,6 +69,8 @@ public class NvHTTP implements AutoCloseable {
     private volatile boolean serverInfoFromAnotherCertificate;
     private HostCapabilities hostCaps = HostCapabilities.UNKNOWN;
     private final LimelightCryptoProvider cryptoProvider;
+    private final SnapshotParser snapshotParser;
+    private volatile ParsedSnapshotCache parsedSnapshotCache;
 
     public static final class LaunchTimeoutException extends IOException {
         public final int seconds;
@@ -66,10 +83,17 @@ public class NvHTTP implements AutoCloseable {
 
     public NvHTTP(ComputerDetails.AddressTuple address, int httpsPort, String uniqueId,
                   X509Certificate serverCert, LimelightCryptoProvider cryptoProvider) throws IOException {
+        this(address, httpsPort, uniqueId, serverCert, cryptoProvider, NightjarHttpJni::parseServerInfoXml);
+    }
+
+    NvHTTP(ComputerDetails.AddressTuple address, int httpsPort, String uniqueId,
+           X509Certificate serverCert, LimelightCryptoProvider cryptoProvider,
+           SnapshotParser snapshotParser) throws IOException {
         if (address == null) throw new IOException("Missing host address");
         this.httpPort = address.port;
         this.serverCert = serverCert;
         this.cryptoProvider = cryptoProvider;
+        this.snapshotParser = snapshotParser == null ? NightjarHttpJni::parseServerInfoXml : snapshotParser;
         byte[] clientCertDer = encodeCert(cryptoProvider == null ? null : cryptoProvider.getClientCertificate());
         byte[] clientKeyPkcs8 = encodeKey(cryptoProvider == null ? null : cryptoProvider.getClientPrivateKey());
         byte[] serverCertDer = encodeCert(serverCert);
@@ -192,7 +216,15 @@ public class NvHTTP implements AutoCloseable {
     }
 
     private Json.Obj parseSnapshot(String serverInfo) throws XmlPullParserException, IOException {
-        return unwrapOkObj(NightjarHttpJni.parseServerInfoXml(serverInfo, httpPort, false), true);
+        ParsedSnapshotCache cached = parsedSnapshotCache;
+        if (cached != null && serverInfo != null && serverInfo.equals(cached.xml)) {
+            return cached.snapshot;
+        }
+        Json.Obj snap = unwrapOkObj(snapshotParser.parse(serverInfo, httpPort, false), true);
+        if (serverInfo != null) {
+            parsedSnapshotCache = new ParsedSnapshotCache(serverInfo, snap);
+        }
+        return snap;
     }
 
     public String getServerVersion(String serverInfo) throws XmlPullParserException, IOException {

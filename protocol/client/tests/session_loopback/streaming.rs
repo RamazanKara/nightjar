@@ -401,3 +401,110 @@ fn unbatched_mouse_motion_reaches_the_host_at_the_mouse_pace() {
     assert!(p90 < 3.0, "gap p90 {p90:.2} ms");
     session.stop();
 }
+
+#[test]
+fn forged_encrypted_video_datagram_does_not_move_transport_feedback_base() {
+    use aes_gcm::aead::{AeadInPlace, KeyInit};
+    use rubylight_protocol::transport_feedback::TransportFeedback;
+
+    let host = crate::host::start_encrypted_feedback_host();
+    let record = Arc::new(Mutex::new(Record::default()));
+    let make = || {
+        Box::new(Recorder {
+            record: record.clone(),
+            need_idr_at: None,
+        })
+    };
+    let config = SessionConfig {
+        stream: StreamConfig {
+            width: 1280,
+            height: 720,
+            fps: 60,
+            packet_size: PACKET_SIZE as i32,
+            encryption_flags: ENCFLG_VIDEO,
+            remote_input_aes_key: KEY,
+            supported_video_formats: VIDEO_FORMAT_H264,
+            ..Default::default()
+        },
+        location: Location::Auto,
+        receive_coalescing: true,
+        ..Default::default()
+    };
+    let session = Session::start(
+        &HostInfo {
+            address: "127.0.0.1".into(),
+            app_version: "7.1.431.-1".into(),
+            rtsp_session_url: Some(format!("rtsp://127.0.0.1:{}", host.rtsp_port)),
+            server_codec_mode_support: SCM_H264,
+        },
+        config,
+        make(),
+        make(),
+        Arc::new(Recorder {
+            record: record.clone(),
+            need_idr_at: None,
+        }),
+        &Interrupt::default(),
+    )
+    .unwrap();
+    let client = host.peer(Media::Video);
+    let cipher = aes_gcm::Aes128Gcm::new(&KEY.into());
+    let mut seq = 0u64;
+    let encrypt = |mut pkt: Vec<u8>, n: u64, frame_num: u32| {
+        let mut iv = [0u8; 12];
+        iv[..8].copy_from_slice(&n.to_le_bytes());
+        let tag = cipher
+            .encrypt_in_place_detached((&iv).into(), &[], &mut pkt)
+            .unwrap();
+        let mut out = iv.to_vec();
+        out.extend_from_slice(&frame_num.to_le_bytes());
+        out.extend_from_slice(&tag);
+        out.extend_from_slice(&pkt);
+        out
+    };
+
+    let mut packetizer = Packetizer {
+        seq: 100,
+        spi: 0,
+        frame: 1,
+    };
+    let packet_size = session.outcome().config.packet_size as usize;
+    let idr = h264_idr();
+    for pkt in packetizer.frame_sized(&idr, 2, packet_size) {
+        host.video.send_to(&encrypt(pkt, seq, 1), client).unwrap();
+        seq += 1;
+    }
+    until("first encrypted frame", || {
+        !record.lock().unwrap().frames.is_empty()
+    });
+
+    // A forged datagram advertising packet id +20_000 fails GCM auth and must not move base_seq.
+    let mut forged = vec![0u8; 64];
+    forged[..2].copy_from_slice(&20_000u16.to_le_bytes());
+    forged[12..16].copy_from_slice(&2u32.to_le_bytes());
+    host.video.send_to(&forged, client).unwrap();
+
+    // Wait past INTERVAL_US (50 ms) so the next authenticated packet flushes a report.
+    thread::sleep(Duration::from_millis(65));
+    for pkt in packetizer.frame_sized(&idr, 2, packet_size) {
+        host.video.send_to(&encrypt(pkt, seq, 2), client).unwrap();
+        seq += 1;
+    }
+    until("second encrypted frame", || {
+        record.lock().unwrap().frames.len() >= 2
+    });
+    until("transport feedback report", || {
+        !host.feedback_reports.lock().unwrap().is_empty()
+    });
+
+    assert_eq!(session.stats().video.decrypt_failures, 1);
+    let raw = host.feedback_reports.lock().unwrap()[0].clone();
+    let report = TransportFeedback::decode(&raw).expect("valid transport feedback wire");
+    assert_eq!(report.base, 0);
+
+    session.stop();
+    until("the disconnect", || {
+        host.control_disconnected.load(Ordering::SeqCst)
+    });
+    assert_eq!(record.lock().unwrap().terminated, None);
+}

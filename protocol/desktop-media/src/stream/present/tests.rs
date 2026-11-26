@@ -19,6 +19,7 @@ fn frame(trc: i32, space: i32, range: i32) -> FrameInfo {
         color_space: space,
         color_range: range,
         color_trc: trc,
+        centred_chroma: false,
     }
 }
 

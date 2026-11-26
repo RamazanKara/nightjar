@@ -27,6 +27,7 @@ pub struct HardwareMetricsPoller {
     poll: Mutex<HardwarePoll>,
     canceller: Mutex<Option<HostClientCanceller>>,
     permanently_unavailable: AtomicBool,
+    stopped: AtomicBool,
 }
 
 impl Default for HardwareMetricsPoller {
@@ -41,11 +42,13 @@ impl HardwareMetricsPoller {
             poll: Mutex::new(HardwarePoll::default()),
             canceller: Mutex::new(None),
             permanently_unavailable: AtomicBool::new(false),
+            stopped: AtomicBool::new(false),
         }
     }
 
     /// Cancels any in-flight metrics HTTP call and resets the active poll generation.
     pub fn stop(&self) {
+        self.stopped.store(true, Ordering::Release);
         if let Some(cancel) = self
             .canceller
             .lock()
@@ -74,6 +77,9 @@ impl HardwareMetricsPoller {
     pub fn due(&self, now_ms: u64, wanted: bool) -> Option<u32> {
         if self.permanently_unavailable.load(Ordering::Acquire) {
             return None;
+        }
+        if wanted {
+            self.stopped.store(false, Ordering::Release);
         }
         self.poll
             .lock()
@@ -134,8 +140,24 @@ impl HardwareMetricsPoller {
         generation: u32,
         now_ms: u64,
     ) -> (Option<HardwareMetrics>, u64, bool) {
+        if self.stopped.load(Ordering::Acquire) {
+            return (
+                None,
+                HardwarePoll::RETRY_MS,
+                self.is_unavailable(),
+            );
+        }
         self.set_canceller(client.canceller());
+        if self.stopped.load(Ordering::Acquire) {
+            *self.canceller.lock().unwrap_or_else(|p| p.into_inner()) = None;
+            return (
+                None,
+                HardwarePoll::RETRY_MS,
+                self.is_unavailable(),
+            );
+        }
         let fetched = client.hardware_metrics(capabilities);
+        *self.canceller.lock().unwrap_or_else(|p| p.into_inner()) = None;
         match fetched {
             Ok(metrics) => {
                 let (show, delay, unavail) =

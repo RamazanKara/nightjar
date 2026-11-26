@@ -262,9 +262,11 @@ fn the_overlay_keeps_androids_values_and_defaults() {
     let corner = |value: &str| serde_json::from_value::<OverlayCorner>(serde_json::json!(value)).unwrap();
     assert_eq!(["top_left", "top_right", "bottom_left", "bottom_right"].map(corner), OverlayCorner::ALL);
     assert_eq!(corner("middle"), OverlayCorner::TopLeft);
-    let set = Settings { overlay_mode: OverlayMode::Debug, overlay_position: OverlayCorner::BottomRight, ..Default::default() };
+    let set = Settings { overlay_mode: OverlayMode::Debug, overlay_position: OverlayCorner::BottomRight, compact_overlay_device_info: true, ..Default::default() };
     let json = serde_json::to_value(&set).unwrap();
-    assert_eq!((&json["overlay_mode"], &json["overlay_position"]), (&serde_json::json!("debug"), &serde_json::json!("bottom_right")));
+    assert_eq!((&json["overlay_mode"], &json["overlay_position"], &json["compact_overlay_device_info"]), (&serde_json::json!("debug"), &serde_json::json!("bottom_right"), &serde_json::json!(true)));
+    assert!(!defaults.compact_overlay_device_info);
+    assert!(!old.compact_overlay_device_info);
 }
 
 #[test]
@@ -364,6 +366,57 @@ fn an_override_this_version_cannot_read_keeps_the_base_setting() {
     let base = Settings { fps: 60, ..Default::default() };
     let overrides = Overrides(serde_json::Map::from_iter([("fps".to_owned(), serde_json::json!(-1))]));
     assert_eq!(overrides.apply(&base), base, "a bad override costs its entry, not the UI");
+}
+
+#[test]
+fn overrides_capture_apply_and_diff_cover_every_serialized_setting_field() {
+    let base = Settings::default();
+    let base_json = serde_json::to_value(&base).unwrap();
+    let keys: Vec<&str> = base_json.as_object().unwrap().keys().map(String::as_str).collect();
+
+    let mut custom = Settings {
+        width: 2560,
+        height: 1440,
+        native_scale: 75,
+        fps: 120,
+        bitrate_kbps: 80_000,
+        hdr: true,
+        virtual_display_scale: 150,
+        virtual_display_dpi: 125,
+        usb_auto: vec!["1234:5678".into()],
+        rtx_hdr: Some(true),
+        setup_card_host: Some(42),
+        ..Default::default()
+    };
+    custom.packet_size = 1392; // `#[serde(skip)]` must not be touched by overrides.
+
+    let mut all = Overrides::default();
+    all.capture(&custom, &keys);
+    assert_eq!(all.keys().count(), keys.len());
+    let expected = Settings { packet_size: base.packet_size, ..custom.clone() };
+    assert_eq!(all.apply(&base), expected);
+
+    for key in &keys {
+        let mut single = Overrides::default();
+        single.capture(&custom, &[key]);
+        let round_tripped: serde_json::Value = serde_json::to_value(&base).unwrap();
+        let mut merged = round_tripped.as_object().unwrap().clone();
+        merged.insert((*key).to_owned(), serde_json::to_value(&custom).unwrap()[*key].clone());
+        let serde_applied: Settings = serde_json::from_value(serde_json::Value::Object(merged)).unwrap();
+        assert_eq!(single.apply(&base), serde_applied, "override parity mismatch for key {key}");
+        assert_eq!(custom.field_differs(&base, key), custom != Settings { ..base.clone() } && base_json[*key] != serde_json::to_value(&custom).unwrap()[*key], "differs parity for {key}");
+    }
+
+    // Special rules: pre-6.4.1 width/height resets inherited native_scale to 100, and custom deserializers apply.
+    let res_only = Overrides(serde_json::Map::from_iter([("width".to_owned(), serde_json::json!(1920))]));
+    assert_eq!(res_only.apply(&Settings { native_scale: 50, ..Default::default() }).native_scale, 100);
+    let clamped = Overrides(serde_json::Map::from_iter([
+        ("virtual_display_scale".to_owned(), serde_json::json!(999)),
+        ("virtual_display_dpi".to_owned(), serde_json::json!(999)),
+    ]));
+    let out = clamped.apply(&base);
+    assert_eq!(out.virtual_display_scale, *RENDER_SCALE.end());
+    assert_eq!(out.virtual_display_dpi, 0);
 }
 
 #[test]
@@ -471,4 +524,53 @@ fn native_metalfx_settings_roundtrip_without_requesting_sdl_gpu_shaders() {
     for (name, value) in [("Bilinear", Upscaling::Bilinear), ("Fsr1", Upscaling::Fsr1), ("Sgsr1", Upscaling::Sgsr1), ("Ai", Upscaling::Ai)] {
         assert_eq!(serde_json::from_value::<Upscaling>(serde_json::json!(name)).unwrap(), value);
     }
+}
+
+#[test]
+fn pre_641_resolution_layers_do_not_inherit_main_native_scale() {
+    let base = Settings { width: 0, height: 0, native_scale: 75, ..Settings::default() };
+    let explicit: Overrides = serde_json::from_str(r#"{"width": 1920, "height": 1080}"#).unwrap();
+    let applied_explicit = explicit.apply(&base);
+    assert_eq!((applied_explicit.width, applied_explicit.height, applied_explicit.native_scale), (1920, 1080, 100));
+
+    let old_native: Overrides = serde_json::from_str(r#"{"width": 0, "height": 0}"#).unwrap();
+    let applied_old_native = old_native.apply(&base);
+    assert_eq!((applied_old_native.width, applied_old_native.height, applied_old_native.native_scale), (0, 0, 100));
+
+    let fps_only: Overrides = serde_json::from_str(r#"{"fps": 120}"#).unwrap();
+    let applied_fps = fps_only.apply(&base);
+    assert_eq!((applied_fps.width, applied_fps.height, applied_fps.native_scale, applied_fps.fps), (0, 0, 75, 120));
+
+    let scaled_layer: Overrides = serde_json::from_str(r#"{"width": 0, "height": 0, "native_scale": 50}"#).unwrap();
+    assert_eq!(scaled_layer.apply(&base).native_scale, 50);
+}
+
+#[test]
+fn unreadable_auxiliary_store_files_keep_their_place_and_bad_shortcuts_are_backed_up() {
+    let dir = std::env::temp_dir().join(format!("nightjar-unreadable-aux-{}", std::process::id()));
+    std::fs::remove_dir_all(&dir).ok();
+    let store = Store::at(dir.clone()).unwrap();
+
+    for name in ["window.json", "recent.json", "open_play.json", "favourites.json", "hidden-games.json", "shortcuts.json"] {
+        std::fs::create_dir(dir.join(name)).unwrap();
+    }
+    assert!(store.window_placement().is_none());
+    assert!(store.save_window_placement(&crate::window_place_types::Placement::default()).is_err());
+    assert!(store.recents().is_empty());
+    assert!(store.save_recents(&[]).is_err());
+    assert_eq!(store.open_play(), OpenPlayState::default());
+    assert!(store.save_open_play(&OpenPlayState::default()).is_err());
+    assert!(store.favourites().is_empty());
+    assert!(store.save_favourites(&[]).is_err());
+    assert!(store.hidden_games().is_empty());
+    assert!(store.save_hidden_games(&[]).is_err());
+    assert!(store.shortcuts().data.is_empty());
+    assert!(store.save_shortcuts(&crate::shortcuts::Shortcuts::default()).is_err());
+
+    let bad_dir = dir.join("bad-shortcuts");
+    let bad_store = Store::at(bad_dir.clone()).unwrap();
+    std::fs::write(bad_dir.join("shortcuts.json"), b"{not valid json").unwrap();
+    assert!(bad_store.shortcuts().data.is_empty());
+    assert!(bad_dir.join("shortcuts.json.bad").is_file(), "unparsable shortcuts keep a .bad copy");
+    std::fs::remove_dir_all(dir).ok();
 }

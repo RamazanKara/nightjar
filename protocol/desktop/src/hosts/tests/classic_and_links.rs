@@ -80,7 +80,7 @@ fn a_classic_pcs_app_list_becomes_its_home_library_and_is_saved() {
 
     // A PC with the native library keeps no app list for Home, and one kept is forgotten.
     let mut hosts = Hosts::without_discovery(vec![paired_record("uid")], Arc::new(|| {}));
-    hosts.list[0].classic_apps = Some(crate::config::ClassicApps::of(&apps));
+    hosts.list[0].classic_apps = Some(Arc::new(crate::config::ClassicApps::of(&apps)));
     let id = hosts.list[0].id;
     info_lands(&mut hosts, id, native_info());
     send(&mut hosts, Event::Apps { id, result: Ok(apps) });
@@ -342,6 +342,67 @@ fn merging_two_records_of_one_pc_keeps_the_name_chosen_here() {
         assert_eq!(hosts.list.len(), 1, "the two records are one PC");
         assert_eq!(hosts.list[0].display_name(), "Living room");
     }
+}
+
+#[test]
+fn pairing_completing_after_unique_id_merge_lands_on_surviving_pc() {
+    let mut existing = HostRecord {
+        name: "Existing".into(),
+        address: "192.0.2.10".into(),
+        http_port: 47989,
+        unique_id: "uid".into(),
+        ..Default::default()
+    };
+    existing.wake_macs.push("00:11:22:33:44:55".into());
+    let mut extra = HostRecord {
+        name: "Manual".into(),
+        address: "192.0.2.11".into(),
+        http_port: 47989,
+        ..Default::default()
+    };
+    extra.manual = true;
+    let mut hosts = Hosts::without_discovery(vec![existing, extra], Arc::new(|| {}));
+    let kept_id = hosts.list[0].id;
+    let pairing_id = hosts.list[1].id;
+    hosts.pairing_generation = 7;
+
+    let info = ServerInfo::parse(INFO, 47989).unwrap();
+    assert!(hosts.apply_info(pairing_id, "192.0.2.11".into(), InfoPath::Pinned, Ok(Box::new(info))));
+    assert_eq!(hosts.list.len(), 1);
+    assert_eq!(hosts.canonical_id(pairing_id), kept_id);
+
+    hosts.sender.send(Event::Paired { id: pairing_id, request: 7, result: Ok(PEM.into()) }).unwrap();
+    let (events, changed) = hosts.drain(&egui::Context::default());
+    assert!(changed);
+    assert_eq!(hosts.list[0].record.server_certificate.as_deref(), Some(PEM));
+    assert!(events.iter().any(|e| matches!(e, Event::Paired { id, request: 7, result: Ok(_) } if *id == kept_id)));
+}
+
+#[test]
+fn distinct_paired_pcs_with_colliding_unique_id_do_not_merge_and_add_manual_matches_all_slots() {
+    let mut first = paired_record("uid");
+    first.address = "192.0.2.10".into();
+    first.other_addresses.push("10.0.0.10".into());
+    first.remote_address = Some("203.0.113.10".into());
+    first.pinned_address = Some("198.51.100.10".into());
+    first.server_certificate = Some("CERT-A".into());
+
+    let mut second = paired_record("uid");
+    second.address = "192.0.2.20".into();
+    second.server_certificate = Some("CERT-B".into());
+
+    let mut hosts = Hosts::without_discovery(vec![first, second], Arc::new(|| {}));
+    assert_eq!(hosts.add_manual("10.0.0.10", Some(47989)), hosts.list[0].id);
+    assert_eq!(hosts.add_manual("203.0.113.10", Some(47989)), hosts.list[0].id);
+    assert_eq!(hosts.add_manual("198.51.100.10", Some(47989)), hosts.list[0].id);
+    assert_eq!(hosts.list.len(), 2, "known extra address slots must not create duplicate records");
+
+    let second_id = hosts.list[1].id;
+    let info = ServerInfo::parse(INFO, 47989).unwrap();
+    let _ = hosts.apply_info(second_id, "192.0.2.20".into(), InfoPath::Pinned, Ok(Box::new(info)));
+    assert_eq!(hosts.list.len(), 2, "distinct certificates on same unique_id must stay separate (#176)");
+    assert_eq!(hosts.list[0].record.server_certificate.as_deref(), Some("CERT-A"));
+    assert_eq!(hosts.list[1].record.server_certificate.as_deref(), Some("CERT-B"));
 }
 
 fn info_event(id: u64, seq: u64, game: i32) -> Event {

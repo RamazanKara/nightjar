@@ -65,24 +65,46 @@ impl Hosts {
         let files = self.art_files.clone();
         let scale = self.art_scale;
         self.load_art(move || {
-            let file = std::fs::read(&cache).ok();
-            if file.is_none() && away {
+            let cached = std::fs::read(&cache).ok().and_then(|bytes| {
+                if nightjar_core::http::is_placeholder_box_art(&bytes) {
+                    Some((bytes, None))
+                } else if let Some(image) = decode_image(&bytes) {
+                    Some((bytes, Some(image)))
+                } else {
+                    let _ = std::fs::remove_file(&cache);
+                    None
+                }
+            });
+            if cached.is_none() && away {
                 return Some(Event::ArtAway { id, app, version });
             }
-            let bytes = match file {
-                Some(file) => Some(file),
+            let (bytes, decoded) = match cached {
+                Some((bytes, image)) => (Some(bytes), image),
                 None => match client_for(&identity, &record, &record.address).and_then(|c| c.box_art(app).map_err(|e| e.to_string())) {
                     Ok(bytes) => {
+                        let decoded = if nightjar_core::http::is_placeholder_box_art(&bytes) {
+                            None
+                        } else if let Some(image) = decode_image(&bytes) {
+                            Some(image)
+                        } else {
+                            eprintln!("nightjar: box art for app {app}: invalid image data");
+                            return Some(Event::ArtFailed { id, app, version });
+                        };
                         if let Some(dir) = cache.parent() {
                             let _ = std::fs::create_dir_all(dir);
                         }
-                        if std::fs::write(&cache, &bytes).is_ok() {
-                            files.lock().unwrap_or_else(std::sync::PoisonError::into_inner).saved(&cache, app);
+                        let part = cache.with_extension("part");
+                        if std::fs::write(&part, &bytes).is_ok() {
+                            if std::fs::rename(&part, &cache).is_ok() {
+                                files.lock().unwrap_or_else(std::sync::PoisonError::into_inner).saved(&cache, app);
+                            } else {
+                                let _ = std::fs::remove_file(&part);
+                            }
                         }
-                        Some(bytes)
+                        (Some(bytes), decoded)
                     }
                     // Hosts answer 404 for apps without art.
-                    Err(e) if e.starts_with("not found") => None,
+                    Err(e) if e.starts_with("not found") => (None, None),
                     Err(e) => {
                         eprintln!("nightjar: box art for app {app}: {e}");
                         return Some(Event::ArtFailed { id, app, version });
@@ -96,7 +118,10 @@ impl Hosts {
             if let Some(fallback) = fallback.filter(|_| !real) {
                 return fallback.fill(id, app, version, scale, bytes);
             }
-            let (image, ambient, sized) = art_and_ambient(bytes, scale);
+            let (image, ambient, sized) = match decoded {
+                Some(image) => bake_art_and_ambient(image, scale),
+                None => (None, None, None),
+            };
             Some(Event::Art { id, app, version, image, ambient, sized })
         });
     }
@@ -130,14 +155,23 @@ impl Hosts {
         let scale = self.art_scale;
         let mut jobs = Vec::new();
         for host in &mut self.list {
-            for (&app, sized) in &mut host.art_sized {
-                if *sized >= scale || !matches!(host.art.get(&app), Some(Art::Ready(_))) {
-                    continue;
-                }
-                let Some(version) = host.art_versions.get(&app) else { continue };
+            let updates: Vec<_> = host
+                .art_sized
+                .iter()
+                .filter(|&(&app, &sized)| sized < scale && matches!(host.art.get(&app), Some(Art::Ready(_))))
+                .filter_map(|(&app, _)| {
+                    let version = host.art_versions.get(&app)?.clone();
+                    Some((app, version))
+                })
+                .collect();
+            if updates.is_empty() {
+                continue;
+            }
+            let art_sized = Arc::make_mut(&mut host.art_sized);
+            for (app, version) in updates {
                 // Taken as sized for the new scale from here, so it is asked for once.
-                *sized = scale;
-                jobs.push((host.id, app, version.clone(), store.art_path(&host.record.unique_id, app, version)));
+                art_sized.insert(app, scale);
+                jobs.push((host.id, app, version.clone(), store.art_path(&host.record.unique_id, app, &version)));
             }
         }
         for (id, app, version, cache) in jobs {
@@ -170,7 +204,7 @@ impl Hosts {
         let mut covers = Vec::new();
         let mut held = 0;
         for (at, host) in self.list.iter().enumerate() {
-            for (&app, art) in &host.art {
+            for (&app, art) in host.art.iter() {
                 if let Art::Ready(texture) = art {
                     held += texture.byte_size();
                     covers.push((self.art_used.get(&texture.id()).copied().unwrap_or(0), at, app, texture.id(), texture.byte_size()));
@@ -189,8 +223,8 @@ impl Hosts {
                 break;
             }
             let host = &mut self.list[at];
-            host.art.insert(app, Art::Dropped);
-            host.art_sized.remove(&app);
+            Arc::make_mut(&mut host.art).insert(app, Art::Dropped);
+            Arc::make_mut(&mut host.art_sized).remove(&app);
             self.art_used.remove(&texture);
             held -= bytes;
         }
@@ -266,6 +300,10 @@ pub(super) fn art_image(bytes: Option<Vec<u8>>) -> Option<egui::ColorImage> {
 /// window of `scale` pixels per point needs ([`cover_sized`]), and the last value says for which.
 pub(super) fn art_and_ambient(bytes: Option<Vec<u8>>, scale: f32) -> (Option<egui::ColorImage>, Option<egui::ColorImage>, Option<f32>) {
     let Some(image) = art_image(bytes) else { return (None, None, None) };
+    bake_art_and_ambient(image, scale)
+}
+
+fn bake_art_and_ambient(image: egui::ColorImage, scale: f32) -> (Option<egui::ColorImage>, Option<egui::ColorImage>, Option<f32>) {
     let ambient = crate::ambient::bake(&image);
     let (image, sized) = cover_sized(image, scale);
     (Some(image), Some(ambient), sized)

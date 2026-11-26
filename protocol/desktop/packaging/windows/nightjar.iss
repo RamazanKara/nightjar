@@ -435,6 +435,7 @@ begin
     Remove := AskRemoveSettings();
   if Remove and not RemoveSettings() then begin
     Log(FmtMessage('Could not remove everything in %1.', [ConfigDir()]));
-    MsgBox(FmtMessage('Could not remove everything in %1.', [ConfigDir()]), mbError, MB_OK);
+    if not UninstallSilent() then
+      MsgBox(FmtMessage('Could not remove everything in %1.', [ConfigDir()]), mbError, MB_OK);
   end;
 end;

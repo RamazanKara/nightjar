@@ -119,4 +119,68 @@ public class MicrophoneCaptureTest {
         }
         assertTrue("the capture did not get there in time", condition.getAsBoolean());
     }
+
+    @Test
+    public void zeroReadBackoffWaitWakesImmediatelyWhenMutedOrStopped() throws Exception {
+        MicrophoneCapture capture = new MicrophoneCapture((pcm, samples) -> 0, false);
+        org.robolectric.util.ReflectionHelpers.setField(capture, "running", true);
+        Object lock = org.robolectric.util.ReflectionHelpers.getField(capture, "lock");
+
+        java.util.concurrent.CountDownLatch waited = new java.util.concurrent.CountDownLatch(1);
+        long startNs = System.nanoTime();
+        Thread sleeper = new Thread(() -> {
+            try {
+                org.robolectric.util.ReflectionHelpers.callInstanceMethod(capture, "awaitZeroReadBackoff",
+                        org.robolectric.util.ReflectionHelpers.ClassParameter.from(int.class, 2000));
+                waited.countDown();
+            } catch (Exception ignored) {
+            }
+        });
+        sleeper.start();
+        Thread.sleep(30);
+        capture.setMuted(true);
+        assertTrue("awaitZeroReadBackoff must wake immediately on mute/stop",
+                waited.await(1, java.util.concurrent.TimeUnit.SECONDS));
+        assertTrue((System.nanoTime() - startNs) < 1_000_000_000L);
+        assertNotNull(lock);
+    }
+
+    @Test
+    public void zeroReadBackoffRampsTwoFiveTenAndResetsAfterFullFrame() throws Exception {
+        java.util.List<Integer> observedBackoffs = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        CountDownLatch finished = new CountDownLatch(1);
+        AtomicInteger readStep = new AtomicInteger();
+        ShadowAudioRecord.setSource(new ShadowAudioRecord.AudioRecordSource() {
+            @Override
+            public int readInShortArray(short[] data, int offset, int size, boolean blocking) {
+                switch (readStep.getAndIncrement()) {
+                    case 0:
+                    case 1:
+                    case 2:
+                    case 3:
+                        return 0;
+                    case 4:
+                        return size;
+                    case 5:
+                        return 0;
+                    default:
+                        return AudioRecord.ERROR_DEAD_OBJECT;
+                }
+            }
+        });
+        AtomicInteger sentFrames = new AtomicInteger();
+        MicrophoneCapture capture = new MicrophoneCapture((pcm, samples) -> {
+            sentFrames.incrementAndGet();
+            return 0;
+        }, false, MicProcessing.DEFAULT, null, null, which -> finished.countDown()) {
+            @Override
+            void awaitZeroReadBackoff(int backoffMs) {
+                observedBackoffs.add(backoffMs);
+            }
+        };
+        capture.start();
+        assertTrue("Capture loop did not finish sequence", finished.await(5, TimeUnit.SECONDS));
+        assertEquals(1, sentFrames.get());
+        assertEquals(java.util.Arrays.asList(2, 5, 10, 10, 2), observedBackoffs);
+    }
 }

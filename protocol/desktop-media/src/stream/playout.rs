@@ -81,19 +81,27 @@ pub struct Playout {
     trim_head: Vec<f32>,
 }
 
+/// Silence lead and maximum queued samples per channel for `frame` and a device period of
+/// `device_frames` samples per channel (0 when unknown).
+fn cushion(frame: usize, device_frames: usize) -> (usize, usize) {
+    let lead = (48 * LEAD_MS).max(device_frames).min(5760 - frame);
+    // Above the trim line (`drift`) by the device's own take at least: a queue that sits just
+    // over the line peaks a device period higher between its requests.
+    let max_queued = (48 * QUEUE_MS).max(2 * lead + frame) + frame;
+    (lead, max_queued)
+}
+
 impl Playout {
     /// `device_frames` is how much the device takes at once (0 when unknown).
     pub fn new(decoder: AudioDecoder, packet_ms: u32, device_frames: usize) -> Self {
         let frame = 48 * packet_ms.max(1) as usize;
-        let lead = (48 * LEAD_MS).max(device_frames).min(5760 - frame);
+        let (lead, max_queued) = cushion(frame, device_frames);
         Self {
             pcm: vec![0.0; 5760 * decoder.channels()],
             decoder,
             len: 0,
             frame,
-            // Above the trim line (`drift`) by the device's own take at least: a queue that sits
-            // just over the line peaks a device period higher between its requests.
-            max_queued: (48 * QUEUE_MS).max(2 * lead + frame) + frame,
+            max_queued,
             lead,
             owed: 0,
             run: 0,
@@ -111,6 +119,14 @@ impl Playout {
 
     pub fn channels(&self) -> usize {
         self.decoder.channels()
+    }
+
+    /// Recomputes lead and maximum queue depth after the output reopens with a new period size.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    pub fn set_device_frames(&mut self, device_frames: usize) {
+        let (lead, max_queued) = cushion(self.frame, device_frames);
+        self.lead = lead;
+        self.max_queued = max_queued;
     }
 
     /// What the last call put out, interleaved.

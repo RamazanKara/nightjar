@@ -457,31 +457,38 @@ impl PlanesPass {
         lock: &mut dyn FnMut(&mut dyn FnMut())) -> windows::core::Result<()> {
         // SAFETY: The immediate context belongs to this (the presenting) thread; the deferred
         // context records the draw so SDL's cached immediate-context state is restored.
-        unsafe {
-            let c = &self.deferred;
-            c.ClearState();
-            write_cb(c, self.constants[0].as_ref().unwrap(), parameters)?;
-            c.OMSetRenderTargets(Some(&self.target), None);
-            // A whole picture draws with the default state `ClearState` left (no scissor); only a
-            // slice scissors to its rows.
-            if let Some((first, end)) = rows {
-                let (top, bottom) = (first.min(self.size.1), end.min(self.size.1));
-                c.RSSetState(&self.raster);
-                c.RSSetScissorRects(Some(&[windows::Win32::Foundation::RECT { left: 0, top: top as i32, right: self.size.0 as i32, bottom: bottom as i32 }]));
+        let mut run = || -> windows::core::Result<()> {
+            unsafe {
+                let c = &self.deferred;
+                c.ClearState();
+                write_cb(c, self.constants[0].as_ref().unwrap(), parameters)?;
+                c.OMSetRenderTargets(Some(&self.target), None);
+                // A whole picture draws with the default state `ClearState` left (no scissor); only a
+                // slice scissors to its rows.
+                if let Some((first, end)) = rows {
+                    let (top, bottom) = (first.min(self.size.1), end.min(self.size.1));
+                    c.RSSetState(&self.raster);
+                    c.RSSetScissorRects(Some(&[windows::Win32::Foundation::RECT { left: 0, top: top as i32, right: self.size.0 as i32, bottom: bottom as i32 }]));
+                }
+                c.RSSetViewports(Some(&[D3D11_VIEWPORT { Width: self.size.0 as f32, Height: self.size.1 as f32,
+                    MinDepth: 0.0, MaxDepth: 1.0, ..Default::default() }]));
+                c.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                c.VSSetShader(&self.vertex, None);
+                c.PSSetShader(fragment, None);
+                c.PSSetShaderResources(slot, Some(views));
+                c.PSSetSamplers(0, Some(&self.sampler));
+                c.PSSetConstantBuffers(0, Some(&self.constants));
+                c.Draw(3, 0);
+                let mut commands = None;
+                c.FinishCommandList(false, Some(&mut commands))?;
+                let commands = commands.unwrap();
+                lock(&mut || self.context.ExecuteCommandList(&commands, true));
             }
-            c.RSSetViewports(Some(&[D3D11_VIEWPORT { Width: self.size.0 as f32, Height: self.size.1 as f32,
-                MinDepth: 0.0, MaxDepth: 1.0, ..Default::default() }]));
-            c.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            c.VSSetShader(&self.vertex, None);
-            c.PSSetShader(fragment, None);
-            c.PSSetShaderResources(slot, Some(views));
-            c.PSSetSamplers(0, Some(&self.sampler));
-            c.PSSetConstantBuffers(0, Some(&self.constants));
-            c.Draw(3, 0);
-            let mut commands = None;
-            c.FinishCommandList(false, Some(&mut commands))?;
-            let commands = commands.unwrap();
-            lock(&mut || self.context.ExecuteCommandList(&commands, true));
+            Ok(())
+        };
+        if let Err(err) = run() {
+            unsafe { self.deferred.ClearState() };
+            return Err(err);
         }
         Ok(())
     }

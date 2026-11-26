@@ -149,6 +149,10 @@ pub struct Mesh {
     /// Each triangle's three corners.
     pub indices: Vec<i32>,
     pub(super) vertices: Vec<SDL_Vertex>,
+    cached_shift: [u32; 2],
+    cached_lens: [u32; 4],
+    cached_areas: Vec<[u32; 4]>,
+    built: bool,
 }
 
 impl std::fmt::Debug for Mesh {
@@ -166,6 +170,22 @@ impl Mesh {
     /// exactly what the shaders do per pixel. A lens bends the mapping, which is drawn as cells
     /// small enough to be within `LENS_ERROR` of it (`lens`).
     pub fn build(&mut self, shift: [f32; 2], lens: [f32; 4], areas: &[[f32; 4]]) {
+        let shift_bits = shift.map(f32::to_bits);
+        let lens_bits = lens.map(f32::to_bits);
+        let same_areas = self.cached_areas.len() == areas.len()
+            && self
+                .cached_areas
+                .iter()
+                .zip(areas)
+                .all(|(a, b)| *a == b.map(f32::to_bits));
+        if self.built && self.cached_shift == shift_bits && self.cached_lens == lens_bits && same_areas {
+            return;
+        }
+        self.cached_shift = shift_bits;
+        self.cached_lens = lens_bits;
+        self.cached_areas.clear();
+        self.cached_areas.extend(areas.iter().map(|a| a.map(f32::to_bits)));
+        self.built = true;
         self.corners.clear();
         self.indices.clear();
         if lens != FLAT {

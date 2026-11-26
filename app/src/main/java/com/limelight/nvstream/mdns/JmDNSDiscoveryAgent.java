@@ -8,6 +8,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 
 import javax.jmdns.JmmDNS;
@@ -21,6 +22,7 @@ import com.limelight.LimeLog;
 
 public class JmDNSDiscoveryAgent extends MdnsDiscoveryAgent {
     private static final String SERVICE_TYPE = "_nvstream._tcp.local.";
+    static final int MAX_PENDING_RETRIES = 4;
     private WifiManager.MulticastLock multicastLock;
     private Thread discoveryThread;
     private DiscoverySession discoverySession;
@@ -28,6 +30,7 @@ public class JmDNSDiscoveryAgent extends MdnsDiscoveryAgent {
     private final class DiscoverySession implements ServiceListener {
         final long generation;
         final HashSet<String> pendingResolution = new HashSet<>();
+        final HashMap<String, Integer> pendingRetries = new HashMap<>();
 
         DiscoverySession(long generation) {
             this.generation = generation;
@@ -38,7 +41,12 @@ public class JmDNSDiscoveryAgent extends MdnsDiscoveryAgent {
         }
 
         @Override public void serviceRemoved(ServiceEvent event) {
-            LimeLog.info("mDNS: Machine disappeared: " + event.getInfo().getName());
+            String name = event.getInfo().getName();
+            synchronized (pendingResolution) {
+                pendingResolution.remove(name);
+                pendingRetries.remove(name);
+            }
+            LimeLog.info("mDNS: Machine disappeared: " + name);
         }
 
         @Override public void serviceResolved(ServiceEvent event) {
@@ -174,6 +182,7 @@ public class JmDNSDiscoveryAgent extends MdnsDiscoveryAgent {
     private void handleResolvedServiceInfo(ServiceInfo info, DiscoverySession session) {
         synchronized (session.pendingResolution) {
             session.pendingResolution.remove(info.getName());
+            session.pendingRetries.remove(info.getName());
         }
 
         try {
@@ -234,6 +243,19 @@ public class JmDNSDiscoveryAgent extends MdnsDiscoveryAgent {
                                 for (ServiceInfo svcinfo : infos) {
                                     handleResolvedServiceInfo(svcinfo, session);
                                 }
+                            } else {
+                                synchronized (session.pendingResolution) {
+                                    if (session.pendingResolution.contains(name)) {
+                                        Integer prev = session.pendingRetries.get(name);
+                                        int next = (prev == null ? 0 : prev) + 1;
+                                        if (next >= MAX_PENDING_RETRIES) {
+                                            session.pendingResolution.remove(name);
+                                            session.pendingRetries.remove(name);
+                                        } else {
+                                            session.pendingRetries.put(name, next);
+                                        }
+                                    }
+                                }
                             }
                         }
                         
@@ -284,6 +306,7 @@ public class JmDNSDiscoveryAgent extends MdnsDiscoveryAgent {
             // This machine is pending resolution
             synchronized (session.pendingResolution) {
                 session.pendingResolution.add(event.getInfo().getName());
+                session.pendingRetries.remove(event.getInfo().getName());
             }
             return;
         }

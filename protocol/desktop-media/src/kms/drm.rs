@@ -561,19 +561,27 @@ impl Card {
         Ok((crtcs, connectors))
     }
 
-    /// A connector's modes and its encoder, connected or not.
+    /// A connector's modes and its encoder, connected or not. Pre-allocates mode room so
+    /// `count_modes` is non-zero and avoids forcing a full kernel EDID probe on every connector.
     fn connector(&self, id: u32) -> std::io::Result<(Connector, Vec<ModeInfo>)> {
-        let mut conn = Connector { connector_id: id, ..Default::default() };
+        let mut modes = vec![ModeInfo::default(); 64];
+        let mut conn = Connector {
+            connector_id: id,
+            modes_ptr: modes.as_mut_ptr() as u64,
+            count_modes: modes.len() as u32,
+            ..Default::default()
+        };
         ioctl(self.fd, GETCONNECTOR, &mut conn)?;
-        let mut modes = vec![ModeInfo::default(); conn.count_modes as usize];
-        let mut encoders = vec![0u32; conn.count_encoders as usize];
-        let mut props = vec![0u32; conn.count_props as usize];
-        let mut values = vec![0u64; conn.count_props as usize];
-        conn.modes_ptr = modes.as_mut_ptr() as u64;
-        conn.encoders_ptr = encoders.as_mut_ptr() as u64;
-        conn.props_ptr = props.as_mut_ptr() as u64;
-        conn.prop_values_ptr = values.as_mut_ptr() as u64;
-        ioctl(self.fd, GETCONNECTOR, &mut conn)?;
+        if conn.count_modes as usize > modes.len() {
+            modes.resize(conn.count_modes as usize, ModeInfo::default());
+            conn.modes_ptr = modes.as_mut_ptr() as u64;
+            conn.count_encoders = 0;
+            conn.encoders_ptr = 0;
+            conn.count_props = 0;
+            conn.props_ptr = 0;
+            conn.prop_values_ptr = 0;
+            ioctl(self.fd, GETCONNECTOR, &mut conn)?;
+        }
         modes.truncate(conn.count_modes as usize);
         Ok((conn, modes))
     }
