@@ -603,4 +603,17 @@
     <string name="stream_dvr_reason_io">Le PC hôte n’a pas pu écrire le clip sur son disque.</string>
     <string name="stream_dvr_reason_not_streaming">Les clips ne peuvent être enregistrés que pendant un stream en cours.</string>
     <string name="stream_dvr_reason_unknown">Le PC hôte n’a pas pu enregistrer le clip.</string>
+    <string name="wake_relay_contacting">Contact de votre relais de réveil (%1$s)…</string>
+    <string name="wake_relay_asking">Demande à votre relais de réveil (%1$s) de réveiller %2$s…</string>
+    <string name="wake_relay_sent">Signal de réveil envoyé. En attente du démarrage de %1$s…</string>
+    <string name="wake_relay_awake">%1$s est réveillé.</string>
+    <string name="wake_relay_sent_no_answer">Le signal de réveil a atteint votre réseau domestique, mais votre relais de réveil ne répond plus. %1$s est peut-être encore en train de démarrer : vérifiez à nouveau dans une minute.</string>
+    <string name="wake_relay_timed_out">Le signal de réveil a atteint votre réseau domestique, mais %1$s n’a pas répondu dans les 45 secondes. Vérifiez Configurer Wake-on-LAN dans le menu du PC.</string>
+    <string name="wake_relay_rate_limited">Trop de demandes de réveil pour %1$s ces derniers temps. Réessayez dans %2$d s.</string>
+    <string name="wake_relay_refused">Votre relais de réveil a refusé la demande. Vérifiez que l’horloge de cet appareil est à l’heure, ou connectez-vous une fois depuis votre réseau domestique pour renouveler l’accès au réveil.</string>
+    <string name="wake_relay_offline">Votre relais de réveil (%1$s) est hors ligne, donc %2$s n’a pas pu être réveillé à distance. Allumez le relais ou réveillez %2$s depuis votre réseau domestique.</string>
+    <string name="wake_relay_unreachable">Nightjar n’a pas pu joindre votre relais de réveil (%1$s). Vérifiez qu’il est allumé et en ligne, puis réessayez.</string>
+    <string name="wake_relay_elsewhere">Votre relais de réveil (%1$s) n’est pas sur le même réseau que %2$s, il n’a donc pas pu le réveiller.</string>
+    <string name="wake_relay_network">Nightjar n’a pas pu ouvrir de connexion sur ce réseau. Vérifiez votre connexion Internet et réessayez.</string>
+    <string name="wake_relay_none">%1$s ne peut pas encore être réveillé depuis l’extérieur de votre réseau domestique. Pour le réveiller à distance, configurez Nightjar pour ordinateur sur un ordinateur toujours allumé chez vous comme relais de réveil.</string>
 </resources>

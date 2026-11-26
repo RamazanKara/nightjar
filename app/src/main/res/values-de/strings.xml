@@ -603,4 +603,17 @@
     <string name="stream_dvr_reason_io">Der Host-PC konnte den Clip nicht auf seine Festplatte schreiben.</string>
     <string name="stream_dvr_reason_not_streaming">Clips können nur während eines laufenden Streams gespeichert werden.</string>
     <string name="stream_dvr_reason_unknown">Der Host-PC konnte den Clip nicht speichern.</string>
+    <string name="wake_relay_contacting">Verbinde mit deinem Aufweck-Relay (%1$s)…</string>
+    <string name="wake_relay_asking">%2$s wird über dein Aufweck-Relay (%1$s) geweckt…</string>
+    <string name="wake_relay_sent">Wecksignal gesendet. Warte, bis %1$s startet…</string>
+    <string name="wake_relay_awake">%1$s ist wach.</string>
+    <string name="wake_relay_sent_no_answer">Das Wecksignal hat dein Heimnetz erreicht, aber dein Aufweck-Relay antwortet nicht mehr. %1$s startet vielleicht noch – schau in einer Minute wieder nach.</string>
+    <string name="wake_relay_timed_out">Das Wecksignal hat dein Heimnetz erreicht, aber %1$s hat nicht innerhalb von 45 Sekunden geantwortet. Prüfe die Wake-on-LAN-Hilfe im PC-Menü.</string>
+    <string name="wake_relay_rate_limited">Zuletzt kamen zu viele Weckanfragen für %1$s. Versuche es in %2$d s erneut.</string>
+    <string name="wake_relay_refused">Dein Aufweck-Relay hat die Anfrage abgelehnt. Prüfe, ob die Uhr dieses Geräts stimmt, oder verbinde dich einmal in deinem Heimnetz, um den Weckzugriff zu erneuern.</string>
+    <string name="wake_relay_offline">Dein Aufweck-Relay (%1$s) ist offline, daher konnte %2$s nicht von unterwegs geweckt werden. Schalte das Relay ein oder wecke %2$s aus deinem Heimnetz.</string>
+    <string name="wake_relay_unreachable">Nightjar konnte dein Aufweck-Relay (%1$s) nicht erreichen. Prüfe, ob es eingeschaltet und online ist, und versuche es dann erneut.</string>
+    <string name="wake_relay_elsewhere">Dein Aufweck-Relay (%1$s) ist nicht im selben Netzwerk wie %2$s und konnte ihn daher nicht wecken.</string>
+    <string name="wake_relay_network">Nightjar konnte in diesem Netzwerk keine Verbindung öffnen. Prüfe deine Internetverbindung und versuche es erneut.</string>
+    <string name="wake_relay_none">%1$s kann noch nicht von außerhalb deines Heimnetzes geweckt werden. Richte dafür Nightjar für den Desktop auf einem ständig eingeschalteten Computer zu Hause als Aufweck-Relay ein.</string>
 </resources>

@@ -648,4 +648,17 @@
     <string name="stream_dvr_reason_io">The host PC could not write the clip to its disk.</string>
     <string name="stream_dvr_reason_not_streaming">Clips can be saved only while a stream is running.</string>
     <string name="stream_dvr_reason_unknown">The host PC could not save the clip.</string>
+    <string name="wake_relay_contacting">Contacting your wake relay (%1$s)…</string>
+    <string name="wake_relay_asking">Asking your wake relay (%1$s) to wake %2$s…</string>
+    <string name="wake_relay_sent">Wake signal sent. Waiting for %1$s to start…</string>
+    <string name="wake_relay_awake">%1$s is awake.</string>
+    <string name="wake_relay_sent_no_answer">The wake signal reached your home network, but your wake relay stopped answering. %1$s may still be starting, so check again in a minute.</string>
+    <string name="wake_relay_timed_out">The wake signal reached your home network, but %1$s did not answer within 45 seconds. Check Wake-on-LAN setup in the PC menu.</string>
+    <string name="wake_relay_rate_limited">Too many wake requests for %1$s lately. Try again in %2$d s.</string>
+    <string name="wake_relay_refused">Your wake relay turned this request down. Check that this device\'s clock is right, or connect once on your home network to refresh wake access.</string>
+    <string name="wake_relay_offline">Your wake relay (%1$s) is offline, so %2$s could not be woken from away. Turn on the relay or wake %2$s from your home network.</string>
+    <string name="wake_relay_unreachable">Nightjar could not reach your wake relay (%1$s). Check that it is on and online, then try again.</string>
+    <string name="wake_relay_elsewhere">Your wake relay (%1$s) is not on the same network as %2$s, so it could not wake it.</string>
+    <string name="wake_relay_network">Nightjar could not open a connection on this network. Check your internet connection and try again.</string>
+    <string name="wake_relay_none">%1$s can\'t be woken from outside your home network yet. To wake it from away, set up desktop Nightjar on an always-on computer at home as a wake relay.</string>
 </resources>

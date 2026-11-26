@@ -603,4 +603,17 @@
     <string name="stream_dvr_reason_io">Il PC host non è riuscito a scrivere la clip sul suo disco.</string>
     <string name="stream_dvr_reason_not_streaming">Le clip si possono salvare solo durante uno stream in corso.</string>
     <string name="stream_dvr_reason_unknown">Il PC host non è riuscito a salvare la clip.</string>
+    <string name="wake_relay_contacting">Contatto con il tuo relay di riattivazione (%1$s)…</string>
+    <string name="wake_relay_asking">Richiesta al tuo relay di riattivazione (%1$s) di riattivare %2$s…</string>
+    <string name="wake_relay_sent">Segnale di riattivazione inviato. In attesa dell’avvio di %1$s…</string>
+    <string name="wake_relay_awake">%1$s è attivo.</string>
+    <string name="wake_relay_sent_no_answer">Il segnale di riattivazione ha raggiunto la tua rete di casa, ma il tuo relay di riattivazione ha smesso di rispondere. %1$s potrebbe essere ancora in avvio: ricontrolla tra un minuto.</string>
+    <string name="wake_relay_timed_out">Il segnale di riattivazione ha raggiunto la tua rete di casa, ma %1$s non ha risposto entro 45 secondi. Controlla Configura Wake-on-LAN nel menu del PC.</string>
+    <string name="wake_relay_rate_limited">Troppe richieste di riattivazione per %1$s di recente. Riprova tra %2$d s.</string>
+    <string name="wake_relay_refused">Il tuo relay di riattivazione ha rifiutato la richiesta. Controlla che l’orologio di questo dispositivo sia corretto, oppure connettiti una volta dalla rete di casa per rinnovare l’accesso alla riattivazione.</string>
+    <string name="wake_relay_offline">Il tuo relay di riattivazione (%1$s) è offline, quindi non è stato possibile riattivare %2$s da fuori casa. Accendi il relay o riattiva %2$s dalla rete di casa.</string>
+    <string name="wake_relay_unreachable">Nightjar non è riuscito a raggiungere il tuo relay di riattivazione (%1$s). Controlla che sia acceso e online, poi riprova.</string>
+    <string name="wake_relay_elsewhere">Il tuo relay di riattivazione (%1$s) non è sulla stessa rete di %2$s, quindi non ha potuto riattivarlo.</string>
+    <string name="wake_relay_network">Nightjar non è riuscito ad aprire una connessione su questa rete. Controlla la connessione a Internet e riprova.</string>
+    <string name="wake_relay_none">%1$s non può ancora essere riattivato da fuori della rete di casa. Per riattivarlo a distanza, configura Nightjar per desktop su un computer di casa sempre acceso come relay di riattivazione.</string>
 </resources>

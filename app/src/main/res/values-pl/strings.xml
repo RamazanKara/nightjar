@@ -603,4 +603,17 @@
     <string name="stream_dvr_reason_io">Komputer hosta nie mógł zapisać klipu na dysku.</string>
     <string name="stream_dvr_reason_not_streaming">Klipy można zapisywać tylko podczas trwającego streamu.</string>
     <string name="stream_dvr_reason_unknown">Komputer hosta nie mógł zapisać klipu.</string>
+    <string name="wake_relay_contacting">Łączenie z przekaźnikiem wybudzania (%1$s)…</string>
+    <string name="wake_relay_asking">Prośba do przekaźnika wybudzania (%1$s) o wybudzenie: %2$s…</string>
+    <string name="wake_relay_sent">Wysłano sygnał wybudzenia. Czekanie na uruchomienie: %1$s…</string>
+    <string name="wake_relay_awake">Wybudzono: %1$s.</string>
+    <string name="wake_relay_sent_no_answer">Sygnał wybudzenia dotarł do sieci domowej, ale przekaźnik wybudzania przestał odpowiadać. %1$s może się jeszcze uruchamiać, sprawdź ponownie za minutę.</string>
+    <string name="wake_relay_timed_out">Sygnał wybudzenia dotarł do sieci domowej, ale komputer %1$s nie odpowiedział w ciągu 45 sekund. Sprawdź Konfigurację Wake-on-LAN w menu komputera.</string>
+    <string name="wake_relay_rate_limited">Ostatnio było zbyt wiele próśb o wybudzenie: %1$s. Spróbuj ponownie za %2$d s.</string>
+    <string name="wake_relay_refused">Przekaźnik wybudzania odrzucił prośbę. Sprawdź, czy zegar tego urządzenia jest prawidłowy, albo połącz się raz w sieci domowej, aby odświeżyć dostęp do wybudzania.</string>
+    <string name="wake_relay_offline">Przekaźnik wybudzania (%1$s) jest offline, więc nie udało się zdalnie wybudzić: %2$s. Włącz przekaźnik albo wybudź %2$s z sieci domowej.</string>
+    <string name="wake_relay_unreachable">Nightjar nie może połączyć się z przekaźnikiem wybudzania (%1$s). Sprawdź, czy jest włączony i online, a potem spróbuj ponownie.</string>
+    <string name="wake_relay_elsewhere">Przekaźnik wybudzania (%1$s) nie jest w tej samej sieci co %2$s, więc nie mógł go wybudzić.</string>
+    <string name="wake_relay_network">Nightjar nie może otworzyć połączenia w tej sieci. Sprawdź połączenie z internetem i spróbuj ponownie.</string>
+    <string name="wake_relay_none">Nie można jeszcze wybudzić %1$s spoza sieci domowej. Aby wybudzać go zdalnie, skonfiguruj Nightjar na komputery na stale włączonym komputerze w domu jako przekaźnik wybudzania.</string>
 </resources>

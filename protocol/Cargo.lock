@@ -1460,6 +1460,7 @@ dependencies = [
  "nightjar-core",
  "nightjar-policy",
  "rubylight-protocol",
+ "rubylight-traverse",
  "serde",
  "serde_json",
  "sonora",

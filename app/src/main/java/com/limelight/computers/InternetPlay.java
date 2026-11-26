@@ -8,6 +8,7 @@ import com.limelight.R;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.jni.NightjarHostsJni;
 import com.limelight.nvstream.jni.NightjarJni;
+import com.limelight.nvstream.wol.WakeRelayKeys;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -96,10 +97,11 @@ public final class InternetPlay {
         }
     }
 
-    /** The PC was removed or forgot this device: its key goes too. */
+    /** The PC was removed or forgot this device: its key goes too, and its away wake keys with it. */
     public static void forget(Context context, String hostUuid) {
         if (context == null || hostUuid == null) return;
         preferences(context).edit().remove(hostUuid).apply();
+        WakeRelayKeys.forget(context, hostUuid);
         try {
             ask(new JSONObject().put("op", "stop").put("host", hostUuid));
         } catch (JSONException | Unreachable e) {

@@ -603,4 +603,17 @@
     <string name="stream_dvr_reason_io">호스트 PC가 클립을 디스크에 쓰지 못했습니다.</string>
     <string name="stream_dvr_reason_not_streaming">클립은 스트림이 실행 중일 때만 저장할 수 있습니다.</string>
     <string name="stream_dvr_reason_unknown">호스트 PC가 클립을 저장하지 못했습니다.</string>
+    <string name="wake_relay_contacting">깨우기 릴레이(%1$s)에 연결하는 중…</string>
+    <string name="wake_relay_asking">깨우기 릴레이(%1$s)에 %2$s 깨우기를 요청하는 중…</string>
+    <string name="wake_relay_sent">깨우기 신호를 보냈습니다. %1$s이(가) 시작되기를 기다리는 중…</string>
+    <string name="wake_relay_awake">%1$s이(가) 깨어났습니다.</string>
+    <string name="wake_relay_sent_no_answer">깨우기 신호가 홈 네트워크에 도달했지만 깨우기 릴레이가 응답을 멈췄습니다. %1$s이(가) 아직 시작 중일 수 있으니 1분 후에 다시 확인하세요.</string>
+    <string name="wake_relay_timed_out">깨우기 신호가 홈 네트워크에 도달했지만 %1$s이(가) 45초 안에 응답하지 않았습니다. PC 메뉴의 Wake-on-LAN 설정을 확인하세요.</string>
+    <string name="wake_relay_rate_limited">최근 %1$s 깨우기 요청이 너무 많았습니다. %2$d초 후에 다시 시도하세요.</string>
+    <string name="wake_relay_refused">깨우기 릴레이가 이 요청을 거부했습니다. 이 기기의 시계가 정확한지 확인하거나, 홈 네트워크에서 한 번 연결해 깨우기 권한을 새로 고치세요.</string>
+    <string name="wake_relay_offline">깨우기 릴레이(%1$s)가 오프라인이어서 외부에서 %2$s을(를) 깨울 수 없었습니다. 릴레이를 켜거나 홈 네트워크에서 %2$s을(를) 깨우세요.</string>
+    <string name="wake_relay_unreachable">Nightjar가 깨우기 릴레이(%1$s)에 연결할 수 없습니다. 켜져 있고 온라인 상태인지 확인한 후 다시 시도하세요.</string>
+    <string name="wake_relay_elsewhere">깨우기 릴레이(%1$s)가 %2$s과(와) 같은 네트워크에 있지 않아 깨울 수 없었습니다.</string>
+    <string name="wake_relay_network">Nightjar가 이 네트워크에서 연결을 열 수 없습니다. 인터넷 연결을 확인한 후 다시 시도하세요.</string>
+    <string name="wake_relay_none">%1$s은(는) 아직 홈 네트워크 밖에서 깨울 수 없습니다. 외부에서 깨우려면 집에 항상 켜져 있는 컴퓨터의 데스크톱용 Nightjar를 깨우기 릴레이로 설정하세요.</string>
 </resources>

@@ -603,4 +603,17 @@
     <string name="stream_dvr_reason_io">主機 PC 無法將片段寫入其磁碟。</string>
     <string name="stream_dvr_reason_not_streaming">只有在串流進行中才能儲存片段。</string>
     <string name="stream_dvr_reason_unknown">主機 PC 無法儲存片段。</string>
+    <string name="wake_relay_contacting">正在聯絡喚醒中繼（%1$s）…</string>
+    <string name="wake_relay_asking">正在請求喚醒中繼（%1$s）喚醒 %2$s…</string>
+    <string name="wake_relay_sent">已傳送喚醒訊號。正在等待 %1$s 啟動…</string>
+    <string name="wake_relay_awake">%1$s 已喚醒。</string>
+    <string name="wake_relay_sent_no_answer">喚醒訊號已到達你的家用網路，但喚醒中繼已停止回應。%1$s 可能仍在啟動，請一分鐘後再查看。</string>
+    <string name="wake_relay_timed_out">喚醒訊號已到達你的家用網路，但 %1$s 在 45 秒內沒有回應。請檢查電腦選單中的 Wake-on-LAN 設定。</string>
+    <string name="wake_relay_rate_limited">最近喚醒 %1$s 的請求過多。請在 %2$d 秒後重試。</string>
+    <string name="wake_relay_refused">喚醒中繼拒絕了此請求。請確認此裝置的時鐘是否準確，或在家用網路中連線一次以更新喚醒權限。</string>
+    <string name="wake_relay_offline">喚醒中繼（%1$s）目前離線，因此無法從外部喚醒 %2$s。請開啟中繼裝置，或在家用網路中喚醒 %2$s。</string>
+    <string name="wake_relay_unreachable">Nightjar 無法連線到喚醒中繼（%1$s）。請確認它已開機並連上網路，然後再試一次。</string>
+    <string name="wake_relay_elsewhere">喚醒中繼（%1$s）與 %2$s 不在同一個網路中，因此無法喚醒它。</string>
+    <string name="wake_relay_network">Nightjar 無法在此網路上建立連線。請檢查你的網際網路連線，然後再試一次。</string>
+    <string name="wake_relay_none">目前還無法從家用網路外喚醒 %1$s。若要從外部喚醒它，請在家中一台持續開機的電腦上將桌面版 Nightjar 設定為喚醒中繼。</string>
 </resources>

@@ -37,6 +37,7 @@ import com.limelight.nvstream.jni.Json;
 import com.limelight.nvstream.jni.NightjarHostsJni;
 import com.limelight.nvstream.mdns.MdnsComputer;
 import com.limelight.nvstream.mdns.MdnsDiscoveryListener;
+import com.limelight.nvstream.wol.WakeRelayKeys;
 import com.limelight.nvstream.wol.WakeTargets;
 import com.limelight.nvstream.wol.WakeTargetsPoll;
 import com.limelight.preferences.AppQuitOnLeave;
@@ -435,8 +436,8 @@ public class ComputerManagerService extends Service {
         InternetPlay.migrateLegacyToManager(this, hostManagerHandle);
 
         wakeRequests = Executors.newSingleThreadExecutor(task -> new Thread(task, "Wake targets"));
-        wakeTargets = new WakeTargetsPoll(new WakeTargets(this), this::nativeClient, wakeRequests,
-                () -> hostManagerHandle == 0 ? 0L : NightjarHostsJni.hostManagerNowMs(hostManagerHandle));
+        wakeTargets = new WakeTargetsPoll(new WakeTargets(this), new WakeRelayKeys(this), this::nativeClient,
+                wakeRequests, () -> hostManagerHandle == 0 ? 0L : NightjarHostsJni.hostManagerNowMs(hostManagerHandle));
         internetPlayCalls = Executors.newSingleThreadExecutor(task -> new Thread(task, "Internet play setting"));
         networkChanges = Executors.newSingleThreadExecutor(task -> new Thread(task, "Network changes"));
         vpnStunCalls = Executors.newSingleThreadExecutor(task -> new Thread(task, "VPN STUN"));

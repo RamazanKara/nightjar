@@ -603,4 +603,17 @@
     <string name="stream_dvr_reason_io">O PC host não conseguiu gravar o clipe no disco.</string>
     <string name="stream_dvr_reason_not_streaming">Os clipes só podem ser salvos enquanto um stream estiver em andamento.</string>
     <string name="stream_dvr_reason_unknown">O PC host não conseguiu salvar o clipe.</string>
+    <string name="wake_relay_contacting">Contatando seu relé de despertar (%1$s)…</string>
+    <string name="wake_relay_asking">Pedindo ao seu relé de despertar (%1$s) para despertar %2$s…</string>
+    <string name="wake_relay_sent">Sinal de despertar enviado. Aguardando %1$s iniciar…</string>
+    <string name="wake_relay_awake">%1$s despertou.</string>
+    <string name="wake_relay_sent_no_answer">O sinal de despertar chegou à sua rede doméstica, mas o seu relé de despertar parou de responder. %1$s ainda pode estar iniciando; verifique de novo em um minuto.</string>
+    <string name="wake_relay_timed_out">O sinal de despertar chegou à sua rede doméstica, mas %1$s não respondeu em 45 segundos. Verifique Configurar Wake-on-LAN no menu do PC.</string>
+    <string name="wake_relay_rate_limited">Pedidos demais para despertar %1$s recentemente. Tente de novo em %2$d s.</string>
+    <string name="wake_relay_refused">Seu relé de despertar recusou o pedido. Verifique se o relógio deste dispositivo está certo ou conecte-se uma vez na sua rede doméstica para renovar o acesso de despertar.</string>
+    <string name="wake_relay_offline">Seu relé de despertar (%1$s) está offline, então não foi possível despertar %2$s à distância. Ligue o relé ou desperte %2$s pela sua rede doméstica.</string>
+    <string name="wake_relay_unreachable">O Nightjar não conseguiu alcançar seu relé de despertar (%1$s). Verifique se ele está ligado e online e tente de novo.</string>
+    <string name="wake_relay_elsewhere">Seu relé de despertar (%1$s) não está na mesma rede que %2$s, então não conseguiu despertá-lo.</string>
+    <string name="wake_relay_network">O Nightjar não conseguiu abrir uma conexão nesta rede. Verifique sua conexão com a internet e tente de novo.</string>
+    <string name="wake_relay_none">Ainda não é possível despertar %1$s fora da sua rede doméstica. Para despertá-lo à distância, configure o Nightjar para desktop em um computador sempre ligado em casa como relé de despertar.</string>
 </resources>

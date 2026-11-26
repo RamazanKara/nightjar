@@ -197,7 +197,7 @@ pub fn client(endpoint: &Endpoint) -> Result<HostClient, Error> {
     })
 }
 
-fn ok<T: Serialize>(result: Result<T, Error>) -> String {
+pub(crate) fn ok<T: Serialize>(result: Result<T, Error>) -> String {
     match result.and_then(|value| {
         serde_json::to_value(value).map_err(|e| Error::Malformed(format!("native API reply: {e}")))
     }) {
@@ -461,6 +461,8 @@ pub fn execute(host: &dyn Host, op: &str, argument: &str) -> String {
 /// Builds the client and runs the operation.
 pub fn request(endpoint: &Endpoint, op: &str, argument: &str) -> String {
     match client(endpoint) {
+        // This device's away wake keys (`crate::wake_relay`); the app keeps them out of logs.
+        Ok(client) if op == crate::wake_relay::KEYS_OP => ok(client.wake_relay()),
         Ok(client) => {
             quick_suspend::execute(&client, op).unwrap_or_else(|| execute(&client, op, argument))
         }

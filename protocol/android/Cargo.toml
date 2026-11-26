@@ -20,6 +20,8 @@ nightjar-core = { path = "../client" }
 # The stream menu's model (src/stream_menu.rs), shared with desktop Nightjar.
 nightjar-policy = { path = "../policy" }
 rubylight-protocol = { path = "../core" }
+# Away wake relay's requester (src/wake_relay.rs).
+rubylight-traverse = { path = "../traverse" }
 jni = "0.21"
 # The microphone's own echo canceller (src/echo.rs): WebRTC's AEC3, ported to Rust.
 sonora = "0.2"

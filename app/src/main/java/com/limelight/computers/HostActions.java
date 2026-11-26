@@ -28,6 +28,7 @@ import com.limelight.nvstream.http.PairingManager.PairState;
 import com.limelight.nvstream.jni.NightjarHostsJni;
 import com.limelight.nvstream.jni.NightjarHttpJni;
 import com.limelight.nvstream.wol.WakeOnLanSender;
+import com.limelight.nvstream.wol.WakeRelayKeys;
 import com.limelight.nvstream.wol.WakeTargets;
 import com.limelight.preferences.LinkGate;
 import com.limelight.ui.NavigationDialogBuilder;
@@ -76,6 +77,7 @@ public final class HostActions {
     private CoopSheet coopSheet;
     private HostWaker waker;
     private ComputerDetails wakeComputer;
+    private AwayWakeFlow awayWake;
     private AlertDialog errorDialog;
     private final java.util.List<AlertDialog> trackedDialogs = new java.util.ArrayList<>();
 
@@ -240,8 +242,50 @@ public final class HostActions {
 
     public void wake(final ComputerDetails computer) {
         final Context app = activity.getApplicationContext();
-        startWake(computer, host -> WakeOnLanSender.sendWolPacket(app, host),
-                task -> new Thread(task, "Wake on LAN").start(), SystemClock::elapsedRealtime);
+        HostWaker.Sender sender = host -> WakeOnLanSender.sendWolPacket(app, host);
+        Executor io = task -> new Thread(task, "Wake on LAN").start();
+        WakeRelayKeys.Kept kept = computer.state == ComputerDetails.State.OFFLINE
+                ? new WakeRelayKeys(app).load(computer.uuid) : null;
+        if (kept != null && wakeFromAway(computer, kept, AwayWake.onPcNetwork(app, computer), sender, io,
+                AwayWakeFlow.JNI, task -> new Thread(task, "Wake relay").start())) {
+            return;
+        }
+        startWake(computer, sender, io, SystemClock::elapsedRealtime);
+    }
+
+    /**
+     * An offline PC that offers waking from away, seen from outside its network ({@link AwayWake#path}): the magic
+     * packets go out as always, and one of its wake relays is asked too, or the user learns there is none yet. False:
+     * today's wake.
+     */
+    @VisibleForTesting
+    boolean wakeFromAway(ComputerDetails computer, WakeRelayKeys.Kept kept, boolean onPcNetwork, HostWaker.Sender sender,
+                         Executor io, AwayWakeFlow.Relay relay, Executor worker) {
+        AwayWake.Path path = AwayWake.path(computer.state == ComputerDetails.State.OFFLINE, onPcNetwork, kept);
+        if (path == AwayWake.Path.LAN) return false;
+        endWake();
+        if (WakeTargets.hasMac(activity, computer)) {
+            final ComputerDetails target = new ComputerDetails(computer);
+            io.execute(() -> {
+                try {
+                    sender.send(target);
+                } catch (IOException e) {
+                    LimeLog.info("Wake: no packet went out to " + target.uuid + " from away: " + e);
+                }
+            });
+        }
+        if (path == AwayWake.Path.NO_RELAY) {
+            showError(computer.displayName(), AwayWake.noRelay(computer.displayName()).in(activity), null);
+            return true;
+        }
+        awayWake = new AwayWakeFlow(this, callbacks, computer, kept, relay, worker, () -> {
+            // A PC that answers by now gets today's wake, which says so.
+            if (!wakeFromAway(computer, kept, onPcNetwork, sender, io, relay, worker)) {
+                startWake(computer, sender, io, SystemClock::elapsedRealtime);
+            }
+        });
+        awayWake.start();
+        return true;
     }
 
     @VisibleForTesting
@@ -289,9 +333,15 @@ public final class HostActions {
         if (waker.isWaiting()) Toast.makeText(activity, R.string.wol_waking_msg, Toast.LENGTH_LONG).show();
     }
 
-    public boolean isWaking() { return waker != null && waker.isWaiting(); }
+    public boolean isWaking() {
+        return (waker != null && waker.isWaiting()) || (awayWake != null && awayWake.isWaiting());
+    }
 
     private void endWake() {
+        if (awayWake != null) {
+            awayWake.cancel();
+            awayWake = null;
+        }
         if (waker != null) {
             boolean waiting = waker.isWaiting();
             waker.cancel();

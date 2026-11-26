@@ -603,4 +603,17 @@
     <string name="stream_dvr_reason_io">ホスト PC がクリップをディスクに書き込めませんでした。</string>
     <string name="stream_dvr_reason_not_streaming">クリップはストリームの実行中にのみ保存できます。</string>
     <string name="stream_dvr_reason_unknown">ホスト PC がクリップを保存できませんでした。</string>
+    <string name="wake_relay_contacting">ウェイクリレー (%1$s) に接続しています…</string>
+    <string name="wake_relay_asking">ウェイクリレー (%1$s) に %2$s のウェイクを依頼しています…</string>
+    <string name="wake_relay_sent">ウェイク信号を送信しました。%1$s の起動を待っています…</string>
+    <string name="wake_relay_awake">%1$s が起動しました。</string>
+    <string name="wake_relay_sent_no_answer">ウェイク信号はホームネットワークに届きましたが、ウェイクリレーからの応答が途絶えました。%1$s はまだ起動中かもしれません。1 分ほどしてからもう一度確認してください。</string>
+    <string name="wake_relay_timed_out">ウェイク信号はホームネットワークに届きましたが、%1$s が 45 秒以内に応答しませんでした。PC のメニューにある Wake-on-LAN の設定を確認してください。</string>
+    <string name="wake_relay_rate_limited">最近 %1$s のウェイク要求が多すぎます。%2$d 秒後にもう一度お試しください。</string>
+    <string name="wake_relay_refused">ウェイクリレーがこの要求を拒否しました。このデバイスの時計が正しいか確認するか、一度ホームネットワークから接続してウェイクのアクセス権を更新してください。</string>
+    <string name="wake_relay_offline">ウェイクリレー (%1$s) がオフラインのため、外出先から %2$s をウェイクできませんでした。リレーの電源を入れるか、ホームネットワークから %2$s をウェイクしてください。</string>
+    <string name="wake_relay_unreachable">Nightjar はウェイクリレー (%1$s) に接続できませんでした。電源が入っていてオンラインか確認してから、もう一度お試しください。</string>
+    <string name="wake_relay_elsewhere">ウェイクリレー (%1$s) は %2$s と同じネットワークにないため、ウェイクできませんでした。</string>
+    <string name="wake_relay_network">Nightjar はこのネットワークで接続を開けませんでした。インターネット接続を確認して、もう一度お試しください。</string>
+    <string name="wake_relay_none">%1$s はまだホームネットワークの外からウェイクできません。外出先からウェイクするには、自宅の常時オンのコンピューターでデスクトップ版 Nightjar をウェイクリレーとして設定してください。</string>
 </resources>

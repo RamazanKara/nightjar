@@ -603,4 +603,17 @@
     <string name="stream_dvr_reason_io">El PC anfitrión no pudo escribir el clip en su disco.</string>
     <string name="stream_dvr_reason_not_streaming">Los clips solo se pueden guardar mientras hay una transmisión en curso.</string>
     <string name="stream_dvr_reason_unknown">El PC anfitrión no pudo guardar el clip.</string>
+    <string name="wake_relay_contacting">Contactando con tu relé de activación (%1$s)…</string>
+    <string name="wake_relay_asking">Pidiendo a tu relé de activación (%1$s) que active %2$s…</string>
+    <string name="wake_relay_sent">Señal de activación enviada. Esperando a que %1$s se inicie…</string>
+    <string name="wake_relay_awake">%1$s está activo.</string>
+    <string name="wake_relay_sent_no_answer">La señal de activación llegó a tu red doméstica, pero tu relé de activación dejó de responder. Puede que %1$s aún se esté iniciando; vuelve a comprobarlo en un minuto.</string>
+    <string name="wake_relay_timed_out">La señal de activación llegó a tu red doméstica, pero %1$s no respondió en 45 segundos. Revisa Configurar Wake-on-LAN en el menú del PC.</string>
+    <string name="wake_relay_rate_limited">Demasiadas solicitudes de activación para %1$s últimamente. Vuelve a intentarlo en %2$d s.</string>
+    <string name="wake_relay_refused">Tu relé de activación rechazó la solicitud. Comprueba que la hora de este dispositivo sea correcta o conéctate una vez desde tu red doméstica para renovar el acceso de activación.</string>
+    <string name="wake_relay_offline">Tu relé de activación (%1$s) está desconectado, así que no se pudo activar %2$s a distancia. Enciende el relé o activa %2$s desde tu red doméstica.</string>
+    <string name="wake_relay_unreachable">Nightjar no pudo comunicarse con tu relé de activación (%1$s). Comprueba que esté encendido y conectado y vuelve a intentarlo.</string>
+    <string name="wake_relay_elsewhere">Tu relé de activación (%1$s) no está en la misma red que %2$s, así que no pudo activarlo.</string>
+    <string name="wake_relay_network">Nightjar no pudo abrir una conexión en esta red. Comprueba tu conexión a internet y vuelve a intentarlo.</string>
+    <string name="wake_relay_none">Aún no se puede activar %1$s desde fuera de tu red doméstica. Para activarlo a distancia, configura Nightjar para escritorio en un ordenador de casa siempre encendido como relé de activación.</string>
 </resources>

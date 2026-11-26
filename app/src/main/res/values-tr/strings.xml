@@ -603,4 +603,17 @@
     <string name="stream_dvr_reason_io">Ana bilgisayar klibi diskine yazamadı.</string>
     <string name="stream_dvr_reason_not_streaming">Klipler yalnızca bir yayın sürerken kaydedilebilir.</string>
     <string name="stream_dvr_reason_unknown">Ana bilgisayar klibi kaydedemedi.</string>
+    <string name="wake_relay_contacting">Uyandırma rölenize (%1$s) bağlanılıyor…</string>
+    <string name="wake_relay_asking">Uyandırma rölenizden (%1$s) %2$s cihazını uyandırması isteniyor…</string>
+    <string name="wake_relay_sent">Uyandırma sinyali gönderildi. %1$s cihazının açılması bekleniyor…</string>
+    <string name="wake_relay_awake">%1$s uyandı.</string>
+    <string name="wake_relay_sent_no_answer">Uyandırma sinyali ev ağınıza ulaştı, ancak uyandırma röleniz yanıt vermeyi bıraktı. %1$s hâlâ açılıyor olabilir; bir dakika sonra yeniden kontrol edin.</string>
+    <string name="wake_relay_timed_out">Uyandırma sinyali ev ağınıza ulaştı, ancak %1$s 45 saniye içinde yanıt vermedi. Bilgisayar menüsündeki Wake-on-LAN kurulumunu kontrol edin.</string>
+    <string name="wake_relay_rate_limited">Son zamanlarda %1$s için çok fazla uyandırma isteği gönderildi. %2$d sn sonra yeniden deneyin.</string>
+    <string name="wake_relay_refused">Uyandırma röleniz isteği reddetti. Bu cihazın saatinin doğru olduğundan emin olun veya uyandırma erişimini yenilemek için ev ağınızdan bir kez bağlanın.</string>
+    <string name="wake_relay_offline">Uyandırma röleniz (%1$s) çevrimdışı olduğu için %2$s uzaktan uyandırılamadı. Röleyi açın veya %2$s cihazını ev ağınızdan uyandırın.</string>
+    <string name="wake_relay_unreachable">Nightjar uyandırma rölenize (%1$s) ulaşamadı. Açık ve çevrimiçi olduğundan emin olup yeniden deneyin.</string>
+    <string name="wake_relay_elsewhere">Uyandırma röleniz (%1$s), %2$s ile aynı ağda olmadığı için onu uyandıramadı.</string>
+    <string name="wake_relay_network">Nightjar bu ağda bağlantı açamadı. İnternet bağlantınızı kontrol edip yeniden deneyin.</string>
+    <string name="wake_relay_none">%1$s henüz ev ağınızın dışından uyandırılamıyor. Uzaktan uyandırmak için evde sürekli açık bir bilgisayardaki masaüstü Nightjar\'ı uyandırma rölesi olarak ayarlayın.</string>
 </resources>

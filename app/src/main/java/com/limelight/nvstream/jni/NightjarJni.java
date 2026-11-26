@@ -403,6 +403,39 @@ public final class NightjarJni {
         return nativeOpenPlayCall(request);
     }
 
+    // --- Away wake relay (wake_relay.rs) ---
+
+    /** Each step of a wake from away, as {@code {"stage", "relay", ...}} JSON, on the requesting thread. */
+    public interface WakeRelayListener {
+        void progress(String json);
+    }
+
+    /** A new wake request's id, for {@link #wakeRelayCancel}; {@link #wakeRelayRequest} with it ends it. */
+    public static long wakeRelayCreate() {
+        ensureLoaded();
+        return nativeWakeRelayCreate();
+    }
+
+    public static void wakeRelayCancel(long id) {
+        ensureLoaded();
+        nativeWakeRelayCancel(id);
+    }
+
+    /**
+     * Asks the bundle's relays in turn to wake the PC; blocks a minute or more, so never on the main thread.
+     * Returns {@code {"outcome", "relays", "retry_after"}} JSON.
+     */
+    public static String wakeRelayRequest(long id, String bundle, WakeRelayListener listener) {
+        ensureLoaded();
+        return nativeWakeRelayRequest(id, bundle, listener);
+    }
+
+    private static native long nativeWakeRelayCreate();
+
+    private static native void nativeWakeRelayCancel(long id);
+
+    private static native String nativeWakeRelayRequest(long id, String bundle, WakeRelayListener listener);
+
     public static String gameInfoCall(String request) {
         ensureLoaded();
         return nativeGameInfoCall(request);

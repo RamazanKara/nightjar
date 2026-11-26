@@ -58,6 +58,7 @@ mod touchpad;
 pub mod update;
 pub mod uri;
 mod usb;
+pub mod wake_relay;
 pub mod wol;
 
 use std::time::Duration;

@@ -603,4 +603,17 @@
     <string name="stream_dvr_reason_io">PC chủ không thể ghi clip vào ổ đĩa.</string>
     <string name="stream_dvr_reason_not_streaming">Chỉ có thể lưu clip khi luồng đang chạy.</string>
     <string name="stream_dvr_reason_unknown">PC chủ không thể lưu clip.</string>
+    <string name="wake_relay_contacting">Đang liên hệ thiết bị chuyển tiếp đánh thức (%1$s)…</string>
+    <string name="wake_relay_asking">Đang yêu cầu thiết bị chuyển tiếp đánh thức (%1$s) đánh thức %2$s…</string>
+    <string name="wake_relay_sent">Đã gửi tín hiệu đánh thức. Đang chờ %1$s khởi động…</string>
+    <string name="wake_relay_awake">%1$s đã thức.</string>
+    <string name="wake_relay_sent_no_answer">Tín hiệu đánh thức đã đến mạng gia đình của bạn, nhưng thiết bị chuyển tiếp đánh thức đã ngừng phản hồi. %1$s có thể vẫn đang khởi động, hãy kiểm tra lại sau một phút.</string>
+    <string name="wake_relay_timed_out">Tín hiệu đánh thức đã đến mạng gia đình của bạn, nhưng %1$s không phản hồi trong vòng 45 giây. Hãy kiểm tra Thiết lập Wake-on-LAN trong menu PC.</string>
+    <string name="wake_relay_rate_limited">Gần đây có quá nhiều yêu cầu đánh thức %1$s. Hãy thử lại sau %2$d giây.</string>
+    <string name="wake_relay_refused">Thiết bị chuyển tiếp đánh thức đã từ chối yêu cầu. Hãy kiểm tra đồng hồ của thiết bị này có đúng không, hoặc kết nối một lần từ mạng gia đình để làm mới quyền đánh thức.</string>
+    <string name="wake_relay_offline">Thiết bị chuyển tiếp đánh thức (%1$s) đang ngoại tuyến nên không thể đánh thức %2$s từ xa. Hãy bật thiết bị chuyển tiếp hoặc đánh thức %2$s từ mạng gia đình.</string>
+    <string name="wake_relay_unreachable">Nightjar không thể kết nối tới thiết bị chuyển tiếp đánh thức (%1$s). Hãy kiểm tra thiết bị đã bật và trực tuyến, rồi thử lại.</string>
+    <string name="wake_relay_elsewhere">Thiết bị chuyển tiếp đánh thức (%1$s) không cùng mạng với %2$s nên không thể đánh thức nó.</string>
+    <string name="wake_relay_network">Nightjar không thể mở kết nối trên mạng này. Hãy kiểm tra kết nối internet rồi thử lại.</string>
+    <string name="wake_relay_none">Chưa thể đánh thức %1$s từ bên ngoài mạng gia đình. Để đánh thức từ xa, hãy thiết lập Nightjar cho máy tính trên một máy tính luôn bật ở nhà làm thiết bị chuyển tiếp đánh thức.</string>
 </resources>

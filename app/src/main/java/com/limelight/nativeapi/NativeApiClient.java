@@ -140,6 +140,16 @@ public final class NativeApiClient {
         }
     }
 
+    /**
+     * This device's keys for waking the PC from away (GET /wake/relay): the bundle's JSON, or null when the PC hands
+     * this device none. Only for a host with {@code HostCapabilities.Feature.AWAY_WAKE_RELAY}. It holds secrets: it
+     * never goes into a log.
+     */
+    public String wakeRelayBundle() throws NativeApiException {
+        Json.Obj bundle = call("wake_relay", "").optObject("bundle");
+        return bundle == null ? null : bundle.toString();
+    }
+
     /** The PC's wake targets. Only for a host that advertises {@link NativeCapabilities#WAKE}. */
     public NativeWake wake() throws NativeApiException {
         try {
