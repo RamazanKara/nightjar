@@ -88,8 +88,10 @@ public class TvScreensPreviewTest {
             describe(screen, name + " search");
             capture(screen, new File(directory, "tv-settings-search.png"));
         }
-        try (ActivityController<ToolbarIconTintTest.Screen> controller =
-                     Robolectric.buildActivity(ToolbarIconTintTest.Screen.class).setup().visible()) {
+        // A screen themed as the app's are (AppTheme.apply): one that only set AppTheme drew the menu's rows in the day
+        // palette's dark ink on a TV's night glass, which no screen of the app does.
+        try (ActivityController<AppThemeTest.Screen> controller =
+                     Robolectric.buildActivity(AppThemeTest.Screen.class).setup().visible()) {
             Activity screen = controller.get();
             ActionSheet sheet = new ActionSheet(screen, "homepc");
             var pair = sheet.addAction(R.drawable.ic_lock, screen.getString(R.string.pcview_menu_pair_pc));
