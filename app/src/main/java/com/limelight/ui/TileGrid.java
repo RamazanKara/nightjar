@@ -107,6 +107,7 @@ public final class TileGrid extends ViewGroup {
         private boolean capShown = true;
         private String hotkey;
         private boolean hotkeyAtEnd;
+        private float endInset = -1;
         private boolean isSwitch;
 
         public Tile(Context context) {
@@ -131,6 +132,31 @@ public final class TileGrid extends ViewGroup {
         void setHotkeyAtEnd(boolean atEnd) {
             hotkeyAtEnd = atEnd;
             invalidate();
+        }
+
+        /** The cap at the end, {@code inset} pixels in from it. */
+        void setHotkeyAtEnd(boolean atEnd, float inset) {
+            endInset = inset;
+            setHotkeyAtEnd(atEnd);
+        }
+
+        private float capWidth(float text) {
+            return Math.max(text + capText * 0.8f, capText * 1.6f);
+        }
+
+        private float capInset() {
+            if (!hotkeyAtEnd) return cornerInset;
+            return endInset >= 0 ? endInset : 2 * cornerInset + 4 * dp;
+        }
+
+        /** How far in from its edge the cap's far side stands, in pixels: what a label beside it must leave free. */
+        float capReach() {
+            if (hotkey == null) return 0;
+            paint.setTextSize(capText);
+            paint.setFakeBoldText(true);
+            float reach = capInset() + capWidth(paint.measureText(hotkey));
+            paint.setFakeBoldText(false);
+            return reach;
         }
 
         /** Whether the cap is drawn; its button works either way. */
@@ -196,8 +222,8 @@ public final class TileGrid extends ViewGroup {
                 paint.setTextSize(capText);
                 paint.setFakeBoldText(true);
                 float text = paint.measureText(hotkey);
-                float w = Math.max(text + capText * 0.8f, capText * 1.6f), h = capText * 1.45f;
-                float inset = hotkeyAtEnd ? 2 * cornerInset + 4 * dp : cornerInset;
+                float w = capWidth(text), h = capText * 1.45f;
+                float inset = capInset();
                 float left = rtl != hotkeyAtEnd ? getWidth() - inset - w : inset;
                 float top = hotkeyAtEnd ? (getHeight() - h) / 2 : cornerInset - dp;
                 box.set(left, top, left + w, top + h);

@@ -265,13 +265,13 @@ final class ControlCenterCards {
         card.setInsetTop(0);
         card.setInsetBottom(0);
         int side = res.getDimensionPixelSize(R.dimen.control_center_card_pad);
-        boolean cap = hotkey != null && capsShown;
-        // The cap stands at the end, so the end padding makes room for it.
-        card.setPaddingRelative(side, side / 2, cap ? side * 3 : side, side / 2);
-        card.setBackground(new Tint(context, Tint.Kind.CARD, res.getDimension(R.dimen.nj_radius_control)));
         card.setHotkey(hotkey);
-        card.setHotkeyAtEnd(true);
+        card.setHotkeyAtEnd(true, side);
         card.setCapShown(capsShown);
+        boolean cap = hotkey != null && capsShown;
+        // The cap stands at the end as far in as the icon at the start, and the end padding makes room for it as wide as it is.
+        card.setPaddingRelative(side, side / 2, cap ? Math.round(card.capReach()) + side / 2 : side, side / 2);
+        card.setBackground(new Tint(context, Tint.Kind.CARD, res.getDimension(R.dimen.nj_radius_control)));
         card.setOn(on);
         if (television(context)) card.setStateListAnimator(Motion.controlFocus(context));
         write(card, label, state);

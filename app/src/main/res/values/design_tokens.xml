@@ -776,7 +776,9 @@
     <integer name="nj_tier_probe_min_budget_hz">120</integer>
     <dimen name="nj_size_control_center_width">408dp</dimen>
     <dimen name="nj_size_control_center_width_compact">352dp</dimen>
+    <dimen name="nj_size_control_center_width_tv">456dp</dimen>
     <dimen name="nj_size_control_center_rail">68dp</dimen>
+    <dimen name="nj_size_control_center_rail_tv">88dp</dimen>
     <dimen name="nj_size_control_center_card">76dp</dimen>
     <dimen name="nj_size_preview_card">124dp</dimen>
     <color name="nj_surface_control_center_fill">#CC0E1016</color>

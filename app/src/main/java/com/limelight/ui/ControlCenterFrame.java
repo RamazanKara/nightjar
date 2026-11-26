@@ -144,8 +144,9 @@ final class ControlCenterFrame extends ViewGroup implements NestedScrollingParen
     /** The dock's width in a window this wide: the token's, or what the window leaves. */
     int dockWidth(int width) {
         int gap = television ? safeTv : margin;
-        int wanted = getResources().getDimensionPixelSize(compact ? R.dimen.nj_size_control_center_width_compact
-                : R.dimen.nj_size_control_center_width);
+        // A TV's is wider: its rail and cards carry the 10-foot type, so their names fit on it whole.
+        int wanted = getResources().getDimensionPixelSize(television ? R.dimen.nj_size_control_center_width_tv
+                : compact ? R.dimen.nj_size_control_center_width_compact : R.dimen.nj_size_control_center_width);
         return Math.min(wanted, width - insets.left - insets.right - gap * 2);
     }
 

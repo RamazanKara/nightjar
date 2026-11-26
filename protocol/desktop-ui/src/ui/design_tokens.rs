@@ -538,7 +538,9 @@ mod values {
     pub const TIER_PROBE_MIN_BUDGET_HZ: u32 = 120;
     pub const SIZE_CONTROL_CENTER_WIDTH: f32 = 408.0;
     pub const SIZE_CONTROL_CENTER_WIDTH_COMPACT: f32 = 352.0;
+    pub const SIZE_CONTROL_CENTER_WIDTH_TV: f32 = 456.0;
     pub const SIZE_CONTROL_CENTER_RAIL: f32 = 68.0;
+    pub const SIZE_CONTROL_CENTER_RAIL_TV: f32 = 88.0;
     pub const SIZE_CONTROL_CENTER_CARD: f32 = 76.0;
     pub const SIZE_PREVIEW_CARD: f32 = 124.0;
     pub const SURFACE_CONTROL_CENTER_FILL: Color32 = Color32::from_rgba_premultiplied(11, 13, 18, 204);

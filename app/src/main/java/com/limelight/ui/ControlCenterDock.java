@@ -212,7 +212,8 @@ public final class ControlCenterDock extends Dialog implements ControlCenterFram
         rail.addView(hintForward, new LinearLayout.LayoutParams(hint));
         panel.addView(rail, sheet ? new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT) : new LinearLayout.LayoutParams(
-                res.getDimensionPixelSize(R.dimen.nj_size_control_center_rail), LinearLayout.LayoutParams.MATCH_PARENT));
+                res.getDimensionPixelSize(television ? R.dimen.nj_size_control_center_rail_tv : R.dimen.nj_size_control_center_rail),
+                LinearLayout.LayoutParams.MATCH_PARENT));
         panel.addView(column, sheet ? new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1)
                 : new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1));
         fillRail();

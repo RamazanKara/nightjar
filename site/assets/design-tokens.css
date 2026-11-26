@@ -775,7 +775,9 @@
   --nj-tier-probe-min-budget-hz: 120;
   --nj-size-control-center-width: 408px;
   --nj-size-control-center-width-compact: 352px;
+  --nj-size-control-center-width-tv: 456px;
   --nj-size-control-center-rail: 68px;
+  --nj-size-control-center-rail-tv: 88px;
   --nj-size-control-center-card: 76px;
   --nj-size-preview-card: 124px;
   --nj-surface-control-center-fill: #0E1016CC;

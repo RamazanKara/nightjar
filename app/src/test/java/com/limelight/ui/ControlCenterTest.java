@@ -307,7 +307,8 @@ public class ControlCenterTest {
             assertEquals(ControlCenterModel.DOCK, dock.placement());
             assertFalse(dock.frame().sheet());
             View frame = dock.frame(), panel = dock.panel();
-            assertEquals(res.getDimensionPixelSize(R.dimen.nj_size_control_center_width), panel.getWidth());
+            // A TV's dock and rail are wider than a tablet's: they carry the 10-foot type.
+            assertEquals(res.getDimensionPixelSize(R.dimen.nj_size_control_center_width_tv), panel.getWidth());
             assertEquals("at the end edge, inside the overscan", frame.getWidth() - safe, panel.getRight());
             assertEquals(safe, panel.getTop());
             assertEquals(frame.getHeight() - safe, panel.getBottom());
@@ -317,10 +318,21 @@ public class ControlCenterTest {
             assertEquals("the rail runs down", first.getLeft(), second.getLeft());
             assertTrue(second.getTop() >= first.getBottom());
             View rail = rail(dock, modules.get(0)), page = dock.page().scroll();
-            assertEquals(res.getDimensionPixelSize(R.dimen.nj_size_control_center_rail), rail.getWidth());
+            assertEquals(res.getDimensionPixelSize(R.dimen.nj_size_control_center_rail_tv), rail.getWidth());
             assertEquals("at the dock's start side", inWindow(panel)[0], inWindow(rail)[0]);
             assertTrue("the page beside it", inWindow(page)[0] >= inWindow(rail)[0] + rail.getWidth());
             assertEquals(2, menu.grid().columns());
+            for (String module : modules) {
+                android.text.Layout name = dock.railEntry(module).getLayout();
+                assertEquals(module + "'s name whole on the rail", 0, name.getEllipsisCount(name.getLineCount() - 1));
+            }
+            for (int i = 0; i < menu.grid().getChildCount(); i++) {
+                if (!(menu.grid().getChildAt(i) instanceof TileGrid.Tile)) continue;
+                TileGrid.Tile card = (TileGrid.Tile) menu.grid().getChildAt(i);
+                // A card hyphenates only a word wider than the room its cap leaves.
+                assertEquals(card.getText() + " beside its cap, no word broken", android.text.Layout.HYPHENATION_FREQUENCY_NONE,
+                        card.getHyphenationFrequency());
+            }
             menu.sheet().dismiss();
         }
     }
