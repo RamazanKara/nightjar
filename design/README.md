@@ -109,11 +109,11 @@ Every tile the stream menu had sits in exactly one module, so nothing is lost; a
 
 ## Settings
 
-Four sections, Recommended first: **Recommended**, **Controls**, **Audio**, **App**, then the **More settings** fold (Presets, Profiles, Video, Display & image, Streaming, Advanced, Debug). The fold is one row until opened and remembers nothing: it opens closed.
+Four sections, Recommended first: **Recommended**, **Controls**, **Audio**, **App**, then the **More settings** fold (Presets, Profiles, Video, Display & image, Streaming, Advanced, Debug). The fold is one row until opened; whether it was open is kept as UI state (`settings_more_open`), never as a setting.
 
 **Preview cards** replace the rows whose words nobody can picture: Frame pacing, HDR and tone mapping, Upscaling and sharpness, Video scaling. Each choice is a card `size.previewCard` tall with a small drawn picture of what it does (a frame timeline, a tone curve, a pixel edge, a screen with bars), its name and one line. The chosen card wears the amber container; focus is the ring. The drawings are a few shapes at run time, the same on both apps, and never screenshots. The setting, its key and its values are unchanged: only the control is new.
 
-**Presets** are four outcomes, each one tap: Native (lowest latency), Smooth TV, Wi-Fi / Away, Battery saver. They set existing settings only and read Custom as soon as one of those is changed by hand.
+**Presets** are four outcomes, each one tap: Native (recommended), Smooth TV, Wi-Fi / Away, Battery saver. Native is not labelled "lowest latency": no measurement of ours backs that claim. They set existing settings only and read Custom as soon as one of those is changed by hand.
 
 A setting's help opens from a small pill that names the real button: the `(i)` cap, or Y, △, X, or "Hold OK" (`input_glyphs`).
 
