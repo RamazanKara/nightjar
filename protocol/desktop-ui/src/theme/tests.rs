@@ -307,7 +307,10 @@ fn oled_is_the_night_palette_on_black() {
 
 #[test]
 fn by_day_every_role_has_its_own_colour_and_text_is_dark_on_light() {
-    for i in 0..COUNT {
+    // The words on a red button are white on the night's red and on the day's.
+    let on_red = usize::from(ON_ERROR_CONTAINER.0);
+    assert_ne!(color(Look::Day, ERROR_CONTAINER), color(Look::Night, ERROR_CONTAINER));
+    for i in (0..COUNT).filter(|i| *i != on_red) {
         assert_ne!(DAY[i], NORMAL[i], "role {i} has a day colour of its own");
     }
     for ground in [NIGHT, SURFACE_LOWEST, SURFACE, SURFACE_HIGHEST] {

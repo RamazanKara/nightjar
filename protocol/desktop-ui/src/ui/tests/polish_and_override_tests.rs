@@ -558,7 +558,7 @@ fn only_what_cant_be_taken_back_is_red() {
         fn walk(shape: &egui::Shape, out: &mut usize) {
             match shape {
                 egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| walk(s, out)),
-                egui::Shape::Mesh(mesh) if mesh.vertices.iter().any(|v| v.color.r() > 0x60 && v.color.g() == 0 && v.color.b() < 0x20 && v.color.a() > 0x80) => *out += 1,
+                egui::Shape::Mesh(mesh) if mesh.vertices.iter().any(|v| v.color.r() > 0x60 && v.color.g() < v.color.r() / 3 && v.color.b() < v.color.r() / 3 && v.color.a() > 0x80) => *out += 1,
                 _ => {}
             }
         }
