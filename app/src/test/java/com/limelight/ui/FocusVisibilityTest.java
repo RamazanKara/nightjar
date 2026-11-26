@@ -369,7 +369,8 @@ public class FocusVisibilityTest {
         plusIsRound();
     }
 
-    @Test @Config(qualifiers = "television")
+    // The TV canvas: a bare television qualifier is a 320x470 dp screen, which ViewportScaler draws at half size.
+    @Test @Config(qualifiers = "w960dp-h540dp-land-television")
     public void thePlusIsARoundGlassButtonThatShowsFocusOnTelevision() {
         plusIsRound();
     }

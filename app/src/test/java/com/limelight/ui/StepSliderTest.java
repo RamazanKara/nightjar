@@ -145,10 +145,15 @@ public class StepSliderTest {
         for (File file : sources) {
             String source = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
             if (!file.getName().equals("StepSlider.java")) assertFalse(file.getPath(), source.contains("LABEL_GONE"));
-            assertFalse(file.getPath(), source.contains("labelBehavior=\"gone\""));
+            // The layout editor's 7.0 slider says its value at the row's end at all times, not in a floating label.
+            boolean valueBeside = file.getName().equals("pad_editor_panel.xml") && source.contains("@+id/pad_studio_opacity_value");
+            assertFalse(file.getPath(), source.contains("labelBehavior=\"gone\"") && !valueBeside);
             if (source.contains("<com.google.android.material.slider.Slider")) {
                 sliders++;
-                assertTrue(file.getPath(), source.contains("labelBehavior=\"floating\""));
+                assertTrue(file.getPath(), source.contains("labelBehavior=\"floating\"") || valueBeside);
+            }
+            if (file.getName().equals("PadEditorPanel.java")) {
+                assertTrue("the value beside the slider follows it", source.contains("opacityText.setText(percent(Math.round(value)))"));
             }
             if (source.contains("new Slider(")) {
                 sliders++;

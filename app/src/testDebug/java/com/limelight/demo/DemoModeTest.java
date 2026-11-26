@@ -360,7 +360,8 @@ public class DemoModeTest {
         try {
             stream.get().onBackPressed();
             StreamMenu menu = ReflectionHelpers.getField(stream.get(), "menu");
-            MaterialButton microphone = menu.row(StreamMenu.Item.MICROPHONE);
+            // The Control Center opens on Quick; the microphone is on Audio.
+            MaterialButton microphone = menu.reveal(StreamMenu.Item.MICROPHONE);
             assertNotNull(microphone);
             assertTrue(microphone.isChecked());
             microphone.performClick();

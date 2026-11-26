@@ -86,6 +86,10 @@ public class UiModeTest {
     public void handheldOnATelevisionReportsTheNormalType() {
         Configuration television = new Configuration(context.getResources().getConfiguration());
         television.uiMode = (television.uiMode & ~Configuration.UI_MODE_TYPE_MASK) | Configuration.UI_MODE_TYPE_TELEVISION;
+        // A TV that reports the 960x540 dp canvas: ViewportScaler leaves it as it is, and normalises any other.
+        television.screenWidthDp = 960;
+        television.screenHeightDp = 540;
+        television.smallestScreenWidthDp = 540;
         Context onTv = context.createConfigurationContext(television);
         assertEquals(Configuration.UI_MODE_TYPE_TELEVISION, type(onTv));
         mode("handheld");
