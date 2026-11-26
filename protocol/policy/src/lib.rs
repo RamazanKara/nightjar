@@ -17,6 +17,7 @@ pub mod control_center;
 pub mod controller;
 pub mod controllers;
 pub mod display_profile;
+pub mod doctor_v2;
 pub mod full_chroma;
 pub mod game_info;
 pub mod gamepad_constants;
