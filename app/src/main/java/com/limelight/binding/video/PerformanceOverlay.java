@@ -258,7 +258,8 @@ public final class PerformanceOverlay {
     static final int MEDIA_OK = 0xff5fd38d;
     static final int MEDIA_WARN = 0xfff5d06b;
     static final int MEDIA_ERROR = 0xffffb4ab;
-    static final int MEDIA_INK_2 = 0xffcdd0dc;
+    // color.labelSecondary, as night_on_surface_variant takes it from the 7.0 tokens.
+    static final int MEDIA_INK_2 = 0xffc7cdd9;
     static final int MEDIA_INFO = 0xffafc8e9;
 
     static int healthColor(Health health) {

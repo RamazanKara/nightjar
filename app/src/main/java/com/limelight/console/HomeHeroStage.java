@@ -42,10 +42,10 @@ final class HomeHeroStage {
     /** A phone held upright: the hero's words end this far down the window. */
     static final float WORDS_FOOT = 1f / 3f;
     /**
-     * What a phone keeps under its hero for the first shelf, in dp: its heading and the upper half of its covers, less the
-     * strip the list's own padding already keeps free over the tab bar.
+     * What a phone keeps under its hero for the first shelf, in dp: its heading and the upper half of its covers. The list's
+     * bottom padding ends at the tab bar's top, so none of this may reach into it.
      */
-    static final int SHELF_PEEK_DP = HomeHero.SHELF_HEADING_DP + HomeHero.SHELF_HALF_DP - 28;
+    static final int SHELF_PEEK_DP = HomeHero.SHELF_HEADING_DP + HomeHero.SHELF_HALF_DP;
 
     private final Activity activity;
     private final BackdropView backdrop;
