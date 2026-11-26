@@ -185,6 +185,7 @@ fn picture(kind: i32, luma: &mut [u8], chroma: &mut [u8], linesize: i32) -> Fram
         width: 3, height: 2, kind, ten_bit: i32::from(kind == FRAME_P010), pts: 0,
         data: [luma.as_mut_ptr(), chroma.as_mut_ptr(), ptr::null_mut()],
         linesize: [linesize; 3], color_space: 9, color_range: 1, color_trc: 18,
+        centred_chroma: false,
     }
 }
 
@@ -221,6 +222,7 @@ fn high_bit_planes_are_uploaded_with_their_codes_in_the_low_bits() {
         width: 3, height: 1, kind: FRAME_YUV444P16, ten_bit: 1, pts: 0,
         data: [planes[0].as_mut_ptr(), planes[1].as_mut_ptr(), planes[2].as_mut_ptr()],
         linesize: [8; 3], color_space: 1, color_range: 1, color_trc: 1,
+        centred_chroma: false,
     };
     let layout = PlanarLayout::of(&info).unwrap();
     assert_eq!(layout, PlanarLayout { width: 3, height: 1, chroma444: true, ten_bit: true });

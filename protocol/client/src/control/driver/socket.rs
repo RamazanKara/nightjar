@@ -246,6 +246,81 @@ fn poll_readable(_: &UdpSocket, _: Duration) -> io::Result<()> {
     Err(io::ErrorKind::Unsupported.into())
 }
 
+/// Receives a UDP datagram on Unix, turning kernel-truncated datagrams (`MSG_TRUNC`) into
+/// `EMSGSIZE` so [`ControlSocket::receive`] drops oversized packets cleanly like Winsock's
+/// `WSAEMSGSIZE` instead of handing truncated payloads to ENet.
+#[cfg(unix)]
+fn recv_datagram(
+    socket: &UdpSocket,
+    buffer: &mut [u8; MTU_MAX],
+) -> io::Result<Option<(SocketAddr, PacketReceived)>> {
+    use std::net::SocketAddrV6;
+    use std::os::unix::io::AsRawFd;
+
+    // SAFETY: zeroed `sockaddr_storage` and `msghdr` are valid before populating the buffer and address slots.
+    let mut storage: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+    let mut iov = libc::iovec {
+        iov_base: buffer.as_mut_ptr().cast(),
+        iov_len: buffer.len(),
+    };
+    let mut msg: libc::msghdr = unsafe { std::mem::zeroed() };
+    msg.msg_name = (&raw mut storage).cast();
+    msg.msg_namelen = std::mem::size_of::<libc::sockaddr_storage>() as libc::socklen_t;
+    msg.msg_iov = &raw mut iov;
+    msg.msg_iovlen = 1;
+
+    // SAFETY: `socket` is open and `msg` points to valid `storage` and `buffer` for this call.
+    let n = unsafe { libc::recvmsg(socket.as_raw_fd(), &raw mut msg, 0) };
+    if n < 0 {
+        let error = io::Error::last_os_error();
+        return if error.kind() == io::ErrorKind::WouldBlock {
+            Ok(None)
+        } else {
+            Err(error)
+        };
+    }
+    let length = n as usize;
+    if (msg.msg_flags & libc::MSG_TRUNC) != 0 || length > buffer.len() {
+        return Err(io::Error::from_raw_os_error(libc::EMSGSIZE));
+    }
+
+    let address = match i32::from(storage.ss_family) {
+        x if x == libc::AF_INET
+            && (msg.msg_namelen as usize) >= std::mem::size_of::<libc::sockaddr_in>() =>
+        {
+            // SAFETY: `ss_family == AF_INET` and `msg_namelen` covers `sockaddr_in`.
+            let addr = unsafe {
+                std::ptr::read_unaligned((&raw const storage).cast::<libc::sockaddr_in>())
+            };
+            SocketAddr::from((
+                std::net::Ipv4Addr::from(addr.sin_addr.s_addr.to_ne_bytes()),
+                u16::from_be(addr.sin_port),
+            ))
+        }
+        x if x == libc::AF_INET6
+            && (msg.msg_namelen as usize) >= std::mem::size_of::<libc::sockaddr_in6>() =>
+        {
+            // SAFETY: `ss_family == AF_INET6` and `msg_namelen` covers `sockaddr_in6`.
+            let addr = unsafe {
+                std::ptr::read_unaligned((&raw const storage).cast::<libc::sockaddr_in6>())
+            };
+            SocketAddr::V6(SocketAddrV6::new(
+                std::net::Ipv6Addr::from(addr.sin6_addr.s6_addr),
+                u16::from_be(addr.sin6_port),
+                addr.sin6_flowinfo,
+                addr.sin6_scope_id,
+            ))
+        }
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "unexpected sender address family",
+            ));
+        }
+    };
+    Ok(Some((address, PacketReceived::Complete(length))))
+}
+
 impl ControlSocket {
     /// Sleeps until a datagram arrives or `timeout` passes. A readiness poll leaves the socket
     /// non-blocking; if the poll fails, a blocking peek waits instead.
@@ -355,7 +430,11 @@ impl rusty_enet::Socket for ControlSocket {
         }
         let mut skipped = 0usize;
         loop {
-            let (address, length) = match rusty_enet::Socket::receive(&mut self.socket, buffer) {
+            #[cfg(unix)]
+            let received = recv_datagram(&self.socket, buffer);
+            #[cfg(not(unix))]
+            let received = rusty_enet::Socket::receive(&mut self.socket, buffer);
+            let (address, length) = match received {
                 Ok(Some((address, PacketReceived::Complete(length)))) => (address, length),
                 Ok(other) => return Ok(other),
                 Err(error) if datagram_lost(&error) => {

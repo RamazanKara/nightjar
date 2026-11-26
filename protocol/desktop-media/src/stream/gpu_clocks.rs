@@ -47,6 +47,7 @@ fn level_mhz(line: &str) -> Option<u32> {
 }
 
 /// The amdgpu cards of `drm` (a `/sys/class/drm`), by `(card_name, device_dir, pci_device_id)`.
+#[cfg(test)]
 pub fn amd_cards(drm: &Path) -> Vec<(String, PathBuf)> {
     amd_cards_with_pci(drm)
         .into_iter()
@@ -140,6 +141,7 @@ pub struct Sampler {
 
 impl Sampler {
     /// The sampler of the first amdgpu card, None without one (or when the thread cannot start).
+    #[cfg(test)]
     pub fn start() -> Option<Self> {
         Self::start_for_device(None)
     }

@@ -176,8 +176,9 @@ fn the_local_address_finds_its_interface() {
 #[cfg(target_os = "linux")]
 #[test]
 fn a_pc_on_this_machine_is_reached_over_loopback_which_does_not_tell() {
-    assert_eq!(interface_name_toward(IpAddr::from([127, 0, 0, 1])).as_deref(), Ok("lo"));
-    let lo = interface_toward(IpAddr::from([127, 0, 0, 1])).expect("loopback is readable");
+    let loopback = SocketAddr::from(([127, 0, 0, 1], 47989));
+    assert_eq!(interface_name_toward(loopback).as_deref(), Ok("lo"));
+    let lo = interface_toward(loopback).expect("loopback is readable");
     assert_eq!(lo.medium, Medium::Other);
     assert!(!lo.vpn);
 }
