@@ -55,11 +55,16 @@ class OutputTest(unittest.TestCase):
         self.tokens = gen.load()
 
     def test_every_token_reaches_every_client(self):
+        rust = gen.rust(self.tokens) + gen.rust_looks(self.tokens)
         for key in self.tokens:
             name = gen.snake(key)
             self.assertIn(f'name="nj_{name}"', gen.android(self.tokens))
-            self.assertIn(f"pub const {name.upper()}:", gen.rust(self.tokens))
+            self.assertEqual(rust.count(f"pub const {name.upper()}:"), 1, name)
             self.assertIn(f"--nj-{name.replace('_', '-')}:", gen.css(self.tokens))
+
+    def test_no_rust_file_passes_the_size_limit(self):
+        for text in (gen.rust(self.tokens), gen.rust_looks(self.tokens)):
+            self.assertLessEqual(text.count("\n"), 800)
 
     def test_the_committed_output_is_current(self):
         for path, text in gen.outputs(self.tokens).items():
