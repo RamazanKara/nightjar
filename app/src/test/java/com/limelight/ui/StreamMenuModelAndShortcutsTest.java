@@ -285,7 +285,8 @@ public class StreamMenuModelAndShortcutsTest {
                 assertTrue("Quit game is the one red control", menu.row(quit).getBackground() instanceof GlassControlDrawable
                         && ((GlassControlDrawable) menu.row(quit).getBackground()).kind() == GlassControlDrawable.Kind.DANGER);
                 assertFalse("End session is a plain row", end.getBackground() instanceof GlassControlDrawable
-                        && ((GlassControlDrawable) end.getBackground()).kind() == GlassControlDrawable.Kind.DANGER);                // The same two ways out stand under Power too, and Quit game stays the one red control.
+                        && ((GlassControlDrawable) end.getBackground()).kind() == GlassControlDrawable.Kind.DANGER);
+                // The same two ways out stand under Power too, and Quit game stays the one red control.
                 assertSame(footer, menu.row(quit).getParent());
                 assertEquals(2, footer.getChildCount());
                 end.performClick();

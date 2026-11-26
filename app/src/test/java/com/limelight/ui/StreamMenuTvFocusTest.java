@@ -155,6 +155,35 @@ public class StreamMenuTvFocusTest {
         }
     }
 
+    /**
+     * A card, the lit module and Return to stream paint their own colours. A MaterialButton hands a background that is not
+     * its own the tint of its style, clear at rest: that once painted every card and the amber capsule away.
+     */
+    @Test
+    public void theCardsTheLitModuleAndReturnToStreamPaintTheirOwnColours() throws Exception {
+        try (var controller = Robolectric.buildActivity(Activity.class).setup().visible()) {
+            Activity activity = controller.get();
+            StreamMenu menu = open(activity, new ArrayList<>());
+            layOut(menu);
+            int moon = androidx.core.content.ContextCompat.getColor(activity, R.color.nj_color_moon);
+            assertEquals("Return to stream is the amber capsule", moon, middle(menu.sheet().primary()));
+            assertNotEquals("a card at rest has its tint", 0, android.graphics.Color.alpha(middle(menu.row(KEYBOARD))));
+            assertNotEquals("the lit module has its container", 0,
+                    android.graphics.Color.alpha(middle(menu.sheet().railEntry(ControlCenterModel.QUICK))));
+            menu.sheet().dismiss();
+        }
+    }
+
+    // What a view's background paints at its middle, in the bounds the view gives it when it draws.
+    private static int middle(View view) {
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(view.getWidth(), view.getHeight(),
+                android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.drawable.Drawable background = view.getBackground();
+        background.setBounds(0, 0, view.getWidth(), view.getHeight());
+        background.draw(new android.graphics.Canvas(bitmap));
+        return bitmap.getPixel(view.getWidth() / 2, view.getHeight() / 2);
+    }
+
     /** German words run longest: every tile and the ways out keep their whole label. */
     @Test @Config(qualifiers = "de-w640dp-h360dp-land-xxhdpi")
     public void germanLabelsFitTheirTiles() throws Exception {

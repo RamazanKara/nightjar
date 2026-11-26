@@ -197,7 +197,8 @@ final class ControlCenterCards {
 
         @Override
         public void setColorFilter(ColorFilter filter) {
-            paint.setColorFilter(filter);
+            // Nothing: a MaterialButton hands a background that is not its own the tint of its style as a colour filter,
+            // clear at rest, which would paint every card and Return to stream away. These colours are its own.
         }
 
         @Override
