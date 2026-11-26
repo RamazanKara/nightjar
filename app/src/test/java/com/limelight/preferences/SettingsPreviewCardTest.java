@@ -97,8 +97,9 @@ public class SettingsPreviewCardTest {
             SettingsPreviewCard card = card(row);
             assertEquals(SettingsPreviewCard.PACING, card.kind());
             assertEquals(PreviewPacing.LATENCY, card.state(), 0f);
-            assertEquals("the picture is said in the setting's own help", pacing.getDialogMessage().toString(),
-                    card.getContentDescription().toString());
+            // A group's description stands for the text inside it, so it names the value before the help.
+            assertEquals("the picture is said as the value and the setting's own help",
+                    pacing.getEntry() + ". " + pacing.getDialogMessage(), card.getContentDescription().toString());
             TextView value = row.findViewById(android.R.id.summary);
             assertSame("the value is the card's caption", card, value.getParent());
             assertEquals(pacing.getEntry().toString(), value.getText().toString());
@@ -112,7 +113,8 @@ public class SettingsPreviewCardTest {
             card = card(size.getView(null, list));
             assertEquals(SettingsPreviewCard.SCALING, card.kind());
             assertEquals(VideoScaling.FIT, card.state(), 0f);
-            assertEquals(screen.getString(R.string.video_scaling_help), card.getContentDescription().toString());
+            assertEquals(screen.getResources().getStringArray(R.array.video_scaling_modes)[VideoScaling.FIT] + ". "
+                    + screen.getString(R.string.video_scaling_help), card.getContentDescription().toString());
         }
     }
 

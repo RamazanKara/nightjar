@@ -130,7 +130,7 @@ final class SettingsPreviews {
         if (card == null || kind == SettingsPreviewCard.NONE) return;
         View chevron = row.findViewById(R.id.settings_preview_chevron);
         if (chevron != null) chevron.setVisibility(preference instanceof TwoStatePreference ? View.GONE : View.VISIBLE);
-        card.setContentDescription(help(preference));
+        card.setContentDescription(said(row, help(preference)));
         card.setEnabled(preference.isEnabled());
         float state = stored(preference);
         Shown shown = remembered(list, key);
@@ -147,6 +147,17 @@ final class SettingsPreviews {
             if (shown.from != state && now - shown.changed < REPLAY_MS) card.show(key, kind, shown.from);
         }
         card.show(key, kind, state);
+    }
+
+    /**
+     * The card in words: its caption, the value in use, and then the setting's own help. A screen reader says a
+     * group's description instead of the text inside it, so the help alone would leave the value unsaid.
+     */
+    private static CharSequence said(View row, CharSequence help) {
+        TextView caption = row.findViewById(android.R.id.summary);
+        CharSequence value = caption == null || caption.getVisibility() != View.VISIBLE ? null : caption.getText();
+        if (TextUtils.isEmpty(value)) return help;
+        return TextUtils.isEmpty(help) ? value : value + ". " + help;
     }
 
     @SuppressWarnings("unchecked")
