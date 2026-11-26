@@ -431,10 +431,14 @@ pub fn diagnose(
                 late: report.late_samples as u32,
                 of: report.samples as u32,
             }
-        } else {
+        } else if report.worst_loss_percent > 0.0 {
             KeyNumber::LossPercent {
-                percent: report.worst_loss_percent.max(0.0),
+                percent: report.worst_loss_percent,
             }
+        } else {
+            // Jitter or periodic stalls without loss: "0.0 % lost" would be no reason to
+            // stand on; the advice carries the stalls' numbers.
+            KeyNumber::None
         };
         let stage = host_stage.unwrap_or(Stage::Network);
         (RootCause::NetworkJitter, stage, key)

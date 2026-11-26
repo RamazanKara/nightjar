@@ -230,7 +230,8 @@ public final class StreamDoctorController {
         boolean guest = snapshot != null && snapshot.sessionActive && !snapshot.callerIsOwner;
         NativeStreamDoctor.Trial trial = snapshot == null ? null : snapshot.bitrateTrial;
         boolean lists = snapshot != null && snapshot.bitrateRemedy != null;
-        boolean bitrate = !guest && f.bitrateManual && trial == null && f.classicUndoKbps == 0
+        // A trial something else replaced blocks nothing: the host takes a new one.
+        boolean bitrate = !guest && f.bitrateManual && (trial == null || !trial.canUndo) && f.classicUndoKbps == 0
                 && (lists ? snapshot.offersBitrateStepdown() : f.classicBitrate);
         boolean resize = !guest && f.resize && resizeTo == null;
         int liveKbps = snapshot != null && snapshot.liveBitrateKbps > 0 ? snapshot.liveBitrateKbps : f.currentKbps;
@@ -268,7 +269,7 @@ public final class StreamDoctorController {
         resizeProblem = RESIZE_OK;
         if (StreamDoctorVerdict.BITRATE_STEPDOWN.equals(remedy.kind)) {
             if (remedy.onHost) {
-                hostBitrate(false, null, 0);
+                hostBitrate(false, null);
                 return;
             }
             host.classicTrial(false);
@@ -295,7 +296,7 @@ public final class StreamDoctorController {
         failure = null;
         NativeStreamDoctor.Trial trial = snapshot == null ? null : snapshot.bitrateTrial;
         if (trial != null) {
-            if (trial.canUndo) hostBitrate(true, trial.trialId, trial.previousKbps);
+            if (trial.canUndo) hostBitrate(true, trial.trialId);
             return;
         }
         host.classicTrial(true);
@@ -316,7 +317,7 @@ public final class StreamDoctorController {
         render();
     }
 
-    private void hostBitrate(boolean undo, String trialId, int previousKbps) {
+    private void hostBitrate(boolean undo, String trialId) {
         busy = true;
         Object at = stream;
         boolean queued = host.background(() -> {
@@ -336,7 +337,9 @@ public final class StreamDoctorController {
                 if (at != stream) return;
                 if (done != null) {
                     snapshot = done;
-                    int kbps = undo ? previousKbps : done.bitrateTrial != null ? done.bitrateTrial.appliedKbps : done.liveBitrateKbps;
+                    // After an undo, the bitrate the PC answers is in force: the trial's old value only if
+                    // nothing (such as its limit) held it lower.
+                    int kbps = undo || done.bitrateTrial == null ? done.liveBitrateKbps : done.bitrateTrial.appliedKbps;
                     if (kbps > 0) host.hostBitrateApplied(kbps);
                 } else {
                     LimeLog.warning("Stream doctor: the PC refused the bitrate " + (undo ? "undo" : "step-down") + ": " + why);

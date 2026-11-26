@@ -177,7 +177,7 @@ public final class StreamDoctorSheet implements StreamDoctorController.View {
                 continue;
             }
             MaterialButton button = sheet.addAction(group, line.icon, line.text);
-            // Undo, the technical measurements and Copy stay usable while a request runs; a remedy waits for it.
+            // The technical measurements and Copy stay usable while a request runs; a remedy and Undo wait for it.
             boolean waits = card.busy && !"technical".equals(line.id) && !"copy".equals(line.id);
             button.setEnabled(!waits);
             button.setOnClickListener(pressed -> line.action.run());

@@ -132,6 +132,17 @@ public class StreamDoctorControllerTest {
     }
 
     @Test
+    public void aReplacedTrialLetsTheHostOfferANewStepDown() {
+        host.offered = true;
+        host.snapshot = snapshot(true, trial(false), OPEN_REMEDY);
+        host.diagnosis = verdict("network_jitter", HOST_BITRATE);
+        controller.open(view);
+        host.runWork();
+        assertTrue(abilities().optBoolean("bitrate"));
+        assertTrue(last().undoReplaced);
+    }
+
+    @Test
     public void aRefusalShowsTheHostsWordsAndChangesNothing() {
         host.offered = true;
         host.snapshot = snapshot(true, "[]", OPEN_REMEDY);
