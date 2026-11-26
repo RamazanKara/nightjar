@@ -30,4 +30,5 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Still shared through usbipd-win since Nightjar closed: {}", "Nightjar kapandığından beri usbipd-win üzerinden hâlâ paylaşılıyor: {}"),
     ("Giving back…", "Geri veriliyor…"),
     ("Give back to Windows", "Windows’a geri ver"),
+    ("Gamescope was holding frames back, so V-Sync now shows the newest frame at each refresh.", "Gamescope kareleri bekletiyordu, bu yüzden V-Sync artık her yenilemede en yeni kareyi gösteriyor."),
 ];
