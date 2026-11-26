@@ -48,6 +48,7 @@ public class RustEngineJniParityTest {
         AUTHORIZED_JNI_HOLDERS.put("Java_com_limelight_nvstream_jni_NightjarDiscoveryJni_", NightjarDiscoveryJni.class);
         AUTHORIZED_JNI_HOLDERS.put("Java_com_limelight_nvstream_jni_NightjarHostsJni_", NightjarHostsJni.class);
         AUTHORIZED_JNI_HOLDERS.put("Java_com_limelight_nvstream_jni_NightjarSessionJni_", NightjarSessionJni.class);
+        AUTHORIZED_JNI_HOLDERS.put("Java_com_limelight_nvstream_jni_NightjarUiPolicyJni_", NightjarUiPolicyJni.class);
     }
 
     /** A Rust name that differs from the Java one for the same startConnection parameter. */
@@ -255,6 +256,7 @@ public class RustEngineJniParityTest {
                 "com/limelight/nvstream/jni/NightjarDiscoveryJni",
                 "com/limelight/nvstream/jni/NightjarHostsJni",
                 "com/limelight/nvstream/jni/NightjarSessionJni",
+                "com/limelight/nvstream/jni/NightjarUiPolicyJni",
                 "com/limelight/nvstream/mdns/MdnsDiscoveryAgent",
                 "com/limelight/nvstream/wol/WakeOnLanSender",
                 "com/limelight/nvstream/wol/WakeTargets",
