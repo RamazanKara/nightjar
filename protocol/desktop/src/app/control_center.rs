@@ -37,6 +37,28 @@ impl Triggers {
         }
         None
     }
+
+    /// On opening: a trigger already pulled on any controller counts as held, so it steps only once
+    /// let go and pulled again; one let go while the menu was closed steps with its next pull.
+    fn prime(&mut self) {
+        let mut held = [false; 2];
+        // SAFETY: SDL gamepad queries on the main thread; the list SDL hands out is freed here.
+        unsafe {
+            let mut count = 0;
+            let ids = SDL_GetGamepads(&mut count);
+            if !ids.is_null() {
+                for &id in std::slice::from_raw_parts(ids, usize::try_from(count).unwrap_or(0)) {
+                    let pad = SDL_GetGamepadFromID(id);
+                    if !pad.is_null() {
+                        held[0] |= SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > Self::RELEASED;
+                        held[1] |= SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > Self::RELEASED;
+                    }
+                }
+                SDL_free(ids.cast());
+            }
+        }
+        self.held = held;
+    }
 }
 
 /// What the open Control Center is painted on.
@@ -54,6 +76,9 @@ fn surface(ctx: &egui::Context) -> Surface {
 
 /// One frame of the open Control Center. True when a shortcut was saved or deleted in it.
 pub(crate) fn show(ctx: &egui::Context, window: *mut SDL_Window, s: &mut Streaming, overlay: &mut StreamOverlay, pads: &mut Gamepads, shortcuts: &mut shortcuts::Shortcuts, title: &str) -> bool {
+    if !overlay.center.is_open() {
+        overlay.triggers.prime();
+    }
     let available = stream_menu::Available {
         mouse: s.controller_mouse_offered(pads).then(|| pads.mouse_active()),
         overlay: s.overlay_visible,
