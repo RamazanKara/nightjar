@@ -503,8 +503,6 @@ impl Launcher {
             }
             if with_actions {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    // The links sit at the right, where the moon may be once the page scrolls.
-                    let scrim = ui.painter().add(egui::Shape::Noop);
                     let view = text_button(ui, "View");
                     self.focus_item(&view, "home-view", false);
                     if view.clicked() {
@@ -515,7 +513,6 @@ impl Launcher {
                         );
                     }
                     let all = text_button(ui, "All games");
-                    super::pcs::scrim_on_moon(ui, scrim, view.rect.union(all.rect).expand(space::XS));
                     if all.clicked() {
                         self.library_filter = console::LibraryFilter::All;
                         self.open(Screen::AllGames);

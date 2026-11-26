@@ -83,8 +83,6 @@ roles! {
     // action, and it is never a filled shape: an icon and a word.
     OK: t::COLOR_OK, t::HC_COLOR_OK, t::DAY_COLOR_OK;
     WARN: t::COLOR_WARN, t::HC_COLOR_WARN, t::DAY_COLOR_WARN;
-    // The orbit rings of the site banner.
-    ORBIT: t::COLOR_ORBIT, rgb(0x2A2D3A), rgb(0xD3D6E0);
     // Paper white of the wordmark; its ink by day.
     PAPER: t::COLOR_PAPER, rgb(0xFFFFFF), t::DAY_COLOR_PAPER;
 }
@@ -159,12 +157,12 @@ fn palette(look: Look) -> &'static [Color32; COUNT] {
 /// sets. High contrast wins over the others.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Look {
-    /// The night palette and sky: the look Nightjar always had.
+    /// The night palette and stage: the look Nightjar always had.
     #[default]
     Night,
-    /// Light glass on a pale sky with a low sun and no stars.
+    /// Light glass on a light page, its stage lit faintly from the top.
     Day,
-    /// The night look on black: black canvas, sky and surfaces.
+    /// The night look on black: black canvas, stage and surfaces.
     Oled,
     /// Black surfaces, white text, solid glass and thick focus rings.
     HighContrast,

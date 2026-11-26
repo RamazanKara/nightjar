@@ -358,9 +358,9 @@ fn help_screenshots() {
     }
 }
 
-/// Cards stand on the sky in the settings rows' glass, and the old surface ladder stays out.
+/// Cards stand on the stage in the settings rows' glass, and the old surface ladder stays out.
 #[test]
-fn help_is_glass_on_the_sky() {
+fn help_is_glass_on_the_stage() {
     let source = include_str!("../help.rs");
     let code = source.split("#[cfg(test)]").next().expect("the page");
     for old in [".fill(*SURFACE", "*SURFACE_HIGH", "OUTLINE_VARIANT"] {

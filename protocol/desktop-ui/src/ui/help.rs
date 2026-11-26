@@ -477,8 +477,8 @@ fn segment(ui: &mut Ui, name: &str, chosen: bool) -> Response {
     response
 }
 
-/// A card: the settings rows' tint on the sky, `width` wide, at least `min_height` tall. Returns the
-/// height its content took.
+/// A card: the settings rows' tint on the stage, `width` wide, at least `min_height` tall. Returns
+/// the height its content took.
 fn card(ui: &mut Ui, width: f32, min_height: f32, add: impl FnOnce(&mut Ui)) -> f32 {
     let mut natural = 0.0;
     let place = ui.painter().add(egui::Shape::Noop);
@@ -488,7 +488,6 @@ fn card(ui: &mut Ui, width: f32, min_height: f32, add: impl FnOnce(&mut Ui)) -> 
         ui.set_min_height(min_height);
     });
     let mut shapes = Vec::new();
-    super::pcs::canvas_on_moon(&mut shapes, ui.ctx(), shown.response.rect, f32::from(radius::PANEL));
     glass::group(&mut shapes, ui.ctx(), shown.response.rect, f32::from(radius::PANEL), rows_fill());
     ui.painter().set(place, egui::Shape::Vec(shapes));
     natural

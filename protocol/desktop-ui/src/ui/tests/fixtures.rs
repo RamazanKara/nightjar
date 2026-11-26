@@ -472,93 +472,34 @@ pub(super) fn blurred_share(f: &Frames) -> f32 {
     regions[0].area() / (f.size.x * f.size.y)
 }
 
-/// Steps frames until the sky's fade ends, checking each against the one before: a moon that comes
-/// starts faint, one that goes leaves faint, one that stays changes by a frame's step at most, and
-/// the fade only runs forward.
-pub(super) fn follow_the_fade(f: &mut Frames, what: &str, moves: bool) -> Vec<backdrop::Painted> {
+/// Steps frames until the backdrop's fade ends, checking each against the one before: the fade only
+/// runs forward, a frame's step at a time, and it ends.
+pub(super) fn follow_the_fade(f: &mut Frames, what: &str) -> Vec<backdrop::Painted> {
     let mut last = backdrop::painted(&f.ctx);
     let mut frames = Vec::new();
     for n in 0..12 {
         f.frame(Vec::new());
         let now = backdrop::painted(&f.ctx);
-        fade_step(&last, &now, what, n, moves);
-        frames.push(now.clone());
+        if last.fading && now.fading {
+            assert!(now.along >= last.along, "{what}, frame {n}: the fade starts over: {last:?} then {now:?}");
+            assert!(now.along - last.along <= 0.35, "{what}, frame {n}: the fade jumps: {last:?} then {now:?}");
+        }
+        frames.push(now);
         last = now;
     }
     assert!(!last.fading, "{what}: the fade ends");
     frames
 }
 
-/// One frame of [`follow_the_fade`]. A moon still fading that moves on its page (its first frame
-/// laid out a little differently) goes on fading where it stands: one that goes and one that comes
-/// alike are one moon. With `moves` a moon at full may move too: the window changed size.
-pub(super) fn fade_step(last: &backdrop::Painted, now: &backdrop::Painted, what: &str, n: usize, moves: bool) {
-    let step = 0.35;
-    let mut gone: Vec<_> = last.moons.iter().filter(|(d, _)| !now.moons.iter().any(|(e, _)| e == d)).collect();
-    for (disc, alpha) in &now.moons {
-        match last.moons.iter().find(|(d, _)| d == disc) {
-            Some((_, was)) => assert!((alpha - was).abs() <= step, "{what}, frame {n}: the moon at {disc:?} jumps from {was} to {alpha}: {last:?} then {now:?}"),
-            None if *alpha <= step => {}
-            None => {
-                let moved = gone.iter().position(|(_, was)| (alpha - was).abs() <= step && (moves || *alpha < 1.0));
-                let moved = moved.unwrap_or_else(|| panic!("{what}, frame {n}: a moon at {disc:?} comes in at {alpha}: {last:?} then {now:?}"));
-                gone.remove(moved);
-            }
-        }
-    }
-    for (disc, was) in gone {
-        assert!(*was <= step, "{what}, frame {n}: the moon at {disc:?} goes at {was}");
-    }
-    if last.fading && now.fading {
-        assert!(now.along >= last.along, "{what}, frame {n}: the fade starts over: {last:?} then {now:?}");
-    }
-}
-
-/// Asserts the moon this frame is whole in the window and clear of everything the page drew, and
-/// says which kinds of shape it checked.
-pub(super) fn assert_moon_clear(f: &Frames, what: &str) -> Vec<&'static str> {
-    let Some((center, r)) = backdrop::disc_of(&f.ctx) else {
-        return Vec::new();
-    };
-    let screen = f.ctx.content_rect();
-    assert!(screen.contains_rect(Rect::from_center_size(center, Vec2::splat(r * 2.0))), "{what}: the moon at {center:?}, r {r}, is whole in the window");
-    let mut kinds = Vec::new();
-    for (kind, rect) in page_shapes(f) {
-        if rect.is_positive() && rect.intersects(screen) {
-            assert!(rect.distance_to_pos(center) >= r, "{what}: the moon at {center:?}, r {r}, meets a {kind} at {rect:?}");
-            kinds.push(kind);
-        }
-    }
-    kinds
-}
-
-/// Every shape the last frame drew but the backdrop's own, as laid out within its clip: the sky,
-/// the page colour and the veil run the window's width, the chrome's soft shade falls from the
-/// window's top, and blurred shadows and halos are no cards.
-pub(super) fn page_shapes(f: &Frames) -> Vec<(&'static str, Rect)> {
-    fn walk(shape: &egui::Shape, clip: Rect, soft: &glass::SoftTextures, out: &mut Vec<(&'static str, Rect)>) {
-        let (kind, rect) = match shape {
-            egui::Shape::Vec(shapes) => return shapes.iter().for_each(|s| walk(s, clip, soft, out)),
-            egui::Shape::Mesh(mesh) if soft.contains(&mesh.texture_id) => return,
-            egui::Shape::Mesh(mesh) => ("mesh", mesh.calc_bounds()),
-            egui::Shape::Rect(rect) => ("rect", rect.rect),
-            egui::Shape::Circle(circle) => ("circle", Rect::from_center_size(circle.center, Vec2::splat(circle.radius * 2.0))),
-            egui::Shape::Path(path) => ("path", Rect::from_points(&path.points)),
-            egui::Shape::Text(text) => ("text", text.visual_bounding_rect()),
-            egui::Shape::Noop => return,
-            other => ("shape", other.visual_bounding_rect()),
-        };
-        out.push((kind, rect.intersect(clip)));
-    }
-    let screen = f.ctx.content_rect();
-    let soft = glass::soft_textures(&f.ctx);
-    let backdrop = |shape: &egui::Shape| matches!(shape, egui::Shape::Vec(s) if matches!(s.first(), Some(egui::Shape::Rect(r)) if r.rect.min == Pos2::ZERO && r.fill == design_tokens::COLOR_CANVAS));
-    let mut out = Vec::new();
-    for clipped in f.shapes.iter().filter(|c| !backdrop(&c.shape)) {
-        walk(&clipped.shape, clipped.clip_rect, &soft, &mut out);
-    }
-    out.retain(|(_, rect)| rect.width() < screen.width() - 1.0 && rect.top() > screen.top());
-    out
+/// What the backdrop painted under the last frame's page: its shapes, in their order.
+pub(super) fn backdrop_shapes(f: &Frames) -> &[egui::Shape] {
+    f.shapes
+        .iter()
+        .find_map(|clipped| match &clipped.shape {
+            egui::Shape::Vec(shapes) if matches!(shapes.first(), Some(egui::Shape::Rect(r)) if r.rect.min == Pos2::ZERO && r.fill == design_tokens::COLOR_CANVAS) => Some(shapes.as_slice()),
+            _ => None,
+        })
+        .expect("the backdrop under the page")
 }
 
 /// The demo's PCs page: one running a game, one online, one asleep and one not paired.

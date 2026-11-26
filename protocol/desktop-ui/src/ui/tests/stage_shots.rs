@@ -1,0 +1,79 @@
+//! Screenshots of the stage and what stands on it without art, in each look and window:
+//! `NIGHTJAR_SHOTS=<dir> cargo test -p nightjar-desktop-ui --lib stage_screenshots -- --ignored`.
+//! `NIGHTJAR_SHOTS_ONLY=<part of a name>` writes only the files whose name has it.
+
+use super::*;
+use crate::config::Theme;
+
+/// The windows: the one the design is drawn in, the smallest SDL allows, and an ultrawide.
+const WINDOWS: [(&str, [f32; 2], f32); 3] = [("1280x800", [1280.0, 800.0], 1.5), ("small", [720.0, 480.0], 1.5), ("wide", [2560.0, 1080.0], 1.0)];
+const LOOKS: [(&str, Theme, bool); 4] = [("night", Theme::Dark, false), ("day", Theme::Light, false), ("oled", Theme::Oled, false), ("high-contrast", Theme::Dark, true)];
+
+/// A launcher in `look` and `window` over `records`, searching the network as a fresh install does.
+fn stage_frames(look: (Theme, bool), window: ([f32; 2], f32), console_home: bool, records: Vec<HostRecord>) -> Frames {
+    crate::theme::own_palette();
+    let ctx = egui::Context::default();
+    crate::theme::apply(&ctx);
+    let mut l = launcher(console_home, false);
+    l.identity_ready = true;
+    l.settings.theme = look.0;
+    l.settings.high_contrast = look.1;
+    if !console_home {
+        l.go(Screen::Hosts);
+    }
+    let mut hosts = Hosts::without_discovery(records, Arc::new(|| {}));
+    hosts.discovering = true;
+    let mut f = Frames::over(ctx, l, hosts);
+    f.size = window.0.into();
+    f.native_ppp = window.1;
+    f.shots = true;
+    f
+}
+
+/// A page of PCs in every state a card has: no art anywhere, so the stage is all there is behind.
+fn pcs(look: (Theme, bool), window: ([f32; 2], f32)) -> Frames {
+    let records = vec![
+        HostRecord { address: "192.0.2.10".into(), ..record("Living Room PC", true, true) },
+        HostRecord { address: "192.0.2.11".into(), ..record("Office PC", true, true) },
+        HostRecord { address: "192.0.2.12".into(), ..record("Studio", false, false) },
+        HostRecord { address: "192.0.2.13".into(), ..record("Laptop", true, false) },
+    ];
+    let mut f = stage_frames(look, window, false, records);
+    f.hosts.list[0].reach = Reach::Online;
+    f.hosts.list[0].info = Some(answer(true, 0));
+    f.hosts.list[1].reach = Reach::Offline;
+    f.hosts.list[2].reach = Reach::Online;
+    f.hosts.list[2].info = Some(answer(false, 0));
+    f.hosts.list[3].reach = Reach::Unknown;
+    f
+}
+
+#[test]
+#[ignore = "writes PNGs; set NIGHTJAR_SHOTS"]
+fn stage_screenshots() {
+    let Some(dir) = std::env::var_os("NIGHTJAR_SHOTS").map(std::path::PathBuf::from) else { return };
+    std::fs::create_dir_all(&dir).expect("the folder for the screenshots");
+    let only = std::env::var("NIGHTJAR_SHOTS_ONLY").unwrap_or_default();
+    let shoot = |f: &mut Frames, name: String| {
+        if !name.contains(&only) {
+            return;
+        }
+        // Past every fade and spring: what the page looks like at rest.
+        for _ in 0..6 {
+            f.settle();
+        }
+        f.shoot(&dir, &name);
+    };
+    for (look_name, theme, high) in LOOKS {
+        for (window_name, size, ppp) in WINDOWS {
+            let (look, window) = ((theme, high), (size, ppp));
+            let named = |page: &str| format!("stage-{page}-{look_name}-{window_name}");
+            shoot(&mut pcs(look, window), named("pcs"));
+            shoot(&mut stage_frames(look, window, true, Vec::new()), named("first-run-scanning"));
+            let mut found = stage_frames(look, window, true, vec![HostRecord { address: "192.0.2.12".into(), ..record("Living Room PC", false, false) }]);
+            found.hosts.list[0].reach = Reach::Online;
+            found.hosts.list[0].info = Some(answer(false, 0));
+            shoot(&mut found, named("first-run-found"));
+        }
+    }
+}

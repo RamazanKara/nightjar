@@ -17,12 +17,8 @@ const HOVER_RISE: f32 = 2.0;
 const TITLE_GAP: f32 = 18.0;
 /// Art on a PC's screen sits a little below its middle, where a cover's picture is.
 const FACE_ART_Y: f32 = 0.58;
-/// An asleep PC's dark screen, what the sky shows through it.
+/// An asleep PC's dark screen, what the stage shows through it.
 const FACE_OFF: Color32 = Color32::from_rgba_premultiplied(26, 27, 31, 56);
-/// The canvas under a card that sits on the moon, so its words keep 4.5:1 on the amber.
-const OVER_MOON: f32 = 0.8;
-/// How far a card reaches onto the moon before that canvas is whole.
-const MOON_CLEAR_OVER: f32 = 24.0;
 const MORE_DOTS_R: f32 = 1.9;
 const MORE_DOTS_APART: f32 = 6.0;
 
@@ -160,34 +156,6 @@ fn into_rounded(rect: Rect, r: f32, p: Pos2) -> Pos2 {
         p
     } else {
         nearest + away.normalized() * r
-    }
-}
-
-/// How much a card covers the moon, from none to enough that its words sit on it. A long list or a
-/// narrow window brings them there, and scrolling moves them across it.
-pub(super) fn over_moon((center, r): (Pos2, f32), card: Rect) -> f32 {
-    let nearest = pos2(
-        center.x.clamp(card.left(), card.right()),
-        center.y.clamp(card.top(), card.bottom()),
-    );
-    ((r - (center - nearest).length()) / MOON_CLEAR_OVER).clamp(0.0, 1.0)
-}
-
-/// The canvas that goes under a card on the moon, or its words sit on the disc's sharp edge.
-pub(super) fn canvas_on_moon(out: &mut Vec<Shape>, ctx: &egui::Context, card: Rect, r: f32) {
-    let over = backdrop::disc_of(ctx).map_or(0.0, |disc| over_moon(disc, card));
-    if over > 0.0 && !high_contrast() {
-        glass::solid(out, ctx, card, r, shade::COLOR_CANVAS.get().gamma_multiply(OVER_MOON * over));
-    }
-}
-
-/// The same canvas under words or controls drawn straight on the sky where they reach onto the
-/// moon, so they never sit on the bright disc. `slot` is a placeholder added before them.
-pub(super) fn scrim_on_moon(ui: &Ui, slot: egui::layers::ShapeIdx, rect: Rect) {
-    let mut out = Vec::new();
-    canvas_on_moon(&mut out, ui.ctx(), rect, rect.height().min(48.0) / 2.0);
-    if !out.is_empty() {
-        ui.painter().set(slot, Shape::Vec(out));
     }
 }
 
@@ -404,7 +372,7 @@ pub(super) fn action_button(ui: &mut Ui, rect: Rect, id: Id, action: PcAction, s
     lift_shapes(&mut out, &ctx, shown, r, feel.hovered, feel.pressed);
     let ink = match action {
         PcAction::Resume(_) => glass::on_play(),
-        // The one PC action in the moon's colour, on a tint: never a second moon button.
+        // The one PC action in amber ink, on a tint: never a second amber button.
         PcAction::Pair if !high_contrast() => shade::COLOR_MOON_INK.get(),
         PcAction::Pair => *MOON,
         _ => *ON_SURFACE,
@@ -615,7 +583,6 @@ impl Launcher {
                     Color32::from_black_alpha(102).gamma_multiply(rise / HOVER_RISE),
                 );
             }
-            canvas_on_moon(&mut out, &ctx, rect, r);
             glass::group(&mut out, &ctx, rect, r, group_fill());
             lift_shapes(
                 &mut out,
@@ -735,37 +702,6 @@ mod tests {
             wide.top().abs() < 1e-3 && (wide.bottom() - 1.0).abs() < 1e-3,
             "{wide:?}"
         );
-    }
-
-    #[test]
-    fn a_card_on_the_moon_gets_its_canvas_and_one_beside_it_none() {
-        let screen = Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0));
-        let moon = backdrop::moon_disc(screen, backdrop::Moon::Low);
-        // The design's third column, first row: clear of the moon at (1040, 520), r 118.
-        assert_eq!(
-            over_moon(
-                moon,
-                Rect::from_min_size(pos2(848.0, 150.0), vec2(384.0, 216.0))
-            ),
-            0.0
-        );
-        // A sixth PC sits right on it.
-        assert_eq!(
-            over_moon(
-                moon,
-                Rect::from_min_size(pos2(848.0, 382.0), vec2(384.0, 216.0))
-            ),
-            1.0
-        );
-        // The edge eases in.
-        let edge = over_moon(
-            moon,
-            Rect::from_min_size(
-                pos2(1040.0 - 118.0 - 384.0 + 12.0, 412.0),
-                vec2(384.0, 216.0),
-            ),
-        );
-        assert!(edge > 0.0 && edge < 1.0, "{edge}");
     }
 
     #[test]

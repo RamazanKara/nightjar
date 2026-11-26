@@ -208,7 +208,7 @@ fn the_home_card_of_a_pc_to_pair_fits_its_state() {
     assert!(!f.drawn.iter().any(|t| t.contains("Games not") || t.ends_with('…')), "{:?}", f.drawn);
 }
 
-/// The first run is the moon, what is happening in one line, one action and the way to help; Home
+/// The first run is the stage, what is happening in one line, one action and the way to help; Home
 /// sends it there.
 #[test]
 fn the_first_run_is_one_line_and_add_pc_from_home_too() {
@@ -268,7 +268,7 @@ fn a_short_pc_list_with_no_search_offers_search_again() {
     assert!(commands.iter().any(|c| matches!(c, Command::SearchAgain)));
 }
 
-/// A found PC arrives as a card with Pair as the page's one moon action, which takes the focus; Add PC
+/// A found PC arrives as a card with Pair as the page's one amber action, which takes the focus; Add PC
 /// steps down, and more PCs than a first run has make the page a list.
 #[test]
 fn a_found_pc_rises_in_with_pair_and_add_pc_steps_down() {

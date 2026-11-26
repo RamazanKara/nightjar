@@ -1,4 +1,4 @@
-//! Top-bar PC switcher sheet, focus retention, and moon backdrop tests.
+//! Top-bar PC switcher sheet and focus retention tests.
 
 use super::*;
 

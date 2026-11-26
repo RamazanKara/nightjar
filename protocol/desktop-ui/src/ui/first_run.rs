@@ -1,7 +1,6 @@
-//! The first run: the sky and the moon with its orbit, the one line of what is happening and one moon
-//! action. A PC found rises in as a card with Pair as that action, and Add PC steps down.
+//! The first run, on the stage: the one line of what is happening and one amber action. A PC found
+//! rises in as a card with Pair as that action, and Add PC steps down.
 
-use super::backdrop::{self, Moon};
 use super::chrome::{capsule_width, control_capsule, play_button, play_width};
 use super::design_tokens as t;
 use super::pcs::{monitor, pc_action, pc_line_of, status_line};
@@ -11,8 +10,6 @@ use egui::Shape;
 
 /// Past this many PCs found it is a list, whatever their state.
 const MOST_FOUND: usize = 3;
-/// The ring the orbit dot runs on, in moon radii: the first of the sky's.
-const ORBIT: f32 = backdrop::ORBIT;
 const WORDS_GAP: f32 = 44.0;
 const ADD_W: f32 = 220.0;
 const ADD_H: f32 = 56.0;
@@ -24,14 +21,13 @@ const CARD_PAD: f32 = 20.0;
 const CARD_GAP: f32 = 16.0;
 const FACE_W: f32 = 112.0;
 const PAIR_H: f32 = 56.0;
-/// A found card's top under the ring, and how far it rises in.
-const CARD_UNDER_RING: f32 = 14.0;
+/// A found card's top under the page's middle, and how far it rises in.
+const CARD_UNDER_MIDDLE: f32 = 14.0;
 const RISE: f32 = 28.0;
 const RISE_TUNE: spring::Tune = spring::Tune {
     stiffness: t::MOTION_SHEET_STIFFNESS,
     ratio: t::MOTION_SHEET_RATIO,
 };
-const OVER_RINGS: f32 = 0.72;
 const STILL_SEARCHING_GAP: f32 = 24.0;
 const STEPPED_DOWN_GAP: f32 = 34.0;
 const STEPPED_DOWN_H: f32 = 48.0;
@@ -41,7 +37,7 @@ const LINK_GAP: f32 = 8.0;
 /// Search again under Add PC, when the search could not start.
 const SEARCH_AGAIN_GAP: f32 = 14.0;
 const LINK_H: f32 = 32.0;
-const TIGHT_UNDER_MOON: f32 = 16.0;
+const TIGHT_UNDER_MIDDLE: f32 = 16.0;
 const TIGHT_GAP: f32 = 10.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -51,11 +47,17 @@ pub(super) enum FirstRun {
 }
 
 impl FirstRun {
-    pub(super) fn moon(self) -> Moon {
-        match self {
-            Self::Searching => Moon::Searching,
-            Self::Found => Moon::Found,
-        }
+    /// The page's middle in this window, where the search shows, and the room kept around it:
+    /// lower and wider while it searches, stepped up and in for a PC's card.
+    fn middle(self, screen: Rect) -> (Pos2, f32) {
+        let (y, room) = match self {
+            Self::Searching => (0.395, 177.0),
+            Self::Found => (0.245, 122.0),
+        };
+        (
+            pos2(screen.center().x, screen.top() + screen.height() * y),
+            room * (screen.height() / 800.0).clamp(0.75, 1.5),
+        )
     }
 }
 
@@ -156,7 +158,7 @@ impl Launcher {
         view: &View<'_>,
         commands: &mut Vec<Command>,
     ) -> f32 {
-        let (center, r) = backdrop::moon_disc(ui.ctx().content_rect(), Moon::Searching);
+        let (center, room) = FirstRun::Searching.middle(ui.ctx().content_rect());
         let dy = -self.page_scrolled;
         let (words, searching) = self.search_words(view);
         let ink = *ON_SURFACE;
@@ -169,7 +171,7 @@ impl Launcher {
         );
         let head_at = pos2(
             middle - head.size().x / 2.0,
-            center.y + r * ORBIT + WORDS_GAP + dy,
+            center.y + room + WORDS_GAP + dy,
         );
         let head_h = head.size().y;
         ui.painter().galley(head_at, head, ink);
@@ -214,14 +216,14 @@ impl Launcher {
         view: &View<'_>,
         commands: &mut Vec<Command>,
     ) -> f32 {
-        let (center, r) = backdrop::moon_disc(ui.ctx().content_rect(), Moon::Found);
+        let (center, room) = FirstRun::Found.middle(ui.ctx().content_rect());
         let page = ui.max_rect();
         let middle = page.center().x;
         let list = &view.hosts.list;
         let (columns, card_w) = found_grid(list.len(), page.width());
         let lines = list.len().div_ceil(columns) as f32;
         let cards_h = lines * (CARD_H + CARD_GAP) - CARD_GAP;
-        let under = center.y + r * ORBIT + CARD_UNDER_RING;
+        let under = center.y + room + CARD_UNDER_MIDDLE;
         let needs = under
             + cards_h
             + STILL_SEARCHING_GAP
@@ -230,10 +232,10 @@ impl Launcher {
             + STEPPED_DOWN_H
             + LINK_GAP
             + LINK_H;
-        // A short window keeps it all in view: the card comes over the ring, the gaps close up.
+        // A short window keeps it all in view: the card comes up, the gaps close up.
         let tight = needs + space::M > ui.ctx().content_rect().bottom();
         let (card_top, still_gap, step_gap) = if tight {
-            (center.y + r + TIGHT_UNDER_MOON, TIGHT_GAP, TIGHT_GAP)
+            (center.y + room / 1.7 + TIGHT_UNDER_MIDDLE, TIGHT_GAP, TIGHT_GAP)
         } else {
             (under, STILL_SEARCHING_GAP, STEPPED_DOWN_GAP)
         };
@@ -316,15 +318,6 @@ impl Launcher {
             ui.multiply_opacity((1.0 - rising).clamp(0.0, 1.0));
             let mut out = Vec::new();
             let r = t::RADIUS_PANEL;
-            if !high_contrast() {
-                glass::solid(
-                    &mut out,
-                    &ctx,
-                    rect,
-                    r,
-                    shade::COLOR_CANVAS.get().gamma_multiply(OVER_RINGS),
-                );
-            }
             glass::group(&mut out, &ctx, rect, r, group_fill());
             // Found just now: nothing played there from this device yet, only what it runs.
             monitor(ui, &mut out, host, super::pcs::card_game(host, &[]), face, id.with("art-in"));

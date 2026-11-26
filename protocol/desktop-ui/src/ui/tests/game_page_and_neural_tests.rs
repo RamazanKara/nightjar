@@ -416,38 +416,6 @@ fn a_menu_rows_ring_and_glow_end_before_the_list_cuts_them() {
     }
 }
 
-/// The cards and rows read the same on the sky's moon as the PCs' cards do: the disc's sharp edge
-/// ran through a card's words. The moon stands clear of them at the page's top, so a card meets it
-/// as the page scrolls: there it gets its canvas, which follows the moon where it really stands and
-/// goes nowhere else.
-#[test]
-fn a_card_on_the_moon_has_canvas_under_its_words() {
-    let canvas = design_tokens::COLOR_CANVAS.gamma_multiply(0.8);
-    for (window, zoom) in [(vec2(1280.0, 800.0), 100), (vec2(1100.0, 650.0), 100), (vec2(1280.0, 800.0), 150)] {
-        let mut f = four_pcs();
-        f.l.settings.ui_zoom = zoom;
-        f.size = window;
-        f.l.go(Screen::Profiles);
-        f.settle();
-        let what = format!("Profiles at {window:?}, {zoom} %");
-        let (center, r) = backdrop::disc_of(&f.ctx).unwrap_or_else(|| panic!("{what}: the moon stands beside the rows"));
-        let mut on_moon = 0;
-        for _ in 0..40 {
-            f.frame(vec![egui::Event::PointerMoved((f.size / 2.0).to_pos2())]);
-            f.frame(vec![egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, -30.0), phase: egui::TouchPhase::Move, source: egui::MouseWheelSource::Unknown, modifiers: egui::Modifiers::NONE }]);
-            assert_eq!(backdrop::disc_of(&f.ctx), Some((center, r)), "{what}: the moon holds still as the page scrolls");
-            for (mesh, clip) in meshes_drawn(&f) {
-                if mesh.vertices.iter().any(|v| v.color == canvas) {
-                    let bounds = mesh.calc_bounds().intersect(clip);
-                    assert!(bounds.distance_to_pos(center) < r, "{what}: canvas at {bounds:?}, away from the moon at {center:?}, r {r}");
-                    on_moon += 1;
-                }
-            }
-        }
-        assert!(on_moon > 0, "{what}: rows scrolled over the moon get their canvas");
-    }
-}
-
 /// Enter on the card, on the PCs page: the card's own action.
 #[test]
 fn picking_a_pc_does_what_enter_does_on_its_card() {

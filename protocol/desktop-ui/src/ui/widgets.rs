@@ -502,19 +502,11 @@ pub(crate) fn page_scroll_from(ui: &mut Ui, id: impl std::hash::Hash + std::fmt:
                 ui.scroll_to_rect(Rect::from_min_size(page.min, Vec2::splat(1.0)), Some(Align::TOP));
             }
             let inside = Rect::from_min_max(Pos2::new(page.left() + margin, page.top()), Pos2::new(page.right() - margin, page.bottom()));
-            let placing = super::backdrop::placing(ui.ctx());
-            let layer = ui.layer_id();
-            let from = ui.ctx().graphics(|g| g.get(layer).map_or(0, |l| l.next_idx().0));
-            let content = ui.scope_builder(egui::UiBuilder::new().max_rect(inside), |ui| {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(inside), |ui| {
                 ui.add_space(top);
                 add(ui);
                 ui.add_space(space::XXL);
             });
-            // What the page laid out, as it stands at its top, for the sky's moon to stand clear of;
-            // what rises over its neighbours is painted later, after the page.
-            if placing {
-                super::backdrop::hold_page_scroll(ui.ctx(), id, layer, from, full, page.top(), content.response.rect);
-            }
         })
         .state
         .clamped_offset()
@@ -600,14 +592,14 @@ pub(super) fn section_below(ui: &mut Ui, title: &str, jump: &mut Option<&'static
     ui.add_space(space::XS);
 }
 
-/// What a group of rows or a card on the night sky is filled with: the sky shows through a little.
+/// What a group of rows or a card on the stage is filled with: the stage shows through a little.
 pub(super) fn group_fill() -> Color32 {
     if high_contrast() { *SURFACE } else { shade::TINT_GROUP_ON_SKY_FILL.get() }
 }
 
-/// What a group of settings rows is filled with. A row's words may pass over the moon, and text
-/// reads over the worst backdrop: dark enough for the secondary colour on amber, and the sky still
-/// shows through a little.
+/// What a group of settings rows is filled with. A row's words may pass over a game's ambient, and
+/// text reads over the worst backdrop: dark enough for the secondary colour on a bright cover's
+/// ambient, and the backdrop still shows through a little.
 pub(super) fn rows_fill() -> Color32 {
     if high_contrast() { *SURFACE } else { shade::COLOR_SURFACE_LOW.get().gamma_multiply(ROWS_ALPHA) }
 }
@@ -674,7 +666,6 @@ pub(crate) fn group_row(ui: &mut Ui, add: impl FnOnce(&mut Ui)) -> Rect {
     let run = RowRun { bottom: rect.bottom(), ..run };
     let group = Rect::from_min_max(Pos2::new(run.left, run.top), Pos2::new(run.right, run.bottom));
     let mut shapes = Vec::new();
-    pcs::canvas_on_moon(&mut shapes, ui.ctx(), group, f32::from(radius::PANEL));
     glass::group(&mut shapes, ui.ctx(), group, f32::from(radius::PANEL), rows_fill());
     painter.set(run.background, egui::Shape::Vec(shapes));
     ui.data_mut(|d| d.insert_temp(run_id, run));

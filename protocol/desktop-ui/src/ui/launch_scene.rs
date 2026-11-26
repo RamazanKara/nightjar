@@ -1,5 +1,5 @@
 //! The launch scene: from Play until the stream takes the window, the game's cover in its own
-//! ambient with the moon's orbit around it, as Nightjar's `ConnectingScreen` on Android. A start
+//! ambient with one thin ring turning around it, as Nightjar's `ConnectingScreen` on Android. A start
 //! that fails turns it into a card beside the cover, which offers the same start again, the
 //! stream's settings and a test of the network. The scene is the launcher's alone: it is over when
 //! the stream's window takes over, so nothing here runs while a stream does.
@@ -26,13 +26,17 @@ const SHADOW_BLUR: f32 = 70.0;
 const WORDS_AT: f32 = 0.75;
 const WORDS_SHARE: f32 = 0.36;
 const WORDS_MOST: f32 = 560.0;
-/// The orbit's rings around the cover, in its heights; the dot runs on the outer one, once in this
-/// many seconds, and rests just below its left without motion.
-const RINGS: [f32; 2] = [0.51, 0.71];
-const ORBIT_SECONDS: f64 = 11.0;
-const ORBIT_REST: f32 = 2.65;
-const ORBIT_DOT_R: f32 = 5.0;
-const ORBIT_FRAME_SECONDS: f32 = 1.0 / 60.0;
+/// The one ring around the cover, in its heights: clear of the cover's corners and of the words
+/// beside it. A lit arc turns on it while the start runs, once in this many seconds, this long
+/// and this strong at its head; it rests just below the left without motion.
+const RING: f32 = 0.64;
+const RING_SECONDS: f64 = 3.2;
+const RING_REST: f32 = 2.65;
+const RING_ARC: f32 = 1.9;
+const RING_LIT: f32 = 0.62;
+const RING_HALF_WIDTH: f32 = 1.25;
+const RING_STEPS: u32 = 96;
+const RING_FRAME_SECONDS: f32 = 1.0 / 60.0;
 /// The failure card: where its room starts across the window, the edge it keeps on the right, and
 /// the widest it gets.
 const CARD_FROM: f32 = 0.49;
@@ -89,6 +93,42 @@ fn opening(ctx: &egui::Context) -> u64 {
         d.insert_temp(id, (pass, opening));
         opening
     })
+}
+
+/// The one thin ring around the cover: faint all the way round, and on it an arc in the page's
+/// ink, lit at its head and gone at its tail, which turns while the start runs and holds still
+/// with reduced motion.
+fn turning_ring(out: &mut Vec<egui::Shape>, ctx: &egui::Context, cover: Rect) {
+    let radius = cover.height() * RING;
+    let track = if high_contrast() { t::HC_COLOR_RIM } else { shade::SKY_RING.get() };
+    out.push(egui::Shape::circle_stroke(cover.center(), radius, Stroke::new(1.0, track)));
+    let moving = spring::motion(ctx);
+    let head = if moving {
+        let along = ctx.input(|i| i.time) / RING_SECONDS;
+        along.fract() as f32 * std::f32::consts::TAU + RING_REST
+    } else {
+        RING_REST
+    };
+    let mut arc = egui::epaint::Mesh::default();
+    for step in 0..=RING_STEPS {
+        let back = step as f32 / RING_STEPS as f32;
+        let turn = head - back * RING_ARC;
+        let out_from_middle = vec2(turn.cos(), turn.sin());
+        let lit = ON_SURFACE.gamma_multiply(RING_LIT * (1.0 - back) * (1.0 - back));
+        for (off, color) in [(-RING_HALF_WIDTH, Color32::TRANSPARENT), (0.0, lit), (RING_HALF_WIDTH, Color32::TRANSPARENT)] {
+            arc.vertices.push(egui::epaint::Vertex { pos: cover.center() + out_from_middle * (radius + off), uv: egui::epaint::WHITE_UV, color });
+        }
+    }
+    for step in 0..RING_STEPS {
+        let (a, b) = (step * 3, (step + 1) * 3);
+        for k in 0..2 {
+            arc.indices.extend([a + k, b + k, b + k + 1, a + k, b + k + 1, a + k + 1]);
+        }
+    }
+    out.push(egui::Shape::mesh(arc));
+    if moving {
+        ctx.request_repaint_after(std::time::Duration::from_secs_f32(RING_FRAME_SECONDS));
+    }
 }
 
 impl ConnectingView {
@@ -161,8 +201,6 @@ impl Launcher {
             }
         }
         let opening = opening(&ctx);
-        self.ambient.set_page(&ctx, "launch");
-        self.ambient.set_orbit(false);
         self.ambient.prepare(&ctx, scene_want(view, &launch));
         let under = ui.painter().clone();
         let backdrop_slot = under.add(egui::Shape::Noop);
@@ -175,7 +213,7 @@ impl Launcher {
         cover_response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, launch.title()));
         let mut out = Vec::new();
         if failed.is_none() {
-            self.paint_orbit(&mut out, &ctx, cover);
+            turning_ring(&mut out, &ctx, cover);
         }
         glass::cover_glow(&mut out, &ctx, cover, t::RADIUS_COVER, self.ambient.glow(), GLOW_BLUR, SHADOW_Y, SHADOW_BLUR);
         let art = view.hosts.get(launch.host_id).and_then(|pc| pc.art.get(&launch.app_id));
@@ -187,31 +225,6 @@ impl Launcher {
             Some((launch, body, settings, test)) => self.failure_card(ui, screen, &launch, &body, settings.as_deref(), test, commands),
         }
         under.set(backdrop_slot, egui::Shape::Vec(self.ambient.finish(&ctx)));
-    }
-
-    /// The rings around the cover and the dot on the outer one, which runs while the start does and
-    /// holds still with reduced motion.
-    fn paint_orbit(&self, out: &mut Vec<egui::Shape>, ctx: &egui::Context, cover: Rect) {
-        let ink = if high_contrast() { t::HC_COLOR_RIM } else { shade::SKY_RING.get() };
-        for share in RINGS {
-            out.push(egui::Shape::circle_stroke(cover.center(), cover.height() * share, Stroke::new(1.0, ink)));
-        }
-        let moving = spring::motion(ctx);
-        let turn = if moving {
-            let along = ctx.input(|i| i.time) / ORBIT_SECONDS;
-            along.fract() as f32 * std::f32::consts::TAU + ORBIT_REST
-        } else {
-            ORBIT_REST
-        };
-        let at = cover.center() + vec2(turn.cos(), turn.sin()) * cover.height() * RINGS[1];
-        if !high_contrast() {
-            let glow = Rect::from_center_size(at, Vec2::splat(ORBIT_DOT_R * 2.0));
-            glass::soft(out, ctx, glow, ORBIT_DOT_R, 14.0, t::COLOR_MOON_HI.gamma_multiply(0.75));
-        }
-        out.push(egui::Shape::circle_filled(at, ORBIT_DOT_R, t::COLOR_MOON_HI));
-        if moving {
-            ctx.request_repaint_after(std::time::Duration::from_secs_f32(ORBIT_FRAME_SECONDS));
-        }
     }
 
     /// Beside the cover while connecting: the game, its PC, the stage, and Cancel.
@@ -231,8 +244,6 @@ impl Launcher {
         let height = title.size().y + pc_h + stage_gap + stage.size().y + button_gap + Size::CONTROL.height;
         let mut y = cover.center().y - height / 2.0;
         let words_top = y;
-        // Under the words and Cancel where they reach onto the moon.
-        let scrim = ui.painter().add(egui::Shape::Noop);
         let painter = ui.painter();
         let title_h = title.size().y;
         painter.galley(pos2(middle, y), title, *ON_SURFACE);
@@ -258,7 +269,6 @@ impl Launcher {
             .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &said));
         y += button_gap;
         let row = Rect::from_x_y_ranges(middle - width / 2.0..=middle + width / 2.0, y..=y + Size::CONTROL.height);
-        super::pcs::scrim_on_moon(ui, scrim, words.union(row).expand(space::M));
         ui.scope_builder(UiBuilder::new().max_rect(row).layout(Layout::top_down(Align::Center)), |ui| {
             let cancel = button_at_least(ui, Some(Id::unique("launch-cancel")), None, tr("Cancel"), None, Tone::Quiet, Size::CONTROL, 140.0);
             // The one thing to press: it keeps the focus, so A or Enter cancels at once.

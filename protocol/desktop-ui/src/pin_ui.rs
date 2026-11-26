@@ -276,7 +276,7 @@ impl PinLock {
         true
     }
 
-    /// Whether the PIN screen or the settings page is up: the sky goes behind them.
+    /// Whether the PIN screen or the settings page is up: the stage goes behind them.
     pub fn up(&self) -> bool {
         self.pad.is_some() || self.page
     }
@@ -485,7 +485,7 @@ impl PinLock {
             }
         });
 
-        // The panel in the middle of the sky; in a short window its keys and slots give way.
+        // The panel in the middle of the stage; in a short window its keys and slots give way.
         let screen = ui.max_rect();
         glass::boundary(ui.painter(), vec![ui.ctx().content_rect()]);
         let edge = DIALOG_MARGIN + space::M;
@@ -583,7 +583,7 @@ impl PinLock {
         }
     }
 
-    /// The settings page, a settings sub-page in look: its head, then rows on the sky.
+    /// The settings page, a settings sub-page in look: its head, then rows on the stage.
     fn page_ui(&mut self, ui: &mut Ui, pcs: &[(String, String)]) {
         let view = self.store.view();
         // With a list open, Escape (B) only closes the list.
