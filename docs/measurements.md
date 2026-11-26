@@ -144,3 +144,14 @@ Measured on 2026-11-26 with a debug build of main (`88fe00458e`): HEVC 1080p60 a
 | TCL Smart TV Pro (MediaTek MT9689, Android 14, 60 Hz) | idle | 16.77 / 25.56, 16.46 / 23.62 | 15.83 / 19.26, 15.59 / 19.75 |
 
 On the TCL both legs with it on beat both legs without it: about 1 ms off the median and 4 to 6 ms off the 95th percentile, with the decoder's own input to output unchanged (8.04 to 8.16 ms median), so the gain is in the threads that feed and release frames. On the Retroid the arms overlapped idle and under load, apart from one loaded leg with it on (p95 9.60 ms). It is on by default since. One Retroid leg (idle, off) received only 46 frames a second from the host; its median matched the other legs. With the CPUs loaded, the Retroid released frames about 1.5 ms sooner and decoded in 0.9 instead of 1.64 ms (median input to output), whatever the setting: its clocks stay higher under load.
+
+## Keep TV video smooth at the app's defaults
+
+Measured on 2026-11-26 as the section above (same build, defaults and order off, on, on, off, 90 s per leg, Speed up frame hand-off off in both arms), with the setting's dot redrawn ten times a second in the On legs (`settings_ab.py run --setting tv --defaults`). Receive to release from Nightjar's latency CSV after the first 5 s; frames a second as received over the leg.
+
+| Device | Off p50 / p95 ms (each leg) | On p50 / p95 ms (each leg) | Gaps over 25 ms, off / on | Frames a second, off / on |
+| --- | --- | --- | --- | --- |
+| TCL Smart TV Pro (MediaTek MT9689, Android 14, 60 Hz) | 17.46 / 28.21, 17.10 / 26.57 | 16.18 / 21.53, 16.08 / 20.92 | 353, 292 / 197, 175 | 58.7, 58.6 / 59.8, 59.9 |
+| Retroid Pocket 6 (120 Hz panel) | 6.42 / 9.31, 6.43 / 9.22 | 6.19 / 10.14, 6.05 / 9.82 | 155, 128 / 50, 50 | 59.3, 58.0 / 60.0, 59.8 |
+
+On the TCL both legs with the dot beat both legs without it: 1.0 to 1.4 ms off the median, 5 to 7 ms off the 95th percentile, fewer gaps between released frames and nearly every frame received, with the decoder's own input to output 0.2 ms longer (8.28 to 8.35 against 8.10 to 8.15 ms median). On the Retroid the median was 0.3 ms lower and the 95th percentile 0.6 to 0.9 ms higher. Neither device reports when SurfaceFlinger shows a frame here, so the dot's own composition cost is not in these numbers. A first set of TCL legs ran while a Gradle build loaded this PC (41 to 58 frames a second received in both arms) and was set aside; it pointed the same way.
