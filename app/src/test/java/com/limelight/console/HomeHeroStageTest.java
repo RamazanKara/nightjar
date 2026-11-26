@@ -15,6 +15,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Shader;
@@ -22,6 +23,7 @@ import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.recyclerview.widget.RecyclerView;
@@ -30,6 +32,9 @@ import com.limelight.PcViewLifecycleTest;
 import com.limelight.R;
 import com.limelight.computers.ComputerManagerListener;
 import com.limelight.computers.ComputerManagerService;
+import com.limelight.grid.assets.CachedAppAssetLoader;
+import com.limelight.grid.assets.MemoryAssetLoader;
+import com.limelight.grid.assets.ScaledBitmap;
 import com.limelight.nativeapi.ConsoleSnapshot;
 import com.limelight.nativeapi.NativeApiFixtures;
 import com.limelight.nvstream.http.ComputerDetails;
@@ -55,8 +60,10 @@ import org.robolectric.util.ReflectionHelpers;
 
 import java.io.File;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.concurrent.Executor;
 
 /**
  * Home's hero art on each form: on a phone the hero's words stand under the art at the foot of the window's top third, on a
@@ -71,6 +78,9 @@ import java.util.HashSet;
 public class HomeHeroStageTest {
     private static final String[] TITLES = {"Hollow Knight", "Outer Wilds", "Celeste", "Hades", "Disco Elysium", "Tunic",
             "Return of the Obra Dinn", "Stardew Valley", "Slay the Spire", "Dead Cells", "Inside", "Journey"};
+    /** A host's cover as the loaders keep it in memory. */
+    private static final int COVER_W = 300;
+    private static final int COVER_H = 450;
 
     /** Home without the computer manager service. */
     public static class Home extends ConsoleHomeActivity {
@@ -87,6 +97,7 @@ public class HomeHeroStageTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
 
     private ConsoleRig rig;
+    private CoverLoaders covers;
 
     @Before
     public void setUp() throws Exception {
@@ -96,6 +107,9 @@ public class HomeHeroStageTest {
 
     @After
     public void tearDown() {
+        if (covers != null) covers.release();
+        // The covers in memory are every screen's: the next test starts without this one's.
+        new MemoryAssetLoader().clearCache();
         rig.close();
         PreferenceManager.getDefaultSharedPreferences(RuntimeEnvironment.getApplication()).edit().clear().commit();
     }
@@ -140,8 +154,24 @@ public class HomeHeroStageTest {
         rig.transport.reply("tower", "session", ok(NativeApiFixtures.IDLE));
         ConsoleSnapshot snapshot = rig.repository.refresh(Collections.singletonList(nativeHost("tower", "Tower", true)));
         ReflectionHelpers.setField(home, "shownSnapshot", snapshot);
+        HomeModel model = HomeModel.of(snapshot, new HashSet<>(Collections.singletonList("tower")));
+        // Every game's cover is in memory, as after a load: the hero's cover, the shelves' covers, the backdrop and the art on
+        // the stage are then what the screen itself makes of them, and one game's are one picture.
+        MemoryAssetLoader memory = new MemoryAssetLoader();
+        for (java.util.List<HomeModel.GameCard> cards : Arrays.asList(model.allGames, model.library, model.continuePlaying, model.favourites)) {
+            for (HomeModel.GameCard card : cards) {
+                memory.populateCache(new CachedAppAssetLoader.LoaderTuple(tower, CoverLoaders.appOf(card.title, card.appId, card.source)),
+                        new ScaledBitmap(COVER_W, COVER_H, cover(card.title)));
+            }
+        }
+        covers = new CoverLoaders(home, "unique", 120);
+        ReflectionHelpers.setField(home, "covers", covers);
+        // The backdrop's blur runs in the test's thread too.
+        View backdrop = home.findViewById(R.id.home_backdrop);
+        ReflectionHelpers.setField(backdrop, "executor", (Executor) Runnable::run);
         ConsoleHomeAdapter shelves = ReflectionHelpers.getField(home, "shelves");
-        shelves.submit(HomeModel.of(snapshot, new HashSet<>(Collections.singletonList("tower"))));
+        shelves.setCovers(covers);
+        shelves.submit(model);
         home.findViewById(R.id.console_loading).setVisibility(View.GONE);
         settle(home);
         return home.findViewById(R.id.console_list);
@@ -190,19 +220,49 @@ public class HomeHeroStageTest {
         return at[1];
     }
 
-    /** A cover with a picture in its upper part, so a preview shows what the crop and the mask keep of it. */
-    private static Bitmap cover() {
-        Bitmap cover = Bitmap.createBitmap(400, 600, Bitmap.Config.ARGB_8888);
+    /**
+     * A game's cover, the size a host's cover is kept in memory: a picture in its upper part, so a preview shows what the
+     * crop and the mask keep of it, in hues of the game's own.
+     */
+    private static Bitmap cover(String title) {
+        // Celeste, which the previews' hero is about, keeps the hues the picture was drawn in.
+        int game = Math.max(0, Arrays.asList(TITLES).indexOf(title));
+        float turn = (game + TITLES.length - 2) % TITLES.length * (360f / TITLES.length);
+        Bitmap cover = Bitmap.createBitmap(COVER_W, COVER_H, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(cover);
+        canvas.scale(COVER_W / 400f, COVER_H / 600f);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setShader(new LinearGradient(0, 0, 400, 600, new int[] {0xFFF2A65A, 0xFFB5446E, 0xFF2B2D6E}, null, Shader.TileMode.CLAMP));
+        paint.setShader(new LinearGradient(0, 0, 400, 600,
+                new int[] {turned(0xFFF2A65A, turn), turned(0xFFB5446E, turn), turned(0xFF2B2D6E, turn)}, null, Shader.TileMode.CLAMP));
         canvas.drawRect(0, 0, 400, 600, paint);
         paint.setShader(null);
-        paint.setColor(0xFFFFF3D6);
-        canvas.drawCircle(250, 190, 70, paint);
-        paint.setColor(0xFF1B1B3A);
+        paint.setColor(turned(0xFFFFF3D6, turn));
+        canvas.drawCircle(250 - game % 3 * 50, 190, 70, paint);
+        paint.setColor(turned(0xFF1B1B3A, turn));
         for (int i = 0; i < 6; i++) canvas.drawRect(i * 80 - 20, 330 - i * 14, i * 80 + 40, 600, paint);
         return cover;
+    }
+
+    private static int turned(int color, float degrees) {
+        float[] hsv = new float[3];
+        Color.colorToHSV(color, hsv);
+        hsv[0] = (hsv[0] + degrees) % 360f;
+        return Color.HSVToColor(hsv);
+    }
+
+    /** The game the hero of a phone or a handheld is about. */
+    private static HomeModel.GameCard heroGame(RecyclerView list) {
+        return (HomeModel.GameCard) list.getLayoutManager().findViewByPosition(0).getTag(HomeHeroStage.GAME);
+    }
+
+    /**
+     * The stage has the hero's art by the screen's own path; for the preview it is shown once more without the cross-fade,
+     * so the picture does not depend on how far a fade has come.
+     */
+    private static void assertTheStageHasTheArtOf(Home home, String title) {
+        HeroStageView stage = stage(home);
+        assertTrue("the stage was given the art of " + title, stage.hasArt());
+        stage.show(cover(title), false);
     }
 
     private static void capture(Home home, String name) throws Exception {
@@ -261,7 +321,7 @@ public class HomeHeroStageTest {
             assertEquals(View.VISIBLE, stage.getVisibility());
             assertEquals(0f, stage.getTranslationY(), 0f);
 
-            stage.show(cover(), false);
+            assertTheStageHasTheArtOf(home, ((HomeModel.GameCard) game).title);
             capture(home, "home-phone-night");
         } finally {
             controller.pause().stop().destroy();
@@ -274,11 +334,11 @@ public class HomeHeroStageTest {
         ActivityController<Home> controller = Robolectric.buildActivity(Home.class).setup().visible();
         try {
             Home home = controller.get();
-            show(home);
+            RecyclerView list = show(home);
             HeroStageView stage = stage(home);
             assertEquals(View.VISIBLE, stage.getVisibility());
             assertTrue("under the day's dark words the art is lifted, not held down", stage.isDay());
-            stage.show(cover(), false);
+            assertTheStageHasTheArtOf(home, heroGame(list).title);
             capture(home, "home-phone-day");
         } finally {
             controller.pause().stop().destroy();
@@ -299,7 +359,7 @@ public class HomeHeroStageTest {
             int heroCover = cards.getChildAt(0).getWidth();
             int shelfCover = shelf.getChildAt(0).getWidth();
             assertTrue("the hero's cover is the larger one: " + heroCover + " over " + shelfCover, heroCover > shelfCover);
-            stage(home).show(cover(), false);
+            assertTheStageHasTheArtOf(home, heroGame(list).title);
             capture(home, "home-phone-360x800-night");
         } finally {
             controller.pause().stop().destroy();
@@ -322,7 +382,7 @@ public class HomeHeroStageTest {
             assertTrue(play.getHeight() > 0);
             // Too low for the shelf's covers: the hero's cover stays as high as theirs, and the heading still shows.
             assertTheHeroAndHalfAShelfFit(home, list, false);
-            stage(home).show(cover(), false);
+            assertTheStageHasTheArtOf(home, heroGame(list).title);
             capture(home, "home-small-phone-night");
         } finally {
             controller.pause().stop().destroy();
@@ -345,7 +405,15 @@ public class HomeHeroStageTest {
             View play = item.findViewById(R.id.hero_play);
             assertTrue("the art's view lies behind the whole hero, down to its buttons", stage.getHeight() >= topOf(play) + play.getHeight());
             assertFalse(stage.isDay());
-            stage.show(cover(), false);
+            // The hero's own cover is the game's art as the shelves' covers are theirs, not an empty frame beside them.
+            ImageView art = item.findViewById(R.id.hero_cover_image);
+            assertEquals(View.VISIBLE, art.getVisibility());
+            assertNotNull("the hero's cover shows the game's art", art.getDrawable());
+            assertEquals("and no tile of a game without art", View.GONE, item.findViewById(R.id.hero_cover_text).getVisibility());
+            ViewGroup shelf = list.getLayoutManager().findViewByPosition(1).findViewById(R.id.shelf_cards);
+            ImageView shelfArt = shelf.getChildAt(0).findViewById(R.id.console_cover);
+            assertNotNull("a shelf's cover shows its game's art too", shelfArt.getDrawable());
+            assertTheStageHasTheArtOf(home, heroGame(list).title);
             capture(home, "home-handheld-night");
         } finally {
             controller.pause().stop().destroy();
@@ -361,7 +429,6 @@ public class HomeHeroStageTest {
             RecyclerView list = show(home);
             HeroStageView stage = stage(home);
             assertEquals("a TV's art is the focused card's, wherever the list is", View.VISIBLE, stage.getVisibility());
-            assertFalse(stage.hasArt());
 
             // A key was used: the first card takes focus, and the hero says its name.
             Object root = ReflectionHelpers.callInstanceMethod(home.getWindow().getDecorView(), "getViewRootImpl");
@@ -375,7 +442,18 @@ public class HomeHeroStageTest {
             assertTrue("the hero names the card", title.getText().length() > 0);
             assertFalse("the TV's hero is written in the light label colours: its art is the night's", stage.isDay());
 
-            stage.show(cover(), false);
+            // The row's first cover rests on the page margin: its lift grows away from it, so the focus ring stays on the
+            // margin instead of standing closer to the screen's edge than the page's own content.
+            View first = cards.getChildAt(0);
+            int[] lifted = new int[2];
+            first.getLocationInWindow(lifted);
+            int[] row = new int[2];
+            cards.getLocationInWindow(row);
+            int rest = row[0] + first.getLeft();
+            assertTrue("the lifted cover has not moved toward the screen's edge: " + lifted[0] + " from " + rest, lifted[0] >= rest);
+            if (first.getScaleX() > 1f) assertTrue("it grows from beyond its start edge: " + first.getPivotX(), first.getPivotX() < 0f);
+
+            assertTheStageHasTheArtOf(home, title.getText().toString());
             capture(home, "home-tv-night");
         } finally {
             controller.pause().stop().destroy();
