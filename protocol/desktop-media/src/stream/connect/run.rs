@@ -80,8 +80,9 @@ pub(crate) fn connect(
         rtx_video: settings.rtx_video,
         hdr_static_only: settings.hdr_format.static_metadata_only(),
         // Asked only of a host that follows a game's start, for a stream with a picture; its own
-        // setting decides whether the stream's DESCRIBE offers the curtain.
-        launch_curtain: true,
+        // setting decides whether the stream's DESCRIBE offers the curtain. Dual screen's second
+        // screen shows the same start without one: the curtain is the main screen's.
+        launch_curtain: !crate::second_screen::this_process(),
         ..Default::default()
     };
     if plan.record.server_certificate.is_none() {

@@ -305,6 +305,8 @@ impl Streaming {
                 }
                 // The launch curtain's A and B, while it is down; the input filter leaves them here.
                 SDL_EVENT_GAMEPAD_BUTTON_DOWN if self.curtain_press(launch_curtain::pad_press(event.gbutton.button, pads.swap_face_buttons)) => {}
+                // Nothing else a controller does reaches the PC under the curtain: the player can't see it.
+                _ if launch_curtain::pad_input(kind) && self.curtain_down() && !self.menu_visible => {}
                 _ => {
                     // A controller event the input filter applied while the loop waited in the
                     // present: only its action is left.

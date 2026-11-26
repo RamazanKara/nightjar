@@ -97,11 +97,13 @@ fn the_host_s_states_move_the_word_and_its_lifting_phases_lift() {
     assert!(heard_in(&mut slot, t0, state(1, Phase::WaitingWindow)));
     assert_eq!(json_at(&slot, t0)["stage"], "opening");
     assert!(
-        heard_in(&mut slot, t0, state(1, Phase::Ready)),
+        heard_in(&mut slot, t0, state(1, Phase::FocusingWindow)),
         "an old sequence still counts as a word from the host"
     );
     assert_eq!(json_at(&slot, t0)["down"], true);
-    assert!(heard_in(&mut slot, t0, state(2, Phase::Ready)));
+    assert_eq!(json_at(&slot, t0)["stage"], "opening");
+    // A lift lifts whatever its sequence.
+    assert!(heard_in(&mut slot, t0, state(1, Phase::Ready)));
     let lifted = json_at(&slot, t0);
     assert_eq!(lifted["lift"]["how"], "ready");
     assert_eq!(lifted["lift"]["notice"], Value::Null);

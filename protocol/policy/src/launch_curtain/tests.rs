@@ -71,18 +71,27 @@ fn a_phase_from_a_newer_host_lifts_the_curtain() {
 }
 
 #[test]
-fn an_old_or_repeated_state_changes_nothing_and_nothing_comes_after_the_lift() {
+fn an_old_or_repeated_state_changes_nothing_but_an_old_lift_still_lifts() {
     let t0 = Instant::now();
     let mut curtain = Curtain::new(t0);
     curtain.heard(t0, state(5, Phase::WaitingWindow));
-    assert_eq!(curtain.heard(t0, state(4, Phase::Ready)), None);
-    assert_eq!(curtain.heard(t0, state(5, Phase::Failed)), None);
+    assert_eq!(curtain.heard(t0, state(4, Phase::StartingApp)), None);
+    assert_eq!(curtain.heard(t0, state(5, Phase::FocusingWindow)), None);
     assert!(curtain.down());
     assert_eq!(curtain.view().stage, Some(OPENING));
-    assert_eq!(curtain.dismiss(), Some(Lift::Dismissed));
+    // A host that lost track of this launch says Ready with sequence 1: the curtain lifts.
+    assert_eq!(curtain.heard(t0, state(1, Phase::Ready)), Some(Lift::Ready));
+    assert_eq!(
+        curtain.heard(t0, state(6, Phase::Failed)),
+        None,
+        "nothing comes after the lift"
+    );
     assert_eq!(curtain.dismiss(), None);
-    assert_eq!(curtain.heard(t0, state(6, Phase::Failed)), None);
-    assert_eq!(curtain.lifted(), Some(&Lift::Dismissed));
+    assert_eq!(curtain.lifted(), Some(&Lift::Ready));
+
+    let mut dismissed = Curtain::new(t0);
+    assert_eq!(dismissed.dismiss(), Some(Lift::Dismissed));
+    assert_eq!(dismissed.dismiss(), None);
 }
 
 #[test]

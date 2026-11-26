@@ -5,6 +5,7 @@ import android.app.Dialog;
 import android.graphics.Bitmap;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
+import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -140,7 +141,8 @@ public final class ConnectingScreen {
         cancel.setFocusable(false);
         cancel.postDelayed(() -> {
             cancel.setFocusable(true);
-            if (!dismissed) focusFirst(cancel);
+            // A launch curtain's Show PC screen keeps the keys once it is offered.
+            if (!dismissed && dialog.findViewById(R.id.conn_show_screen).getVisibility() != View.VISIBLE) focusFirst(cancel);
         }, CANCEL_FOCUS_MS);
     }
 
@@ -234,21 +236,29 @@ public final class ConnectingScreen {
      */
     public void showCurtain(String stageWord, CharSequence attention, CharSequence windowTitle, Runnable onShowScreen) {
         if (dismissed || failed) return;
-        if (stageWord != null) setStage(stageWord);
+        if (stageWord != null && !TextUtils.equals(word.getText(), stageWord)) setStage(stageWord);
         View card = dialog.findViewById(R.id.conn_attention);
         boolean newCard = attention != null && card.getVisibility() != View.VISIBLE;
         card.setVisibility(attention == null ? View.GONE : View.VISIBLE);
         if (attention != null) {
-            ((TextView) dialog.findViewById(R.id.conn_attention_line)).setText(attention);
+            // The host's heartbeat repeats a state: unchanged words are not set again, so TalkBack says them once.
+            setIfChanged(dialog.findViewById(R.id.conn_attention_line), attention);
             TextView titleView = dialog.findViewById(R.id.conn_attention_title);
-            titleView.setText(windowTitle);
+            setIfChanged(titleView, windowTitle);
             titleView.setVisibility(windowTitle == null || windowTitle.length() == 0 ? View.GONE : View.VISIBLE);
         }
         View show = dialog.findViewById(R.id.conn_show_screen);
+        boolean newButton = onShowScreen != null && show.getVisibility() != View.VISIBLE;
         show.setVisibility(onShowScreen == null ? View.GONE : View.VISIBLE);
         show.setOnClickListener(onShowScreen == null ? null : v -> onShowScreen.run());
-        // The card asks the player to act: keys land on Show PC screen, Back and B still cancel.
-        if (newCard && onShowScreen != null) focusFirst(show);
+        // Keys, OK and A land on Show PC screen as soon as it is offered, and again when a card asks the player to
+        // act; Back and B still cancel.
+        if ((newCard || newButton) && onShowScreen != null) focusFirst(show);
+    }
+
+    private static void setIfChanged(TextView view, CharSequence text) {
+        CharSequence now = text == null ? "" : text;
+        if (!TextUtils.equals(view.getText(), now)) view.setText(now);
     }
 
     public void dismiss() {

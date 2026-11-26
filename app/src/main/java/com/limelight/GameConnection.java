@@ -339,6 +339,8 @@ final class GameConnection {
     }
 
     void connectionTerminated(final int reportedErrorCode) {
+        // A curtain still down ends with the stream, even when a failure dialog skips stopConnection.
+        game.runOnUiThread(launchCurtain::end);
         GameTerminationFlow.connectionTerminated(game, this, reportedErrorCode);
     }
 

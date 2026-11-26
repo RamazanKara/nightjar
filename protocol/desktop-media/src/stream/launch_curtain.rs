@@ -71,6 +71,20 @@ pub(super) fn pad_press(button: u8, swapped: bool) -> Option<Press> {
 
 /// The toast a lift leaves: none when the game is in front or the player chose it; after a
 /// failure the PC's own words follow on a line of their own.
+/// A controller's press, motion, touch or sensor reading, which the curtain keeps from the PC.
+pub(super) fn pad_input(kind: SDL_EventType) -> bool {
+    matches!(
+        kind,
+        SDL_EVENT_GAMEPAD_AXIS_MOTION
+            | SDL_EVENT_GAMEPAD_BUTTON_DOWN
+            | SDL_EVENT_GAMEPAD_BUTTON_UP
+            | SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN
+            | SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION
+            | SDL_EVENT_GAMEPAD_TOUCHPAD_UP
+            | SDL_EVENT_GAMEPAD_SENSOR_UPDATE
+    )
+}
+
 pub(super) fn lift_toast(lift: &Lift) -> Option<String> {
     let line = tr(lift.notice()?.en);
     Some(match lift.reason().filter(|_| matches!(lift, Lift::Failed(_))) {
@@ -173,7 +187,8 @@ impl Streaming {
         let (Some(press), Some(view), false) = (press, self.curtain_view(), self.menu_visible) else { return false };
         match press {
             Press::ShowScreen if view.dismissible => self.curtain_show_screen(),
-            Press::ShowScreen => return false,
+            // Before the first picture there is no PC screen to show; the press goes nowhere.
+            Press::ShowScreen => {}
             Press::Cancel => self.curtain_cancel(),
         }
         true
@@ -248,5 +263,22 @@ mod tests {
         assert_eq!(pad_press(south, true), Some(Press::Cancel), "swapped face buttons");
         assert_eq!(pad_press(east, true), Some(Press::ShowScreen));
         assert_eq!(pad_press(SDL_GAMEPAD_BUTTON_NORTH.0 as u8, false), None);
+    }
+
+    #[test]
+    fn every_controller_input_is_kept_from_the_pc_under_the_curtain() {
+        for kind in [
+            SDL_EVENT_GAMEPAD_BUTTON_DOWN,
+            SDL_EVENT_GAMEPAD_BUTTON_UP,
+            SDL_EVENT_GAMEPAD_AXIS_MOTION,
+            SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION,
+            SDL_EVENT_GAMEPAD_SENSOR_UPDATE,
+        ] {
+            assert!(pad_input(kind), "{}", kind.0);
+        }
+        // A controller coming or going is still the stream's to handle.
+        assert!(!pad_input(SDL_EVENT_GAMEPAD_ADDED));
+        assert!(!pad_input(SDL_EVENT_GAMEPAD_REMOVED));
+        assert!(!pad_input(SDL_EVENT_KEY_DOWN));
     }
 }

@@ -182,6 +182,44 @@ public class LaunchCurtainControllerTest {
     }
 
     @Test
+    public void okAndALandOnShowPcScreenOnceItIsOfferedNotOnCancel() {
+        InputSource.remember(InputSource.PAD);
+        try {
+            engine.state = down("starting", null, false, false, 60_000);
+            curtain.hold(screen);
+            ShadowLooper.idleMainLooper();
+            engine.state = down("opening", null, true, false, 10_000);
+            curtain.changed();
+            ShadowLooper.idleMainLooper(1, TimeUnit.SECONDS);
+            View show = screen.dialog().findViewById(R.id.conn_show_screen);
+            assertTrue("A or OK shows the PC screen instead of ending the stream", show.isFocused());
+            // The host's heartbeat repeats the state: the word is not set again for TalkBack.
+            TextView word = screen.dialog().findViewById(R.id.conn_word);
+            CharSequence before = word.getText();
+            curtain.changed();
+            ShadowLooper.idleMainLooper();
+            assertTrue(before == word.getText());
+            assertTrue(show.isFocused());
+        } finally {
+            InputSource.remember(null);
+        }
+    }
+
+    @Test
+    public void theStreamsEndTakesAHeldCurtainWithIt() {
+        engine.state = down("opening", null, true, false, 10_000);
+        curtain.hold(screen);
+        ShadowLooper.idleMainLooper();
+        assertTrue(screen.dialog().isShowing());
+        curtain.end();
+        ShadowLooper.idleMainLooper();
+        assertEquals("no dead curtain over the stream's end", List.of(screen), released);
+        assertFalse(screen.dialog().isShowing());
+        curtain.end();
+        assertEquals(List.of(screen), released);
+    }
+
+    @Test
     public void theWatchdogLiftsItWhenTheHostGoesQuiet() {
         engine.state = down("starting", null, true, false, 10_000);
         engine.afterTick = lifted("quiet", "still_starting", null);

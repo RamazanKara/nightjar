@@ -161,20 +161,14 @@ impl Curtain {
         }
     }
 
-    /// A state from the host. A repeated or older sequence only counts as a word from the host;
-    /// a lifting phase lifts the curtain and returns how.
+    /// A state from the host. A lifting phase lifts the curtain whatever its sequence (lifting
+    /// is for good, so it is always safe) and returns how; any other state with a repeated or
+    /// older sequence only counts as a word from the host.
     pub fn heard(&mut self, now: Instant, state: CurtainState) -> Option<Lift> {
         if self.lifted.is_some() {
             return None;
         }
         self.heard = Some(now);
-        if self
-            .state
-            .as_ref()
-            .is_some_and(|last| state.sequence <= last.sequence)
-        {
-            return None;
-        }
         let lift = match state.phase {
             Phase::Ready => Some(Lift::Ready),
             Phase::Dismissed => Some(Lift::Dismissed),
@@ -182,6 +176,14 @@ impl Curtain {
             Phase::Failed => Some(Lift::Failed(state.reason.clone())),
             _ => None,
         };
+        if lift.is_none()
+            && self
+                .state
+                .as_ref()
+                .is_some_and(|last| state.sequence <= last.sequence)
+        {
+            return None;
+        }
         self.state = Some(state);
         lift.and_then(|lift| self.lift(lift))
     }

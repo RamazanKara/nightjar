@@ -87,12 +87,17 @@ public final class LaunchCurtainController {
         return screen != null;
     }
 
-    /** The stream ends: the watchdog stops and the engine forgets the curtain. The screen goes with the stream's end. */
+    /**
+     * The stream ends: the watchdog stops, the engine forgets the curtain, and a connecting screen still held goes
+     * with it, as it went when the connection stood, so no dead curtain stays over the stream's end. Main thread.
+     */
     public void end() {
         handler.removeCallbacks(watchdog);
         handler.removeCallbacks(refresh);
+        ConnectingScreen held = screen;
         screen = null;
         engine.end();
+        if (held != null) release.accept(held);
     }
 
     private void refresh() {
