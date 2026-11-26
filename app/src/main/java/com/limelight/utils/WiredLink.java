@@ -14,9 +14,15 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -59,6 +65,19 @@ public final class WiredLink {
     /** Reads the speed in Mbps an interface reports; zero when it reports none. */
     interface SpeedSource {
         int mbps(String interfaceName);
+    }
+
+    /** A local address and prefix configured directly on a network interface. */
+    static final class LocalSubnet {
+        final String interfaceName;
+        final InetAddress address;
+        final int prefixLength;
+
+        LocalSubnet(String interfaceName, InetAddress address, int prefixLength) {
+            this.interfaceName = interfaceName;
+            this.address = address;
+            this.prefixLength = prefixLength;
+        }
     }
 
     private WiredLink() {}
@@ -140,39 +159,188 @@ public final class WiredLink {
     private static List<Route> routesTo(Context context, InetAddress host) {
         List<Route> routes = new ArrayList<>();
         ConnectivityManager connectivity = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (connectivity == null) {
-            return routes;
-        }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            // RouteInfo cannot be asked about a destination before Android 10, so the routes are
-            // unknown. The active network is the best guess for the medium, never for the speed.
-            routes.addAll(activeNetworkRoute(connectivity));
-            return routes;
-        }
-        Network active = connectivity.getActiveNetwork();
-        for (Network network : connectivity.getAllNetworks()) {
-            NetworkCapabilities capabilities = connectivity.getNetworkCapabilities(network);
-            LinkProperties properties = connectivity.getLinkProperties(network);
-            if (capabilities == null || properties == null) {
-                continue;
-            }
-            int prefix = -1;
-            for (RouteInfo route : properties.getRoutes()) {
-                if (route.matches(host)) {
-                    prefix = Math.max(prefix, route.getDestination().getPrefixLength());
+        if (connectivity != null) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                // RouteInfo cannot be asked about a destination before Android 10, so the routes are
+                // unknown. The active network is the best guess for the medium, never for the speed.
+                routes.addAll(activeNetworkRoute(connectivity));
+            } else {
+                Network active = connectivity.getActiveNetwork();
+                for (Network network : connectivity.getAllNetworks()) {
+                    NetworkCapabilities capabilities = connectivity.getNetworkCapabilities(network);
+                    LinkProperties properties = connectivity.getLinkProperties(network);
+                    if (capabilities == null || properties == null) {
+                        continue;
+                    }
+                    int prefix = -1;
+                    for (RouteInfo route : properties.getRoutes()) {
+                        if (route.matches(host)) {
+                            prefix = Math.max(prefix, route.getDestination().getPrefixLength());
+                        }
+                    }
+                    if (prefix >= 0) {
+                        routes.add(new Route(properties.getInterfaceName(),
+                                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET),
+                                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ||
+                                        !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN),
+                                network.equals(active), prefix,
+                                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
+                                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)));
+                    }
                 }
             }
-            if (prefix >= 0) {
-                routes.add(new Route(properties.getInterfaceName(),
-                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET),
-                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ||
-                                !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN),
-                        network.equals(active), prefix,
-                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
-                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)));
+        }
+        // Android's ConnectivityManager lists upstream networks and omits local tethering
+        // interfaces (SoftAP hotspot and wired USB/Ethernet tethering), so add any matching
+        // local subnet route too.
+        boolean keepActiveEthernet = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && hasEthernetRoute(routes);
+        addLocalRoutes(routes, host, localSubnets(), keepActiveEthernet);
+        return routes;
+    }
+
+    private static boolean hasEthernetRoute(List<Route> routes) {
+        for (Route route : routes) {
+            if (route.ethernet && route.active) {
+                return true;
             }
         }
-        return routes;
+        return false;
+    }
+
+    static boolean subnetMatches(InetAddress network, int prefixLength, InetAddress host) {
+        if (network == null || host == null) {
+            return false;
+        }
+        if (network.isLinkLocalAddress() || host.isLinkLocalAddress()) {
+            if (!(network instanceof Inet6Address) || !(host instanceof Inet6Address)) {
+                return false;
+            }
+            int netScope = ((Inet6Address) network).getScopeId();
+            int hostScope = ((Inet6Address) host).getScopeId();
+            if (netScope == 0 || netScope != hostScope) {
+                return false;
+            }
+        }
+        byte[] netBytes = network.getAddress();
+        byte[] hostBytes = host.getAddress();
+        if (netBytes.length != hostBytes.length || prefixLength <= 0 || prefixLength > netBytes.length * 8) {
+            return false;
+        }
+        int fullBytes = prefixLength / 8;
+        for (int i = 0; i < fullBytes; i++) {
+            if (netBytes[i] != hostBytes[i]) {
+                return false;
+            }
+        }
+        int rem = prefixLength % 8;
+        if (rem > 0) {
+            int mask = (0xFF << (8 - rem)) & 0xFF;
+            if ((netBytes[fullBytes] & mask) != (hostBytes[fullBytes] & mask)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static boolean isWirelessHotspotInterface(String interfaceName) {
+        if (interfaceName == null || interfaceName.isEmpty()) {
+            return false;
+        }
+        String name = interfaceName.toLowerCase(Locale.ROOT);
+        if (name.startsWith("wlan") || name.startsWith("swlan") || name.startsWith("softap")
+                || name.startsWith("p2p") || name.startsWith("wifi")) {
+            return true;
+        }
+        if (name.startsWith("ap")) {
+            if (name.length() == 2) {
+                return true;
+            }
+            char third = name.charAt(2);
+            return Character.isDigit(third) || third == '_';
+        }
+        if (name.startsWith("sap") && name.length() > 3) {
+            char fourth = name.charAt(3);
+            return Character.isDigit(fourth) || fourth == '_';
+        }
+        return false;
+    }
+
+    static boolean isWiredLocalInterface(String interfaceName) {
+        if (interfaceName == null || interfaceName.isEmpty()) {
+            return false;
+        }
+        String name = interfaceName.toLowerCase(Locale.ROOT);
+        if (name.startsWith("rndis") || name.startsWith("ncm")
+                || name.startsWith("usb") || name.startsWith("eth")) {
+            return true;
+        }
+        return name.startsWith("en") && name.length() > 2 && Character.isDigit(name.charAt(2));
+    }
+
+    static void addLocalRoutes(List<Route> routes, InetAddress host, List<LocalSubnet> localSubnets,
+                               boolean keepActiveEthernet) {
+        for (LocalSubnet subnet : localSubnets) {
+            if (!subnetMatches(subnet.address, subnet.prefixLength, host)) {
+                continue;
+            }
+            boolean wirelessHotspot = isWirelessHotspotInterface(subnet.interfaceName);
+            boolean wiredLocal = !wirelessHotspot && isWiredLocalInterface(subnet.interfaceName);
+            if (!wirelessHotspot && !wiredLocal) {
+                continue;
+            }
+            if (keepActiveEthernet && subnet.interfaceName != null
+                    && subnet.interfaceName.toLowerCase(Locale.ROOT).startsWith("wlan")) {
+                // On Android < Q, an active Ethernet fallback route has prefixLength 0 and no
+                // interface name; do not let an ordinary associated wlan* LAN override it.
+                continue;
+            }
+            boolean covered = false;
+            for (Route existing : routes) {
+                if (subnet.interfaceName.equals(existing.interfaceName)
+                        && existing.prefixLength >= subnet.prefixLength) {
+                    covered = true;
+                    break;
+                }
+            }
+            if (!covered) {
+                routes.add(new Route(subnet.interfaceName, false, false, false, subnet.prefixLength,
+                        wirelessHotspot, false));
+            }
+        }
+    }
+
+    private static List<LocalSubnet> localSubnets() {
+        List<LocalSubnet> subnets = new ArrayList<>();
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            if (interfaces == null) {
+                return subnets;
+            }
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                try {
+                    if (!iface.isUp() || iface.isLoopback()) {
+                        continue;
+                    }
+                    String name = iface.getName();
+                    for (InterfaceAddress addr : iface.getInterfaceAddresses()) {
+                        InetAddress ip = addr.getAddress();
+                        int prefix = addr.getNetworkPrefixLength();
+                        if (ip != null && prefix > 0
+                                && !ip.isLoopbackAddress()
+                                && !ip.isAnyLocalAddress()
+                                && !ip.isLinkLocalAddress()) {
+                            subnets.add(new LocalSubnet(name, ip, prefix));
+                        }
+                    }
+                } catch (SocketException | RuntimeException ignored) {
+                    // Skip unreadable interfaces; keep inspecting the rest.
+                }
+            }
+        } catch (SocketException | RuntimeException ignored) {
+            // No interface list available: leave routes unchanged.
+        }
+        return subnets;
     }
 
     /** The active network as the only route, for Android 9 and older. */

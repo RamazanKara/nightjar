@@ -1,12 +1,16 @@
 package com.limelight.utils;
 
 import com.limelight.nvstream.http.HostCapabilities;
+import com.limelight.utils.WiredLink.LocalSubnet;
 import com.limelight.utils.WiredLink.Route;
 
 import org.junit.Test;
 
+import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -131,5 +135,87 @@ public class WiredLinkTest {
             assertFalse(WiredLink.tellsHostWireless(false, family, true));
             assertFalse(WiredLink.tellsHostWireless(true, family, false));
         }
+    }
+
+    @Test public void subnetMatchesPrefixLengthsAndFamilies() throws Exception {
+        InetAddress ap = InetAddress.getByName("172.31.225.1");
+        InetAddress peer = InetAddress.getByName("172.31.225.121");
+        InetAddress otherSubnet = InetAddress.getByName("172.31.224.121");
+        assertTrue(WiredLink.subnetMatches(ap, 24, peer));
+        assertTrue(WiredLink.subnetMatches(ap, 16, otherSubnet));
+        assertFalse(WiredLink.subnetMatches(ap, 24, otherSubnet));
+        assertTrue(WiredLink.subnetMatches(peer, 32, peer));
+        assertFalse(WiredLink.subnetMatches(ap, 32, peer));
+        assertFalse(WiredLink.subnetMatches(ap, 0, peer));
+        assertFalse(WiredLink.subnetMatches(ap, 33, peer));
+
+        InetAddress v6Net = InetAddress.getByName("fd00:1234:5678::1");
+        InetAddress v6Peer = InetAddress.getByName("fd00:1234:5678::42");
+        InetAddress v6Other = InetAddress.getByName("fd00:1234:5679::42");
+        assertTrue(WiredLink.subnetMatches(v6Net, 64, v6Peer));
+        assertFalse(WiredLink.subnetMatches(v6Net, 64, v6Other));
+        assertFalse(WiredLink.subnetMatches(ap, 24, v6Peer));
+        assertFalse(WiredLink.subnetMatches(null, 24, peer));
+        assertFalse(WiredLink.subnetMatches(ap, 24, null));
+    }
+
+    @Test public void onlyWirelessAndHotspotInterfacesCountAsHotspots() {
+        for (String name : Arrays.asList("ap0", "ap1", "ap_br_wlan0", "ap_br_wlan2",
+                "wlan1", "swlan0", "softap0", "p2p-wlan0-0", "wifi0", "sap0")) {
+            assertTrue(name, WiredLink.isWirelessHotspotInterface(name));
+        }
+        for (String name : Arrays.asList("eth0", "en0", "rndis0", "usb0", "ncm0",
+                "tun0", "lo", "rmnet0", "ccmni0", "v4-rmnet0", "bridge0", "apple0", "", null)) {
+            assertFalse(String.valueOf(name), WiredLink.isWirelessHotspotInterface(name));
+        }
+    }
+
+    @Test public void localHotspotRouteMarksOfflineAndDefaultRoutedSoftApStreamsWireless() throws Exception {
+        InetAddress host = InetAddress.getByName("172.31.225.121");
+        InetAddress apIp = InetAddress.getByName("172.31.225.1");
+
+        // Local hotspot without mobile data: ConnectivityManager returned nothing.
+        List<Route> offlineHotspot = new ArrayList<>();
+        WiredLink.addLocalRoutes(offlineHotspot, host,
+                Collections.singletonList(new LocalSubnet("ap0", apIp, 24)), false);
+        assertTrue(WiredLink.wirelessToward(offlineHotspot));
+        assertEquals(0, WiredLink.mbpsToward(offlineHotspot, name -> 1000));
+
+        // Hotspot with an unknown default route (e.g. opaque VPN): /24 hotspot route wins.
+        List<Route> unknownDefault = new ArrayList<>();
+        unknownDefault.add(new Route("tun0", false, true, true, 0));
+        WiredLink.addLocalRoutes(unknownDefault, host,
+                Collections.singletonList(new LocalSubnet("ap_br_wlan2", apIp, 24)), false);
+        assertTrue(WiredLink.wirelessToward(unknownDefault));
+
+        // USB tethering (rndis0 / ncm0 / usb0) with cellular or Wi-Fi default route stays wired.
+        List<Route> usbTether = new ArrayList<>();
+        usbTether.add(new Route("rmnet0", false, false, true, 0, false, true));
+        WiredLink.addLocalRoutes(usbTether, host,
+                Collections.singletonList(new LocalSubnet("rndis0", apIp, 24)), false);
+        assertFalse(WiredLink.wirelessToward(usbTether));
+        assertEquals(0, WiredLink.mbpsToward(usbTether, name -> 1000));
+
+        // Pre-Q active Ethernet fallback is not overridden by an associated wlan0 LAN subnet.
+        List<Route> preQEthernet = new ArrayList<>(WiredLink.activeNetworkRoute(true, false, false, false));
+        WiredLink.addLocalRoutes(preQEthernet, host,
+                Collections.singletonList(new LocalSubnet("wlan0", apIp, 24)), true);
+        assertFalse(WiredLink.wirelessToward(preQEthernet));
+
+        // Link-local IPv6 subnets without matching scope must not match wireless interfaces.
+        InetAddress v6LinkLocalHost = InetAddress.getByName("fe80::1234");
+        InetAddress v6LinkLocalWlan = InetAddress.getByName("fe80::1");
+        assertFalse(WiredLink.subnetMatches(v6LinkLocalWlan, 64, v6LinkLocalHost));
+        List<Route> usbWithLinkLocalWlan = new ArrayList<>();
+        WiredLink.addLocalRoutes(usbWithLinkLocalWlan, v6LinkLocalHost,
+                Collections.singletonList(new LocalSubnet("wlan0", v6LinkLocalWlan, 64)), false);
+        assertFalse(WiredLink.wirelessToward(usbWithLinkLocalWlan));
+
+        // Existing ConnectivityManager route on the same interface is not duplicated.
+        List<Route> alreadyPresent = new ArrayList<>();
+        alreadyPresent.add(new Route("wlan1", false, false, true, 24, true, false));
+        WiredLink.addLocalRoutes(alreadyPresent, host,
+                Collections.singletonList(new LocalSubnet("wlan1", apIp, 24)), false);
+        assertEquals(1, alreadyPresent.size());
     }
 }
