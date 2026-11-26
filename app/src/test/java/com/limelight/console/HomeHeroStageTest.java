@@ -447,9 +447,9 @@ public class HomeHeroStageTest {
             View first = cards.getChildAt(0);
             int[] lifted = new int[2];
             first.getLocationInWindow(lifted);
-            int[] row = new int[2];
-            cards.getLocationInWindow(row);
-            int rest = row[0] + first.getLeft();
+            int[] shelfAt = new int[2];
+            cards.getLocationInWindow(shelfAt);
+            int rest = shelfAt[0] + first.getLeft();
             assertTrue("the lifted cover has not moved toward the screen's edge: " + lifted[0] + " from " + rest, lifted[0] >= rest);
             if (first.getScaleX() > 1f) {
                 assertTrue("it grows from beyond its cover's start edge: " + first.getPivotX(),
