@@ -358,6 +358,35 @@ public class ControlCenterTest {
         }
     }
 
+    /** A handheld's cards are narrow: a name whose word does not fit beside its cap takes the cap up into the corner. */
+    @Test
+    public void aNarrowCardsNameStaysWholeAndTheRailKeepsInsideTheDocksCorners() throws Exception {
+        try (var controller = Robolectric.buildActivity(Activity.class).setup().visible()) {
+            Activity activity = controller.get();
+            StreamMenu menu = open(activity, everything(NvApp.Role.STREAM), new ArrayList<>(), null);
+            layOut(activity, menu);
+            boolean moved = false;
+            for (int i = 0; i < menu.grid().getChildCount(); i++) {
+                if (!(menu.grid().getChildAt(i) instanceof TileGrid.Tile)) continue;
+                TileGrid.Tile card = (TileGrid.Tile) menu.grid().getChildAt(i);
+                assertEquals(card.getText() + ": no word broken", android.text.Layout.HYPHENATION_FREQUENCY_NONE,
+                        card.getHyphenationFrequency());
+                moved |= card.capInCorner();
+                if (card.capInCorner()) {
+                    assertEquals("its name has the room the cap left", card.getPaddingStart(), card.getPaddingEnd());
+                }
+            }
+            assertTrue("Keyboard's cap went up into the corner", moved);
+            View rail = rail(menu.sheet(), menu.modules().get(0));
+            float[] corners = ((android.graphics.drawable.GradientDrawable) rail.getBackground()).getCornerRadii();
+            float r = activity.getResources().getDimension(R.dimen.nj_radius_panel);
+            assertEquals("the start corners are the dock's", r, corners[0], 0.01f);
+            assertEquals(r, corners[7], 0.01f);
+            assertEquals("the page side is square", 0f, corners[2], 0.01f);
+            menu.sheet().dismiss();
+        }
+    }
+
     @Test
     public void theStreamsNoticeHeadsQuickAndThePcsEncoderLoadStandsOnPicture() throws Exception {
         try (var controller = Robolectric.buildActivity(Activity.class).setup().visible()) {

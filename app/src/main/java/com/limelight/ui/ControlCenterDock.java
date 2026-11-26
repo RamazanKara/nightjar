@@ -178,7 +178,13 @@ public final class ControlCenterDock extends Dialog implements ControlCenterFram
         rail.setOrientation(sheet ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
         rail.setGravity(android.view.Gravity.CENTER);
         if (!AppTheme.isHighContrast(context)) {
-            rail.setBackgroundColor(ContextCompat.getColor(context, R.color.nj_surface_control_center_rail_fill));
+            int fill = ContextCompat.getColor(context, R.color.nj_surface_control_center_rail_fill);
+            // Down the dock's start edge the rail's corners there are the dock's, so its fill stays inside the rim.
+            boolean rtl = res.getConfiguration().getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+            android.graphics.drawable.GradientDrawable back = new android.graphics.drawable.GradientDrawable();
+            back.setColor(fill);
+            back.setCornerRadii(sheet ? new float[8] : rtl ? new float[] {0, 0, r, r, r, r, 0, 0} : new float[] {r, r, 0, 0, 0, 0, r, r});
+            rail.setBackground(back);
         }
         int pad = res.getDimensionPixelSize(R.dimen.control_center_rail_pad);
         rail.setPadding(pad, pad, pad, pad);

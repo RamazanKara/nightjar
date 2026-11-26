@@ -270,7 +270,10 @@ final class ControlCenterCards {
         card.setCapShown(capsShown);
         boolean cap = hotkey != null && capsShown;
         // The cap stands at the end as far in as the icon at the start, and the end padding makes room for it as wide as it is.
-        card.setPaddingRelative(side, side / 2, cap ? Math.round(card.capReach()) + side / 2 : side, side / 2);
+        int beside = Math.round(card.capReach()) + side / 2;
+        card.setPaddingRelative(side, side / 2, cap ? beside : side, side / 2);
+        // A card too narrow for its name's longest word beside the cap, a handheld's, takes the cap up into its corner.
+        if (cap) card.setCapMoves(beside, side);
         card.setBackground(new Tint(context, Tint.Kind.CARD, res.getDimension(R.dimen.nj_radius_control)));
         card.setOn(on);
         if (television(context)) card.setStateListAnimator(Motion.controlFocus(context));
