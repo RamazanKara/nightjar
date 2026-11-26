@@ -32,3 +32,4 @@ mod library_and_demo_tests;
 mod responsive_and_a11y_tests;
 mod pad_links_and_pin_tests;
 mod stage_shots;
+mod first_run_scan_tests;

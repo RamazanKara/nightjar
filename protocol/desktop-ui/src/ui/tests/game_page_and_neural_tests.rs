@@ -46,10 +46,11 @@ fn a_pc_offers_the_one_action_its_state_calls_for() {
     assert_eq!(action_of(&f), PcAction::TryAgain);
     assert!(click_action(&mut f).iter().any(|c| matches!(c, Command::Refresh(_))));
 
-    // Up and not paired: Pair, and the lock says why.
+    // Up and not paired: Pair, and the lock says why. Alone it is the first run's card, which says
+    // where the PC is too.
     let mut f = Frames::new(record("Den", false, false), Reach::Online);
     assert_eq!((action_of(&f), line_of(&f)), (PcAction::Pair, PcLine::NotPaired));
-    assert!(shows(&f, "Not paired"), "{:?}", f.drawn);
+    assert!(shows(&f, "Not paired \u{b7} 192.0.2.7"), "{:?}", f.drawn);
     assert!(click_action(&mut f).iter().any(|c| matches!(c, Command::Pair(_))));
 }
 

@@ -1,6 +1,6 @@
 //! Screenshots of the stage and what stands on it without art, in each look and window:
 //! `NIGHTJAR_SHOTS=<dir> cargo test -p nightjar-desktop-ui --lib stage_screenshots -- --ignored`.
-//! `NIGHTJAR_SHOTS_ONLY=<part of a name>` writes only the files whose name has it.
+//! `NIGHTJAR_SHOTS_ONLY=<part of a name>[,<another>]` writes only the files whose name has one.
 
 use super::*;
 use crate::config::Theme;
@@ -48,6 +48,17 @@ fn pcs(look: (Theme, bool), window: ([f32; 2], f32)) -> Frames {
     f
 }
 
+/// The first run with these PCs found on the network, none of them paired yet.
+fn found(look: (Theme, bool), window: ([f32; 2], f32), names: &[&str]) -> Frames {
+    let records = names.iter().enumerate().map(|(n, name)| HostRecord { address: format!("192.0.2.{}", 12 + n), ..record(name, false, false) }).collect();
+    let mut f = stage_frames(look, window, true, records);
+    for host in &mut f.hosts.list {
+        host.reach = Reach::Online;
+        host.info = Some(answer(false, 0));
+    }
+    f
+}
+
 #[test]
 #[ignore = "writes PNGs; set NIGHTJAR_SHOTS"]
 fn stage_screenshots() {
@@ -55,7 +66,7 @@ fn stage_screenshots() {
     std::fs::create_dir_all(&dir).expect("the folder for the screenshots");
     let only = std::env::var("NIGHTJAR_SHOTS_ONLY").unwrap_or_default();
     let shoot = |f: &mut Frames, name: String| {
-        if !name.contains(&only) {
+        if !only.split(',').any(|part| name.contains(part)) {
             return;
         }
         // Past every fade and spring: what the page looks like at rest.
@@ -70,10 +81,11 @@ fn stage_screenshots() {
             let named = |page: &str| format!("stage-{page}-{look_name}-{window_name}");
             shoot(&mut pcs(look, window), named("pcs"));
             shoot(&mut stage_frames(look, window, true, Vec::new()), named("first-run-scanning"));
-            let mut found = stage_frames(look, window, true, vec![HostRecord { address: "192.0.2.12".into(), ..record("Living Room PC", false, false) }]);
-            found.hosts.list[0].reach = Reach::Online;
-            found.hosts.list[0].info = Some(answer(false, 0));
-            shoot(&mut found, named("first-run-found"));
+            let mut stopped = stage_frames(look, window, true, Vec::new());
+            stopped.hosts.discovering = false;
+            shoot(&mut stopped, named("first-run-no-search"));
+            shoot(&mut found(look, window, &["Living Room PC"]), named("first-run-found"));
+            shoot(&mut found(look, window, &["Living Room PC", "Office PC", "Studio"]), named("first-run-found-three"));
         }
     }
 }

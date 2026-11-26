@@ -268,8 +268,8 @@ fn a_short_pc_list_with_no_search_offers_search_again() {
     assert!(commands.iter().any(|c| matches!(c, Command::SearchAgain)));
 }
 
-/// A found PC arrives as a card with Pair as the page's one amber action, which takes the focus; Add PC
-/// steps down, and more PCs than a first run has make the page a list.
+/// A found PC arrives as a card with Pair, the page's one amber action, beside its name; Pair takes
+/// the focus, Add PC steps down, and more PCs than a first run has make the page a list.
 #[test]
 fn a_found_pc_rises_in_with_pair_and_add_pc_steps_down() {
     let mut f = first_run_frames(Vec::new());
@@ -289,7 +289,8 @@ fn a_found_pc_rises_in_with_pair_and_add_pc_steps_down() {
     assert!(rising.top() > settled.top(), "it rises: {rising:?} to {settled:?}");
     let at = |f: &Frames, text: &str| f.placed.iter().find(|(t, ..)| t == text).map(|p| p.1).unwrap_or_else(|| panic!("{text} in {:?}", f.drawn));
     let (pair, line, add) = (at(&f, "Pair"), at(&f, "Searching for PCs\u{2026}"), at(&f, "Add PC"));
-    assert!(settled.bottom() <= pair.top() && pair.bottom() <= line.top() && line.bottom() <= add.top(), "{pair:?} {line:?} {add:?}");
+    assert!(settled.right() <= pair.left() && pair.center().y > settled.top(), "Pair in the card's row, after the name: {settled:?} {pair:?}");
+    assert!(pair.bottom() <= line.top() && line.bottom() <= add.top(), "{pair:?} {line:?} {add:?}");
     assert!(add.top() != before.top(), "Add PC stepped down");
     assert_eq!(f.placed.iter().filter(|(t, ..)| t == "PCs").count(), 1, "the tab's alone, no page title: {:?}", f.drawn);
     let focused = f.ctx.memory(|m| m.focused()).and_then(|i| f.ctx.read_response(i)).expect("Pair has focus").rect;

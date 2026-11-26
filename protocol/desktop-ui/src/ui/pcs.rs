@@ -8,6 +8,9 @@ use super::{glass, spring};
 use egui::Shape;
 use nightjar_policy::internet_path::InternetPath;
 
+mod glyph;
+pub(super) use glyph::display_well;
+
 const PC_CARD_H: f32 = 216.0;
 const PC_CARD_PAD: f32 = 22.0;
 const SCREEN_W: f32 = 132.0;
@@ -180,7 +183,7 @@ pub(super) fn card_game(host: &Host, recents: &[crate::config::Recent]) -> Optio
 
 /// A small screen on a stand, in the state of its PC, showing `game`'s cover once it is here
 /// ([`card_game`]). `face` is the screen's rect; the stand hangs below it.
-pub(super) fn monitor(ui: &Ui, out: &mut Vec<Shape>, host: &Host, game: Option<i32>, face: Rect, reveal_id: Id) {
+fn monitor(ui: &Ui, out: &mut Vec<Shape>, host: &Host, game: Option<i32>, face: Rect, reveal_id: Id) {
     use nightjar_policy::tile::{tile_pair, title_hash};
     let ctx = ui.ctx();
     let w = face.width();
@@ -417,7 +420,12 @@ fn more_button(ui: &mut Ui, rect: Rect, id: Id, said: &str) -> Response {
 }
 
 /// The dot, or the lock of a PC not paired yet, and the line beside it. True when the line was cut.
-pub(super) fn status_line(ui: &Ui, out: &mut Vec<Shape>, at: Pos2, room: f32, line: &PcLine) -> bool {
+fn status_line(ui: &Ui, out: &mut Vec<Shape>, at: Pos2, room: f32, line: &PcLine) -> bool {
+    status_words(ui, out, at, room, line, line.words())
+}
+
+/// [`status_line`] saying `words`: the line's own, or more after them (where the PC is).
+pub(super) fn status_words(ui: &Ui, out: &mut Vec<Shape>, at: Pos2, room: f32, line: &PcLine, words: &str) -> bool {
     const FONT: f32 = 15.0;
     let ctx = ui.ctx();
     let ink: Color32 = match line {
@@ -457,8 +465,7 @@ pub(super) fn status_line(ui: &Ui, out: &mut Vec<Shape>, at: Pos2, room: f32, li
             9.0
         }
     };
-    let mut job =
-        egui::text::LayoutJob::simple_singleline(line.words().to_owned(), regular(FONT), ink);
+    let mut job = egui::text::LayoutJob::simple_singleline(words.to_owned(), regular(FONT), ink);
     job.wrap = egui::text::TextWrapping::truncate_at_width(room - lead - 8.0);
     let galley = ui.painter().layout_job(job);
     let cut = galley.elided;
