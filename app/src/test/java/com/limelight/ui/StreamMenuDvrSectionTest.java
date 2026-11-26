@@ -135,8 +135,8 @@ public class StreamMenuDvrSectionTest {
         dvr.onState(sent.get(0)[0], StreamMenuDvrSection.RECORDING, StreamMenuDvrSection.NONE, 60, 0);
         assertTrue(toasts.isEmpty());
         dvr.request(StreamMenuDvrSection.OP_STOP);
-        dvr.onClip(sent.get(1)[0], StreamMenuDvrSection.SAVED, StreamMenuDvrSection.NONE, 134, 1_250_000_000L);
-        assertEquals("Recording saved (02:14, " + StreamMenuDvrSection.size(1_250_000_000L) + ")", toasts.get(0));
+        dvr.onClip(sent.get(1)[0], StreamMenuDvrSection.SAVED, StreamMenuDvrSection.NONE, 134, 1_240_000_000L);
+        assertEquals("Recording saved (02:14, 1.2 GB)", toasts.get(0));
 
         dvr.request(StreamMenuDvrSection.OP_START);
         dvr.onState(sent.get(2)[0], StreamMenuDvrSection.ERROR, StreamMenuDvrSection.DISK_FULL, 0, 0);
