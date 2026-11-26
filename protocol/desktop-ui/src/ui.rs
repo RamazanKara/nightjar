@@ -13,6 +13,7 @@ pub mod files;
 pub mod glass;
 mod glass_lens;
 pub mod viewport_scale;
+pub mod feedback_hook;
 mod first_run;
 mod game;
 mod help;

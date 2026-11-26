@@ -341,6 +341,8 @@ impl Gui {
         }
         // The stream menu and overlay keep the night look in every theme.
         crate::theme::set_over_video(&self.ctx, over_video);
+        // The motors and the speakers belong to the game while it is on screen.
+        nightjar_desktop_ui::ui::feedback_hook::set_stream_active(&self.ctx, over_video);
     }
 
     /// Tells this pass's glass its tier.
