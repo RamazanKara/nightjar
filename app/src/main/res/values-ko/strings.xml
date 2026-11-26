@@ -571,4 +571,9 @@
     <string name="summary_hdr_shield_firmware_update">HDR을 사용하려면 NVIDIA SHIELD Android TV의 펌웨어를 업데이트하세요</string>
     <string name="full_range_vulkan_switched">디코더가 풀 레인지를 적용하지 않아, 블랙 레벨을 맞추려고 Vulkan으로 전환했습니다.</string>
     <string name="full_range_vulkan_unavailable">풀 레인지 미적용, Vulkan 없음: 검은색이 틀릴 수 있습니다. “풀 레인지 색상”을 끄세요.</string>
+    <string name="title_hdr_format">HDR 형식</string>
+    <string name="summary_hdr_format">자동은 양쪽이 지원하는 가장 좋은 HDR 형식을 사용하고, 다른 항목은 Dolby Vision 또는 HDR10을 넘는 모든 것을 뺍니다. 어떤 형식이 이상하게 보이면 바꾸세요. HDR10만을 골라도 일부 PC는 HDR10+를 보낼 수 있습니다.</string>
+    <string name="hdr_format_auto">자동</string>
+    <string name="hdr_format_no_dolby_vision">Dolby Vision 제외</string>
+    <string name="hdr_format_hdr10">HDR10만</string>
 </resources>

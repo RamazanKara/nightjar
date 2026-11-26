@@ -34,6 +34,7 @@ import com.limelight.binding.input.driver.UsbDriverService;
 import com.limelight.binding.video.CrashAccounting;
 import com.limelight.binding.video.CrashListener;
 import com.limelight.binding.video.DisplayFrameRatePolicy;
+import com.limelight.binding.video.HdrFormatPolicy;
 import com.limelight.binding.video.HdrPolicy;
 import com.limelight.binding.video.MediaCodecDecoderRenderer;
 import com.limelight.binding.video.MediaCodecHelper;
@@ -51,6 +52,7 @@ import com.limelight.nvstream.http.NvApp;
 import com.limelight.nvstream.http.NvHTTP;
 import com.limelight.nvstream.jni.MoonBridge;
 import com.limelight.nvstream.jni.NightjarPolicyJni;
+import com.limelight.preferences.HdrFormatChoice;
 import com.limelight.preferences.ControllersChoice;
 import com.limelight.preferences.GlPreferences;
 import com.limelight.preferences.PreferenceConfiguration;
@@ -282,7 +284,8 @@ final class GameStreamUiSetup {
         if (mediaStream && game.prefConfig.enableHdr) {
             HdrPolicy.Refusal refusal = HdrPolicy.displayRefusal(
                     game.videoOutput.getVideoDisplay(), true,
-                    cachedCaps == null ? 0 : cachedCaps.hdrFormats(),
+                    // Masked as the pick is: HLG cannot stand in under "HDR10 only".
+                    HdrFormatPolicy.masked(cachedCaps == null ? 0 : cachedCaps.hdrFormats(), game.prefConfig.hdrFormat),
                     MediaCodecDecoderRenderer.vulkanSurface(game.prefConfig, false));
             willStreamHdr = refusal == HdrPolicy.Refusal.NONE;
             if (!willStreamHdr) game.overlays.refuseHdr(refusal);
@@ -418,6 +421,7 @@ final class GameStreamUiSetup {
                 .setBitrateLimit(StreamRateChanges.clientLimitKbps(
                         game.prefConfig.layers == null ? null : game.prefConfig.layers.network, game.prefConfig.mobileBitrateLimit))
                 .setFecChoice(game.prefConfig.fecChoice).setRateChange(!smallStream)
+                .setHdrStaticOnly(game.prefConfig.hdrFormat == HdrFormatChoice.HDR10)
                 .setEnableSops(!smallStream && game.prefConfig.enableSops)
                 .enableLocalAudioPlayback(smallStream || game.prefConfig.playHostAudio)
                 .setMaxPacketSize(1392).setRemoteConfiguration(StreamConfiguration.STREAM_CFG_AUTO)

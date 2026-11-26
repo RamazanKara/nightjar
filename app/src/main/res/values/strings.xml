@@ -616,4 +616,9 @@
     <string name="home_setup_dismiss">Dismiss</string>
     <string name="full_range_vulkan_switched">The decoder dropped full color range. Switched to Vulkan to keep black levels right.</string>
     <string name="full_range_vulkan_unavailable">Decoder dropped full color range, no Vulkan: blacks may be off. Turn off Full color range.</string>
+    <string name="title_hdr_format">HDR format</string>
+    <string name="summary_hdr_format">Automatic uses the best HDR format both sides take; the others leave out Dolby Vision, or everything beyond HDR10. Change it if a format looks wrong; with HDR10 only some PCs may still send HDR10+.</string>
+    <string name="hdr_format_auto">Automatic</string>
+    <string name="hdr_format_no_dolby_vision">No Dolby Vision</string>
+    <string name="hdr_format_hdr10">HDR10 only</string>
 </resources>

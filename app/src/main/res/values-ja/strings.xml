@@ -571,4 +571,9 @@
     <string name="summary_hdr_shield_firmware_update">HDR を有効にするには NVIDIA SHIELD Android TV のファームウェアを更新してください</string>
     <string name="full_range_vulkan_switched">デコーダーがフルレンジを適用しないため、黒レベルを保つようVulkanに切り替えました。</string>
     <string name="full_range_vulkan_unavailable">フルレンジが適用されずVulkanも使えません。黒がおかしい場合は「フルレンジカラー」をオフに。</string>
+    <string name="title_hdr_format">HDR 形式</string>
+    <string name="summary_hdr_format">「自動」は両方が対応する最良の HDR 形式を使い、ほかの項目は Dolby Vision、または HDR10 を超えるすべてを省きます。表示がおかしい形式があれば変更してください。「HDR10 のみ」でも HDR10+ を送る PC があります。</string>
+    <string name="hdr_format_auto">自動</string>
+    <string name="hdr_format_no_dolby_vision">Dolby Vision なし</string>
+    <string name="hdr_format_hdr10">HDR10 のみ</string>
 </resources>

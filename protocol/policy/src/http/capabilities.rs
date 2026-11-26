@@ -631,6 +631,13 @@ impl HostCapabilities {
         self.evidence.as_ref().map_or(0, |e| e.nvidia_enhancements)
     }
 
+    /// Whether the host takes `rlHdrDynamic` to leave HDR10+ and HDR Vivid out of a stream.
+    pub fn hdr_dynamic_control(&self) -> bool {
+        self.evidence
+            .as_ref()
+            .is_some_and(|e| e.hdr_dynamic_control)
+    }
+
     /// `MaxVideoPacket`: the largest video packet this host accepts, including a client's 32-byte
     /// encryption header. 0 when it offers no more than stock Moonlight's 1400 bytes; a stream's
     /// DESCRIBE offer may be smaller still.

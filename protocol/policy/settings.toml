@@ -1760,6 +1760,16 @@ desktop_key = "hdr"
 advice = "Enable with an HDR screen, a compatible decoder and HDR configured on the host display. HDR10 works with any host that streams HDR; HDR10+, HLG and Dolby Vision are used where the screen, the decoder and the PC support them (Rubylight 3.0). Availability is device-filtered."
 
 [[android_setting]]
+key = "list_hdr_format"
+category = "category_basic_settings"
+tier = "more"
+kind = "list"
+xml_default = "auto"
+scope = "layer"
+desktop_key = "hdr_format"
+advice = "Automatic by default. No Dolby Vision never asks for Dolby Vision (any profile) and keeps HDR10, HDR10+ and HLG as Automatic picks them; HDR10 only asks for plain HDR10 and tells a PC that offers `HdrDynamicControl` to leave out HDR10+ and HDR Vivid (`rlHdrDynamic=0`), while other PCs may still send HDR10+. No Dolby Vision is listed only where the app asks for Dolby Vision, or while it is selected."
+
+[[android_setting]]
 key = "more_video"
 category = "category_more_video"
 tier = "main"
@@ -3569,6 +3579,14 @@ rust_type = "bool"
 default_expr = "false"
 scope = "layer"
 override_allowed = true
+
+[[desktop_setting]]
+key = "hdr_format"
+rust_type = "nightjar_policy::video_codec::hdr::HdrFormatChoice"
+default_expr = "nightjar_policy::video_codec::hdr::HdrFormatChoice::Auto"
+scope = "layer"
+override_allowed = true
+android_key = "list_hdr_format"
 
 [[desktop_setting]]
 key = "experimental_packed_444"

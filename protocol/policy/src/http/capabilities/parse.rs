@@ -162,6 +162,9 @@ impl Evidence {
                     e.nvidia_enhancements =
                         rubylight_protocol::nvidia_enhance::parse_offer(Some(&text))
                 }
+                rubylight_protocol::hdr::DYNAMIC_SERVERINFO_FIELD => {
+                    e.hdr_dynamic_control = unsigned(&text, 0xFFFF) > 0
+                }
                 "RustHostInternetPlayVersion" => {
                     e.internet_play_version = unsigned(&text, 0xFFFF) as i32
                 }

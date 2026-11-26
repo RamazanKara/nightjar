@@ -571,4 +571,9 @@
     <string name="summary_hdr_shield_firmware_update">Aggiorna il firmware del tuo NVIDIA SHIELD Android TV per abilitare l’HDR</string>
     <string name="full_range_vulkan_switched">Il decoder ha ignorato la gamma completa. Passaggio a Vulkan per neri corretti.</string>
     <string name="full_range_vulkan_unavailable">Gamma completa ignorata, niente Vulkan: neri errati. Disattiva «Gamma colori completa».</string>
+    <string name="title_hdr_format">Formato HDR</string>
+    <string name="summary_hdr_format">Automatico usa il miglior formato HDR supportato da entrambe le parti; le altre scelte escludono Dolby Vision o tutto ciò che va oltre HDR10. Cambialo se un formato si vede male; con Solo HDR10 alcuni PC possono comunque inviare HDR10+.</string>
+    <string name="hdr_format_auto">Automatico</string>
+    <string name="hdr_format_no_dolby_vision">Senza Dolby Vision</string>
+    <string name="hdr_format_hdr10">Solo HDR10</string>
 </resources>

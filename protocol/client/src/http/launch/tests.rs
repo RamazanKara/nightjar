@@ -472,3 +472,36 @@ fn launch_replies() {
         Err(Error::Status { code: 503, .. })
     ));
 }
+
+#[test]
+fn hdr10_only_asks_a_host_that_offers_it_to_leave_out_the_dynamic_metadata() {
+    let offering = ServerInfo::parse(
+        &RUBYLIGHT.replace("</root>", "<HdrDynamicControl>1</HdrDynamicControl></root>"),
+        47989,
+    )
+    .unwrap()
+    .capabilities;
+    assert!(offering.hdr_dynamic_control());
+    assert!(!rubylight().hdr_dynamic_control());
+    assert!(!HostCapabilities::UNKNOWN.hdr_dynamic_control());
+    let hdr = LaunchRequest {
+        hdr: true,
+        ..request()
+    };
+    let only = LaunchRequest {
+        hdr_static_only: true,
+        ..hdr.clone()
+    };
+    assert!(only.query(&offering, false).contains("&rlHdrDynamic=0&"));
+    // Automatic, other hosts and SDR streams send exactly today's query.
+    assert!(!hdr.query(&offering, false).contains("rlHdrDynamic"));
+    assert_eq!(
+        only.query(&rubylight(), false),
+        hdr.query(&rubylight(), false)
+    );
+    let sdr = LaunchRequest {
+        hdr: false,
+        ..only
+    };
+    assert!(!sdr.query(&offering, false).contains("rlHdrDynamic"));
+}

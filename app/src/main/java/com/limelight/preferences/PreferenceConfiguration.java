@@ -96,6 +96,8 @@ public class PreferenceConfiguration extends SettingsCatalogGen {
     public boolean tellHostLinkSpeed = true;
     /** The video FEC asked for at launch from a PC that lets the client choose it; the PC's own by default. */
     public FecChoice fecChoice = FecChoice.HOST;
+    /** "HDR format": what an HDR stream may ask for (list_hdr_format). */
+    public HdrFormatChoice hdrFormat = HdrFormatChoice.AUTO;
     /** Whether the bitrate is automatic for the stream's size and rate. */
     public boolean automaticBitrate;
     /** Link test before the first bitrate (Experimental). */

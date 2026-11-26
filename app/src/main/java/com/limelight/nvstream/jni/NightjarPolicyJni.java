@@ -422,6 +422,7 @@ public final class NightjarPolicyJni {
             int hostFormats, int displayMask, int dolbyVisionDecoders, int videoFormats);
     public static native boolean hdrFormatNeedsHlgProbe(
             boolean pyroWave, int hostFormats, int displayMask, int surfaceOrdinal);
+    public static native int hdrFormatMask(int hostFormats, int choiceOrdinal);
     public static native int hdrFormatSurface(int op, int hostFormats, int surfaceOrdinal, int windowOrdinal);
     public static native boolean hdrFormatPassesHdr10Plus(int displayMask, int transferCode);
     public static native boolean hdrFormatPyroWaveHlgRefusedByDisplay(

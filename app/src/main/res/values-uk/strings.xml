@@ -571,4 +571,9 @@
     <string name="summary_hdr_shield_firmware_update">Оновіть прошивку NVIDIA SHIELD Android TV, щоб увімкнути HDR</string>
     <string name="full_range_vulkan_switched">Декодер відкинув повний діапазон. Увімкнено Vulkan, щоб чорний був правильним.</string>
     <string name="full_range_vulkan_unavailable">Повний діапазон відкинуто, Vulkan нема: чорний може бути хибним. Вимкніть цей діапазон.</string>
+    <string name="title_hdr_format">Формат HDR</string>
+    <string name="summary_hdr_format">«Автоматично» бере найкращий формат HDR, який підтримують обидві сторони; інші варіанти прибирають Dolby Vision або все понад HDR10. Змініть, якщо якийсь формат виглядає неправильно; з «Лише HDR10» деякі ПК все одно можуть надсилати HDR10+.</string>
+    <string name="hdr_format_auto">Автоматично</string>
+    <string name="hdr_format_no_dolby_vision">Без Dolby Vision</string>
+    <string name="hdr_format_hdr10">Лише HDR10</string>
 </resources>

@@ -271,6 +271,8 @@ final class PreferenceReader {
         config.oscSteamControls = prefs.getBoolean(OSC_STEAM_CONTROLS_PREF_STRING, OSC_STEAM_CONTROLS_DEFAULT);
         config.enableHdr = prefs.getBoolean(ENABLE_HDR_PREF_STRING, DEFAULT_ENABLE_HDR)
                 && !PreferenceConfiguration.isShieldAtvFirmwareWithBrokenHdr();
+        config.hdrFormat = HdrFormatChoice.fromPreference(
+                prefs.getString(HdrFormatChoice.PREF_KEY, HdrFormatChoice.AUTO.value));
         config.enableSdr10Bit = prefs.getBoolean(ENABLE_SDR10_PREF_STRING, DEFAULT_ENABLE_SDR10);
         config.enablePip = prefs.getBoolean(ENABLE_PIP_PREF_STRING, DEFAULT_ENABLE_PIP);
         config.autoReconnect = prefs.getBoolean(AUTO_RECONNECT_PREF_STRING, DEFAULT_AUTO_RECONNECT);

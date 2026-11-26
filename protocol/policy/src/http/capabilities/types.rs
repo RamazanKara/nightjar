@@ -302,6 +302,8 @@ pub struct Evidence {
     /// The image enhancements the host runs before encoding (`NvidiaEnhancements`,
     /// `rubylight_protocol::nvidia_enhance` bits); 0 for none.
     pub nvidia_enhancements: u8,
+    /// `HdrDynamicControl`: the host honours `rlHdrDynamic` (`rubylight_protocol::hdr`).
+    pub hdr_dynamic_control: bool,
     /// -1 without `RustHostInternetPlayVersion` (paired serverinfo only), 0 when the host has
     /// Play over the internet off.
     pub internet_play_version: i32,
