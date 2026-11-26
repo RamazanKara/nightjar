@@ -1,0 +1,16 @@
+<!-- One choice in a preview picker: the picture of what it does over its name (SettingsPreviews.pick). The cards of a
+     line share its height, so a name that wraps never leaves its neighbours shorter. -->
+<com.limelight.preferences.SettingsPreviewCard xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_weight="1"
+    android:focusable="true"
+    android:clickable="true">
+    <TextView
+        android:id="@+id/settings_preview_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="?attr/nightjarFaceStrong"
+        android:textAppearance="@style/TextAppearance.Nightjar.Supporting"
+        android:textColor="@color/text_on_surface" />
+</com.limelight.preferences.SettingsPreviewCard>

@@ -511,17 +511,16 @@ final class StreamSettingsRowBindings {
         });
         fragment.findPreference(VideoScaling.PREF).setOnPreferenceClickListener(preference -> {
             SharedPreferences prefs = fragment.getPreferenceManager().getSharedPreferences();
-            AlertDialog picker = new NavigationDialogBuilder(fragment.getActivity()).setTitle(R.string.video_scaling_title)
-                    .setSingleChoiceItems(R.array.video_scaling_modes, StreamSettingsSearchAndSummaries.storedVideoScaling(prefs), (dialog, which) -> {
+            // Its choices are cards with the picture of each (SettingsPreviews); Help explains them without closing.
+            CharSequence[] names = fragment.getResources().getTextArray(R.array.video_scaling_modes);
+            SettingsPreviews.pick(fragment.getActivity(), preference.getTitle(), SettingsPreviewCard.SCALING, names,
+                    SettingsPreviews.states(VideoScaling.PREF, null, names.length, prefs),
+                    StreamSettingsSearchAndSummaries.storedVideoScaling(prefs),
+                    () -> showInfo(fragment.getActivity(), R.string.video_scaling_title, R.string.video_scaling_help), which -> {
                         SharedPreferences.Editor editor = prefs.edit();
                         VideoScaling.save(editor, which);
                         editor.apply();
-                        dialog.dismiss();
-                    }).setNeutralButton(R.string.help, null)
-                    .setNegativeButton(android.R.string.cancel, null).create();
-            UiHelper.showDialog(fragment.getActivity(), picker);
-            picker.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view ->
-                    showInfo(fragment.getActivity(), R.string.video_scaling_title, R.string.video_scaling_help));
+                    });
             return true;
         });
         fragment.findPreference(OverlayChoice.ENABLED_KEY).setOnPreferenceClickListener(preference -> {

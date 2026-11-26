@@ -412,7 +412,9 @@ final class StreamSettingsChrome {
                 preference.setLayoutResource(TextUtils.isEmpty(preference.getTitle()) ?
                         R.layout.settings_category_spacer : categoryLayout);
             } else {
-                preference.setLayoutResource(showsValueAtEnd(preference) ? R.layout.settings_preference_value : R.layout.settings_preference);
+                // A setting with a preview card says its value in the card, under the picture of it.
+                preference.setLayoutResource(SettingsPreviews.has(preference.getKey()) ? R.layout.settings_preference_preview
+                        : showsValueAtEnd(preference) ? R.layout.settings_preference_value : R.layout.settings_preference);
             }
             if (preference instanceof PreferenceGroup) {
                 stylePreferences((PreferenceGroup) preference, categoryLayout);

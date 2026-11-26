@@ -1,0 +1,59 @@
+<!-- A grouped row whose choice is easier to see than to read: the title line, then a preview card with the picture of the
+     current choice over its name (SettingsPreviewCard, filled by SettingsPreviews.bind). A switch keeps its widget on
+     the title line and has no chevron. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="@dimen/settings_row_min_height"
+    android:descendantFocusability="blocksDescendants"
+    android:background="@drawable/settings_row_press"
+    android:orientation="vertical"
+    android:paddingStart="@dimen/settings_row_inset"
+    android:paddingEnd="@dimen/settings_row_inset"
+    android:paddingTop="@dimen/settings_row_padding"
+    android:paddingBottom="@dimen/space_m">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="32dp"
+        android:gravity="center_vertical">
+        <TextView
+            android:id="@android:id/title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="?attr/nightjarFaceStrong"
+            android:textAppearance="@style/TextAppearance.Nightjar.Body"
+            android:textColor="@color/text_on_surface" />
+        <LinearLayout
+            android:id="@android:id/widget_frame"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_m"
+            android:gravity="center_vertical"
+            android:orientation="horizontal" />
+        <!-- The value rows end 2dp nearer the group's edge than the switches: the chevron keeps their line. -->
+        <ImageView
+            android:id="@+id/settings_preview_chevron"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginEnd="-2dp"
+            android:src="@drawable/settings_chevron"
+            android:importantForAccessibility="no" />
+    </LinearLayout>
+    <com.limelight.preferences.SettingsPreviewCard
+        android:id="@+id/settings_preview_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xs">
+        <com.limelight.preferences.ExpandingSummaryView
+            android:id="@android:id/summary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="@integer/settings_summary_lines"
+            android:ellipsize="end"
+            android:fontFamily="?attr/nightjarFaceStrong"
+            android:textAppearance="@style/TextAppearance.Nightjar.Supporting"
+            android:textColor="@color/text_on_surface" />
+    </com.limelight.preferences.SettingsPreviewCard>
+</LinearLayout>

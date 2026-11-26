@@ -90,7 +90,8 @@ final class StreamSettingsSearchAndSummaries {
             for (Preference pref : entry.getValue()) {
                 if (fragment.hidden.contains(pref.getKey()) || pref.getKey().startsWith(StreamSettings.MORE_PREFIX)) continue;
                 if (SettingsSearch.matches(query, pref.getTitle(), pref.getSummary(),
-                        results.getTitle() + " " + java.util.Objects.toString(fragment.descriptions.get(pref.getKey()), ""))) {
+                        results.getTitle() + " " + java.util.Objects.toString(fragment.descriptions.get(pref.getKey()), "")
+                                + SettingsPreviews.keywords(pref))) {
                     // Search rows navigate to the original setting so dependency and dialog behavior stay intact.
                     Preference result = new Preference(activity);
                     result.setKey("search_result_" + pref.getKey());

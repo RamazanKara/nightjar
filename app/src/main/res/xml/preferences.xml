@@ -166,7 +166,7 @@
 
     <!-- Display & image -->
     <PreferenceCategory android:key="category_display_main">
-        <Preference android:key="video_scaling"
+        <com.limelight.preferences.PreviewRowPreference android:key="video_scaling"
             android:title="@string/video_scaling_title" android:persistent="false" />
         <com.limelight.preferences.MaterialListPreference
             android:key="stream_orientation"
