@@ -1,2 +1,2 @@
 ## en
-- TV display compatibility is now called Keep TV video smooth and is on by default on TVs. It keeps TVs and TV boxes from stuttering after a while when the performance overlay is hidden, and on a TCL TV it lowered the delay before frames are shown.
+- **Keep TV video smooth** now activates automatically without a visible corner dot: `CompositorWatch` detects stalled display scanout callbacks or sustained post-handoff display judder and attaches an invisible `1×1` transparent `SurfaceControl` layer (`1 Hz`, off the UI thread on Android 10+ `SurfaceView`; `1×1` near-zero-alpha fallback on older Android/`TextureView`), keeping the setting off by default while letting affected TVs toggle it on from stream start.

@@ -549,6 +549,7 @@ final class GameConnection {
         game.appSurfaceFrameRateVote = null;
         game.surfaceCreated = true;
         if (game.streamRecovery.resumeStoppedStreamIfNeeded()) return;
+        game.videoOutput.updateCompositorHeartbeat();
         LimeLog.info("Video surface: " + (game.prefConfig.useTextureView ? "TextureView" : "SurfaceView")
                 + ", pacing: " + game.prefConfig.framePacing + ", newest frame: " + game.prefConfig.dropLateFrames);
         if (game.prefConfig.useTextureView) { game.videoOutput.logDisplayRefreshPolicy(game.videoOutput.getVideoDisplay()); return; }
@@ -561,6 +562,7 @@ final class GameConnection {
         game.surfaceCreated = false;
         game.videoSurface = null;
         game.appSurfaceFrameRateVote = null;
+        game.videoOutput.updateCompositorHeartbeat();
         if (game.attemptedConnection && game.decoderRenderer != null) game.decoderRenderer.prepareForStop();
         if (game.externalPresentation != null && !game.isFinishing() && !game.isDestroyed()) {
             game.videoOutput.returnVideoToDevice();

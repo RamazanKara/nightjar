@@ -17,7 +17,7 @@
     <string name="title_experimental_chipset_tuning">Tinh chỉnh chipset</string>
     <string name="summary_experimental_chipset_tuning">Có thể làm hỏng việc giải mã trên một số thiết bị. Cung cấp cho bộ giải mã MediaTek Dimensity và Samsung Exynos các cài đặt độ trễ thấp bổ sung nhằm giảm độ trễ giải mã; các chipset khác không bị ảnh hưởng. Hãy để tắt trừ khi bộ giải mã bị chậm.</string>
     <string name="title_tv_display_compatibility">Giữ video TV mượt</string>
-    <string name="summary_tv_display_compatibility">Dành cho TV và hộp TV mà hình bị giật, đứng, nhấp nháy hoặc khởi động lại sau một lúc nếu không có gì được vẽ đè lên hình, chẳng hạn lớp phủ hiệu năng. Mặc định bật trên TV. Tốn một chấm gần như đen ở góc trên bên trái, được vẽ lại mười lần mỗi giây.</string>
+    <string name="summary_tv_display_compatibility">Hãy tắt trên hầu hết các TV: Nightjar tự động bật lớp trình kết hợp vô hình nếu nhịp hiển thị bị khựng hoặc đứng hình. Bật tùy chọn này để ép dùng lớp đó ngay từ đầu trên các TV bị giật, nhấp nháy hoặc khởi động lại ngay lập tức.</string>
     <string name="scut_deleted_pc">Đã xóa PC</string>
     <string name="scut_not_paired">Chưa ghép đôi PC</string>
     <string name="scut_pc_not_found">Không tìm thấy PC</string>

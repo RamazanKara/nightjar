@@ -17,7 +17,7 @@
     <string name="title_experimental_chipset_tuning">Ajuste del chipset</string>
     <string name="summary_experimental_chipset_tuning">Puede impedir la decodificación en algunos dispositivos. Da a los decodificadores MediaTek Dimensity y Samsung Exynos ajustes adicionales de baja latencia pensados para reducir el retraso de decodificación; otros chipsets no se ven afectados. Déjalo desactivado salvo que el decodificador se retrase.</string>
     <string name="title_tv_display_compatibility">Mantener fluido el vídeo del TV</string>
-    <string name="summary_tv_display_compatibility">Para televisores y cajas de TV cuya imagen se entrecorta con el tiempo, se congela, parpadea o se reinicia si no se dibuja algo encima, como la superposición de rendimiento. Activado de forma predeterminada en televisores. Cuesta un punto casi negro en la esquina superior izquierda, redibujado diez veces por segundo.</string>
+    <string name="summary_tv_display_compatibility">Déjalo desactivado en la mayoría de los televisores: Nightjar activa automáticamente una capa de composición invisible si la cadencia de pantalla se detiene o se congela. Actívalo para forzar esa capa desde el inicio en televisores que se entrecortan, parpadean o se reinician de inmediato.</string>
     <string name="scut_deleted_pc">PC eliminado</string>
     <string name="scut_not_paired">PC no vinculado</string>
     <string name="scut_pc_not_found">PC no encontrado</string>

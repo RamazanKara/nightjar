@@ -296,6 +296,7 @@ public final class NightjarPolicyJni {
     public static final int QUEUE_SLAB_DISPLAY_WATCH = 5;
     public static final int QUEUE_SLAB_PRESENT_SCHEDULER = 6;
     public static final int QUEUE_SLAB_RECOVERY_BACKOFF = 7;
+    public static final int QUEUE_SLAB_COMPOSITOR_WATCH = 8;
 
     public static native long queueSlabCreate(int kind);
     public static native void queueSlabDestroy(int kind, long handle);
@@ -320,6 +321,8 @@ public final class NightjarPolicyJni {
                                                      boolean vrr, int streamFrameRateMilliHz, long refreshNs);
     public static native long displayQueueOp(int op, long handle, long a, long b, boolean flag);
     public static native String displayQueueTakeEvent(long handle);
+    public static native long compositorWatchOp(int op, long handle, long a, long b, boolean flag);
+    public static native String compositorWatchTakeEvent(long handle);
 
     public static native boolean presentSchedulerIsLate(long handle, long hostUs, long readyNs,
                                                         long contentIntervalNs);

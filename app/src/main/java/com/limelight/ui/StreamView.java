@@ -44,6 +44,10 @@ public class StreamView extends FrameLayout {
         return surfaceView.getHolder();
     }
 
+    public SurfaceView getSurfaceView() {
+        return surfaceView;
+    }
+
     public TextureView getTextureView() {
         return textureView;
     }
