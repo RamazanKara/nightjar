@@ -377,6 +377,8 @@ public class ControlCenterTest {
                 moved |= card.capInCorner();
                 if (card.capInCorner()) {
                     assertEquals("its name has the room the cap left", card.getPaddingStart(), card.getPaddingEnd());
+                    assertTrue(card.getText() + " starts under the cap, not beside it",
+                            card.getTotalPaddingTop() + card.getLayout().getLineTop(0) >= card.capFoot());
                 }
             }
             assertTrue("Keyboard's cap went up into the corner", moved);

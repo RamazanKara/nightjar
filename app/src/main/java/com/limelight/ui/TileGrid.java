@@ -109,7 +109,7 @@ public final class TileGrid extends ViewGroup {
         private boolean hotkeyAtEnd;
         private float endInset = -1;
         // A card's cap moves into the top end corner, and its end padding with it, where its name needs the room beside it.
-        private int besideEnd = -1, cornerEnd;
+        private int besideEnd = -1, cornerEnd, besideTop;
         private boolean inCorner;
         private boolean isSwitch;
 
@@ -156,12 +156,18 @@ public final class TileGrid extends ViewGroup {
         void setCapMoves(int besideEnd, int cornerEnd) {
             this.besideEnd = besideEnd;
             this.cornerEnd = cornerEnd;
+            besideTop = getPaddingTop();
             requestLayout();
         }
 
         /** Whether the cap stands in the top end corner now, as its name needs the room beside it. */
         boolean capInCorner() {
             return inCorner;
+        }
+
+        /** Where the cap in the corner ends, in pixels from the top: the name starts under it. */
+        int capFoot() {
+            return Math.round(cornerInset - dp + capText * 1.45f);
         }
 
         private boolean wordsFit(float room) {
@@ -228,7 +234,9 @@ public final class TileGrid extends ViewGroup {
                     int end = getPaddingEnd();
                     inCorner = !wordsFit(size - getCompoundPaddingLeft() - getCompoundPaddingRight() + end - besideEnd);
                     int want = inCorner ? cornerEnd : besideEnd;
-                    if (end != want) setPaddingRelative(getPaddingStart(), getPaddingTop(), want, getPaddingBottom());
+                    // In the corner the cap stands over the name's end, so the name starts under it.
+                    int top = inCorner ? Math.max(besideTop, capFoot() + Math.round(2 * dp)) : besideTop;
+                    if (end != want || getPaddingTop() != top) setPaddingRelative(getPaddingStart(), top, want, getPaddingBottom());
                 }
                 boolean fits = wordsFit(size - getCompoundPaddingLeft() - getCompoundPaddingRight());
                 int frequency = fits ? android.text.Layout.HYPHENATION_FREQUENCY_NONE : android.text.Layout.HYPHENATION_FREQUENCY_FULL;
