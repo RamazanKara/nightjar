@@ -456,6 +456,18 @@ fn no_shown_text_says_experimental_in_any_language() {
 }
 
 #[test]
+fn no_shown_text_names_a_mod() {
+    // Nightjar never names a mod (GPL-3.0 section 7(e)); the co-op page says co-op.
+    let names = |text: &str| text.contains("Nucleus");
+    let english: Vec<String> = marked().into_iter().map(|m| m.text).filter(|t| names(t)).collect();
+    assert!(english.is_empty(), "English text names a mod:\n{}", english.join("\n"));
+    for (lang, ..) in &LANGS[1..] {
+        let found: Vec<&str> = lookup(*lang).values().copied().filter(|t| names(t)).collect();
+        assert!(found.is_empty(), "{lang:?} text names a mod:\n{}", found.join("\n"));
+    }
+}
+
+#[test]
 fn placeholders_report_order_and_form() {
     assert_eq!(placeholders("{} of {}"), [(0, false), (1, false)]);
     assert_eq!(placeholders("{1} von {0} {{}}"), [(1, true), (0, true)]);

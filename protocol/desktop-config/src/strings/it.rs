@@ -901,10 +901,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("A file dialog is already open. Finish it first.", "Una finestra dei file è già aperta. Completala prima."),
     ("Transfer not started", "Trasferimento non avviato"),
     ("The shared folders were closed while the file dialog was open. Open them again to transfer the file.", "Le cartelle condivise sono state chiuse mentre la finestra dei file era aperta. Riaprile per trasferire il file."),
-    // Co-op (Nucleus Co-op)
+    // Co-op
     ("Co-op", "Co-op"),
     ("Co-op sessions", "Sessioni co-op"),
-    ("Play a game together with other devices, each in its own copy of the game on this PC, through Nucleus Co-op. Join a running session here, or start one with “<game> (Co-op)” in the library.", "Gioca insieme ad altri dispositivi, ognuno nella propria copia del gioco su questo PC, tramite Nucleus Co-op. Unisciti qui a una sessione in corso, o avviane una con «<gioco> (Co-op)» nella libreria."),
     ("Show sessions", "Mostra sessioni"),
     ("Joining…", "Accesso…"),
     ("The PC gave no reason.", "Il PC non ha dato alcun motivo."),
@@ -920,7 +919,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The PC refused the join.", "Il PC ha rifiutato l’accesso."),
     ("The co-op session is no longer running.", "La sessione co-op non è più in corso."),
     ("The PC cannot run co-op sessions right now.", "Il PC non può eseguire sessioni co-op al momento."),
-    ("Nucleus Co-op on the PC is busy with another session.", "Nucleus Co-op sul PC è occupato con un’altra sessione."),
     ("Starting", "Avvio"),
     ("Ended", "Terminata"),
     ("Unknown state", "Stato sconosciuto"),

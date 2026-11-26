@@ -205,13 +205,13 @@ mod tests {
         assert_eq!(session.players[1].name, None);
         // An unavailable host may leave the lists out.
         let off: Coop = serde_json::from_str(
-            r#"{"available":false,"reason":"Nucleus Co-op is not installed"}"#,
+            r#"{"available":false,"reason":"The co-op helper is not set up"}"#,
         )
         .unwrap();
         assert!(off.sessions.is_empty() && off.games.is_empty());
         assert_eq!(
             off.reason.as_deref(),
-            Some("Nucleus Co-op is not installed")
+            Some("The co-op helper is not set up")
         );
     }
 
@@ -257,11 +257,11 @@ mod tests {
             CoopProblem::of(&api(
                 409,
                 ErrorCode::SessionBusy,
-                "Nucleus Co-op runs another game"
+                "The co-op helper runs another game"
             )),
-            CoopProblem::Busy("Nucleus Co-op runs another game".into())
+            CoopProblem::Busy("The co-op helper runs another game".into())
         );
-        let missing = "Nucleus Co-op could not be installed: the download has another SHA-256";
+        let missing = "The co-op helper could not be set up: the download has another SHA-256";
         assert_eq!(
             CoopProblem::of(&api(503, ErrorCode::TemporarilyUnavailable, missing)).message(),
             missing

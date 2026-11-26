@@ -348,7 +348,7 @@ impl Launcher {
         use crate::coop_page::{join_label, phase_text, slot_text};
         section(ui, "Co-op");
         let Some(open) = self.coop.state_for(id) else {
-            let button = row(ui, "Co-op sessions", "Play a game together with other devices, each in its own copy of the game on this PC, through Nucleus Co-op. Join a running session here, or start one with “<game> (Co-op)” in the library.", |ui| {
+            let button = row(ui, "Co-op sessions", "Play a game together with other devices, each in its own copy of the game on this PC. Join a running session here, or start one with “<game> (Co-op)” in the library.", |ui| {
                 quiet_button(ui, "Show sessions")
             });
             self.focus_item(&button, "coop", false);

@@ -901,10 +901,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("A file dialog is already open. Finish it first.", "Діалог файлів уже відкрито. Спершу завершіть його."),
     ("Transfer not started", "Передавання не почато"),
     ("The shared folders were closed while the file dialog was open. Open them again to transfer the file.", "Спільні теки закрито, поки був відкритий діалог файлів. Відкрийте їх знову, щоб передати файл."),
-    // Co-op (Nucleus Co-op)
+    // Co-op
     ("Co-op", "Co-op"),
     ("Co-op sessions", "Сеанси co-op"),
-    ("Play a game together with other devices, each in its own copy of the game on this PC, through Nucleus Co-op. Join a running session here, or start one with “<game> (Co-op)” in the library.", "Грайте разом з іншими пристроями, кожен у власній копії гри на цьому ПК, через Nucleus Co-op. Приєднайтеся тут до поточного сеансу або почніть новий через «<game> (Co-op)» у бібліотеці."),
     ("Show sessions", "Показати сеанси"),
     ("Joining…", "Приєднання…"),
     ("The PC gave no reason.", "ПК не вказав причину."),
@@ -920,7 +919,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The PC refused the join.", "ПК відхилив приєднання."),
     ("The co-op session is no longer running.", "Сеанс co-op більше не триває."),
     ("The PC cannot run co-op sessions right now.", "ПК зараз не може проводити сеанси co-op."),
-    ("Nucleus Co-op on the PC is busy with another session.", "Nucleus Co-op на ПК зайнятий іншим сеансом."),
     ("Starting", "Запуск"),
     ("Ended", "Завершено"),
     ("Unknown state", "Невідомий стан"),

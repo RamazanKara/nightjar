@@ -167,13 +167,13 @@ fn every_refusal_is_shown_with_the_pcs_words_and_launches_nothing() {
             api(
                 503,
                 ErrorCode::TemporarilyUnavailable,
-                "Nucleus Co-op is not installed",
+                "The co-op helper is not set up",
             ),
             "The PC cannot run co-op sessions right now.",
         ),
         (
-            api(409, ErrorCode::SessionBusy, "Nucleus Co-op runs Halo"),
-            "Nucleus Co-op on the PC is busy with another session.",
+            api(409, ErrorCode::SessionBusy, "The co-op helper runs Halo"),
+            "The PC is busy with another co-op session.",
         ),
     ] {
         let message = match &error {

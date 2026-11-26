@@ -901,10 +901,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("A file dialog is already open. Finish it first.", "文件对话框已打开。请先完成它。"),
     ("Transfer not started", "传输未开始"),
     ("The shared folders were closed while the file dialog was open. Open them again to transfer the file.", "文件对话框打开期间共享文件夹已关闭。请重新打开它们以传输文件。"),
-    // Co-op (Nucleus Co-op)
+    // Co-op
     ("Co-op", "合作"),
     ("Co-op sessions", "合作会话"),
-    ("Play a game together with other devices, each in its own copy of the game on this PC, through Nucleus Co-op. Join a running session here, or start one with “<game> (Co-op)” in the library.", "通过 Nucleus Co-op 与其他设备一起玩游戏，每台设备在此电脑上运行自己的游戏副本。在这里加入正在进行的会话，或从游戏库中的“<游戏> (Co-op)”启动一个。"),
     ("Show sessions", "显示会话"),
     ("Joining…", "正在加入…"),
     ("The PC gave no reason.", "电脑没有给出原因。"),
@@ -920,7 +919,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The PC refused the join.", "电脑拒绝了加入请求。"),
     ("The co-op session is no longer running.", "合作会话已不再运行。"),
     ("The PC cannot run co-op sessions right now.", "电脑目前无法运行合作会话。"),
-    ("Nucleus Co-op on the PC is busy with another session.", "电脑上的 Nucleus Co-op 正忙于另一个会话。"),
     ("Starting", "正在启动"),
     ("Ended", "已结束"),
     ("Unknown state", "未知状态"),

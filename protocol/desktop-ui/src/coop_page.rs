@@ -253,7 +253,7 @@ pub fn problem_text(problem: &CoopProblem) -> String {
         CoopProblem::Refused(_) => Some(en("The PC refused the join.")),
         CoopProblem::Gone(_) => Some(en("The co-op session is no longer running.")),
         CoopProblem::Unavailable(_) => Some(en("The PC cannot run co-op sessions right now.")),
-        CoopProblem::Busy(_) => Some(en("Nucleus Co-op on the PC is busy with another session.")),
+        CoopProblem::Busy(_) => Some(en("The PC is busy with another co-op session.")),
         CoopProblem::Other(_) => None,
     };
     match why {

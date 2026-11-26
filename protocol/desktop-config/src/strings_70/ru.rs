@@ -49,4 +49,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The game is starting or stopping. Try again in a moment.", "Игра запускается или закрывается. Повторите попытку чуть позже."),
     ("There is no game the PC can pause right now.", "Сейчас нет игры, которую ПК может приостановить."),
     ("The PC couldn’t pause or resume the game. It resumes what it paused as soon as it can.", "ПК не удалось приостановить или возобновить игру. Он возобновит приостановленное, как только сможет."),
+    ("Play a game together with other devices, each in its own copy of the game on this PC. Join a running session here, or start one with “<game> (Co-op)” in the library.", "Играйте вместе с другими устройствами, каждое в своей копии игры на этом ПК. Присоединитесь здесь к идущему сеансу или начните новый через «<game> (Co-op)» в библиотеке."),
+    ("The PC is busy with another co-op session.", "ПК занят другим сеансом co-op."),
 ];

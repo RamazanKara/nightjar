@@ -49,4 +49,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The game is starting or stopping. Try again in a moment.", "Trò chơi đang khởi động hoặc đang dừng. Hãy thử lại sau giây lát."),
     ("There is no game the PC can pause right now.", "Hiện không có trò chơi nào mà PC có thể tạm dừng."),
     ("The PC couldn’t pause or resume the game. It resumes what it paused as soon as it can.", "PC không thể tạm dừng hoặc tiếp tục trò chơi. PC sẽ tiếp tục những gì đã tạm dừng ngay khi có thể."),
+    ("Play a game together with other devices, each in its own copy of the game on this PC. Join a running session here, or start one with “<game> (Co-op)” in the library.", "Chơi trò chơi cùng các thiết bị khác, mỗi thiết bị một bản trò chơi riêng trên PC này. Tham gia một phiên đang chạy tại đây, hoặc bắt đầu một phiên bằng “<trò chơi> (Co-op)” trong thư viện."),
+    ("The PC is busy with another co-op session.", "PC đang bận với một phiên co-op khác."),
 ];

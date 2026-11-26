@@ -49,4 +49,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The game is starting or stopping. Try again in a moment.", "遊戲正在啟動或結束。請稍後再試。"),
     ("There is no game the PC can pause right now.", "目前沒有電腦可以暫停的遊戲。"),
     ("The PC couldn’t pause or resume the game. It resumes what it paused as soon as it can.", "電腦未能暫停或恢復遊戲。它會盡快恢復已暫停的內容。"),
+    ("Play a game together with other devices, each in its own copy of the game on this PC. Join a running session here, or start one with “<game> (Co-op)” in the library.", "與其他裝置一起玩遊戲，每台裝置在此電腦上執行自己的遊戲副本。在這裡加入正在進行的工作階段，或從遊戲庫中的「<遊戲> (Co-op)」啟動一個。"),
+    ("The PC is busy with another co-op session.", "電腦正忙於另一個合作工作階段。"),
 ];

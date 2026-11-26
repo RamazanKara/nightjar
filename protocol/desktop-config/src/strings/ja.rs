@@ -901,10 +901,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("A file dialog is already open. Finish it first.", "ファイルダイアログがすでに開いています。先に完了してください。"),
     ("Transfer not started", "転送は開始されていません"),
     ("The shared folders were closed while the file dialog was open. Open them again to transfer the file.", "ファイルダイアログが開いている間に共有フォルダーが閉じられました。ファイルを転送するにはもう一度開いてください。"),
-    // Co-op (Nucleus Co-op)
+    // Co-op
     ("Co-op", "Co-op"),
     ("Co-op sessions", "Co-opセッション"),
-    ("Play a game together with other devices, each in its own copy of the game on this PC, through Nucleus Co-op. Join a running session here, or start one with “<game> (Co-op)” in the library.", "Nucleus Co-opを使い、このPC上でそれぞれ自分のゲームのコピーを動かして、他のデバイスと一緒にプレイします。実行中のセッションにここから参加するか、ライブラリの「<game> (Co-op)」で開始してください。"),
     ("Show sessions", "セッションを表示"),
     ("Joining…", "参加しています…"),
     ("The PC gave no reason.", "PCは理由を示しませんでした。"),
@@ -920,7 +919,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The PC refused the join.", "PCは参加を拒否しました。"),
     ("The co-op session is no longer running.", "Co-opセッションはもう実行されていません。"),
     ("The PC cannot run co-op sessions right now.", "PCは今Co-opセッションを実行できません。"),
-    ("Nucleus Co-op on the PC is busy with another session.", "PCのNucleus Co-opは別のセッションで使用中です。"),
     ("Starting", "起動中"),
     ("Ended", "終了"),
     ("Unknown state", "不明な状態"),

@@ -901,10 +901,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("A file dialog is already open. Finish it first.", "Bir dosya penceresi zaten açık. Önce onu tamamlayın."),
     ("Transfer not started", "Aktarım başlatılmadı"),
     ("The shared folders were closed while the file dialog was open. Open them again to transfer the file.", "Dosya penceresi açıkken paylaşılan klasörler kapatıldı. Dosyayı aktarmak için yeniden açın."),
-    // Co-op (Nucleus Co-op)
+    // Co-op
     ("Co-op", "Co-op"),
     ("Co-op sessions", "Co-op oturumları"),
-    ("Play a game together with other devices, each in its own copy of the game on this PC, through Nucleus Co-op. Join a running session here, or start one with “<game> (Co-op)” in the library.", "Nucleus Co-op ile, her biri bu bilgisayarda oyunun kendi kopyasında olmak üzere diğer cihazlarla birlikte oynayın. Süren bir oturuma buradan katılın veya kitaplıktaki “<game> (Co-op)” ile yeni bir tane başlatın."),
     ("Show sessions", "Oturumları göster"),
     ("Joining…", "Katılınıyor…"),
     ("The PC gave no reason.", "Bilgisayar bir neden belirtmedi."),
@@ -920,7 +919,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The PC refused the join.", "Bilgisayar katılımı reddetti."),
     ("The co-op session is no longer running.", "Co-op oturumu artık sürmüyor."),
     ("The PC cannot run co-op sessions right now.", "Bilgisayar şu anda co-op oturumu çalıştıramıyor."),
-    ("Nucleus Co-op on the PC is busy with another session.", "Bilgisayardaki Nucleus Co-op başka bir oturumla meşgul."),
     ("Starting", "Başlatılıyor"),
     ("Ended", "Sona erdi"),
     ("Unknown state", "Bilinmeyen durum"),

@@ -901,10 +901,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("A file dialog is already open. Finish it first.", "Một hộp thoại tệp đang mở. Hãy hoàn tất nó trước."),
     ("Transfer not started", "Chưa bắt đầu truyền"),
     ("The shared folders were closed while the file dialog was open. Open them again to transfer the file.", "Các thư mục chia sẻ đã đóng trong khi hộp thoại tệp đang mở. Hãy mở lại để truyền tệp."),
-    // Co-op (Nucleus Co-op)
+    // Co-op
     ("Co-op", "Co-op"),
     ("Co-op sessions", "Phiên co-op"),
-    ("Play a game together with other devices, each in its own copy of the game on this PC, through Nucleus Co-op. Join a running session here, or start one with “<game> (Co-op)” in the library.", "Chơi trò chơi cùng các thiết bị khác qua Nucleus Co-op, mỗi thiết bị một bản trò chơi riêng trên PC này. Tham gia một phiên đang chạy tại đây, hoặc bắt đầu một phiên bằng “<trò chơi> (Co-op)” trong thư viện."),
     ("Show sessions", "Hiện các phiên"),
     ("Joining…", "Đang tham gia…"),
     ("The PC gave no reason.", "PC không đưa ra lý do."),
@@ -920,7 +919,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The PC refused the join.", "PC từ chối yêu cầu tham gia."),
     ("The co-op session is no longer running.", "Phiên co-op không còn chạy."),
     ("The PC cannot run co-op sessions right now.", "PC hiện không thể chạy phiên co-op."),
-    ("Nucleus Co-op on the PC is busy with another session.", "Nucleus Co-op trên PC đang bận với một phiên khác."),
     ("Starting", "Đang khởi động"),
     ("Ended", "Đã kết thúc"),
     ("Unknown state", "Trạng thái không xác định"),

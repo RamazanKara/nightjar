@@ -901,10 +901,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("A file dialog is already open. Finish it first.", "파일 대화 상자가 이미 열려 있습니다. 먼저 완료하세요."),
     ("Transfer not started", "전송이 시작되지 않았습니다"),
     ("The shared folders were closed while the file dialog was open. Open them again to transfer the file.", "파일 대화 상자가 열려 있는 동안 공유 폴더가 닫혔습니다. 파일을 전송하려면 다시 여세요."),
-    // Co-op (Nucleus Co-op)
+    // Co-op
     ("Co-op", "Co-op"),
     ("Co-op sessions", "Co-op 세션"),
-    ("Play a game together with other devices, each in its own copy of the game on this PC, through Nucleus Co-op. Join a running session here, or start one with “<game> (Co-op)” in the library.", "Nucleus Co-op으로 이 PC에서 각자 게임 사본을 실행하며 다른 기기와 함께 플레이합니다. 여기에서 실행 중인 세션에 참가하거나 라이브러리의 “<game> (Co-op)”으로 시작하세요."),
     ("Show sessions", "세션 보기"),
     ("Joining…", "참가 중…"),
     ("The PC gave no reason.", "PC가 이유를 밝히지 않았습니다."),
@@ -920,7 +919,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The PC refused the join.", "PC가 참가를 거부했습니다."),
     ("The co-op session is no longer running.", "Co-op 세션이 더 이상 실행되고 있지 않습니다."),
     ("The PC cannot run co-op sessions right now.", "지금은 PC에서 Co-op 세션을 실행할 수 없습니다."),
-    ("Nucleus Co-op on the PC is busy with another session.", "PC의 Nucleus Co-op이 다른 세션으로 사용 중입니다."),
     ("Starting", "시작 중"),
     ("Ended", "종료됨"),
     ("Unknown state", "알 수 없는 상태"),

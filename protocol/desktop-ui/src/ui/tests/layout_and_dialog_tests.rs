@@ -268,7 +268,7 @@ fn the_details_page_lists_co_op_sessions_only_where_the_pc_offers_them_and_joins
         f.settle();
     };
     offer(&mut f, false);
-    assert!(!shows(&f, "Co-op"), "a PC without Nucleus Co-op shows none");
+    assert!(!shows(&f, "Co-op"), "a PC without co-op shows none");
     offer(&mut f, true);
     assert!(shows(&f, "Co-op") && shows(&f, "Show sessions"), "{:?}", f.drawn);
     let id = f.hosts.list[0].id;
