@@ -33,10 +33,12 @@ import static org.robolectric.Shadows.shadowOf;
 public class ModernControllerTest extends ModernControllerHarness {
     @Test public void everyControlIsItsOwnViewInTheStreamFrame() {
         ModernController controller = controller(GAME);
-        // Every control, plus each stick's knob layer above them (the WASD stick's too, though it starts hidden) and
-        // the press halos' layer under them; the Steam Controller controls only with their setting.
-        assertEquals(PadLayout.Control.values().length - 8 + 3 + 1, frame.getChildCount());
-        assertTrue(frame.getChildAt(0) instanceof PadControlView.HaloLayer);
+        // Every control with its own glow layer under all of them, plus each stick's cap layer above them (the WASD
+        // stick's too, though it starts hidden); the Steam Controller controls only with their setting.
+        int controls = PadLayout.Control.values().length - 8;
+        assertEquals(controls * 2 + 3, frame.getChildCount());
+        for (int i = 0; i < controls; i++) assertTrue(frame.getChildAt(i) instanceof PadControlView.HaloLayer);
+        assertTrue(frame.getChildAt(controls) instanceof PadControlView);
         assertNull(controller.view(PadLayout.Control.LEFT_PAD));
         assertEquals(View.GONE, controller.view(PadLayout.Control.WASD).getVisibility());
         PadControlView face = controller.view(PadLayout.Control.FACE);
@@ -428,7 +430,7 @@ public class ModernControllerTest extends ModernControllerHarness {
     @Test public void onlyStickClicksLeavesJustL3AndR3() {
         prefs.onlyL3R3 = true;
         ModernController controller = controller(GAME);
-        assertEquals("L3, R3 and the halo layer under them", 3, frame.getChildCount());
+        assertEquals("L3 and R3, each with its glow layer under it", 4, frame.getChildCount());
         assertNotNull(controller.view(PadLayout.Control.L3));
         assertNull(controller.view(PadLayout.Control.FACE));
     }

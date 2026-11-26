@@ -110,6 +110,11 @@ final class PadEditor extends FrameLayout {
         return selected;
     }
 
+    /** The sticks' deadzone setting as a share of their travel, which they draw as a guide. */
+    float stickDeadzone() {
+        return Math.max(0, Math.min(.9f, controller.prefs().oscStickDeadzone / 100f));
+    }
+
     float baseOpacity() {
         return controller.prefs().oscOpacity / 100f;
     }

@@ -7,16 +7,15 @@ import java.util.Arrays;
 
 /**
  * Tracks a {@link PadControlView}'s pressed parts, eases released parts back to rest over
- * {@link PadPainter#RELEASE_MS}, coordinates its resting/pressed alpha with its stick knob layer, and triggers
- * redraws on the shared {@link PadControlView.HaloLayer}.
+ * {@link PadPainter#RELEASE_MS}, coordinates its resting/pressed alpha with its stick knob and glow layers, and redraws
+ * the control's own {@link PadControlView.HaloLayer} when its glow changes. At opacity 0 it only follows the press:
+ * nothing eases and nothing is redrawn.
  */
 final class PadPressAnimator {
     private final PadControlView view;
     private final PadPainter painter;
     private final PadPainter.State state;
     private float restingAlpha = 1;
-    /** The layer under the controls that draws a press's halo past this control's edge; null without one. */
-    private View haloLayer;
     /** The parts held at the last look ({@link PadPainter#heldParts}), and when each let go while easing back, else 0. */
     private int heldParts;
     private final long[] releasedAt = new long[PadPainter.PARTS];
@@ -28,13 +27,9 @@ final class PadPressAnimator {
         this.state = state;
     }
 
-    /** Where this control's press halo draws ({@link PadControlView.HaloLayer}). */
-    void setHaloLayer(View haloLayer) {
-        this.haloLayer = haloLayer;
-    }
-
+    /** Redraws this control's glow, which only a visible control has. */
     void invalidateHalo() {
-        if (haloLayer != null) haloLayer.invalidate();
+        if (restingAlpha > 0) view.haloLayer().invalidate();
     }
 
     float restingAlpha() {
@@ -47,8 +42,11 @@ final class PadPressAnimator {
      * draws nothing, not the control, a stick's knob, a touchpad's finger nor the pressed amber.
      */
     void setRestingAlpha(float alpha) {
+        boolean shown = restingAlpha > 0;
         restingAlpha = alpha;
         applyAlpha();
+        // What was drawn must go, and what was skipped must come: the views draw nothing at 0.
+        if (shown != alpha > 0) view.redrawAll();
     }
 
     void applyAlpha() {
@@ -59,13 +57,13 @@ final class PadPressAnimator {
     private void showAlpha() {
         boolean active = state.flags != 0 || state.pressed || state.stickActive;
         float alpha = PadControlView.alpha(restingAlpha, active ? 1 : easingLevel());
-        if (Float.compare(view.getAlpha(), alpha) != 0) {
-            view.setAlpha(alpha);
-        }
-        View knobLayer = view.knobLayer();
-        if (knobLayer != null && Float.compare(knobLayer.getAlpha(), alpha) != 0) {
-            knobLayer.setAlpha(alpha);
-        }
+        show(view, alpha);
+        show(view.knobLayer(), alpha);
+        show(view.haloLayer(), alpha);
+    }
+
+    private static void show(View layer, float alpha) {
+        if (layer != null && Float.compare(layer.getAlpha(), alpha) != 0) layer.setAlpha(alpha);
     }
 
     /** The deepest press still easing back, or 0. */
@@ -78,8 +76,8 @@ final class PadPressAnimator {
     }
 
     /**
-     * Follows which parts are held: a part going down shows pressed at once and rings, a part let go eases back over
-     * the next frames ({@link #ease}). At opacity 0 a part only goes in and out, as nothing of it is drawn.
+     * Follows which parts are held: a part going down shows pressed at once, a part let go eases back over the next
+     * frames ({@link #ease}). At opacity 0 a part only goes in and out, as nothing of it is drawn.
      */
     private void trackPress() {
         int held = PadPainter.heldParts(view.control, state, painter.facesSwapped());
@@ -91,7 +89,6 @@ final class PadPressAnimator {
             if (on) {
                 state.press[i] = 1;
                 releasedAt[i] = 0;
-                if (!was) state.pressedAt[i] = visible ? now : 0;
             } else if (was && visible) {
                 releasedAt[i] = now;
                 letGo = true;
@@ -133,9 +130,7 @@ final class PadPressAnimator {
         Arrays.fill(releasedAt, 0);
         heldParts = PadPainter.heldParts(view.control, state, painter.facesSwapped());
         for (int i = 0; i < PadPainter.PARTS; i++) {
-            boolean on = (heldParts & 1 << i) != 0;
-            state.press[i] = on ? 1 : 0;
-            if (!on) state.pressedAt[i] = 0;
+            state.press[i] = (heldParts & 1 << i) != 0 ? 1 : 0;
         }
         showAlpha();
         invalidateHalo();

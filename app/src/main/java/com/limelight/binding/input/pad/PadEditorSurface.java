@@ -44,6 +44,8 @@ final class PadEditorSurface extends View {
         grid.setStrokeWidth(Math.max(1, density));
         guide.setColor(painter.accent());
         guide.setStrokeWidth(Math.max(1, density));
+        // The sticks show the deadzone they play with.
+        idle.deadzone = editor.stickDeadzone();
     }
 
     /** How many alignment guides the surface shows now, for tests. */
@@ -64,12 +66,11 @@ final class PadEditorSurface extends View {
             if (!editor.onSurface(control)) continue;
             PadLayout.Spec spec = draft.spec(control);
             draft.bounds(control, width, height, density, box);
-            // Show the real opacity, but never so faint that a control cannot be found.
-            float alpha = Math.max(.35f, base * spec.opacity / 100f);
-            int saved = canvas.saveLayerAlpha(box[0], box[1], box[0] + box[2], box[1] + box[3],
-                    Math.round(alpha * 255));
+            // Show the real opacity, but never so faint that a control cannot be found. The skin fades its own
+            // paints, so no control needs a layer.
+            painter.setOpacity(Math.max(.35f, base * spec.opacity / 100f));
             painter.draw(canvas, control, box[0], box[1], box[2], box[3], previewState(control));
-            canvas.restoreToCount(saved);
+            painter.setOpacity(1);
             painter.drawOutline(canvas, box[0], box[1], box[2], box[3], control == selected);
         }
         for (int i = 0; i < guidesX; i++) canvas.drawLine(guideX[i], 0, guideX[i], height, guide);

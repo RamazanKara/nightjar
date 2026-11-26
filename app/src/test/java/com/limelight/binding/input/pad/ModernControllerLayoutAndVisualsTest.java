@@ -281,18 +281,26 @@ public class ModernControllerLayoutAndVisualsTest extends ModernControllerHarnes
         controller.destroy();
     }
 
-    /** The halo layer under the controls drawn into a bitmap of the frame's size. */
+    /** The shown controls' halo layers, which lie under the controls, drawn into a bitmap of the frame's size. */
     private Bitmap haloPixels() {
-        View halo = frame.getChildAt(0);
-        assertTrue(halo instanceof PadControlView.HaloLayer);
+        assertTrue(frame.getChildAt(0) instanceof PadControlView.HaloLayer);
         Bitmap pixels = Bitmap.createBitmap(frame.getWidth(), frame.getHeight(), Bitmap.Config.ARGB_8888);
-        halo.draw(new Canvas(pixels));
+        Canvas canvas = new Canvas(pixels);
+        for (int i = 0; i < frame.getChildCount(); i++) {
+            View halo = frame.getChildAt(i);
+            if (!(halo instanceof PadControlView.HaloLayer) || halo.getVisibility() != View.VISIBLE) continue;
+            int saved = canvas.save();
+            canvas.translate(halo.getLeft(), halo.getTop());
+            canvas.clipRect(0, 0, halo.getWidth(), halo.getHeight());
+            halo.draw(canvas);
+            canvas.restoreToCount(saved);
+        }
         return pixels;
     }
 
     /**
-     * A press shows in full at once and rings; let go, it eases back over the release time, and its halo past the
-     * button's edge, where a thumb on the button leaves it in view, fades with it.
+     * A press shows in full at once; let go, it eases back over the release time, and its halo past the button's
+     * edge, where a thumb on the button leaves it in view, fades with it.
      */
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
     public void aPressShowsAtOnceAndItsHaloFadesAsItEasesBack() {
@@ -303,7 +311,6 @@ public class ModernControllerLayoutAndVisualsTest extends ModernControllerHarnes
         assertEquals("No halo at rest", 0, Color.alpha(haloPixels().getPixel(outsideX, middleY)));
         start.down(0, 5, 5, 100);
         assertEquals(1, start.state().press[0], 0);
-        assertTrue("It rings", start.state().pressedAt[0] != 0);
         assertTrue("Held, a halo past its box", Color.alpha(haloPixels().getPixel(outsideX, middleY)) > 0);
         start.up(0, 200);
         assertEquals("Let go, it starts easing back", 1, start.state().press[0], 0);
@@ -320,7 +327,6 @@ public class ModernControllerLayoutAndVisualsTest extends ModernControllerHarnes
         for (int i = 1; i < frames.size(); i++) assertTrue("Only ever further out: " + frames, frames.get(i) <= frames.get(i - 1));
         assertTrue("Partway back on the way: " + frames, frames.get(frames.size() / 2) > 0 && frames.get(frames.size() / 2) < 1);
         assertEquals("Back out", 0, start.state().press[0], 0);
-        ShadowLooper.idleMainLooper(PadPainter.RIPPLE_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
         assertEquals("and its halo gone", 0, Color.alpha(haloPixels().getPixel(outsideX, middleY)));
         controller.destroy();
     }
@@ -328,7 +334,7 @@ public class ModernControllerLayoutAndVisualsTest extends ModernControllerHarnes
     /**
      * Every control a player presses answers past its edge, where a thumb on it leaves the halo in view: each control of
      * the layout with the Steam Controller's added, the WASD stick's keys, a stick's click and a finger on the pointer
-     * touchpad. Once let go and the ring has run out, nothing stays lit.
+     * touchpad. Once let go and eased back, nothing stays lit.
      */
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
     public void everyPressableControlShowsAHaloPastItsEdge() {
@@ -356,8 +362,7 @@ public class ModernControllerLayoutAndVisualsTest extends ModernControllerHarnes
                 view.down(0, view.getWidth() / 2f, view.getHeight() / 2f, 500);
                 view.up(0, 600);
             }
-            ShadowLooper.idleMainLooper(PadPainter.RELEASE_MS + PadPainter.RIPPLE_MS + 40,
-                    java.util.concurrent.TimeUnit.MILLISECONDS);
+            ShadowLooper.idleMainLooper(PadPainter.RELEASE_MS + 40, java.util.concurrent.TimeUnit.MILLISECONDS);
             assertEquals(control + " leaves nothing once let go", 0, litOutside(haloPixels(), null));
             shapes.add(control.shape);
         }
@@ -413,7 +418,7 @@ public class ModernControllerLayoutAndVisualsTest extends ModernControllerHarnes
         return lit;
     }
 
-    /** At opacity 0 a press neither rings nor leaves a halo, and letting go drops it at once: nothing is drawn. */
+    /** At opacity 0 a press leaves no halo, and letting go drops it at once: nothing is drawn. */
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
     public void atOpacityZeroAPressHasNoHaloAndNoEasing() {
         prefs.oscOpacity = 0;
@@ -421,7 +426,7 @@ public class ModernControllerLayoutAndVisualsTest extends ModernControllerHarnes
         PadControlView start = controller.view(PadLayout.Control.START);
         float density = frame.getResources().getDisplayMetrics().density;
         start.down(0, 5, 5, 100);
-        assertEquals(0, start.state().pressedAt[0]);
+        assertEquals("It still answers", 1, start.state().press[0], 0);
         Bitmap pixels = haloPixels();
         for (int x = 0; x < pixels.getWidth(); x += Math.round(4 * density)) {
             for (int y = 0; y < pixels.getHeight(); y += Math.round(4 * density)) {
@@ -445,7 +450,6 @@ public class ModernControllerLayoutAndVisualsTest extends ModernControllerHarnes
         controller.releaseInput();
         for (PadControlView view : new PadControlView[] {start, face}) {
             assertEquals(view.control.name(), 0, view.state().press[0], 0);
-            assertEquals(view.control.name(), 0, view.state().pressedAt[0]);
         }
         assertEquals(prefs.oscOpacity / 100f, start.getAlpha(), 1e-4);
         controller.destroy();

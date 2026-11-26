@@ -1,103 +1,63 @@
 package com.limelight.binding.input.pad;
 
 import android.graphics.Canvas;
-import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.RadialGradient;
 import android.graphics.RectF;
-import android.graphics.Shader;
 
 /**
- * Draws the non-stick controls for {@link PadPainter}: D-pad cross and split arms, face cluster and split buttons,
- * shoulder/trigger/grip pills, Steam trackpads and pointer touchpad (with dot grid, mode chip and finger trail), and
- * round system buttons. Reuses scratch paints, paths and buffers so frames allocate nothing.
+ * Draws the non-stick controls for {@link PadPainter} in the 7.0 material ({@link PadSkin70}): D-pad cross and split
+ * arms, face cluster and split buttons, shoulder/trigger/grip pills, Steam trackpads and pointer touchpad (with dot
+ * grid, mode chip and finger trail), and round system buttons. Every glyph is the label colour whatever the controller
+ * family, over its dark hairline. Reuses scratch paints, paths and buffers so frames allocate nothing.
  */
 final class PadPainterControls {
-    private static final int DOTS = 0x33FFFFFF;
-    /**
-     * The face glyphs' colours per controller family, in {@link PadInput#FACE_CENTERS} order; null for the labels'
-     * one neutral colour. PlayStation's shapes stay neutral, so they never take on the look of Sony's coloured mark.
-     */
-    private static final int[][] FACE_COLORS = {
-            {0xFF7DD45E, 0xFFFF6B63, 0xFF5AAEFF, 0xFFFFD54F}, // Xbox: A green, B red, X blue, Y yellow
-            null,                                              // PlayStation: neutral, as the other labels
-            null,                                              // Nintendo: white, as on its pads
-    };
-    /** A face cluster's free sliver between its buttons and its box, as a share of the box's shorter side. */
-    private static final float FACE_SLACK = 1 - PadInput.FACE_CENTERS[0][1] - PadInput.FACE_RADIUS;
-
     private final PadPainter p;
+    private final PadSkin70 skin;
     private final Paint dots = new Paint(Paint.ANTI_ALIAS_FLAG), trail = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint fingerGlow;
-    private final Path path = new Path(), unitPath = new Path();
-    private final Matrix matrix = new Matrix();
+    private final Path path = new Path(), mark = new Path();
     /** A touchpad's dot grid, refilled for each pad drawn and grown only when a larger pad needs more. */
     private float[] dotPoints = new float[128];
 
     PadPainterControls(PadPainter painter) {
         this.p = painter;
+        this.skin = painter.skin;
         dots.setStyle(Paint.Style.STROKE);
         dots.setStrokeCap(Paint.Cap.ROUND);
-        dots.setColor(DOTS);
         trail.setStyle(Paint.Style.STROKE);
         trail.setStrokeCap(Paint.Cap.ROUND);
-        fingerGlow = PadPainter.shaderPaint(new RadialGradient(0, 0, 1,
-                new int[] {PadPainter.alpha(p.accent, .55f), PadPainter.alpha(p.accent, 0)},
-                new float[] {.3f, 1}, Shader.TileMode.CLAMP));
     }
 
     /**
-     * The D-pad as one bevelled glass cross whose arms reach the box's edges, so a wide or tall box spreads it as
-     * {@link PadInput#dpad} reads it; the arms keep the thickness of the box's shorter side. A held arm lights amber and
-     * eases back once let go; a dimple marks the middle.
+     * The D-pad as one matte cross whose arms reach the box's edges, so a wide or tall box spreads it as
+     * {@link PadInput#dpad} reads it; the arms keep the thickness of the box's shorter side. A held arm lights amber,
+     * body and rim, and eases back once let go; a ring marks the pivot.
      */
     void drawDpad(Canvas canvas, float left, float top, float width, float height, PadPainter.State state) {
-        float size = Math.min(width, height), edge = PadPainter.EDGE_DP * p.density;
+        float size = Math.min(width, height), edge = PadPainter.EDGE_DP * p.density + skin.rimWidth / 2;
         float arm = size * PadInput.DPAD_ARM, r = size * PadInput.DPAD_CORNER;
         float cx = left + width / 2, cy = top + height / 2;
         float l = left + edge, t = top + edge, w = width - 2 * edge, h = height - 2 * edge;
         plusOutline(l, t, w, h, arm, r);
-        // Its shadow along the outline, then the glass.
-        float reach = PadPainter.SHADOW_REACH_DP * p.density;
-        int saved = canvas.save();
-        canvas.translate(0, Math.min(PadPainter.SHADOW_DROP_DP * p.density, reach / 2));
-        p.ring.setStrokeWidth(2 * reach);
-        p.ring.setColor(PadPainter.SHADOW_SOFT);
-        canvas.drawPath(path, p.ring);
-        p.ring.setStrokeWidth(reach);
-        p.ring.setColor(PadPainter.SHADOW);
-        canvas.drawPath(path, p.ring);
-        canvas.restoreToCount(saved);
-        p.fill.setColor(PadPainter.GLASS);
-        canvas.drawPath(path, p.fill);
+        skin.shape(canvas, path);
         float reachX = (w - arm) / 2, reachY = (h - arm) / 2;
         armFill(canvas, state.press[0], cx - arm / 2, t, cx + arm / 2, t + reachY + r, r);
         armFill(canvas, state.press[1], cx - arm / 2, t + h - reachY - r, cx + arm / 2, t + h, r);
         armFill(canvas, state.press[2], l, cy - arm / 2, l + reachX + r, cy + arm / 2, r);
         armFill(canvas, state.press[3], l + w - reachX - r, cy - arm / 2, l + w, cy + arm / 2, r);
-        // The light from above over the whole cross: its outline taken to the box's 0..1 and scaled back.
-        if (w > 0 && h > 0) {
-            matrix.setTranslate(-l, -t);
-            matrix.postScale(1 / w, 1 / h);
-            path.transform(matrix, unitPath);
-            saved = canvas.save();
-            canvas.translate(l, t);
-            canvas.scale(w, h);
-            canvas.drawPath(unitPath, p.highlight);
-            canvas.restoreToCount(saved);
-        }
-        p.fill.setColor(0x2E000000);
-        canvas.drawCircle(cx, cy, arm * .26f, p.fill);
-        float rim = PadPainter.RIM_DP * p.density;
-        p.stroke.setStrokeWidth(rim);
-        p.stroke.setColor(PadPainter.RIM);
-        canvas.drawPath(path, p.stroke);
+        canvas.drawCircle(cx, cy, arm * .2f, skin.line(PadSkin70.alpha(skin.rim, .4f), p.density));
+        skin.shapeRim(canvas, path, 0);
+        // A held arm's own stretch of the rim lights with it.
+        float out = skin.rimWidth;
+        armRim(canvas, state.press[0], l - out, t - out, l + w + out, cy - arm / 2);
+        armRim(canvas, state.press[1], l - out, cy + arm / 2, l + w + out, t + h + out);
+        armRim(canvas, state.press[2], l - out, t - out, cx - arm / 2, t + h + out);
+        armRim(canvas, state.press[3], cx + arm / 2, t - out, l + w + out, t + h + out);
         float chevron = arm * .22f, insetX = reachX * .5f, insetY = reachY * .5f;
-        chevron(canvas, cx, t + insetY, 0, -1, chevron, state.press[0]);
-        chevron(canvas, cx, t + h - insetY, 0, 1, chevron, state.press[1]);
-        chevron(canvas, l + insetX, cy, -1, 0, chevron, state.press[2]);
-        chevron(canvas, l + w - insetX, cy, 1, 0, chevron, state.press[3]);
+        chevron(canvas, cx, t + insetY, 0, -1, chevron);
+        chevron(canvas, cx, t + h - insetY, 0, 1, chevron);
+        chevron(canvas, l + insetX, cy, -1, 0, chevron);
+        chevron(canvas, l + w - insetX, cy, 1, 0, chevron);
     }
 
     /** Puts the plus's outline, its arms {@code arm} thick with corners of radius {@code r}, in {@link #path}. */
@@ -131,21 +91,27 @@ final class PadPainterControls {
 
     private void armFill(Canvas canvas, float level, float l, float t, float r, float b, float radius) {
         if (level <= 0) return;
-        p.fill.setColor(PadPainter.alpha(p.accent, level));
-        canvas.drawRoundRect(l, t, r, b, radius, radius, p.fill);
+        canvas.drawRoundRect(l, t, r, b, radius, radius, skin.fill(PadSkin70.alpha(skin.pressedFill, level)));
     }
 
-    private void chevron(Canvas canvas, float cx, float cy, int dx, int dy, float s, float level) {
-        path.reset();
-        // Tip toward (dx, dy), arms back from it.
+    /** The cross's rim inside one arm's part of the box, lit by {@code level}; {@link #path} holds the cross. */
+    private void armRim(Canvas canvas, float level, float l, float t, float r, float b) {
+        if (level <= 0) return;
+        int saved = canvas.save();
+        canvas.clipRect(l, t, r, b);
+        skin.shapeRim(canvas, path, level);
+        canvas.restoreToCount(saved);
+    }
+
+    /** A chevron with its tip toward ({@code dx}, {@code dy}), in {@link #mark} so the cross in {@link #path} stays. */
+    private void chevron(Canvas canvas, float cx, float cy, int dx, int dy, float s) {
         float tipX = cx + dx * s * .6f, tipY = cy + dy * s * .6f;
         float backX = cx - dx * s * .4f, backY = cy - dy * s * .4f;
-        path.moveTo(backX - dy * s, backY + dx * s);
-        path.lineTo(tipX, tipY);
-        path.lineTo(backX + dy * s, backY - dx * s);
-        p.stroke.setColor(PadPainter.blend(PadPainter.LABEL, p.onAccent, level));
-        p.stroke.setStrokeWidth(2 * p.density);
-        canvas.drawPath(path, p.stroke);
+        mark.reset();
+        mark.moveTo(backX - dy * s, backY + dx * s);
+        mark.lineTo(tipX, tipY);
+        mark.lineTo(backX + dy * s, backY - dx * s);
+        for (int pass = 0; pass < 2; pass++) canvas.drawPath(mark, skin.ink(pass, PadSkin70.INK_DP * p.density));
     }
 
     /**
@@ -154,62 +120,59 @@ final class PadPainterControls {
      */
     void drawFace(Canvas canvas, float left, float top, float width, float height, PadPainter.State state) {
         float size = Math.min(width, height), r = size * PadInput.FACE_RADIUS;
-        // The buttons leave a sliver of the box free around them; their shadows stay inside it.
-        float reach = Math.max(0, Math.min(PadPainter.SHADOW_REACH_DP * p.density, size * FACE_SLACK - PadPainter.SHADOW_DROP_DP * p.density));
         for (int i = 0; i < PadInput.FACE_CENTERS.length; i++) {
             float cx = left + PadInput.FACE_CENTERS[i][0] * width, cy = top + PadInput.FACE_CENTERS[i][1] * height;
             float level = state.press[i];
-            p.disc(canvas, cx, cy, r, r, level, reach);
-            faceGlyph(canvas, p.faceButtonAt(i), cx, cy, r - PadPainter.PRESS_IN_DP * p.density * level, level);
+            skin.disc(canvas, cx, cy, r, r, level);
+            faceGlyph(canvas, p.faceButtonAt(i), cx, cy, r - skin.sink(level));
         }
     }
 
-    /** One face button of a split cluster: the cluster's glass button filling its box, with the glyph set's glyph. */
+    /** One face button of a split cluster: the cluster's button filling its box, with the glyph set's glyph. */
     void drawFaceButton(Canvas canvas, PadLayout.Control control, float left, float top, float width,
                         float height, PadPainter.State state) {
         float level = state.press[0], edge = PadPainter.EDGE_DP * p.density;
         float cx = left + width / 2, cy = top + height / 2;
         float rx = width / 2 - edge, ry = height / 2 - edge;
-        p.disc(canvas, cx, cy, rx, ry, level, PadPainter.SHADOW_REACH_DP * p.density);
-        faceGlyph(canvas, control.memberIndex(), cx, cy, Math.min(rx, ry) - PadPainter.PRESS_IN_DP * p.density * level, level);
+        skin.disc(canvas, cx, cy, rx, ry, level);
+        faceGlyph(canvas, control.memberIndex(), cx, cy, Math.min(rx, ry) - skin.sink(level));
     }
 
     /**
      * The glyph on the face button at {@code index} of radius {@code r}: the family's letter, or PlayStation's shapes
-     * drawn as lines so they stay crisp at any size; in the family's colour (PlayStation's neutral), dark on amber
-     * while pressed.
+     * drawn as lines so they stay crisp at any size. Every family draws in the one label colour: the skin has no
+     * coloured glyphs, and PlayStation's shapes never take on the look of Sony's coloured mark.
      */
-    private void faceGlyph(Canvas canvas, int index, float cx, float cy, float r, float level) {
+    private void faceGlyph(Canvas canvas, int index, float cx, float cy, float r) {
         PadLayout.Glyph glyph = p.glyph();
-        int[] colors = FACE_COLORS[glyph.ordinal()];
-        int color = PadPainter.blend(colors == null ? PadPainter.LABEL : colors[index], p.onAccent, level);
         if (glyph != PadLayout.Glyph.PLAYSTATION) {
-            p.label(canvas, PadGlyphs.face(glyph, index), cx, cy, r * .95f, color);
+            skin.text(canvas, PadGlyphs.face(glyph, index), cx, cy, r * .95f);
             return;
         }
-        float s = r * .42f;
-        p.stroke.setColor(color);
-        p.stroke.setStrokeWidth(Math.max(1.5f * p.density, s * .24f));
-        switch (index) {
-            case 0: // Cross
-                canvas.drawLine(cx - s * .8f, cy - s * .8f, cx + s * .8f, cy + s * .8f, p.stroke);
-                canvas.drawLine(cx - s * .8f, cy + s * .8f, cx + s * .8f, cy - s * .8f, p.stroke);
-                break;
-            case 1: // Circle
-                canvas.drawCircle(cx, cy, s * .9f, p.stroke);
-                break;
-            case 2: // Square
-                p.rect.set(cx - s * .78f, cy - s * .78f, cx + s * .78f, cy + s * .78f);
-                canvas.drawRoundRect(p.rect, s * .1f, s * .1f, p.stroke);
-                break;
-            default: // Triangle, raised a little so it looks centred
-                path.reset();
-                path.moveTo(cx, cy - s);
-                path.lineTo(cx + s * .98f, cy + s * .66f);
-                path.lineTo(cx - s * .98f, cy + s * .66f);
-                path.close();
-                canvas.drawPath(path, p.stroke);
-                break;
+        float s = r * .42f, weight = Math.max(1.5f * p.density, s * .24f);
+        for (int pass = 0; pass < 2; pass++) {
+            Paint ink = skin.ink(pass, weight);
+            switch (index) {
+                case 0: // Cross
+                    canvas.drawLine(cx - s * .8f, cy - s * .8f, cx + s * .8f, cy + s * .8f, ink);
+                    canvas.drawLine(cx - s * .8f, cy + s * .8f, cx + s * .8f, cy - s * .8f, ink);
+                    break;
+                case 1: // Circle
+                    canvas.drawCircle(cx, cy, s * .9f, ink);
+                    break;
+                case 2: // Square
+                    p.rect.set(cx - s * .78f, cy - s * .78f, cx + s * .78f, cy + s * .78f);
+                    canvas.drawRoundRect(p.rect, s * .1f, s * .1f, ink);
+                    break;
+                default: // Triangle, raised a little so it looks centred
+                    path.reset();
+                    path.moveTo(cx, cy - s);
+                    path.lineTo(cx + s * .98f, cy + s * .66f);
+                    path.lineTo(cx - s * .98f, cy + s * .66f);
+                    path.close();
+                    canvas.drawPath(path, ink);
+                    break;
+            }
         }
     }
 
@@ -230,11 +193,11 @@ final class PadPainterControls {
         RectF shape = p.chip;
         shape.set(left + edge, top + edge, left + width - edge, top + height - edge);
         float thickness = vertical ? shape.width() : shape.height();
-        p.slab(canvas, shape, armRadius(shape, vertical), level, PadPainter.SHADOW_REACH_DP * p.density);
+        skin.slab(canvas, shape, armRadius(shape, vertical), level);
         int dx = control == PadLayout.Control.DPAD_LEFT ? -1 : control == PadLayout.Control.DPAD_RIGHT ? 1 : 0;
         int dy = control == PadLayout.Control.DPAD_UP ? -1 : control == PadLayout.Control.DPAD_DOWN ? 1 : 0;
         float size = Math.min(thickness, vertical ? shape.height() : shape.width());
-        chevron(canvas, shape.centerX(), shape.centerY(), dx, dy, size * .22f, level);
+        chevron(canvas, shape.centerX(), shape.centerY(), dx, dy, size * .22f);
     }
 
     void drawPill(Canvas canvas, PadLayout.Control control, float left, float top, float width, float height,
@@ -244,30 +207,30 @@ final class PadPainterControls {
         shape.set(left + edge, top + edge, left + width - edge, top + height - edge);
         // A stadium filling the box, lying or standing: the shorter side is the round end.
         float thickness = Math.min(shape.width(), shape.height());
-        p.slab(canvas, shape, thickness / 2, level, PadPainter.SHADOW_REACH_DP * p.density);
-        float sunk = Math.min(p.inner.width(), p.inner.height());
-        int color = PadPainter.blend(PadPainter.LABEL, p.onAccent, level);
+        skin.slab(canvas, shape, thickness / 2, level);
+        RectF inner = skin.inner;
+        float sunk = Math.min(inner.width(), inner.height());
         if (control == PadLayout.Control.TOUCHPAD) {
             // Touchpad: a small pad with its click line, like the one on a PlayStation pad.
-            float h = sunk * .4f, w = Math.min(p.inner.width() * .5f, h * 1.8f);
-            float l = p.inner.centerX() - w / 2, t = p.inner.centerY() - h / 2;
-            p.stroke.setColor(color);
-            p.stroke.setStrokeWidth(1.5f * p.density);
+            float h = sunk * .4f, w = Math.min(inner.width() * .5f, h * 1.8f);
+            float l = inner.centerX() - w / 2, t = inner.centerY() - h / 2;
             p.rect.set(l, t, l + w, t + h);
-            canvas.drawRoundRect(p.rect, h * .25f, h * .25f, p.stroke);
-            canvas.drawLine(p.rect.centerX(), t + h * .3f, p.rect.centerX(), t + h * .7f, p.stroke);
+            for (int pass = 0; pass < 2; pass++) {
+                Paint ink = skin.ink(pass, 1.5f * p.density);
+                canvas.drawRoundRect(p.rect, h * .25f, h * .25f, ink);
+                canvas.drawLine(p.rect.centerX(), t + h * .3f, p.rect.centerX(), t + h * .7f, ink);
+            }
             return;
         }
         String name = PadGlyphs.shoulder(control, p.glyph());
         if (name == null) name = PadPainter.pillLabel(control);
         // A long label (the grips') shrinks to stay inside the pill.
-        p.text.setTextSize(sunk * .42f);
-        float fit = Math.min(1, p.inner.width() * .8f / Math.max(1, p.text.measureText(name)));
-        p.label(canvas, name, p.inner.centerX(), p.inner.centerY(), sunk * .42f * fit, color);
+        float fit = Math.min(1, inner.width() * .8f / Math.max(1, skin.textWidth(name, sunk * .42f)));
+        skin.text(canvas, name, inner.centerX(), inner.centerY(), sunk * .42f * fit);
     }
 
     /**
-     * A touchpad: a rounded glass pad with a faint dot grid, its rim lit amber while touched. A Steam Controller
+     * A touchpad: a rounded matte pad with a faint dot grid, its rim lit amber while touched. A Steam Controller
      * trackpad shows its side's {@code letter} in the middle; the pointer touchpad shows its mode's word as a small chip
      * in a corner ({@code word}), so a glance says whether it moves the pointer or the camera. The finger shows as an
      * amber dot with a short trail that fades behind it.
@@ -278,29 +241,18 @@ final class PadPainterControls {
         RectF shape = p.chip;
         shape.set(left + edge, top + edge, left + width - edge, top + height - edge);
         float size = Math.min(shape.width(), shape.height()), radius = size * corner;
-        p.shadowRound(canvas, shape, radius, PadPainter.SHADOW_REACH_DP * p.density, 1);
-        p.fill.setColor(PadPainter.blend(PadPainter.GLASS, PadPainter.GLASS_HELD, level));
-        canvas.drawRoundRect(shape, radius, radius, p.fill);
-        p.highlightRound(canvas, shape, radius);
+        // A surface, not a key: a finger lights its rim and leaves the body clear for the game behind it.
+        skin.slab(canvas, shape, radius, skin.fill, PadSkin70.blend(skin.rim, skin.pressedRim, level), 0);
         drawDots(canvas, shape, radius);
-        float rim = PadPainter.RIM_DP * p.density;
-        p.stroke.setStrokeWidth(rim);
-        p.stroke.setColor(PadPainter.blend(PadPainter.RIM, p.accent, level));
-        p.rect.set(shape);
-        p.rect.inset(rim / 2, rim / 2);
-        canvas.drawRoundRect(p.rect, radius, radius, p.stroke);
-        if (letter != null) p.label(canvas, letter, shape.centerX(), shape.centerY(), size * .22f, PadPainter.alpha(PadPainter.LABEL, .6f));
+        if (letter != null) skin.text(canvas, letter, shape.centerX(), shape.centerY(), size * .22f, PadSkin70.alpha(skin.label, .7f));
         if (word != null && !word.isEmpty()) drawChip(canvas, word, shape, size, radius);
         drawTrail(canvas, left, top, width, height, state);
         if (!Float.isNaN(state.touchX)) {
             float fx = left + Math.max(0, Math.min(width, state.touchX)), fy = top + Math.max(0, Math.min(height, state.touchY));
             float dot = Math.min(7 * p.density, size * .1f);
-            PadPainter.unit(canvas, fingerGlow, fx, fy, dot * 2.6f, dot * 2.6f);
-            p.fill.setColor(p.accent);
-            canvas.drawCircle(fx, fy, dot, p.fill);
-            p.stroke.setStrokeWidth(1.5f * p.density);
-            p.stroke.setColor(0xCCFFFFFF);
-            canvas.drawCircle(fx, fy, dot, p.stroke);
+            canvas.drawCircle(fx, fy, dot * 1.9f, skin.line(PadSkin70.alpha(skin.pressedRim, .3f), dot * .8f));
+            canvas.drawCircle(fx, fy, dot, skin.fill(skin.pressedRim));
+            canvas.drawCircle(fx, fy, dot, skin.line(skin.label, 1.5f * p.density));
         }
     }
 
@@ -321,22 +273,19 @@ final class PadPainterControls {
             }
         }
         dots.setStrokeWidth(2 * p.density);
+        dots.setColor(skin.tint(PadSkin70.alpha(skin.rim, .32f)));
         canvas.drawPoints(dotPoints, 0, k, dots);
     }
 
-    /** The pointer touchpad's mode word as a small amber chip in its upper left corner, sized to the pad. */
+    /** The pointer touchpad's mode word as a small dark chip in its upper left corner, sized to the pad. */
     private void drawChip(Canvas canvas, String word, RectF area, float size, float radius) {
         float textSize = Math.max(7 * p.density, Math.min(12 * p.density, size * .14f));
-        p.text.setTextSize(textSize);
-        float pad = textSize * .7f, w = p.text.measureText(word) + 2 * pad, h = textSize * 1.75f;
+        float pad = textSize * .7f, w = skin.textWidth(word, textSize) + 2 * pad, h = textSize * 1.75f;
         float inset = Math.max(4 * p.density, Math.min(radius * .45f, size * .14f));
         p.rect.set(area.left + inset, area.top + inset, area.left + inset + w, area.top + inset + h);
-        p.fill.setColor(PadPainter.alpha(p.accent, .22f));
-        canvas.drawRoundRect(p.rect, h / 2, h / 2, p.fill);
-        p.stroke.setStrokeWidth(p.density);
-        p.stroke.setColor(PadPainter.alpha(p.accent, .6f));
-        canvas.drawRoundRect(p.rect, h / 2, h / 2, p.stroke);
-        p.label(canvas, word, p.rect.centerX(), p.rect.centerY(), textSize, p.accent);
+        canvas.drawRoundRect(p.rect, h / 2, h / 2, skin.fill(skin.shadow));
+        canvas.drawRoundRect(p.rect, h / 2, h / 2, skin.line(PadSkin70.alpha(skin.rim, .6f), p.density));
+        skin.text(canvas, word, p.rect.centerX(), p.rect.centerY(), textSize);
     }
 
     /** The finger's last places as amber strokes, thinner and fainter the older they are, gone after {@link PadPainter#TRAIL_MS}. */
@@ -348,7 +297,7 @@ final class PadPainterControls {
             if (age >= PadPainter.TRAIL_MS) continue;
             float fade = 1 - age / (float) PadPainter.TRAIL_MS, along = i / (float) (state.trailCount - 1);
             trail.setStrokeWidth((1.5f + 3.5f * along) * p.density);
-            trail.setColor(PadPainter.alpha(p.accent, .7f * fade * (.3f + .7f * along)));
+            trail.setColor(skin.tint(PadSkin70.alpha(skin.pressedRim, .7f * fade * (.3f + .7f * along))));
             canvas.drawLine(left + Math.max(0, Math.min(width, state.trailX[from])), top + Math.max(0, Math.min(height, state.trailY[from])),
                     left + Math.max(0, Math.min(width, state.trailX[to])), top + Math.max(0, Math.min(height, state.trailY[to])), trail);
         }
@@ -360,28 +309,36 @@ final class PadPainterControls {
         float level = state.press[0], edge = PadPainter.EDGE_DP * p.density;
         float cx = left + width / 2, cy = top + height / 2;
         float rx = width / 2 - edge, ry = height / 2 - edge;
-        p.disc(canvas, cx, cy, rx, ry, level, PadPainter.SHADOW_REACH_DP * p.density);
-        float r = Math.min(rx, ry) - PadPainter.PRESS_IN_DP * p.density * level;
-        int color = PadPainter.blend(PadPainter.LABEL, p.onAccent, level);
+        skin.disc(canvas, cx, cy, rx, ry, level);
+        float r = Math.min(rx, ry) - skin.sink(level);
         float g = r * .42f;
-        p.stroke.setColor(color);
-        p.stroke.setStrokeWidth(1.75f * p.density);
         switch (control) {
             case SELECT: {
-                // View: two overlapping windows.
+                // View: two windows, the front one over the back one's corner. Only the back one's part in view is
+                // drawn, so nothing has to cover it.
                 float w = g * 1.1f, h = g * .85f, o = g * .35f;
-                p.rect.set(cx - w / 2 - o, cy - h / 2 - o, cx + w / 2 - o, cy + h / 2 - o);
-                canvas.drawRoundRect(p.rect, g * .15f, g * .15f, p.stroke);
-                p.rect.offset(2 * o, 2 * o);
-                p.fill.setColor(PadPainter.blend(0xFF22262E, p.accent, level));
-                canvas.drawRoundRect(p.rect, g * .15f, g * .15f, p.fill);
-                canvas.drawRoundRect(p.rect, g * .15f, g * .15f, p.stroke);
+                float l = cx - w / 2 - o, t = cy - h / 2 - o;
+                path.reset();
+                path.moveTo(l + 2 * o, t + h);
+                path.lineTo(l, t + h);
+                path.lineTo(l, t);
+                path.lineTo(l + w, t);
+                path.lineTo(l + w, t + 2 * o);
+                p.rect.set(l + 2 * o, t + 2 * o, l + 2 * o + w, t + 2 * o + h);
+                for (int pass = 0; pass < 2; pass++) {
+                    Paint ink = skin.ink(pass, PadSkin70.INK_DP * p.density);
+                    canvas.drawPath(path, ink);
+                    canvas.drawRoundRect(p.rect, g * .15f, g * .15f, ink);
+                }
                 break;
             }
             case START: {
                 // Menu: three lines.
-                for (int i = -1; i <= 1; i++) {
-                    canvas.drawLine(cx - g * .75f, cy + i * g * .5f, cx + g * .75f, cy + i * g * .5f, p.stroke);
+                for (int pass = 0; pass < 2; pass++) {
+                    Paint ink = skin.ink(pass, PadSkin70.INK_DP * p.density);
+                    for (int i = -1; i <= 1; i++) {
+                        canvas.drawLine(cx - g * .75f, cy + i * g * .5f, cx + g * .75f, cy + i * g * .5f, ink);
+                    }
                 }
                 break;
             }
@@ -395,11 +352,11 @@ final class PadPainterControls {
                 path.lineTo(cx - g * .55f, cy + g * .7f);
                 path.lineTo(cx + g * .55f, cy + g * .7f);
                 path.lineTo(cx + g * .55f, cy - g * .25f);
-                canvas.drawPath(path, p.stroke);
+                for (int pass = 0; pass < 2; pass++) canvas.drawPath(path, skin.ink(pass, PadSkin70.INK_DP * p.density));
                 break;
             }
             default:
-                p.label(canvas, control.name(), cx, cy, r * .7f, color);
+                skin.text(canvas, control.name(), cx, cy, r * .7f);
                 break;
         }
     }

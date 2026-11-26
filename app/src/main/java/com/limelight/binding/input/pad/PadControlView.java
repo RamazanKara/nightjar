@@ -23,7 +23,11 @@ import java.util.Arrays;
  * finger, sends it as a touch on that pad and clicks the pad from a tap; a grip holds from one tap to the next. The pointer touchpad moves the
  * mouse or the camera, with tap, two-finger right-click and two-finger scroll. A split cluster's members are views of
  * their own, and a finger that lands on one slides across all four ({@link Group}). A press shows at once; let go, it
- * eases back over {@link PadPainter#RELEASE_MS}, and its halo past the control's edge draws in the {@link HaloLayer}.
+ * eases back over {@link PadPainter#RELEASE_MS}, and its glow past the control's edge draws in its {@link HaloLayer}.
+ *
+ * <p>Over the stream it costs as little as it can. A press redraws this control's own views and nothing else of the
+ * frame; none of them needs an offscreen layer to fade ({@link #hasOverlappingRendering}); and at opacity 0 nothing is
+ * drawn or redrawn at all, while the control still takes every touch.
  */
 @SuppressLint("ViewConstructor") // Created by ModernController for one control.
 final class PadControlView extends View {
@@ -47,6 +51,8 @@ final class PadControlView extends View {
     private boolean haptics = true;
     /** A stick's knob, drawn in a larger view of its own; null for every other control. */
     private final KnobLayer knobLayer;
+    /** This control's glow past its edge, drawn in a larger view of its own under the controls. */
+    private final HaloLayer haloLayer;
     private final PadPressAnimator animator;
     private final PadStickHandler stickHandler;
     private final PadTrackpadHandler trackpadHandler;
@@ -68,6 +74,7 @@ final class PadControlView extends View {
         setHapticFeedbackEnabled(true);
         Arrays.fill(pointerIds, -1);
         knobLayer = control.shape == PadLayout.Shape.STICK ? new KnobLayer(context, this) : null;
+        haloLayer = new HaloLayer(context, this);
         animator = new PadPressAnimator(this, painter, state);
         stickHandler = control.shape == PadLayout.Shape.STICK ? new PadStickHandler(this, keys) : null;
         trackpadHandler = control.shape == PadLayout.Shape.PAD ? new PadTrackpadHandler(this) : null;
@@ -94,10 +101,16 @@ final class PadControlView extends View {
 
         @Override
         protected void onDraw(Canvas canvas) {
+            if (owner.animator.restingAlpha() <= 0) return;
             // The control's box sits centred in this view.
             int width = owner.getWidth(), height = owner.getHeight();
             owner.painter.drawStickKnob(canvas, owner.control, (getWidth() - width) / 2f, (getHeight() - height) / 2f,
                     width, height, owner.state);
+        }
+
+        @Override
+        public boolean hasOverlappingRendering() {
+            return false;
         }
 
         @SuppressLint("ClickableViewAccessibility") // Draws only; touches fall through to what is below.
@@ -108,21 +121,18 @@ final class PadControlView extends View {
     }
 
     /**
-     * Draws the press cue that reaches past the controls' edges ({@link PadPainter#drawHalo}), so a thumb covering a
-     * small button still sees it answer: one view under every control, the size of the frame, taking no touches. It
-     * draws only around a held or easing part, never for a control at opacity 0, and a control asks it to redraw when
-     * its press changes; its own frames run only while a press ring does.
+     * Draws one control's press cue past its edge ({@link PadPainter#drawHalo}), so a thumb covering a small button
+     * still sees it answer: the control's box grown by the glow's reach on every side, under every control, taking no
+     * touches. It draws only around a held or easing part and never at opacity 0, and only its own control asks it to
+     * redraw, so a press never redraws more of the frame than the pressed control and its glow.
      */
     @SuppressLint("ViewConstructor")
     static final class HaloLayer extends View {
-        private final PadPainter painter;
-        private final java.util.Collection<PadControlView> controls;
+        private final PadControlView owner;
 
-        /** {@code controls} is read on every draw, so the layer follows the controller's controls as they change. */
-        HaloLayer(Context context, PadPainter painter, java.util.Collection<PadControlView> controls) {
+        HaloLayer(Context context, PadControlView owner) {
             super(context);
-            this.painter = painter;
-            this.controls = controls;
+            this.owner = owner;
             setFocusable(false);
             setClickable(false);
             setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -130,15 +140,16 @@ final class PadControlView extends View {
 
         @Override
         protected void onDraw(Canvas canvas) {
-            long now = AnimationUtils.currentAnimationTimeMillis();
-            boolean running = false;
-            for (PadControlView view : controls) {
-                if (view.getVisibility() != VISIBLE || view.animator.restingAlpha() <= 0) continue;
-                // The controls are this layer's siblings, laid out in the same frame.
-                running |= painter.drawHalo(canvas, view.control, view.getLeft() - getLeft(), view.getTop() - getTop(),
-                        view.getWidth(), view.getHeight(), view.state, view.getAlpha(), now);
-            }
-            if (running) postInvalidateOnAnimation();
+            if (owner.animator.restingAlpha() <= 0) return;
+            // The control's box sits centred in this view.
+            int width = owner.getWidth(), height = owner.getHeight();
+            owner.painter.drawHalo(canvas, owner.control, (getWidth() - width) / 2f, (getHeight() - height) / 2f,
+                    width, height, owner.state);
+        }
+
+        @Override
+        public boolean hasOverlappingRendering() {
+            return false;
         }
 
         @SuppressLint("ClickableViewAccessibility") // Draws only; touches fall through to what is below.
@@ -148,9 +159,14 @@ final class PadControlView extends View {
         }
     }
 
-    /** Where this control's press halo draws ({@link HaloLayer}). */
-    void setHaloLayer(View haloLayer) {
-        animator.setHaloLayer(haloLayer);
+    /** This control's glow in its own view, to add under the controls ({@link HaloLayer}). */
+    View haloLayer() {
+        return haloLayer;
+    }
+
+    /** How far past each edge of the box the glow's view reaches, in whole pixels. */
+    int haloReach() {
+        return painter.haloReach();
     }
 
     /** The knob's own view for a stick, to add above the controls; null for other controls. */
@@ -167,9 +183,18 @@ final class PadControlView extends View {
     public void setVisibility(int visibility) {
         super.setVisibility(visibility);
         if (knobLayer != null) knobLayer.setVisibility(visibility);
+        haloLayer.setVisibility(visibility);
         // A hidden member takes no input, also from a finger that slid onto it from another member.
         if (group != null && visibility != VISIBLE) group.update(null);
-        animator.invalidateHalo();
+    }
+
+    /**
+     * A control's fills and strokes barely overlap, so fading it needs no offscreen layer: each is drawn at the
+     * view's alpha. Over a stream that saves a buffer per control whenever the opacity is below 100 %.
+     */
+    @Override
+    public boolean hasOverlappingRendering() {
+        return false;
     }
 
     /**
@@ -257,7 +282,9 @@ final class PadControlView extends View {
     }
 
     void configureStick(boolean floating, float deadzone) {
-        if (stickHandler != null) stickHandler.configure(floating, deadzone);
+        if (stickHandler == null) return;
+        // The stick draws the deadzone it works with as a guide.
+        state.deadzone = stickHandler.configure(floating, deadzone);
     }
 
     /** With the Steam Controller controls, a finger on an analog stick also touches that controller's stick. */
@@ -323,9 +350,23 @@ final class PadControlView extends View {
         if (trackpadHandler != null) trackpadHandler.finishPadClick();
     }
 
+    /** Whether anything of this control is drawn: not at opacity 0, where it only takes touches. */
+    boolean drawn() {
+        return animator.restingAlpha() > 0;
+    }
+
+    /** Redraws the control and its knob; at opacity 0 neither shows, so neither is drawn again. */
     void redraw() {
+        if (!drawn()) return;
         invalidate();
         if (knobLayer != null) knobLayer.invalidate();
+    }
+
+    /** Redraws every view of this control whatever its opacity: it just went to 0 or came back from it. */
+    void redrawAll() {
+        invalidate();
+        if (knobLayer != null) knobLayer.invalidate();
+        haloLayer.invalidate();
     }
 
     LayoutGamepad gamepad() {
@@ -354,6 +395,8 @@ final class PadControlView extends View {
 
     @Override
     protected void onDraw(Canvas canvas) {
+        // Invisible controls: the player chose 0 %, so the frame holds nothing of this control.
+        if (animator.restingAlpha() <= 0) return;
         state.now = AnimationUtils.currentAnimationTimeMillis();
         if (knobLayer != null) {
             painter.drawStickBase(canvas, control, 0, 0, getWidth(), getHeight(), state);
@@ -361,7 +404,7 @@ final class PadControlView extends View {
             painter.draw(canvas, control, 0, 0, getWidth(), getHeight(), state);
         }
         // A touchpad's trail fades over the next frames, also once the finger lifts.
-        if (animator.restingAlpha() > 0 && state.trailShows(state.now)) postInvalidateOnAnimation();
+        if (state.trailShows(state.now)) postInvalidateOnAnimation();
     }
 
     /** A touchpad finger at ({@code x}, {@code y}); {@code first} starts a new trail behind it. */
