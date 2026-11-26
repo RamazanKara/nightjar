@@ -113,9 +113,17 @@ fn a_confirmed_ac3_offer_plays_unchunked_frames_whole() {
             .iter()
             .all(|p| p.len() == 12 + 2560 || p.len() == 24 + 2560)
     );
-    for packet in &packets {
-        host.audio.send_to(packet, client).unwrap();
-        thread::sleep(Duration::from_micros(500));
+    // A block (four frames and their parity) at a time, each read and its frames played before
+    // the next goes out: a burst would overrun the socket's default receive buffer or the
+    // 30-packet play queue on a loaded machine, and lose frames the assertions count on.
+    for block in packets.chunks(6) {
+        let wire = session.wire_bytes() + block.iter().map(|p| p.len() as u64).sum::<u64>();
+        for packet in block {
+            host.audio.send_to(packet, client).unwrap();
+            thread::sleep(Duration::from_micros(500));
+        }
+        until("the block read", || session.wire_bytes() >= wire);
+        until("the block played", || session.stats().audio_queue_len == 0);
     }
     let last = Some(ac3_frame(FRAMES - 1));
     until("the last AC3 frame", || {
