@@ -451,7 +451,10 @@ public class HomeHeroStageTest {
             cards.getLocationInWindow(row);
             int rest = row[0] + first.getLeft();
             assertTrue("the lifted cover has not moved toward the screen's edge: " + lifted[0] + " from " + rest, lifted[0] >= rest);
-            if (first.getScaleX() > 1f) assertTrue("it grows from beyond its start edge: " + first.getPivotX(), first.getPivotX() < 0f);
+            if (first.getScaleX() > 1f) {
+                assertTrue("it grows from beyond its cover's start edge: " + first.getPivotX(),
+                        first.getPivotX() < first.findViewById(R.id.console_cover_frame).getLeft());
+            }
 
             assertTheStageHasTheArtOf(home, title.getText().toString());
             capture(home, "home-tv-night");
