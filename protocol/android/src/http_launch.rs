@@ -98,6 +98,7 @@ fn parse_launch_request(v: &Value) -> Result<LaunchRequest, Error> {
         rate_change: v["rate_change"].as_bool().unwrap_or(false),
         confirm_replace: v["confirm_replace"].as_bool().unwrap_or(false),
         clipboard_sync: v["clipboard_sync"].as_bool().unwrap_or(false),
+        launch_curtain: v["launch_curtain"].as_bool().unwrap_or(false),
         display_luminance,
         rtx_hdr: v["rtx_hdr"].as_bool(),
         rtx_video: v["rtx_video"].as_bool(),
@@ -268,4 +269,18 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarHttpJni_launchCon
         "terminate_completed": is_terminate_completed(&err),
     }));
     new_jstring(&env, &reply)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_launch_json_asks_for_the_curtain_only_when_it_says_so() {
+        let key = "00112233445566778899AABBCCDDEEFF";
+        let asked = json!({"ri_key_hex": key, "launch_curtain": true});
+        assert!(parse_launch_request(&asked).unwrap().launch_curtain);
+        let older = json!({"ri_key_hex": key});
+        assert!(!parse_launch_request(&older).unwrap().launch_curtain);
+    }
 }

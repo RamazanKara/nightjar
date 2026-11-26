@@ -542,6 +542,10 @@ public class NvHTTP implements AutoCloseable {
         return NvHttpLaunch.asksClipboardSync(context);
     }
 
+    public static boolean asksLaunchCurtain(ConnectionContext context) {
+        return NvHttpLaunch.asksLaunchCurtain(context);
+    }
+
     static String getLaunchQuery(ConnectionContext context, int appId, boolean enableHdr) {
         return NvHttpLaunch.getLaunchQuery(context, appId, enableHdr);
     }

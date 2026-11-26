@@ -30,6 +30,7 @@ pub mod identity;
 pub mod internet;
 pub mod jni_input;
 pub mod jni_stream;
+mod launch_curtain;
 pub mod library_order;
 mod listener;
 pub mod mdns;

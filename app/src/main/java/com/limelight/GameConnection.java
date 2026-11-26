@@ -44,6 +44,7 @@ import com.limelight.nvstream.jni.NightjarPolicyJni;
 import com.limelight.nvstream.jni.NightjarSessionJni;
 import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.ui.ConnectingScreen;
+import com.limelight.ui.LaunchCurtainController;
 import com.limelight.ui.StreamMenuHint;
 import com.limelight.utils.ClipboardSync;
 import com.limelight.utils.ShortcutHelper;
@@ -71,7 +72,16 @@ final class GameConnection {
     static final long USB_DETACH_WAIT_MS = 500;
     @VisibleForTesting static final int MOVE_WATCH_READS = 50;
 
-    GameConnection(Game game) { this.game = game; }
+    final LaunchCurtainController launchCurtain;
+
+    GameConnection(Game game) {
+        this.game = game;
+        launchCurtain = new LaunchCurtainController(game, LaunchCurtainController.NATIVE, screen -> {
+            if (game.spinner == screen) game.spinner = null;
+            screen.dismiss();
+        }, text -> game.messages.alert(text, Toast.LENGTH_LONG),
+                () -> LaunchCurtainController.dismissOnHost(game.conn != null ? game.conn.nativeApiClient() : null));
+    }
 
     void destroyMoveWatch() {
         if (moveWatchTask != null) {
@@ -235,6 +245,7 @@ final class GameConnection {
 
     void stopConnection() {
         destroyMoveWatch();
+        launchCurtain.end();
         if (hostLossWatch != null) hostLossWatch.stop();
         if (openPlaySettled != null) game.bitrateHandler.removeCallbacks(openPlaySettled);
         game.adaptation.stopFoundationAbr();
@@ -398,7 +409,8 @@ final class GameConnection {
                 openPlaySettled = OpenPlay.settleAfter(game, game.bitrateHandler);
             }
             dropConnectingCover();
-            if (game.spinner != null) { game.spinner.dismiss(); game.spinner = null; }
+            // Stays over the stream while the game starts on the PC, when the launch has a curtain.
+            if (game.spinner != null) launchCurtain.hold(game.spinner);
             game.connected = true;
             game.videoOutput.updateCompositorHeartbeat();
             startHostLossWatch();

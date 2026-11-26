@@ -464,6 +464,8 @@ pub fn request(endpoint: &Endpoint, op: &str, argument: &str) -> String {
     match client(endpoint) {
         // This device's away wake keys (`crate::wake_relay`); the app keeps them out of logs.
         Ok(client) if op == crate::wake_relay::KEYS_OP => ok(client.wake_relay()),
+        // Show PC screen on the launch curtain (`LaunchCurtainController`).
+        Ok(client) if op == "session.curtain.dismiss" => ok(client.dismiss_launch_curtain()),
         Ok(client) => quick_suspend::execute(&client, op)
             .or_else(|| stream_doctor::execute(&client, op, argument))
             .unwrap_or_else(|| execute(&client, op, argument)),

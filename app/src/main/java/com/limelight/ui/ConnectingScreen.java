@@ -227,6 +227,30 @@ public final class ConnectingScreen {
         });
     }
 
+    /**
+     * The launch curtain over the running stream ({@link LaunchCurtainController}), on the main thread: the stage word
+     * (null keeps the word shown), the card while a launcher or Windows wants the player (null for none) with the
+     * waiting window's title, and Show PC screen while {@code onShowScreen} is not null. Cancel stays as it is.
+     */
+    public void showCurtain(String stageWord, CharSequence attention, CharSequence windowTitle, Runnable onShowScreen) {
+        if (dismissed || failed) return;
+        if (stageWord != null) setStage(stageWord);
+        View card = dialog.findViewById(R.id.conn_attention);
+        boolean newCard = attention != null && card.getVisibility() != View.VISIBLE;
+        card.setVisibility(attention == null ? View.GONE : View.VISIBLE);
+        if (attention != null) {
+            ((TextView) dialog.findViewById(R.id.conn_attention_line)).setText(attention);
+            TextView titleView = dialog.findViewById(R.id.conn_attention_title);
+            titleView.setText(windowTitle);
+            titleView.setVisibility(windowTitle == null || windowTitle.length() == 0 ? View.GONE : View.VISIBLE);
+        }
+        View show = dialog.findViewById(R.id.conn_show_screen);
+        show.setVisibility(onShowScreen == null ? View.GONE : View.VISIBLE);
+        show.setOnClickListener(onShowScreen == null ? null : v -> onShowScreen.run());
+        // The card asks the player to act: keys land on Show PC screen, Back and B still cancel.
+        if (newCard && onShowScreen != null) focusFirst(show);
+    }
+
     public void dismiss() {
         dismissed = true;
         activity.runOnUiThread(() -> {
@@ -242,6 +266,7 @@ public final class ConnectingScreen {
         ring.setBare(true);
         stage.setVisibility(View.GONE);
         cancel.setVisibility(View.GONE);
+        dialog.findViewById(R.id.conn_show_screen).setVisibility(View.GONE);
         panel.setVisibility(View.VISIBLE);
         ((TextView) dialog.findViewById(R.id.conn_error_title)).setText(heading);
         TextView what = dialog.findViewById(R.id.conn_error_what);

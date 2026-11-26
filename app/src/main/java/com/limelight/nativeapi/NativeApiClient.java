@@ -201,6 +201,14 @@ public final class NativeApiClient {
         return quickSuspend("quick_suspend.resume");
     }
 
+    /**
+     * Show PC screen (POST /session/curtain/dismiss): the host lifts the launch curtain of this device's launch and
+     * stops following its start. Needs Launch and the session; the curtain here lifted already.
+     */
+    public void dismissCurtain() throws NativeApiException {
+        call("session.curtain.dismiss", "");
+    }
+
     private NativeQuickSuspend quickSuspend(String op) throws NativeApiException {
         try {
             return NativeQuickSuspend.parse(call(op, ""));

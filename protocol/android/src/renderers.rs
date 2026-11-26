@@ -35,6 +35,8 @@ pub struct Video {
     /// The "Video data straight to the decoder" setting, for [`direct_hand_off`].
     codec_direct: bool,
     chunks: ChunkBatch,
+    /// A frame went to the decoder: the launch curtain has heard of the first picture.
+    pictured: bool,
 }
 
 impl Video {
@@ -48,6 +50,7 @@ impl Video {
             pyrowave: false,
             codec_direct,
             chunks: ChunkBatch::default(),
+            pictured: false,
         }
     }
 
@@ -372,6 +375,11 @@ impl VideoDecoder for Video {
             ];
             Ok(b.int(env, b.m.dr_submit_direct, &args))
         });
+        if !self.pictured {
+            // After the frame went, so the curtain's word costs it no time.
+            self.pictured = true;
+            crate::launch_curtain::picture(&b);
+        }
         decode_status(status)
     }
 

@@ -378,6 +378,12 @@ public class MoonBridge extends MoonBridgeForwarders {
         if (listener != null) listener.clipboardSyncRefused(reason);
     }
 
+    // The launch curtain changed: CurtainBridge.state() says how.
+    public static void bridgeClLaunchCurtain() {
+        NvConnectionListener listener = connectionListener;
+        if (listener != null) listener.launchCurtainChanged();
+    }
+
     public static void bridgeClHostTiming(byte[] payload) {
         VideoDecoderRenderer renderer = videoRenderer;
         HostTimingReport report = HostTimingReport.parse(payload);

@@ -60,6 +60,7 @@ pub struct Methods {
     pub clipboard_sync_refused: JStaticMethodID,
     pub dvr_state: JStaticMethodID,
     pub dvr_clip: JStaticMethodID,
+    pub launch_curtain: JStaticMethodID,
 }
 
 pub struct Bridge {
@@ -139,6 +140,7 @@ pub fn init(env: &mut JNIEnv, class: &JClass) -> jni::errors::Result<()> {
         clipboard_sync_refused: id("bridgeClClipboardSyncRefused", "(I)V")?,
         dvr_state: id("bridgeClDvrState", "(IIIIIIJJ)V")?,
         dvr_clip: id("bridgeClDvrClip", "(IIIIJ)V")?,
+        launch_curtain: id("bridgeClLaunchCurtain", "()V")?,
     };
     let bridge = Arc::new(Bridge {
         vm: env.get_java_vm()?,

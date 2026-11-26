@@ -669,6 +669,7 @@ public class Game extends Activity implements SurfaceHolder.Callback, TextureVie
     @Override public void textInput(int kind, int inputType, int flags, int element) { runOnUiThread(() -> keyboardInput.onHostTextField(kind, inputType, flags, element)); }
     @Override public void clipboardSync(String text) { runOnUiThread(() -> { if (clipboardSync != null) clipboardSync.received(text); }); }
     @Override public void clipboardSyncRefused(int reason) { runOnUiThread(() -> { if (clipboardSync != null) clipboardSync.refused(reason); }); }
+    @Override public void launchCurtainChanged() { streamConnection.launchCurtain.changed(); }
 
     @Override
     public void cursorShape(byte[] message) {

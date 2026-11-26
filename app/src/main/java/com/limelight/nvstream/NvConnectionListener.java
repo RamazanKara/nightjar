@@ -88,6 +88,9 @@ public interface NvConnectionListener {
     /** A host copy clipboard sync refused: MoonBridge.CLIPBOARD_REFUSED_*. On the receive thread. */
     default void clipboardSyncRefused(int reason) {}
 
+    /** The launch curtain changed ({@code CurtainBridge.state()}). On any thread. */
+    default void launchCurtainChanged() {}
+
     default void setAdaptiveTriggers(short controllerNumber, byte eventFlags, byte typeLeft,
                                      byte typeRight, byte[] left, byte[] right) {}
 

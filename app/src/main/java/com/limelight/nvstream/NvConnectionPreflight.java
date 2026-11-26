@@ -30,6 +30,7 @@ import com.limelight.nvstream.http.HostHttpResponseException;
 import com.limelight.nvstream.http.NvApp;
 import com.limelight.nvstream.http.NvHTTP;
 import com.limelight.nvstream.http.PairingManager;
+import com.limelight.nvstream.jni.CurtainBridge;
 import com.limelight.nvstream.jni.MoonBridge;
 import com.limelight.nvstream.jni.NightjarSessionJni;
 import com.limelight.preferences.HostDisplayChoice;
@@ -589,6 +590,8 @@ final class NvConnectionPreflight {
                             hintPrefs.audioPassthrough, hintPrefs.muteAudio,
                             context.streamConfig.getAudioConfiguration().channelCount));
                     MoonBridge.requestFrameWarp(hintPrefs.frameWarp, frameWarp.isSupported(), frameWarpHostTooOld);
+                    // Before the handshake, whose DESCRIBE says whether the host keeps the curtain.
+                    CurtainBridge.begin(NvHTTP.asksLaunchCurtain(context));
                     Network streamNetwork = RoamingNetworkWatch.defaultNetwork(appContext);
                     int ret = MoonBridge.startConnection(
                             context.serverAddress.address, context.serverAppVersion, context.rtspSessionUrl,

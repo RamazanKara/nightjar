@@ -59,6 +59,13 @@ final class NvHttpLaunch {
                 && getLaunchQuery(context, app.getAppId(), false).contains("&rlClipboardSync=1");
     }
 
+    /** Whether the launch asked the host for its launch curtain (control message 0x5548). */
+    static boolean asksLaunchCurtain(ConnectionContext context) {
+        NvApp app = context.streamConfig.getApp();
+        return app != null && context.hostCaps != null
+                && getLaunchQuery(context, app.getAppId(), false).contains("&rlLaunchCurtain=1");
+    }
+
     static String getLaunchQuery(ConnectionContext context, int appId, boolean enableHdr) {
         try {
             String req = buildLaunchRequestJson(context, appId, enableHdr);
@@ -102,7 +109,9 @@ final class NvHttpLaunch {
                 .put("playstation_mask", sc.getPlayStationGamepadMask() & 0xFFFF)
                 .put("persist_gamepads", sc.getPersistGamepadsAfterDisconnect())
                 .put("rate_change", ctx.rateChange).put("confirm_replace", ctx.confirmReplace)
-                .put("clipboard_sync", ctx.streamConfig.getClipboardSync());
+                .put("clipboard_sync", ctx.streamConfig.getClipboardSync())
+                // A game's start, as opposed to a resume or an action: the host's setting decides the rest.
+                .put("launch_curtain", app != null && role == NvApp.Role.STREAM && app.getControl() == NvApp.Control.NONE);
         j.put("hdr_static_only", sc.getHdrStaticOnly());
         if (ctx.fecChoice != null) j.put("fec", ctx.fecChoice.wireValue);
         if (sc.getDisplayLuminance() != null) {

@@ -221,6 +221,8 @@ impl Listener for Events {
 
     fn host_control_messages(&self, messages: &[u16]) {
         engine::announce_host_messages(messages);
+        // Without 0x5548 the curtain the launch asked for lifts now.
+        crate::launch_curtain::offered(&self.bridge, messages);
     }
 
     fn host_packed444_modes(&self, modes: u8) {
@@ -514,8 +516,8 @@ impl Listener for Events {
                 args.push(bridge::long(bytes));
                 b.post(m.dvr_clip, &args);
             }
-            // The launch curtain reaches the Java side in its own change.
-            ControlEvent::LaunchCurtain(_) => {}
+            // The curtain's rules run here (launch_curtain.rs); Java reads the result.
+            ControlEvent::LaunchCurtain(state) => crate::launch_curtain::heard(b, state),
             // The session reports terminations through connection_terminated.
             ControlEvent::Terminated { .. } => {}
         }
