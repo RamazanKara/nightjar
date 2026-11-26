@@ -573,4 +573,8 @@
     <string name="full_range_vulkan_unavailable">Plage complète ignorée, pas de Vulkan : noirs faussés. Désactivez la plage complète.</string>
     <string name="launch_warning_virtual_display_unavailable">L’écran virtuel du PC n’est pas disponible, ce flux affiche donc son écran physique.</string>
     <string name="launch_warning_virtual_display_disabled_by_client">Cet appareil a demandé l’écran du PC lui-même, le flux n’utilise donc pas d’écran virtuel.</string>
+    <string name="frame_warp_update_host">Frame Warp est désactivé : il faut la version actuelle de Nightjar et de l’application de streaming du PC.</string>
+    <string name="frame_warp_overlay_update_host">Frame Warp : nécessite la version actuelle sur le PC</string>
+    <string name="frame_warp_overlay_confidence">%1$s, confiance %2$s %%</string>
+    <string name="frame_warp_overlay_confidence_gyro">%1$s, confiance %2$s %%, gyroscope calé</string>
 </resources>

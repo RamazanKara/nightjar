@@ -573,4 +573,8 @@
     <string name="full_range_vulkan_unavailable">Dải đầy đủ bị bỏ, không có Vulkan: màu đen có thể sai. Hãy tắt “Dải màu đầy đủ”.</string>
     <string name="launch_warning_virtual_display_unavailable">Màn hình ảo của PC không khả dụng, nên luồng này hiển thị màn hình vật lý.</string>
     <string name="launch_warning_virtual_display_disabled_by_client">Thiết bị này đã yêu cầu màn hình riêng của PC, nên luồng không dùng màn hình ảo.</string>
+    <string name="frame_warp_update_host">Frame Warp đã tắt: cần phiên bản hiện tại của Nightjar và ứng dụng phát trực tuyến trên PC.</string>
+    <string name="frame_warp_overlay_update_host">Frame Warp: cần phiên bản hiện tại trên PC</string>
+    <string name="frame_warp_overlay_confidence">%1$s, độ tin cậy %2$s%%</string>
+    <string name="frame_warp_overlay_confidence_gyro">%1$s, độ tin cậy %2$s%%, con quay đã khóa</string>
 </resources>

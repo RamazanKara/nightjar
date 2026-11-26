@@ -573,4 +573,8 @@
     <string name="full_range_vulkan_unavailable">Gamma completa ignorata, niente Vulkan: neri errati. Disattiva «Gamma colori completa».</string>
     <string name="launch_warning_virtual_display_unavailable">Lo schermo virtuale del PC non è disponibile, quindi questo stream mostra il suo schermo fisico.</string>
     <string name="launch_warning_virtual_display_disabled_by_client">Questo dispositivo ha chiesto lo schermo del PC stesso, quindi lo stream non usa uno schermo virtuale.</string>
+    <string name="frame_warp_update_host">Frame Warp è disattivato: richiede la versione attuale di Nightjar e dell’app di streaming del PC.</string>
+    <string name="frame_warp_overlay_update_host">Frame Warp: richiede la versione attuale sul PC</string>
+    <string name="frame_warp_overlay_confidence">%1$s, affidabilità %2$s%%</string>
+    <string name="frame_warp_overlay_confidence_gyro">%1$s, affidabilità %2$s%%, giroscopio agganciato</string>
 </resources>
