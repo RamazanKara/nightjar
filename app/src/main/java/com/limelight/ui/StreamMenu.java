@@ -147,6 +147,8 @@ public final class StreamMenu {
         public String encoderLoad;
         /** The later PC features this PC advertises, by the model's gate names; a card of theirs shows only when named. */
         public java.util.Set<String> gates = java.util.Collections.emptySet();
+        /** Instant Replay on a host that offers Stream DVR for this stream; null leaves it out. */
+        public StreamMenuDvrSection dvr;
 
         public Options(NvApp.Role role, ComputerDetails host) {
             this.role = role;

@@ -245,6 +245,7 @@ final class GameMenuActions {
                 game.getString(R.string.launch_warning_virtual_display_unavailable),
                 game.getString(R.string.launch_warning_virtual_display_disabled_by_client));
         options.encoderLoad = game.overlays.encoderLoad();
+        options.dvr = game.streamDvr;
         return options;
     }
 
