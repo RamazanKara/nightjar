@@ -95,10 +95,10 @@ public class NativeCoopTest {
     @Test
     public void anUnavailableHostSaysWhy() throws Exception {
         transport.reply("pc", "coop", NativeApiFixtures.ok("{\"available\":false,\"reason\":"
-                + "\"Nucleus Co-op is not installed.\",\"games\":[],\"sessions\":[]}"));
+                + "\"The co-op helper is not set up.\",\"games\":[],\"sessions\":[]}"));
         NativeCoop coop = client().coop();
         assertFalse(coop.available);
-        assertEquals("Nucleus Co-op is not installed.", coop.reason);
+        assertEquals("The co-op helper is not set up.", coop.reason);
     }
 
     @Test

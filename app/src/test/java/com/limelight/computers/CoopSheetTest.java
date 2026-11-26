@@ -338,11 +338,11 @@ public class CoopSheetTest {
     @Test
     public void anUnavailableJoinClosesTheSheetWithTheHostsWords() {
         script("coop", "{\"ok\":" + OPEN + "}");
-        script("coop.join", api(503, "temporarily_unavailable", "Nucleus Co-op is not installed."));
+        script("coop.join", api(503, "temporarily_unavailable", "The co-op helper is not set up."));
         CoopSheet sheet = sheet();
         row(sheet, R.string.coop_join).performClick();
         assertEquals("Co-op is not available on Office", ui.title.toString());
-        assertEquals("Nucleus Co-op is not installed.", ui.message.toString());
+        assertEquals("The co-op helper is not set up.", ui.message.toString());
         assertNull(ui.retry);
         assertFalse(sheet.sheet().isShowing());
     }
@@ -363,11 +363,11 @@ public class CoopSheetTest {
 
     @Test
     public void aHostWithoutCoopSaysWhyAndCloses() {
-        script("coop", "{\"ok\":{\"available\":false,\"reason\":\"Nucleus Co-op is not installed.\","
+        script("coop", "{\"ok\":{\"available\":false,\"reason\":\"The co-op helper is not set up.\","
                 + "\"games\":[],\"sessions\":[]}}");
         CoopSheet sheet = sheet();
         assertEquals("Co-op is not available on Office", ui.title.toString());
-        assertEquals("Nucleus Co-op is not installed.", ui.message.toString());
+        assertEquals("The co-op helper is not set up.", ui.message.toString());
         assertFalse(sheet.sheet().isShowing());
     }
 
