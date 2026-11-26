@@ -203,6 +203,7 @@ impl Gamepads {
         };
         self.pads.push(Pad {
             audio: None,
+            bt_audio: None,
             id,
             handle,
             index,
