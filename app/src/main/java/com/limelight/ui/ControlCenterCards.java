@@ -60,6 +60,10 @@ final class ControlCenterCards {
         }
     }
 
+    // Under this height, in dp, a window gets the low cards: upright phones and tablets are over it, a phone on its side
+    // and a handheld under it.
+    private static final int LOW_WINDOW_DP = 480;
+
     static boolean television(Context context) {
         return (context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_TYPE_MASK)
                 == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;
@@ -253,7 +257,7 @@ final class ControlCenterCards {
         card.setIconSize(res.getDimensionPixelSize(R.dimen.control_center_card_icon));
         card.setIconPadding(res.getDimensionPixelSize(R.dimen.control_center_gap));
         card.setIconTint(ink(context, true));
-        int height = res.getDimensionPixelSize(R.dimen.nj_size_control_center_card);
+        int height = cardHeight(context);
         card.setMinHeight(height);
         card.setMinimumHeight(height);
         card.setMinWidth(0);
@@ -272,6 +276,17 @@ final class ControlCenterCards {
         if (television(context)) card.setStateListAnimator(Motion.controlFocus(context));
         write(card, label, state);
         return card;
+    }
+
+    /**
+     * A card's least height: the design's, or the low one where the window is too low to show two rows of those between
+     * the header and the ways out, as a handheld's and a phone's on its side are. A TV has the height.
+     */
+    static int cardHeight(Context context) {
+        Resources res = context.getResources();
+        int tall = res.getConfiguration().screenHeightDp;
+        boolean low = !television(context) && tall > 0 && tall < LOW_WINDOW_DP;
+        return res.getDimensionPixelSize(low ? R.dimen.control_center_card_low : R.dimen.nj_size_control_center_card);
     }
 
     /** A card's name and, under it, its state; also what a screen reader says for it. */

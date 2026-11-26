@@ -58,6 +58,8 @@ public final class ControlCenterDock extends Dialog implements ControlCenterFram
     private final DpadEchoFilter dpadEchoes = new DpadEchoFilter();
     private final Set<Integer> handledKeys = new HashSet<>();
     private final Map<String, MaterialButton> railEntries = new LinkedHashMap<>();
+    // The ways out and the mark each has where there is room for it.
+    private final Map<MaterialButton, Integer> exitMarks = new LinkedHashMap<>();
     private List<String> modules = new ArrayList<>();
     private String selected;
     private String placement;
@@ -214,6 +216,7 @@ public final class ControlCenterDock extends Dialog implements ControlCenterFram
         panel.addView(column, sheet ? new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1)
                 : new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1));
         fillRail();
+        markExits();
         frame.place(sheet, compact, television, radii, page.scroll());
     }
 
@@ -406,6 +409,7 @@ public final class ControlCenterDock extends Dialog implements ControlCenterFram
         boolean had = primary != null && primary.hasFocus();
         footer.removeAllViews();
         exits.removeAllViews();
+        exitMarks.clear();
         primary = ControlCenterCards.primary(context, label, capsShown ? "B" : null);
         primary.setOnClickListener(view -> dismiss());
         footer.addView(primary, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
@@ -426,7 +430,19 @@ public final class ControlCenterDock extends Dialog implements ControlCenterFram
         int touch = context.getResources().getDimensionPixelSize(R.dimen.nj_size_touch_min);
         button.setMinHeight(touch);
         button.setMinimumHeight(touch);
+        exitMarks.put(button, icon);
+        markExits();
         return button;
+    }
+
+    // On the compact dock the ways out are their names alone: with its mark, Quit game in most languages does not fit
+    // beside Disconnect and takes a row of its own from a page that shows two.
+    private void markExits() {
+        boolean marks = !compact || isSheet();
+        for (Map.Entry<MaterialButton, Integer> exit : exitMarks.entrySet()) {
+            if (!marks) exit.getKey().setIcon(null);
+            else if (exit.getKey().getIcon() == null) exit.getKey().setIconResource(exit.getValue());
+        }
     }
 
     /** Return to stream. */

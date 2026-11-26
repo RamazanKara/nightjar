@@ -140,9 +140,13 @@ public class StreamMenuTvFocusTest {
             assertEquals(2, menu.grid().columns());
             float density = res.getDisplayMetrics().density;
             View tile = menu.row(KEYBOARD);
-            int card = res.getDimensionPixelSize(R.dimen.nj_size_control_center_card);
-            assertTrue("a card keeps the design's height: " + tile.getHeight() / density + "dp",
+            // A window this low gets the low card, so two rows of cards show between the header and the ways out.
+            int card = res.getDimensionPixelSize(R.dimen.control_center_card_low);
+            assertTrue("a card has the low window's height: " + tile.getHeight() / density + "dp",
                     tile.getHeight() >= card && tile.getHeight() <= card + 24 * density);
+            View page = menu.sheet().page().scroll(), third = menu.grid().getChildAt(2);
+            assertTrue("two rows of cards are in sight: " + (topIn(third, page) + third.getHeight()) / density + " of "
+                    + page.getHeight() / density + "dp", topIn(third, page) + third.getHeight() <= page.getHeight());
             // Six modules on a dock 336 dp tall: the rail shows them all, each still a touch target, before it would scroll.
             View lastModule = menu.sheet().railEntry(menu.modules().get(menu.modules().size() - 1));
             assertTrue("the rail shows every module: " + lastModule.getBottom() / density + "dp",
@@ -179,6 +183,13 @@ public class StreamMenuTvFocusTest {
         }
     }
 
+    // A view's top inside an ancestor, by their layout alone.
+    private static int topIn(View view, View ancestor) {
+        int top = 0;
+        for (View at = view; at != ancestor; at = (View) at.getParent()) top += at.getTop();
+        return top;
+    }
+
     // What a view's background paints at its middle, in the bounds the view gives it when it draws.
     private static int middle(View view) {
         android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(view.getWidth(), view.getHeight(),
@@ -198,6 +209,10 @@ public class StreamMenuTvFocusTest {
             layOut(menu);
             assertEquals("Tastatur", ((android.widget.TextView) menu.row(KEYBOARD)).getText().toString());
             assertNoLabelCut(menu);
+            // On the compact dock the ways out are their names alone, so Spiel beenden fits beside Trennen.
+            assertNull(menu.row(DISCONNECT).getIcon());
+            assertFalse("Quit game stands beside Disconnect, not on a row of its own",
+                    ((ActionSheet.FooterBar) menu.row(DISCONNECT).getParent()).split());
             capture(activity, menu, "handheld-stream-menu-de.png");
             menu.sheet().dismiss();
         }
