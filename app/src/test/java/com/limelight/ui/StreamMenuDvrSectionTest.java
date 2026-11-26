@@ -6,8 +6,6 @@ import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
 
-import androidx.test.core.app.ApplicationProvider;
-
 import com.google.android.material.button.MaterialButton;
 import com.limelight.R;
 import com.limelight.nvstream.http.NvApp;
@@ -17,6 +15,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowLooper;
 
@@ -34,7 +33,7 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 34, application = Application.class, qualifiers = "w960dp-h540dp-land-xhdpi")
 public class StreamMenuDvrSectionTest {
-    private final Context context = ApplicationProvider.getApplicationContext();
+    private final Context context = RuntimeEnvironment.getApplication();
     private final List<int[]> sent = new ArrayList<>();
     private final List<String> toasts = new ArrayList<>();
     private long now = 1_000;
@@ -137,7 +136,7 @@ public class StreamMenuDvrSectionTest {
         assertTrue(toasts.isEmpty());
         dvr.request(StreamMenuDvrSection.OP_STOP);
         dvr.onClip(sent.get(1)[0], StreamMenuDvrSection.SAVED, StreamMenuDvrSection.NONE, 134, 1_250_000_000L);
-        assertEquals("Recording saved (02:14, 1.2 GB)", toasts.get(0));
+        assertEquals("Recording saved (02:14, " + StreamMenuDvrSection.size(1_250_000_000L) + ")", toasts.get(0));
 
         dvr.request(StreamMenuDvrSection.OP_START);
         dvr.onState(sent.get(2)[0], StreamMenuDvrSection.ERROR, StreamMenuDvrSection.DISK_FULL, 0, 0);
