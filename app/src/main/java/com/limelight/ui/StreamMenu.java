@@ -39,7 +39,7 @@ public final class StreamMenu {
         HOST_MENU, SERVER_COMMANDS, CLIPBOARD_SEND, CLIPBOARD_RECEIVE, IMAGE_CLIPBOARD_SEND, IMAGE_CLIPBOARD_RECEIVE,
         USB_DEVICES, GUESTS, FILES, HOST_WEB_UI, HOST_STATUS,
         RECONNECT, DISCONNECT, CONFIRM_DISCONNECT, QUIT_GAME, END_SESSION, END_HOST_SESSION, CLOSE_GAME,
-        NATIVE_PAGE, NATIVE_RESUME, SUSPEND_GAME, RESUME_GAME, SHORTCUTS, CLOSE,
+        NATIVE_PAGE, NATIVE_RESUME, SUSPEND_GAME, RESUME_GAME, SAVE_CLIP, RECORD, SHORTCUTS, CLOSE,
         OVERLAY_OFF, OVERLAY_COMPACT, OVERLAY_STATISTICS, OVERLAY_DEBUG,
         OVERLAY_TOP_LEFT, OVERLAY_TOP_RIGHT, OVERLAY_BOTTOM_LEFT, OVERLAY_BOTTOM_RIGHT, OVERLAY_COPY, STREAM_HEALTH, LATENCY_TEST
     }
@@ -147,7 +147,7 @@ public final class StreamMenu {
         public String encoderLoad;
         /** The later PC features this PC advertises, by the model's gate names; a card of theirs shows only when named. */
         public java.util.Set<String> gates = java.util.Collections.emptySet();
-        /** Instant Replay on a host that offers Stream DVR for this stream; null leaves it out. */
+        /** Instant Replay on a host that offers Stream DVR for this stream, its cards on Clips; null leaves it out. */
         public StreamMenuDvrSection dvr;
 
         public Options(NvApp.Role role, ComputerDetails host) {

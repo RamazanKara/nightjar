@@ -1,12 +1,10 @@
-//! The stream menu's Instant Replay group under the grid: Save clip and Start / Stop recording
-//! as the stream's DVR state has them (`nightjar_desktop_media::stream::dvr`), each with the line
-//! under it, and greyed out with the reason while the host cannot save. No button hints: the
-//! rows are plain actions for touch, mouse and controller alike.
+//! Instant Replay's lines on the Control Center's Clips page, under its Save clip and Start /
+//! Stop recording cards: what the stream's DVR state (`nightjar_desktop_media::stream::dvr`)
+//! says about each, and why the host cannot save while it cannot.
 
 use egui::Ui;
 use rubylight_protocol::stream_dvr::Op;
 
-use crate::glyphs::Icon;
 use crate::menu_style;
 use crate::strings::tr;
 
@@ -14,30 +12,19 @@ use crate::strings::tr;
 /// and whether that line says why not.
 pub type Entry<'a> = (Op, &'a str, &'a str, bool, bool);
 
-/// Draws the group; the op of the entry pressed.
-pub fn section(ui: &mut Ui, entries: &[Entry]) -> Option<Op> {
-    let mut chosen = None;
+/// The lines under the Clips page's cards, captioned Instant Replay: what the buffer holds, the
+/// recording's time, or why the host cannot save (in the problem colour). Nothing without a line.
+pub fn notes(ui: &mut Ui, entries: &[Entry]) {
+    if entries.iter().all(|entry| entry.2.is_empty()) {
+        return;
+    }
     menu_style::caption(ui, tr("Instant Replay"));
-    menu_style::group(ui, |ui| {
-        for &(op, label, detail, enabled, problem) in entries {
-            if ui.add_enabled_ui(enabled, |ui| menu_style::action(ui, icon(op), label, None)).inner.clicked() {
-                chosen = Some(op);
-            }
-            match (detail.is_empty(), problem) {
-                (true, _) => {}
-                (false, true) => menu_style::problem(ui, detail),
-                (false, false) => menu_style::note(ui, detail),
-            }
+    for &(_, _, detail, _, problem) in entries {
+        match (detail.is_empty(), problem) {
+            (true, _) => {}
+            (false, true) => menu_style::problem(ui, detail),
+            (false, false) => menu_style::note(ui, detail),
         }
-    });
-    chosen
-}
-
-/// Save clip keeps the buffer; recording starts and stops like a player.
-pub fn icon(op: Op) -> Icon {
-    match op {
-        Op::SaveClip | Op::QueryState => Icon::Download,
-        Op::StartRecord | Op::StopRecord => Icon::Play,
     }
 }
 
@@ -46,21 +33,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_disabled_entry_is_never_chosen_and_the_group_draws_without_one() {
+    fn the_lines_draw_with_a_problem_and_without_any() {
         crate::theme::own_palette();
         let ctx = egui::Context::default();
         crate::theme::apply(&ctx);
-        let mut chosen = Some(Op::QueryState);
-        let entries = [
+        let lines = [
             (Op::SaveClip, "Save clip", "Last 60 s ready", true, false),
             (Op::StartRecord, "Start recording", "Clips cannot be saved.", false, true),
         ];
-        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-            menu_style::show(ui.ctx(), "Stream menu", "dvr-test", |ui| chosen = section(ui, &entries));
-        });
-        // No renderer takes the textures here, and egui refuses to drop them unasked.
-        output.textures_delta.clear();
-        assert_eq!(chosen, None);
-        assert_eq!(icon(Op::StopRecord), Icon::Play);
+        let none = [(Op::SaveClip, "Save clip", "", true, false), (Op::StartRecord, "Start recording", "", true, false)];
+        for entries in [lines, none] {
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                menu_style::show(ui.ctx(), "Stream menu", "dvr-test", |ui| notes(ui, &entries));
+            });
+            // No renderer takes the textures here, and egui refuses to drop them unasked.
+            output.textures_delta.clear();
+        }
     }
 }

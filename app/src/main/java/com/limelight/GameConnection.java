@@ -192,7 +192,7 @@ final class GameConnection {
         }
     }
 
-    // Instant Replay on the menu's first page, once the native capabilities say the host offers it. UI thread.
+    // Instant Replay on the Control Center's Clips, once the native capabilities say the host offers it. UI thread.
     private void startStreamDvr() {
         if (!game.connected || game.isFinishing()) return;
         game.streamDvr = null;
@@ -201,6 +201,7 @@ final class GameConnection {
                 com.limelight.ui.StreamMenuDvrSection.hostOffers(game.conn.getHostDetails()), announced, game.app.getRole())) return;
         game.streamDvr = new com.limelight.ui.StreamMenuDvrSection(game, MoonBridge::sendStreamDvr,
                 text -> game.messages.alert(text, Toast.LENGTH_LONG), SystemClock::elapsedRealtime);
+        game.streamDvr.setOnChange(game.menuActions::refreshStreamMenu);
         game.streamDvr.start();
     }
 

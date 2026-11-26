@@ -140,6 +140,10 @@ impl Host<'_> {
         if module == Module::Picture && let Some(load) = self.s.encoder_load() {
             cards::status_row(ui, glyphs::Icon::Pulse, tr("Video encoder"), &load);
         }
+        if module == Module::Clips && let Some(entries) = self.s.dvr_menu() {
+            let rows = entries.each_ref().map(|e| (e.op, e.label.as_str(), e.detail.as_str(), e.enabled, e.problem));
+            stream_menu::dvr::notes(ui, &rows);
+        }
         if !page.rows.is_empty() {
             menu_style::group(ui, |ui| {
                 for id in &page.rows {
@@ -168,6 +172,15 @@ impl Host<'_> {
                 "server_commands" => self.next = Some(stream_menu::Page::Commands),
                 "native_page" => *self.session_page_requested = true,
                 "suspend_game" | "resume_game" => s.quick_suspend_tile(id),
+                // Save clip, then Start / Stop recording; one the host cannot take now says why below.
+                "save_clip" | "record" => {
+                    if let Some(entries) = s.dvr_menu() {
+                        let entry = &entries[usize::from(id == "record")];
+                        if entry.enabled {
+                            s.dvr_request(entry.op);
+                        }
+                    }
+                }
                 other => eprintln!("nightjar: the Control Center has no action for the card {other}"),
             },
             Some(stream_menu::Chosen::Shortcut(index)) => {

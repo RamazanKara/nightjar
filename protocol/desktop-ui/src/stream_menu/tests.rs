@@ -64,7 +64,7 @@ fn every_choice_for_a_button_is_one_the_desktop_can_draw_and_run() {
 fn everything() -> Available {
     Available {
         mouse: Some(true), overlay: true, shortcuts: true, microphone: Some(false), quality: true, clipboard: true, image_clipboard: true,
-        commands: true, session: true, host_audio: true, controller_audio: true, usb: true, guests: true, suspend: Some(false), exits: vec![HostExit::End, HostExit::CloseGame],
+        commands: true, session: true, host_audio: true, controller_audio: true, usb: true, guests: true, suspend: Some(false), dvr: None, exits: vec![HostExit::End, HostExit::CloseGame],
     }
 }
 
@@ -456,4 +456,23 @@ fn a_draft_is_named_modifiers_first_whatever_order_its_keys_were_picked_in() {
     draft.toggle("SHIFT");
     assert!(draft.save(&mut saved));
     assert_eq!((saved.data[0].name.as_str(), &saved.data[0].keys[..]), ("Shift + Caps Lock", &["SHIFT".to_owned(), "CAPS_LOCK".into()][..]));
+}
+
+/// Instant Replay's cards stand on Clips only while the host offers Stream DVR for the stream, and
+/// Recording says what pressing it does.
+#[test]
+fn instant_replay_cards_stand_on_clips_only_behind_their_gate() {
+    let open = Gates { stream_dvr: true, ..Gates::default() };
+    let offered = Available { dvr: Some(true), ..everything() };
+    let shown = dock(&offered, 0, &Default::default(), &open);
+    let clips = shown.page(Module::Clips).expect("the gate is open");
+    assert_eq!(
+        clips.cards,
+        [Cell::Tile { id: "save_clip", on: None, hotkey: None }, Cell::Tile { id: "record", on: Some(true), hotkey: None }]
+    );
+    assert!(dock(&offered, 0, &Default::default(), &Gates::default()).page(Module::Clips).is_none());
+    assert!(dock(&everything(), 0, &Default::default(), &open).page(Module::Clips).is_none(), "nothing offered");
+    assert_eq!(card_text("record", Some(true)), (tr("Stop recording"), None));
+    assert_eq!(card_text("record", Some(false)), (tr("Start recording"), None));
+    assert_eq!((card_text("save_clip", None).0, icon("save_clip")), (tr("Save clip"), Icon::Download));
 }

@@ -5,6 +5,7 @@ import android.app.Application;
 import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
 import com.google.android.material.button.MaterialButton;
 import com.limelight.R;
@@ -21,14 +22,17 @@ import org.robolectric.shadows.ShadowLooper;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.*;
 
 /**
- * The stream menu's Instant Replay group: offered only with the host's Stream DVR feature and 0x554A on the stream's own
- * device, rows that follow the host's state, the requests they send, and the words of its results and reasons.
+ * Instant Replay in the Control Center: offered only with the host's Stream DVR feature and 0x554A on the stream's own
+ * device, its Clips cards and lines that follow the host's state, the requests they send, and the words of its results
+ * and reasons.
  */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 34, application = Application.class, qualifiers = "w960dp-h540dp-land-xhdpi")
@@ -159,12 +163,55 @@ public class StreamMenuDvrSectionTest {
         assertEquals("1 MB", StreamMenuDvrSection.size(1));
     }
 
-    private static List<String> buttonTexts(View root) {
+    private static List<StreamMenu.Item> items(List<StreamMenu.Entry> entries) {
+        List<StreamMenu.Item> items = new ArrayList<>();
+        for (StreamMenu.Entry entry : entries) items.add(entry.item);
+        return items;
+    }
+
+    @Test
+    public void theClipsCardsFollowTheStateAndAskTheHost() {
+        StreamMenuDvrSection dvr = section();
+        StreamMenu.Options o = new StreamMenu.Options(NvApp.Role.STREAM, TestHosts.details("rubylight-serverinfo.xml"));
+        List<StreamMenu.Entry> entries = new ArrayList<>();
+        StreamMenuDvrSection.addTo(entries, o);
+        assertTrue("left out without Stream DVR", entries.isEmpty());
+        o.dvr = dvr;
+        StreamMenuDvrSection.addTo(entries, o);
+        assertEquals(Arrays.asList(StreamMenu.Item.SAVE_CLIP, StreamMenu.Item.RECORD), items(entries));
+        assertEquals(R.string.stream_dvr_record_start, entries.get(1).label);
+
+        int[] changes = {0};
+        dvr.setOnChange(() -> changes[0]++);
+        String before = dvr.shown();
+        dvr.onState(0, StreamMenuDvrSection.RECORDING, StreamMenuDvrSection.NONE, 60, 5);
+        assertEquals("a state shows again", 1, changes[0]);
+        assertNotEquals(before, dvr.shown());
+        entries.clear();
+        StreamMenuDvrSection.addTo(entries, o);
+        assertEquals(R.string.stream_dvr_record_stop, entries.get(1).label);
+        assertEquals(R.drawable.ic_stop, entries.get(1).icon);
+
+        dvr.choose(StreamMenu.Item.SAVE_CLIP);
+        assertEquals(StreamMenuDvrSection.OP_SAVE, sent.get(sent.size() - 1)[1]);
+        dvr.choose(StreamMenu.Item.SAVE_CLIP);
+        assertEquals("a save it waits for is not sent twice", 1, sent.size());
+        dvr.choose(StreamMenu.Item.RECORD);
+        assertEquals(StreamMenuDvrSection.OP_STOP, sent.get(sent.size() - 1)[1]);
+
+        // A card the host cannot take says why instead of asking.
+        dvr.onState(0, StreamMenuDvrSection.UNSUPPORTED, StreamMenuDvrSection.PYROWAVE, 0, 0);
+        dvr.choose(StreamMenu.Item.RECORD);
+        assertEquals(2, sent.size());
+        assertEquals(Collections.singletonList(context.getString(R.string.stream_dvr_reason_pyrowave)), toasts);
+    }
+
+    private static List<String> texts(View root) {
         List<String> texts = new ArrayList<>();
         ArrayDeque<View> left = new ArrayDeque<>(List.of(root));
         while (!left.isEmpty()) {
             View view = left.pop();
-            if (view instanceof MaterialButton) texts.add(((MaterialButton) view).getText().toString());
+            if (view instanceof TextView) texts.add(((TextView) view).getText().toString());
             if (view instanceof ViewGroup) {
                 for (int i = 0; i < ((ViewGroup) view).getChildCount(); i++) left.add(((ViewGroup) view).getChildAt(i));
             }
@@ -173,23 +220,34 @@ public class StreamMenuDvrSectionTest {
     }
 
     @Test
-    public void theMenuShowsTheGroupOnlyWhenTheStreamOffersIt() {
+    public void theControlCenterShowsTheCardsOnClipsOnlyWhenTheStreamOffersIt() {
         try (var controller = Robolectric.buildActivity(Activity.class).setup().visible()) {
             Activity activity = controller.get();
             activity.setTheme(R.style.StreamTheme);
             for (boolean offered : new boolean[] {false, true}) {
                 StreamMenu.Options state = new StreamMenu.Options(NvApp.Role.STREAM, TestHosts.details("rubylight-serverinfo.xml"));
-                if (offered) state.dvr = section();
+                if (offered) {
+                    state.dvr = section();
+                    state.gates = Collections.singleton("stream_dvr");
+                }
                 StreamMenu menu = new StreamMenu(activity, () -> state, item -> { }, null, null);
                 menu.show();
                 ShadowLooper.idleMainLooper(100, TimeUnit.MILLISECONDS);
-                List<String> texts = buttonTexts(menu.sheet().getWindow().getDecorView());
-                assertEquals(texts.toString(), offered, texts.contains("Save clip"));
-                assertEquals(texts.toString(), offered, texts.contains("Start recording"));
+                MaterialButton save = menu.reveal(StreamMenu.Item.SAVE_CLIP);
+                assertEquals(offered, save != null);
+                assertEquals(offered, menu.reveal(StreamMenu.Item.RECORD) != null);
                 if (offered) {
-                    // A state while the menu is open rewrites the rows in place.
+                    assertEquals(ControlCenterModel.CLIPS, menu.dock().moduleOf("save_clip"));
+                    List<String> texts = texts(menu.sheet().getWindow().getDecorView());
+                    assertTrue(texts.toString(), texts.contains("Start recording"));
+                    // A state while Clips shows turns the card and the line under it.
+                    state.dvr.setOnChange(menu::refresh);
                     state.dvr.onState(0, StreamMenuDvrSection.RECORDING, StreamMenuDvrSection.NONE, 60, 5);
-                    assertTrue(buttonTexts(menu.sheet().getWindow().getDecorView()).contains("Stop recording"));
+                    ShadowLooper.idleMainLooper(100, TimeUnit.MILLISECONDS);
+                    texts = texts(menu.sheet().getWindow().getDecorView());
+                    assertTrue(texts.toString(), texts.contains("Stop recording"));
+                    assertTrue(texts.toString(), texts.contains("Recording 00:05"));
+                    assertTrue(texts.toString(), texts.contains("Last 60 s ready"));
                 }
                 menu.sheet().dismiss();
             }

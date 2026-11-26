@@ -446,6 +446,7 @@ public class StreamMenuTest {
             withControl.nightModeOffered = withControl.headphoneSurroundOffered = true;
             withControl.hostAudio = NativeApiFixtures.audio(NativeApiFixtures.audioJson(true, false));
             withControl.quickSuspendOffered = true;
+            withControl.dvr = new StreamMenuDvrSection(null, (id, op, secs) -> true, text -> { }, () -> 0);
             reachable.addAll(items(StreamMenu.mainPage(withControl)));
             reachable.addAll(items(StreamMenu.nativePage(withControl)));
             // Resume game replaces Suspend game while the game is paused.

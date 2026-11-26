@@ -27,6 +27,7 @@ fn everything() -> Available {
         usb: true,
         guests: true,
         suspend: Some(false),
+        dvr: None,
         exits: vec![HostExit::End, HostExit::QuitApp],
     }
 }

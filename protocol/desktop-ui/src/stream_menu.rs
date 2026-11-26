@@ -77,6 +77,9 @@ pub struct Available {
     /// Quick Suspend, as the host offers it: Some(false) offers Suspend game, Some(true) Resume
     /// game while the game is paused on the PC.
     pub suspend: Option<bool>,
+    /// Instant Replay, on a stream whose host offers Stream DVR: whether a recording runs. Its
+    /// cards (Save clip, Start / Stop recording) are Control Center extras on Clips.
+    pub dvr: Option<bool>,
     /// The ways out that end the PC's session or game, beside Disconnect: End session (a More row)
     /// and Close or Quit game as the Session and graphics page offers them, Quit game on a PC
     /// without it.
@@ -214,6 +217,8 @@ pub fn label(id: &str) -> &'static str {
         "native_page" => tr("Session and graphics"),
         "suspend_game" => tr("Suspend game"),
         "resume_game" => tr("Resume game"),
+        "save_clip" => tr("Save clip"),
+        "record" => tr("Start recording"),
         model::MORE => tr("More"),
         other => unreachable!("grid tile {other} without a label"),
     }
@@ -232,6 +237,8 @@ fn icon(id: &str) -> Icon {
         "native_page" => Icon::Sliders,
         "suspend_game" => Icon::Pause,
         "resume_game" => Icon::Play,
+        "save_clip" => Icon::Download,
+        "record" => Icon::Play,
         _ => Icon::More,
     }
 }
@@ -372,7 +379,12 @@ pub fn footer(ui: &mut Ui, layout: &Layout) -> Option<Leave> {
 /// The Control Center for what is offered: the same tiles as [`layout`], sorted into modules by
 /// `nightjar_policy::control_center` (the dock Android draws too), with the extras `gates` allow.
 pub fn dock(a: &Available, saved: usize, buttons: &model::Buttons, gates: &Gates) -> Dock {
-    nightjar_policy::control_center::dock(&offers(a), a.shortcuts.then_some(saved), buttons, gates).expect("the desktop offers only tiles the model knows")
+    let mut offers = offers(a);
+    if let Some(recording) = a.dvr {
+        offers.push(Offer::action("save_clip"));
+        offers.push(Offer::switch("record", recording));
+    }
+    nightjar_policy::control_center::dock(&offers, a.shortcuts.then_some(saved), buttons, gates).expect("the desktop offers only tiles the model knows")
 }
 
 /// The way out in the Control Center's footer a controller button runs, when the user gave it one.
@@ -403,8 +415,8 @@ pub fn cards(ui: &mut Ui, dock: &Dock, module: Module, saved: &Shortcuts, hotkey
         let cell = shown[index];
         let response = match cell {
             Cell::Tile { id, on, hotkey } => {
-                let state = on.map(|on| if on { tr("On") } else { tr("Off") });
-                cards::card(ui, card_id(id), width, &cards::Card { icon: icon(id), label: label(id), state, on: *on, cap: hotkey.map(Hotkey::cap) })
+                let (label, state) = card_text(id, *on);
+                cards::card(ui, card_id(id), width, &cards::Card { icon: icon(id), label, state, on: *on, cap: hotkey.map(Hotkey::cap) })
             }
             Cell::Shortcut(n) => {
                 let shortcut = &saved.data[*n];
@@ -425,6 +437,15 @@ pub fn cards(ui: &mut Ui, dock: &Dock, module: Module, saved: &Shortcuts, hotkey
         }
     });
     pressed.or(picked)
+}
+
+/// A card's label and the state under it. Recording says what pressing it does, lit while it runs.
+pub fn card_text(id: &str, on: Option<bool>) -> (&'static str, Option<&'static str>) {
+    match (id, on) {
+        ("record", Some(true)) => (tr("Stop recording"), None),
+        ("record", _) => (tr("Start recording"), None),
+        _ => (label(id), on.map(|on| if on { tr("On") } else { tr("Off") })),
+    }
 }
 
 /// The Control Center's footer, under every page: Return to stream, the main action (`back` is the

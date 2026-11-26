@@ -96,10 +96,12 @@ pub(crate) fn show(ctx: &egui::Context, window: *mut SDL_Window, s: &mut Streami
         usb: s.usb.is_some() || s.usb_refused.is_some(),
         guests: s.guests.shown(),
         suspend: s.quick_suspend.tile(),
+        dvr: s.dvr_menu().map(|[_, record]| record.op == rubylight_protocol::stream_dvr::Op::StopRecord),
         exits: page_hosts::game_exits(s, overlay.hints),
     };
-    // No gated extra is offered yet, so every gate stays shut.
-    let dock = stream_menu::dock(&available, shortcuts.data.len(), pads.menu_buttons(), &Gates::default());
+    // Instant Replay's cards on Clips: the host offers Stream DVR for this stream.
+    let gates = Gates { stream_dvr: available.dvr.is_some(), ..Gates::default() };
+    let dock = stream_menu::dock(&available, shortcuts.data.len(), pads.menu_buttons(), &gates);
     overlay.menu_hotkeys = dock.buttons.keys().copied().collect();
     let mut page = std::mem::take(&mut overlay.menu_page);
     // More, Quality and Guests were pages of the 6.x menu: their rows are the modules' own now.

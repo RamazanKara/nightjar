@@ -1,10 +1,8 @@
 package com.limelight.ui;
 
 import android.content.Context;
-import android.view.View;
 import android.widget.LinearLayout;
 
-import com.google.android.material.button.MaterialButton;
 import com.limelight.LimeLog;
 import com.limelight.R;
 import com.limelight.nativeapi.KnownCapabilities;
@@ -14,15 +12,16 @@ import com.limelight.nvstream.http.NvApp;
 
 import org.json.JSONException;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
 /**
- * The stream menu's Instant Replay group (Stream DVR, control message 0x554A): Save clip and Start / Stop recording as the
- * host's latest DVR state has them, the line under each (the buffer, the recording's time, or why it is off), and the toast
- * a clip result or a refusal shows. Offered only by a host with {@link HostCapabilities.Feature#STREAM_DVR} that announced
- * 0x554A, to the device that started the stream. The rows are plain actions, with no button hints.
+ * Instant Replay (Stream DVR, control message 0x554A) in the Control Center: the Save clip and Start / Stop recording cards
+ * on Clips as the host's latest DVR state has them, the lines under them there (the buffer, the recording's time, or why
+ * it is off), and the toast a clip result or a refusal shows. Offered only by a host with
+ * {@link HostCapabilities.Feature#STREAM_DVR} that announced 0x554A, to the device that started the stream.
  */
 public final class StreamMenuDvrSection {
     /** The wire's ops. */
@@ -67,8 +66,7 @@ public final class StreamMenuDvrSection {
     private int state, reason, bufferedSecs, recordingSecs;
     private int pendingId, pendingOp;
     private long pendingAt;
-    private ActionSheet sheet;
-    private LinearLayout group;
+    private Runnable onChange;
 
     public StreamMenuDvrSection(Context context, Sender sender, Consumer<CharSequence> toast, LongSupplier clock) {
         this.context = context;
@@ -92,6 +90,56 @@ public final class StreamMenuDvrSection {
             LimeLog.warning("Stream DVR: unreadable native capabilities: " + e.getMessage());
             return false;
         }
+    }
+
+    /** Runs whenever what the cards and their lines show changed: the open Control Center shows it again. UI thread. */
+    public void setOnChange(Runnable onChange) {
+        this.onChange = onChange;
+    }
+
+    /** The Clips cards: Save clip, then Start or Stop recording as the host's state has it. */
+    static void addTo(List<StreamMenu.Entry> entries, StreamMenu.Options o) {
+        if (o.dvr == null) return;
+        entries.add(StreamMenuCatalog.action(StreamMenu.Section.HOST, StreamMenu.Item.SAVE_CLIP, R.string.stream_dvr_save,
+                R.drawable.ic_download));
+        boolean recording = o.dvr.recording();
+        entries.add(StreamMenuCatalog.action(StreamMenu.Section.HOST, StreamMenu.Item.RECORD,
+                recording ? R.string.stream_dvr_record_stop : R.string.stream_dvr_record_start,
+                recording ? R.drawable.ic_stop : R.drawable.ic_video));
+    }
+
+    /** A recording runs on the host. */
+    boolean recording() {
+        return known && state == RECORDING;
+    }
+
+    /** A card was chosen: what it asks the host, or why the host cannot take it now. UI thread. */
+    public void choose(StreamMenu.Item item) {
+        Row[] rows = rows();
+        Row row = rows[item == StreamMenu.Item.SAVE_CLIP ? 0 : 1];
+        // Save clip's line has the reason the host cannot take either.
+        if (row.enabled) request(row.op);
+        else if (rows[0].problem && rows[0].detail != null) toast.accept(rows[0].detail);
+    }
+
+    /** The lines under the Clips cards, captioned Instant Replay; nothing without a line. */
+    void addNotes(ControlCenterPage view) {
+        LinearLayout group = null;
+        for (Row row : rows()) {
+            if (row.detail == null) continue;
+            if (group == null) {
+                view.addSection(R.string.stream_dvr_title);
+                group = view.addGroup();
+            }
+            view.addNote(group, row.detail, row.problem);
+        }
+    }
+
+    /** What the Clips page shows of the state, so a change rebuilds it: the lines and which recording card. */
+    String shown() {
+        StringBuilder text = new StringBuilder(recording() ? "rec" : "-");
+        for (Row row : rows()) text.append('\n').append(row.enabled).append(row.problem).append(row.detail);
+        return text.toString();
     }
 
     /** Asks the host for its state, once the stream runs. */
@@ -176,37 +224,8 @@ public final class StreamMenuDvrSection {
         return new Row[] {save, record};
     }
 
-    /** Draws the group on the menu's first page; it rewrites itself as the host's answers come. */
-    public void render(ActionSheet sheet) {
-        this.sheet = sheet;
-        group = sheet.addGroup();
-        fill();
-    }
-
     private void update() {
-        if (group != null && sheet != null && sheet.isShowing()) fill();
-    }
-
-    private void fill() {
-        // The row that has the focus keeps it through the rewrite.
-        int focused = -1, at = 0;
-        View focus = group.findFocus();
-        for (int i = 0; i < group.getChildCount(); i++) {
-            if (!(group.getChildAt(i) instanceof MaterialButton)) continue;
-            if (group.getChildAt(i) == focus) focused = at;
-            at++;
-        }
-        group.removeAllViews();
-        sheet.addSection(group, R.string.stream_dvr_title);
-        at = 0;
-        for (Row row : rows()) {
-            int icon = row.op == OP_SAVE ? R.drawable.ic_download : row.op == OP_STOP ? R.drawable.ic_stop : R.drawable.ic_video;
-            MaterialButton button = sheet.addAction(group, icon, row.label);
-            button.setEnabled(row.enabled);
-            button.setOnClickListener(view -> request(row.op));
-            if (row.detail != null) sheet.addNote(group, row.detail, row.problem);
-            if (at++ == focused) button.requestFocus();
-        }
+        if (onChange != null) onChange.run();
     }
 
     /** The toast for a clip result: what was saved, or the host's reason. */

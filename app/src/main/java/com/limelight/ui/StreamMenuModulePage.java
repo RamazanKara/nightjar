@@ -2,8 +2,8 @@
  * One module's page of the Control Center for {@link StreamMenu}: the cards nightjar-policy's {@code control_center::dock}
  * gives the module (the user's shortcuts and Add at the end of Quick), a switch among its rows as one more card, the
  * bitrate as a wide card with its track inside, the rows that say something about the stream with their value, then the
- * rows that lead one level down. Quick starts with what the stream had to say when it started, and Picture ends with
- * the video encoder's load while the PC reports it.
+ * rows that lead one level down. Quick starts with what the stream had to say when it started, Picture ends with the
+ * video encoder's load while the PC reports it, and Clips with Instant Replay's state.
  */
 package com.limelight.ui;
 
@@ -54,6 +54,8 @@ final class StreamMenuModulePage {
     private StepSlider bitrateSlider;
     private TextView bitrateShown, audioNote, launchNotice, encoderLoad;
     private MenuRow bitrateRow;
+    // What Clips shows of Instant Replay's state; null on another page.
+    private String dvrShown;
 
     StreamMenuModulePage(Activity activity, android.content.Context context, ControlCenterPage view, Host host) {
         this.activity = activity;
@@ -69,6 +71,7 @@ final class StreamMenuModulePage {
         bitrateSlider = null;
         bitrateShown = audioNote = launchNotice = encoderLoad = null;
         bitrateRow = null;
+        dvrShown = null;
     }
 
     TileGrid grid() {
@@ -104,7 +107,9 @@ final class StreamMenuModulePage {
         boolean audio = quick && o.role == com.limelight.nvstream.http.NvApp.Role.STREAM && o.hostAudioUnread;
         boolean notice = quick && o.launchNotice != null && !o.launchNotice.isEmpty();
         boolean encoder = ControlCenterModel.PICTURE.equals(module) && o.encoderLoad != null;
-        return audio == (audioNote != null) && notice == (launchNotice != null) && encoder == (encoderLoad != null);
+        String dvr = ControlCenterModel.CLIPS.equals(module) && o.dvr != null ? o.dvr.shown() : null;
+        return audio == (audioNote != null) && notice == (launchNotice != null) && encoder == (encoderLoad != null)
+                && java.util.Objects.equals(dvr, dvrShown);
     }
 
     /**
@@ -183,6 +188,11 @@ final class StreamMenuModulePage {
         addStatus(page, o, offered, status, labels);
         if (ControlCenterModel.PICTURE.equals(page.module) && o.encoderLoad != null) {
             encoderLoad = view.addNotice(R.drawable.ic_speed, activity.getString(R.string.hardware_gpu_encoder, o.encoderLoad));
+        }
+        // Under Instant Replay's cards: the buffer, the recording's time, or why the host cannot save.
+        if (ControlCenterModel.CLIPS.equals(page.module) && o.dvr != null) {
+            dvrShown = o.dvr.shown();
+            o.dvr.addNotes(view);
         }
         for (Entry entry : below) {
             // Never in red, even one that ends something: Quit game under the pages is the one red control.

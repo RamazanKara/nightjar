@@ -159,6 +159,7 @@ final class StreamMenuCatalog {
             entries.add(action(Section.HOST, Item.NATIVE_PAGE, R.string.native_menu_row, R.drawable.ic_tune));
         }
         StreamMenuSuspendSection.addTo(entries, o);
+        StreamMenuDvrSection.addTo(entries, o);
         // Only when the host's native capabilities offer it, whoever made the host.
         if (o.role == NvApp.Role.STREAM && o.hostMenu) {
             entries.add(action(Section.HOST, Item.HOST_MENU, R.string.stream_host_menu, R.drawable.ic_computer));

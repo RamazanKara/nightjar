@@ -246,6 +246,8 @@ final class GameMenuActions {
                 game.getString(R.string.launch_warning_virtual_display_disabled_by_client));
         options.encoderLoad = game.overlays.encoderLoad();
         options.dvr = game.streamDvr;
+        // Clips opens for Instant Replay's cards while the host offers Stream DVR for this stream.
+        if (options.dvr != null) options.gates = java.util.Collections.singleton("stream_dvr");
         return options;
     }
 
@@ -317,6 +319,8 @@ final class GameMenuActions {
             case HOST_MENU: action = hostActions::openHostMenu; break;
             case SUSPEND_GAME:
             case RESUME_GAME: action = () -> hostActions.quickSuspend.choose(item); break;
+            case SAVE_CLIP:
+            case RECORD: action = () -> { if (game.streamDvr != null) game.streamDvr.choose(item); }; break;
             case RECONNECT: action = game.streamRecovery::reconnectStream; break;
             case DISCONNECT: action = this::leaveStream; break;
             case CONFIRM_DISCONNECT: action = this::confirmDisconnect; break;
