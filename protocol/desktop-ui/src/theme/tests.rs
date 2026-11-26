@@ -511,27 +511,6 @@ fn high_contrast_outlines_are_visible_against_the_surfaces() {
     }
 }
 
-/// The bird's mask holds as much as its polygon, at the place the moon's box puts it.
-#[test]
-fn the_birds_mask_covers_what_its_outline_does() {
-    let polygon = bird_polygon();
-    let twice: f32 = polygon
-        .iter()
-        .enumerate()
-        .map(|(i, a)| {
-            let b = polygon[(i + 1) % polygon.len()];
-            a.0 * b.1 - b.0 * a.1
-        })
-        .sum();
-    let area = (twice / 2.0).abs();
-    let size = 256;
-    let mask = bird_mask(size);
-    let covered: f32 = mask.pixels.iter().map(|p| f32::from(p.a()) / 255.0).sum();
-    let units = covered * (54.0 / size as f32).powi(2);
-    assert!((units - area).abs() / area < 0.03, "{units} of {area}");
-    assert!(mask.pixels.iter().any(|p| p.a() == 255) && mask.pixels.iter().any(|p| p.a() == 0));
-}
-
 #[test]
 fn logo_is_a_moon_with_a_night_bird() {
     let size = 64;

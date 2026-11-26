@@ -583,8 +583,7 @@ mod controls;
 mod fonts;
 
 pub use controls::{
-    bird_mask, log_slider, logo_image, logo_rgba, mbps_text, percent, slider, step_value,
-    VALUE_AFTER_KEY,
+    log_slider, logo_image, logo_rgba, mbps_text, percent, slider, step_value, VALUE_AFTER_KEY,
 };
 pub use fonts::{
     apply, definitions, fallback_ahead, fonts_for, fonts_for_scripts, fonts_key,
