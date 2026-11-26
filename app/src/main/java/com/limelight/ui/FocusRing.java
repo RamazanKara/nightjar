@@ -41,6 +41,11 @@ final class FocusRing {
         invalidator = view::invalidate;
     }
 
+    /** How far the ring's outer side lies outside the shape it is drawn around. */
+    float outset() {
+        return gapWidth + ringWidth;
+    }
+
     /** Under the view's content. */
     void drawHalo(Canvas canvas, float left, float top, float right, float bottom, float radius) {
         if (haloBlur <= 0f) return;

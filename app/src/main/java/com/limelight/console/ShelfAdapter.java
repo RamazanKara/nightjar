@@ -181,7 +181,26 @@ final class ShelfAdapter extends RecyclerView.Adapter<ShelfAdapter.CardHolder> {
         params.width = innerWidth(width, params);
         params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
         view.setLayoutParams(params);
-        return new CardHolder(env, view, cover, type == ALL_TILE);
+        CardHolder holder = new CardHolder(env, view, cover, type == ALL_TILE);
+        if (type == COVER_GAME && view instanceof com.limelight.ui.CoverCard) {
+            ((com.limelight.ui.CoverCard) view).setLift(() -> liftAt(view, holder.getBindingAdapterPosition()));
+        }
+        return holder;
+    }
+
+    /**
+     * Which side a shelf's card keeps still when focus lifts it. The first card rests on the row's start margin and the last,
+     * in a row longer than the screen, on its end margin: each lifts away from its margin, so the focus ring stays on the
+     * margin instead of reaching toward the screen's edge. The cards between them lift about their middle.
+     */
+    int liftAt(View card, int position) {
+        if (position == 0) return com.limelight.ui.CoverCard.LIFT_FROM_START;
+        if (position < 0 || position != items.size() - 1 || !(card.getParent() instanceof RecyclerView)) {
+            return com.limelight.ui.CoverCard.LIFT_MIDDLE;
+        }
+        RecyclerView row = (RecyclerView) card.getParent();
+        return row.computeHorizontalScrollRange() > row.computeHorizontalScrollExtent()
+                ? com.limelight.ui.CoverCard.LIFT_FROM_END : com.limelight.ui.CoverCard.LIFT_MIDDLE;
     }
 
     @Override
