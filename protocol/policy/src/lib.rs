@@ -34,6 +34,7 @@ pub mod pin;
 pub mod presets;
 pub mod pyrowave;
 pub mod quality;
+pub mod quick_suspend;
 pub mod recovery;
 pub mod roaming;
 pub mod rumble;
