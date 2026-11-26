@@ -24,11 +24,12 @@ import java.util.ArrayDeque;
  * another control's edge or centre, its twin's mirror), and a guide shows the line ({@link PadSnapGrid}). With the
  * mirror lock on, a control's left or right twin moves and sizes with it ({@link #setMirror}); {@link #undo} takes
  * changes back one at a time.
- * The glass panel shows the picked control (its size, opacity, Split or Join, Hide, and the pointer touchpad's Mouse
- * and Camera) or, with nothing picked, every control's size and opacity, the Add tiles of the controls the layout leaves
- * out, the preset and glyphs and whether Done saves for this game only; it changes between them smoothly. Its grip
- * moves it anywhere, and it reopens where it was left. Done keeps the draft; Cancel and Back drop it. A hidden control
- * leaves the surface for the Add tiles.
+ * The dock is a bar of tools ({@link PadStudioInspector}: Add, Preset, the mirror lock, Undo, More, Reset, Cancel and
+ * Done) over a tray that shows only when there is something to show ({@link PadEditorPanel}): the picked control (its
+ * size, opacity, Split or Join, Hide, and the pointer touchpad's Mouse and Camera), the Add tiles of the controls the
+ * layout leaves out, or under More every control's size and opacity, the glyphs and whether Done saves for this game
+ * only; it changes between them smoothly. Its grip moves it anywhere, and it reopens where it was left. Done keeps the
+ * draft; Cancel and Back drop it. A hidden control leaves the surface for the Add tiles.
  */
 @SuppressLint("ViewConstructor") // Created by ModernController.
 final class PadEditor extends FrameLayout {

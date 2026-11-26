@@ -62,4 +62,5 @@
     <string name="pad_dpad_down">Steuerkreuz unten</string>
     <string name="pad_dpad_left">Steuerkreuz links</string>
     <string name="pad_dpad_right">Steuerkreuz rechts</string>
+    <string name="pad_edit_mirror">Links und rechts spiegeln</string>
 </resources>

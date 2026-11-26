@@ -32,17 +32,13 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Manages {@link PadEditor}'s floating glass panel: its responsive layout on tall and short surfaces, its grip drag
- * and per-orientation saved placement, smooth transitions between picked-control and layout sections, the grouped Add
- * tiles and control/glyph labels.
+ * Manages {@link PadEditor}'s floating dock under its bar ({@link PadStudioInspector}): where it stands on tall and
+ * short surfaces, its grip drag and per-orientation saved placement, the tray with the picked control or one of the
+ * layout's trays, smooth transitions between them, the grouped Add tiles and control/glyph labels.
  */
 final class PadEditorPanel {
-    private static final float PANEL_WIDTH_DP = 400, PANEL_MARGIN_DP = 16, SHORT_SURFACE_DP = 480;
-    /**
-     * On a short surface the panel is wider and lower: the preset, glyphs and game choice sit beside the Add tiles, or
-     * in one row below them when the tiles need the width.
-     */
-    private static final float SHORT_PANEL_WIDTH_DP = 480;
+    /** A surface lower than this (a phone held sideways) gets the tray without the hint and its options in one row. */
+    private static final float SHORT_SURFACE_DP = 480;
     /** How long the panel takes to come in and to change between the picked control and the layout. */
     private static final long PANEL_MS = 200;
     private static final Interpolator EASE = new PathInterpolator(.2f, 0, 0, 1);
@@ -51,15 +47,14 @@ final class PadEditorPanel {
     private final PadEditor editor;
     private final View surface;
     private final float density;
-    private final View panel, controlSection, pointerMode, mouseCard, cameraCard, thisGame;
+    private final PadStudioInspector inspector;
+    private final View panel, tray, sizeRow, opacityRow, controlSection, pointerMode, mouseCard, cameraCard, thisGame;
     private final LinearLayout layoutSection, options, addSection;
-    /** The Add groups side by side, for measuring whether they fit beside the options. */
-    private TileFlow groups;
     private final TextView selection, sizeText, hint;
-    private final MaterialButton hide, reset, split, join;
+    private final MaterialButton hide, split, join;
     private final Chip glyphs;
     private final Slider opacity;
-    private boolean compactButtons, shortSurface, settingOpacity;
+    private boolean oneRow = true, shortSurface, settingOpacity;
     /** The controls the Add tiles show, so they are built again only when that changes. */
     private String addShown = "";
     private final List<PadEditor.Tile> tiles = new ArrayList<>();
@@ -90,11 +85,9 @@ final class PadEditorPanel {
         this.editor = editor;
         this.surface = surface;
         this.density = density;
+        // Its surface is baked into the layout: an opaque fill and a rim, nothing that blurs or shades the stream.
         panel = LayoutInflater.from(context).inflate(R.layout.pad_editor_panel, editor, false);
-        // The stream's glass for a modal panel without a blur: its text never sits on a control or the game.
-        float corner = 16 * context.getResources().getDisplayMetrics().density;
-        panel.setBackground(com.limelight.ui.GlassPanelDrawable.stream(context,
-                new float[] {corner, corner, corner, corner, corner, corner, corner, corner}));
+        inspector = new PadStudioInspector(panel, editor, this);
         editor.addView(panel, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
         panel.findViewById(R.id.pad_editor_grip).setOnTouchListener((grip, event) -> dragPanel(event));
@@ -103,6 +96,9 @@ final class PadEditorPanel {
         panel.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> showPlacedPanel());
         int[] placed = editor.panelPosition();
         if (placed != null) placePanel(placed[0], placed[1]);
+        tray = panel.findViewById(R.id.pad_editor_scroll);
+        sizeRow = panel.findViewById(R.id.pad_studio_size_row);
+        opacityRow = panel.findViewById(R.id.pad_studio_opacity_row);
         selection = panel.findViewById(R.id.pad_editor_selection);
         sizeText = panel.findViewById(R.id.pad_editor_size);
         controlSection = panel.findViewById(R.id.pad_editor_control);
@@ -110,9 +106,6 @@ final class PadEditorPanel {
         addSection = panel.findViewById(R.id.pad_editor_add);
         options = panel.findViewById(R.id.pad_editor_options);
         hide = panel.findViewById(R.id.pad_editor_hide);
-        reset = panel.findViewById(R.id.pad_editor_reset);
-        Chip preset = panel.findViewById(R.id.pad_editor_preset);
-        preset.setOnClickListener(v -> editor.choosePreset());
         glyphs = panel.findViewById(R.id.pad_editor_glyphs);
         glyphs.setContentDescription(context.getString(R.string.pad_edit_glyphs));
         glyphs.setOnClickListener(v -> editor.chooseGlyphs());
@@ -130,9 +123,6 @@ final class PadEditorPanel {
         panel.findViewById(R.id.pad_editor_smaller).setOnClickListener(v -> editor.scaleBy(-PadEditor.SCALE_STEP));
         panel.findViewById(R.id.pad_editor_larger).setOnClickListener(v -> editor.scaleBy(PadEditor.SCALE_STEP));
         hide.setOnClickListener(v -> editor.toggleHidden());
-        reset.setOnClickListener(v -> editor.resetDraft());
-        panel.findViewById(R.id.pad_editor_cancel).setOnClickListener(v -> editor.finishEditing(false));
-        panel.findViewById(R.id.pad_editor_done).setOnClickListener(v -> editor.finishEditing(true));
         MaterialSwitch gameSwitch = panel.findViewById(R.id.pad_editor_this_game);
         thisGame = gameSwitch;
         gameSwitch.setVisibility(gameAvailable ? View.VISIBLE : View.GONE);
@@ -168,19 +158,18 @@ final class PadEditorPanel {
     }
 
     void onEditorSizeChanged(int w, int h, int oldw, int oldh) {
-        // As wide as the design asks on a tablet, never wider than a phone in portrait leaves room for. A short surface
-        // (a phone in landscape) gets a wider, lower panel without the hint, so it covers fewer controls.
-        boolean shortSurface = h < SHORT_SURFACE_DP * density;
-        int width = Math.round(Math.min((shortSurface ? SHORT_PANEL_WIDTH_DP : PANEL_WIDTH_DP) * density,
-                w - 2 * PANEL_MARGIN_DP * density));
-        // A narrow panel shows Reset as its icon so Cancel and Done stay on the row.
-        boolean narrow = width < PANEL_WIDTH_DP * density;
+        // As wide as its bar on one row where the surface has the room, else with the tools above the actions and
+        // never wider than a phone in portrait leaves room for. A short surface (a phone in landscape) gets a lower
+        // tray without the hint, so it covers fewer controls.
+        boolean shortSurface = h < SHORT_SURFACE_DP * density, oneRow = PadStudioInspector.oneRow(w, density);
+        int width = PadStudioInspector.width(w, density);
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) panel.getLayoutParams();
-        if (params.width != width || narrow != compactButtons || shortSurface != this.shortSurface) {
-            params.width = Math.max(0, width);
+        if (params.width != width || oneRow != this.oneRow || shortSurface != this.shortSurface) {
+            params.width = width;
             editor.post(() -> {
-                compactButtons = narrow;
+                this.oneRow = oneRow;
                 this.shortSurface = shortSurface;
+                inspector.arrange(oneRow);
                 update();
                 panel.setLayoutParams(params);
                 keepClear();
@@ -202,42 +191,16 @@ final class PadEditorPanel {
     }
 
     /**
-     * Where the preset and glyph chips and the game switch go, so the panel stays low on a short surface: beside the
-     * Add tiles when every group of them fits there in one row, else in one row below them. On a tall surface the
-     * chips sit above the switch, below the tiles.
+     * Where the glyph chip and the game switch go in the More tray, so it stays low on a short surface: in one row
+     * there, the switch taking what the chip leaves; on a tall surface the chip above the switch.
      */
     private void arrangeLayout() {
-        int margin = Math.round(12 * density);
-        int content = ((FrameLayout.LayoutParams) panel.getLayoutParams()).width - panel.getPaddingStart() - panel.getPaddingEnd();
-        boolean beside = false;
-        if (shortSurface && content > 0 && addSection.getVisibility() == View.VISIBLE && groups != null) {
-            int any = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-            // The options as wide as their own words, whatever row they were in before.
-            View chips = (View) glyphs.getParent();
-            chips.measure(any, any);
-            thisGame.measure(any, any);
-            groups.measure(any, any);
-            int side = Math.max(chips.getMeasuredWidth(), thisGame.getMeasuredWidth());
-            beside = groups.getMeasuredWidth() <= content - side - margin;
-        }
-        layoutSection.setOrientation(beside ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams add = (LinearLayout.LayoutParams) addSection.getLayoutParams();
-        add.width = beside ? 0 : LinearLayout.LayoutParams.MATCH_PARENT;
-        add.weight = beside ? 1 : 0;
-        add.setMarginEnd(beside ? margin : 0);
-        addSection.setLayoutParams(add);
-        boolean oneRow = shortSurface && !beside;
-        options.setOrientation(oneRow ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
-        options.setGravity(oneRow ? Gravity.CENTER_VERTICAL : Gravity.NO_GRAVITY);
-        LinearLayout.LayoutParams side = (LinearLayout.LayoutParams) options.getLayoutParams();
-        side.width = beside ? LinearLayout.LayoutParams.WRAP_CONTENT : LinearLayout.LayoutParams.MATCH_PARENT;
-        options.setLayoutParams(side);
-        // Beside the tiles the switch is as wide as its words, so its column is; in one row it takes what the chips
-        // leave; below the chips it spans the panel.
+        options.setOrientation(shortSurface ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+        options.setGravity(shortSurface ? Gravity.CENTER_VERTICAL : Gravity.NO_GRAVITY);
         LinearLayout.LayoutParams game = (LinearLayout.LayoutParams) thisGame.getLayoutParams();
-        game.width = beside ? LinearLayout.LayoutParams.WRAP_CONTENT : oneRow ? 0 : LinearLayout.LayoutParams.MATCH_PARENT;
-        game.weight = oneRow ? 1 : 0;
-        game.setMarginStart(oneRow ? Math.round(16 * density) : 0);
+        game.width = shortSurface ? 0 : LinearLayout.LayoutParams.MATCH_PARENT;
+        game.weight = shortSurface ? 1 : 0;
+        game.setMarginStart(shortSurface ? Math.round(16 * density) : 0);
         thisGame.setLayoutParams(game);
     }
 
@@ -352,32 +315,44 @@ final class PadEditorPanel {
         settingOpacity = true;
         opacity.setValue(Math.max(PadLayout.MIN_OPACITY, Math.min(PadLayout.MAX_OPACITY, Math.round(spec.opacity / 5f) * 5)));
         settingOpacity = false;
-        // A picked control shows its own section; with none, the layout's: the Add tiles, preset, glyphs and game.
+        // The tray shows the picked control, or with none one of the layout's trays: the Add tiles, or every
+        // control's size and opacity with the glyphs and the game. With neither the dock is its bar alone.
         boolean picked = selected != null;
+        if (picked) inspector.picked();
+        inspector.update(updateAdd());
+        boolean adding = !picked && inspector.tray() == PadStudioInspector.ADD;
+        boolean more = !picked && inspector.tray() == PadStudioInspector.MORE;
+        tray.setVisibility(picked || adding || more ? View.VISIBLE : View.GONE);
+        sizeRow.setVisibility(picked || more ? View.VISIBLE : View.GONE);
+        opacityRow.setVisibility(picked || more ? View.VISIBLE : View.GONE);
         controlSection.setVisibility(picked ? View.VISIBLE : View.GONE);
-        layoutSection.setVisibility(picked ? View.GONE : View.VISIBLE);
+        layoutSection.setVisibility(adding || more ? View.VISIBLE : View.GONE);
+        addSection.setVisibility(adding ? View.VISIBLE : View.GONE);
+        options.setVisibility(more ? View.VISIBLE : View.GONE);
         boolean showing = picked && spec.hidden;
         hide.setIconResource(showing ? R.drawable.ic_visibility : R.drawable.ic_visibility_off);
         hide.setText(showing ? R.string.pad_edit_show : R.string.pad_edit_hide);
-        label(reset, context.getString(R.string.pad_edit_reset));
         boolean pointerPad = selected == PadLayout.Control.POINTER_PAD;
         pointerMode.setVisibility(pointerPad ? View.VISIBLE : View.GONE);
         boolean camera = draft.pointerMode() == PadLayout.PointerMode.CAMERA;
         mouseCard.setSelected(!camera);
         cameraCard.setSelected(camera);
-        // The pointer touchpad's line says what Camera does, so the mode is found; a short surface shows only that.
+        // The pointer touchpad's line says what Camera does, so the mode is found; the More tray says how to edit
+        // where the surface is tall enough for the line.
         hint.setText(pointerPad ? R.string.pad_edit_hint_camera : R.string.pad_edit_hint);
-        hint.setVisibility(pointerPad || !shortSurface ? View.VISIBLE : View.GONE);
+        hint.setVisibility(pointerPad || (more && !shortSurface) ? View.VISIBLE : View.GONE);
         // Split for a shown face cluster or D-pad; Join for one of the members that stand in for it.
         split.setVisibility(picked && PadLayout.members(selected).length > 0 && !spec.hidden ? View.VISIBLE : View.GONE);
         join.setVisibility(picked && selected.cluster() != null ? View.VISIBLE : View.GONE);
         glyphs.setText(glyphName(context, draft.glyph()));
-        updateAdd();
         arrangeLayout();
     }
 
-    /** Builds the Add tiles again when the controls the layout leaves out changed, and redraws them otherwise. */
-    private void updateAdd() {
+    /**
+     * Builds the Add tiles again when the controls the layout leaves out changed, and redraws them otherwise. Says
+     * whether there is any control to add.
+     */
+    private boolean updateAdd() {
         StringBuilder shown = new StringBuilder();
         List<PadLayout.Control> out = new ArrayList<>();
         for (PadLayout.Control control : PadLayout.Control.values()) {
@@ -387,18 +362,15 @@ final class PadEditorPanel {
         }
         if (shown.toString().equals(addShown)) {
             for (PadEditor.Tile tile : tiles) tile.refresh();
-            return;
+            return !out.isEmpty();
         }
         addShown = shown.toString();
         addSection.removeAllViews();
         tiles.clear();
-        groups = null;
-        addSection.setVisibility(out.isEmpty() ? View.GONE : View.VISIBLE);
-        if (out.isEmpty()) return;
-        addSection.addView(heading(R.string.pad_edit_add, R.style.TextAppearance_Nightjar_Label, R.color.night_on_surface));
-        // Each group its name over its tiles; the groups side by side as far as the panel is wide.
+        if (out.isEmpty()) return false;
+        // Each group its name over its tiles; the groups side by side as far as the dock is wide.
         int gap = Math.round(PadEditor.TILE_GAP_DP * density);
-        groups = new TileFlow(context, Math.round(PadEditor.GROUP_GAP_DP * density), gap);
+        TileFlow groups = new TileFlow(context, Math.round(PadEditor.GROUP_GAP_DP * density), gap);
         addSection.addView(groups, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         for (int group : new int[] {PadEditor.GAMEPAD, PadEditor.KEYBOARD_MOUSE, PadEditor.EXTRAS}) {
@@ -419,6 +391,7 @@ final class PadEditorPanel {
                 flow.addView(tile);
             }
         }
+        return true;
     }
 
     private TextView heading(int text, int appearance, int color) {
@@ -451,27 +424,6 @@ final class PadEditorPanel {
             case NINTENDO: return context.getString(R.string.pad_glyph_nintendo);
             default: return context.getString(R.string.pad_glyph_xbox);
         }
-    }
-
-    /** A labelled button, or on a narrow panel its icon alone with the label as description and tooltip. */
-    private void label(MaterialButton button, String text) {
-        // The style's own padding and minimum width, kept so a panel that widens again restores them.
-        if (button.getTag(R.id.pad_editor_hide) == null) {
-            button.setTag(R.id.pad_editor_hide, new int[] {button.getPaddingStart(), button.getPaddingEnd(), button.getMinWidth()});
-        }
-        int[] wide = (int[]) button.getTag(R.id.pad_editor_hide);
-        int touch = Math.round(PadLayout.MIN_TOUCH_DP * density);
-        // Icon alone: a 48 dp square with the icon in its middle, so the row fits a phone.
-        int side = compactButtons ? Math.max(0, (touch - button.getIconSize()) / 2) : 0;
-        button.setText(compactButtons ? null : text);
-        button.setContentDescription(compactButtons ? text : null);
-        button.setIconPadding(compactButtons ? 0 : Math.round(8 * density));
-        button.setIconGravity(compactButtons ? MaterialButton.ICON_GRAVITY_TEXT_START : MaterialButton.ICON_GRAVITY_START);
-        button.setPaddingRelative(compactButtons ? side : wide[0], button.getPaddingTop(),
-                compactButtons ? side : wide[1], button.getPaddingBottom());
-        button.setMinWidth(compactButtons ? touch : wide[2]);
-        button.setMinimumWidth(compactButtons ? touch : wide[2]);
-        androidx.appcompat.widget.TooltipCompat.setTooltipText(button, compactButtons ? text : null);
     }
 
     /** The control's name for people: its label, or what it is when it has none; a face button's in its glyph set. */

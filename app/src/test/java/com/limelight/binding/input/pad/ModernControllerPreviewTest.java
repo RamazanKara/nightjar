@@ -140,12 +140,23 @@ public class ModernControllerPreviewTest {
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         layout(frame, width, height);
         PadEditor editor = (PadEditor) frame.getChildAt(frame.getChildCount() - 1);
+        // The dock is its bar alone until there is something to show.
         touchTargets(editor, metrics.density, problems);
         write(frame, width, height, new File(directory, name + "-3-editor-all.png"));
         panelInside(editor, "all", problems);
+        // More: every control's size and opacity, the glyphs and where Done saves.
+        editor.findViewById(com.limelight.R.id.pad_studio_more).performClick();
+        layout(frame, width, height);
+        touchTargets(editor, metrics.density, problems);
+        panelInside(editor, "more", problems);
+        write(frame, width, height, new File(directory, name + "-9-editor-more.png"));
+        // A control picked, with the mirror lock on: its tool is lit.
         editor.select(PadLayout.Control.FACE);
         editor.toggleHidden();
         editor.select(PadLayout.Control.DPAD);
+        editor.findViewById(com.limelight.R.id.pad_studio_mirror).performClick();
+        layout(frame, width, height);
+        touchTargets(editor, metrics.density, problems);
         write(frame, width, height, new File(directory, name + "-4-editor-picked.png"));
         panelInside(editor, "picked", problems);
         controller.finishEditing(false);
@@ -193,6 +204,7 @@ public class ModernControllerPreviewTest {
         editor.select(PadLayout.Control.HOME);
         editor.toggleHidden();
         editor.select(null);
+        editor.findViewById(com.limelight.R.id.pad_studio_add).performClick();
         layout(frame, width, height);
         touchTargets(editor, metrics.density, problems);
         tiles(editor, metrics.density, problems);
