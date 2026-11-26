@@ -6,15 +6,26 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 
 import com.limelight.R;
+import com.limelight.nvstream.jni.NightjarJni;
+import com.limelight.nvstream.jni.NightjarUiPolicyJni;
 
 /**
  * What the last input came from, so a button hint names what the device in the hand really has: taken from the event and
  * its {@link InputDevice}, never from the form factor. Touch and a mouse get no hints.
+ *
+ * <p>The key a hint names is nightjar-policy's {@code input_glyphs}, the desktop's too: a Nintendo controller (vendor
+ * 0x057E) shows B/X, a PlayStation one ×/△, anything else A/Y, a keyboard Enter/F/Esc, a remote OK/Hold OK; with the face
+ * button swap setting on, Go and Back trade places. The controller styles are ported from Moonlight V+
+ * (streaming/input/gamepadglyphs.h and SdlGamepadKeyNavigation::detectUiStyle). The words for a remote's keys stay
+ * Android strings, translated here.
  */
 public enum InputSource {
     REMOTE, PAD, KEYBOARD, NONE;
 
-    private static final int SONY = 0x054C;
+    /** The face button swap setting (SettingsCatalogGen.FLIP_FACE_BUTTONS_PREF_STRING). */
+    static final String FLIP_FACE_BUTTONS = "checkbox_flip_face_buttons";
+    static final int SONY = 0x054C;
+    static final int NINTENDO = 0x057E;
 
     /** The source of the last event any screen saw; null until there was one. */
     private static InputSource last;
@@ -76,20 +87,71 @@ public enum InputSource {
 
     /** The key for Go on this source; null with no hints. A pad's own labels when the pad is known to differ. */
     public String goKey(Context context, int padVendor) {
-        switch (this) {
-            case REMOTE: return context.getString(R.string.console_hint_key_ok);
-            case PAD: return padVendor == SONY ? "✕" : "A";
-            case KEYBOARD: return context.getString(R.string.console_hint_key_enter);
-            default: return null;
-        }
+        return key(context, "go", padVendor);
     }
 
     /** The key for More on this source; null with no hints. Whatever is on a pad's Y also opens from Hold OK. */
     public String moreKey(Context context, int padVendor) {
+        return key(context, "more", padVendor);
+    }
+
+    /** The key for Back on a pad or a keyboard; null elsewhere (a remote's Back key carries no word to show). */
+    public String backKey(Context context, int padVendor) {
+        return this == REMOTE ? null : key(context, "back", padVendor);
+    }
+
+    private String key(Context context, String hint, int padVendor) {
+        boolean swap = android.preference.PreferenceManager.getDefaultSharedPreferences(context)
+                .getBoolean(FLIP_FACE_BUTTONS, false);
+        String glyph = glyph(policyKey(), padVendor, hint, swap);
+        if (glyph == null) return null;
+        int colon = glyph.indexOf(':');
+        String kind = glyph.substring(0, colon);
+        String text = glyph.substring(colon + 1);
+        switch (kind) {
+            case "remote_ok": return context.getString(R.string.console_hint_key_ok);
+            case "remote_hold_ok": return context.getString(R.string.console_hint_key_hold_ok);
+            case "enter": return context.getString(R.string.console_hint_key_enter);
+            default: return text;
+        }
+    }
+
+    /** The policy's name for this source. */
+    String policyKey() {
         switch (this) {
-            case REMOTE: return context.getString(R.string.console_hint_key_hold_ok);
-            case PAD: return padVendor == SONY ? "△" : "Y";
-            case KEYBOARD: return "F";
+            case REMOTE: return "remote";
+            case PAD: return "pad";
+            case KEYBOARD: return "keyboard";
+            default: return "touch";
+        }
+    }
+
+    /** {@code "<glyph key>:<English text>"} for a hint, or null for none: the policy's answer, or its mirror. */
+    static String glyph(String source, int vendor, String hint, boolean swap) {
+        if (NightjarJni.isAvailable()) {
+            try {
+                return NightjarUiPolicyJni.inputGlyph(source, vendor, hint, swap);
+            } catch (LinkageError ignored) {
+                // Falls back to the mirror below.
+            }
+        }
+        return glyphMirror(source, vendor, hint, swap);
+    }
+
+    /** input_glyphs::glyph in Java, pinned to the policy by InputSourceGlyphTest. */
+    static String glyphMirror(String source, int vendor, String hint, boolean swap) {
+        boolean go = "go".equals(hint), more = "more".equals(hint), back = "back".equals(hint);
+        if (!go && !more && !back) return null;
+        switch (source) {
+            case "keyboard": return go ? "enter:Enter" : more ? "key:F" : "escape:Esc";
+            case "remote": return go ? "remote_ok:OK" : more ? "remote_hold_ok:Hold OK" : "remote_back:Back";
+            case "pad": {
+                // South, east, north as each style labels them.
+                String[] faces = vendor == SONY ? new String[] {"×", "○", "△"}
+                        : vendor == NINTENDO ? new String[] {"B", "A", "X"} : new String[] {"A", "B", "Y"};
+                if (more) return "button:" + faces[2];
+                return "button:" + faces[go != swap ? 0 : 1];
+            }
             default: return null;
         }
     }
