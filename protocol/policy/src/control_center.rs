@@ -80,8 +80,9 @@ pub fn module_of(tile: &str) -> Option<Module> {
         | "clipboard_receive" | "mouse_cursor" | "keyboard_keys" | "zoom_reset" | "picture_in_picture" | "image_clipboard_send"
         | "image_clipboard_receive" | "help" => Module::Quick,
         "bitrate" | "rate_change" | "video_output" | "overlay_page" | "picture" | "video_scaling" | "automatic_quality"
-        | "automatic_bitrate" | "stream_size" | "stream_health" | "night_mode" | "export_statistics" => Module::Picture,
-        "microphone" | "mic_button" | "headphone_surround" | "controller_audio" => Module::Audio,
+        | "automatic_bitrate" | "stream_size" | "stream_health" | "export_statistics" => Module::Picture,
+        // The PC's night mode and headphone surround are sound, beside the microphone.
+        "microphone" | "mic_button" | "night_mode" | "headphone_surround" | "controller_audio" => Module::Audio,
         "native_page" | "server_commands" | "host_menu" | "files" | "host_web_ui" | "host_status" => Module::Pc,
         "onscreen_controls" | "controls_layout" | "menu_button" | "game_controls" | "usb_devices" => Module::Controller,
         "guests" => Module::Guests,
@@ -392,6 +393,13 @@ mod tests {
         assert!(quick.rows.contains(&"help"));
         let none = super::dock(&everything(), None, &Buttons::new(), &Gates::default()).unwrap();
         assert!(!none.page(Module::Quick).unwrap().cards.iter().any(|cell| matches!(cell, Cell::Shortcut(_) | Cell::Add)));
+    }
+
+    #[test]
+    fn the_pcs_sound_switches_are_on_audio() {
+        for tile in ["night_mode", "headphone_surround", "microphone"] {
+            assert_eq!(module_of(tile), Some(Module::Audio), "{tile}");
+        }
     }
 
     #[test]
