@@ -297,6 +297,7 @@ public class ControlCenterTest {
 
     @Test @Config(qualifiers = TELEVISION)
     public void aTvGetsTheDockInsideItsSafeAreaWithTheRailDownItsSide() throws Exception {
+        StreamMenu.gamepadForTest = true;
         try (var controller = Robolectric.buildActivity(Activity.class).setup().visible()) {
             Activity activity = controller.get();
             StreamMenu menu = open(activity, everything(NvApp.Role.STREAM), new ArrayList<>(), null);
@@ -361,6 +362,8 @@ public class ControlCenterTest {
     /** A handheld's cards are narrow: a name whose word does not fit beside its cap takes the cap up into the corner. */
     @Test
     public void aNarrowCardsNameStaysWholeAndTheRailKeepsInsideTheDocksCorners() throws Exception {
+        // With a controller there, so the cards draw their caps.
+        StreamMenu.gamepadForTest = true;
         try (var controller = Robolectric.buildActivity(Activity.class).setup().visible()) {
             Activity activity = controller.get();
             StreamMenu menu = open(activity, everything(NvApp.Role.STREAM), new ArrayList<>(), null);
