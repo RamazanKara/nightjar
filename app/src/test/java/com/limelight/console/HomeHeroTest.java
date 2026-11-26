@@ -70,13 +70,15 @@ public class HomeHeroTest {
 
     @Test
     public void theCoverFollowsTheWindowAndFitsTheHeight() {
-        assertEquals("the design's share of the width where the window is high enough", 290, HomeHero.coverWidth(412, 915, 1f));
-        assertEquals("the same in pixels of a denser screen", 580, HomeHero.coverWidth(824, 1830, 2f));
-        // 800 high: 284 around the cover and 188 for the first shelf's heading and upper half leave it 328, which is 219 wide.
-        assertEquals(219, HomeHero.coverWidth(360, 800, 1f));
-        assertTrue("its height and the rest fit the window", 219 * 3 / 2 + HomeHero.AROUND_COVER_DP + HomeHero.SHELF_HEADING_DP + HomeHero.SHELF_HALF_DP <= 800);
+        assertEquals("the design's share of the width where the window is high enough", 290, HomeHero.coverWidth(412, 932, 1f));
+        assertEquals("the same in pixels of a denser screen", 580, HomeHero.coverWidth(824, 1864, 2f));
+        // The design's 412 x 915 phone: its top row and name stand 16 dp taller than the design's, so the cover gives up 5.
+        assertEquals(285, HomeHero.coverWidth(412, 915, 1f));
+        // 800 high: 300 around the cover and 188 for the first shelf's heading and upper half leave it 312, which is 208 wide.
+        assertEquals(208, HomeHero.coverWidth(360, 800, 1f));
+        assertTrue("its height and the rest fit the window", 208 * 3 / 2 + HomeHero.AROUND_COVER_DP + HomeHero.SHELF_HEADING_DP + HomeHero.SHELF_HALF_DP <= 800);
         assertEquals("a low window keeps the cover as high as a shelf's own and shows less of the shelf", 176, HomeHero.coverWidth(360, 640, 1f));
-        assertEquals("until only the heading is left of it", 176, HomeHero.coverWidth(360, 604, 1f));
+        assertEquals("until only the heading is left of it", 176, HomeHero.coverWidth(360, 620, 1f));
         assertTrue("then the cover shrinks", HomeHero.coverWidth(360, 560, 1f) < 176);
         assertTrue("a short window narrows the cover", HomeHero.coverWidth(412, 500, 1f) < 290);
         assertTrue("but it stays a cover", HomeHero.coverWidth(800, 360, 1f) >= 360 * .36f / 1.5f - 1);

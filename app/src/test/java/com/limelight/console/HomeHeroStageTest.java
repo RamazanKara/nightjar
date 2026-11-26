@@ -217,8 +217,12 @@ public class HomeHeroStageTest {
                 words.getPaddingTop(), topOf(cards), cards.getHeight(), topOf(play), play.getHeight(), topOf(shelf), topOf(heading),
                 heading.getHeight(), topOf(covers), covers.getHeight(), covers.getPaddingTop(), covers.getPaddingBottom(),
                 home.getResources().getDisplayMetrics().density);
-        assertTrue("and so is the upper half of its covers: " + (topOf(covers) + covers.getHeight() / 2) + " of " + dock + where,
-                topOf(covers) + covers.getHeight() / 2 <= dock);
+        // The upper half of a cover's art: the row is taller, as it holds the names under the covers.
+        View art = ((android.view.ViewGroup) covers).getChildAt(0).findViewById(R.id.console_cover_frame);
+        assertNotNull("the shelf shows covers", art);
+        int half = topOf(art) + art.getHeight() / 2;
+        assertTrue("and so is the upper half of its covers: " + half + " of " + dock + " (art " + topOf(art) + "+" + art.getHeight() + ")"
+                + where, half <= dock);
     }
 
     private static int topOf(View view) {

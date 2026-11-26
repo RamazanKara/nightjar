@@ -30,10 +30,10 @@ final class HomeHero {
     /** The middle cover's share of the width where the window is high enough for it (the design's 290 of 412). */
     private static final float COVER_OF_WIDTH = 290f / 412f;
     /**
-     * What a phone's hero takes of the window's height besides its cover, in dp: the top row over it (56), its name and line
-     * (74), Play under the cover with the gaps around it (80) and the tab bar (74).
+     * What a phone's hero takes of the window's height besides its cover, in dp, as it is laid out: the top row over it (64),
+     * its name and line (82), Play under the cover with the gaps around it (80) and the tab bar (74).
      */
-    static final int AROUND_COVER_DP = 284;
+    static final int AROUND_COVER_DP = 300;
     /** What still shows of the first shelf under the hero: its heading, and the upper half of its covers. */
     static final int SHELF_HEADING_DP = 56;
     static final int SHELF_HALF_DP = 132;
