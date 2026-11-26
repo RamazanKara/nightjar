@@ -23,7 +23,7 @@ use crate::{
 use std::{
     collections::HashMap,
     io,
-    net::{SocketAddr, SocketAddrV4, TcpStream, UdpSocket},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream, UdpSocket},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -52,6 +52,9 @@ const PROBE_EVERY: Duration = Duration::from_secs(2);
 #[cfg(test)]
 const PROBE_EVERY: Duration = Duration::from_millis(50);
 const PROBE_CONNECT: Duration = Duration::from_millis(800);
+/// How often, and how far apart, the final status goes.
+const FINAL_COPIES: usize = 2;
+const FINAL_GAP: Duration = Duration::from_millis(300);
 
 /// What the relay needs of the network it is on.
 pub trait Lan: Send + Sync {
@@ -81,20 +84,16 @@ impl Lan for UdpLan {
         (self.list)()
     }
 
-    /// Each directed broadcast leaves from the interface on its subnet, bound to that
-    /// interface's own address (never a wildcard); the limited broadcast leaves from each.
+    /// Each datagram leaves once, from the address [`sources`] picks (never a wildcard).
     fn send(&self, burst: &Burst) -> usize {
-        let interfaces = self.interfaces();
-        let mut sockets: HashMap<std::net::Ipv4Addr, UdpSocket> = HashMap::new();
-        for (destination, _) in &burst.packets {
-            if let Some(interface) = interfaces
-                .iter()
-                .find(|interface| interface.broadcast() == Some(*destination.ip()))
-                && !sockets.contains_key(&interface.ip)
-                && let Ok(socket) = UdpSocket::bind(SocketAddrV4::new(interface.ip, 0))
+        let sources = sources(burst, &self.interfaces());
+        let mut sockets: HashMap<Ipv4Addr, UdpSocket> = HashMap::new();
+        for ip in sources.iter().flatten() {
+            if !sockets.contains_key(ip)
+                && let Ok(socket) = UdpSocket::bind(SocketAddrV4::new(*ip, 0))
                 && socket.set_broadcast(true).is_ok()
             {
-                sockets.insert(interface.ip, socket);
+                sockets.insert(*ip, socket);
             }
         }
         let per_repeat = burst
@@ -103,23 +102,15 @@ impl Lan for UdpLan {
             .div_ceil(crate::wake_relay::BURST_REPEATS)
             .max(1);
         let mut sent = 0;
-        for (index, (destination, packet)) in burst.packets.iter().enumerate() {
+        for (index, ((destination, packet), source)) in burst.packets.iter().zip(&sources).enumerate()
+        {
             if index > 0 && index % per_repeat == 0 {
                 thread::sleep(Duration::from_millis(10));
             }
-            let from: Vec<&UdpSocket> = if destination.ip().is_broadcast() {
-                sockets.values().collect()
-            } else {
-                interfaces
-                    .iter()
-                    .filter(|interface| interface.broadcast() == Some(*destination.ip()))
-                    .filter_map(|interface| sockets.get(&interface.ip))
-                    .collect()
-            };
-            for socket in from {
-                if socket.send_to(packet, destination).is_ok() {
-                    sent += 1;
-                }
+            if let Some(socket) = source.and_then(|ip| sockets.get(&ip))
+                && socket.send_to(packet, destination).is_ok()
+            {
+                sent += 1;
             }
         }
         sent
@@ -128,6 +119,33 @@ impl Lan for UdpLan {
     fn is_up(&self, address: SocketAddrV4) -> bool {
         TcpStream::connect_timeout(&address.into(), PROBE_CONNECT).is_ok()
     }
+}
+
+/// The address each of a burst's datagrams leaves from, or none: a directed broadcast from the
+/// first interface on its subnet, the limited broadcast from the first of those only. So a
+/// relay on several networks still sends each datagram at most once, never more than the burst.
+fn sources(burst: &Burst, interfaces: &[Interface]) -> Vec<Option<Ipv4Addr>> {
+    let on_subnet = |destination: Ipv4Addr| {
+        interfaces
+            .iter()
+            .find(|interface| interface.broadcast() == Some(destination))
+            .map(|interface| interface.ip)
+    };
+    let first = burst
+        .packets
+        .iter()
+        .find_map(|(destination, _)| on_subnet(*destination.ip()));
+    burst
+        .packets
+        .iter()
+        .map(|(destination, _)| {
+            if destination.ip().is_broadcast() {
+                first
+            } else {
+                on_subnet(*destination.ip())
+            }
+        })
+        .collect()
 }
 
 #[derive(Clone, Debug)]
@@ -164,6 +182,16 @@ struct DeviceState {
     last_poll: Option<Millis>,
     polling: bool,
     answered: Option<[u8; 16]>,
+}
+
+/// A wake request a path took, handled once the paths are unlocked.
+struct Pending {
+    tag: [u8; 8],
+    session: [u8; 16],
+    target: String,
+    device: DeviceId,
+    payload: Vec<u8>,
+    from: SocketAddr,
 }
 
 /// A punched path to one device's session.
@@ -318,8 +346,11 @@ impl WakeRelayPeer {
         if let Some(path) = paths.get_mut(&tag)
             && punched.is_none_or(|session| session == path.session)
         {
-            if let Some(opened) = path.opener.open(datagram) {
-                self.on_datagram(&mut paths, tag, opened, from);
+            if let Some(opened) = path.opener.open(datagram)
+                && let Some(request) = self.on_datagram(&mut paths, tag, opened, from)
+            {
+                drop(paths);
+                self.on_request(request);
             }
             return;
         }
@@ -346,19 +377,22 @@ impl WakeRelayPeer {
         drop(devices);
         path.opener = opener;
         paths.insert(tag, path);
-        self.on_datagram(&mut paths, tag, opened, from);
+        if let Some(request) = self.on_datagram(&mut paths, tag, opened, from) {
+            drop(paths);
+            self.on_request(request);
+        }
     }
 
+    /// Answers what a path needs at once; a wake request comes back, for [`Self::on_request`]
+    /// to handle once the paths are unlocked (a burst and a look at the interfaces take time).
     fn on_datagram(
         &self,
         paths: &mut HashMap<[u8; 8], Path>,
         tag: [u8; 8],
         opened: Opened,
         from: SocketAddr,
-    ) {
-        let Some(path) = paths.get_mut(&tag) else {
-            return;
-        };
+    ) -> Option<Pending> {
+        let path = paths.get_mut(&tag)?;
         path.heard = self.shared.node.now();
         path.peer = Some(from);
         match opened.kind {
@@ -367,22 +401,32 @@ impl WakeRelayPeer {
                 self.send(path, from, Kind::PunchAck, &[]);
             }
             Kind::PunchAck => path.puncher.on_ack(from),
-            Kind::WakeRequest => self.on_request(path, tag, &opened.payload, from),
+            Kind::WakeRequest => {
+                return Some(Pending {
+                    tag,
+                    session: path.session,
+                    target: path.target.clone(),
+                    device: path.device,
+                    payload: opened.payload,
+                    from,
+                });
+            }
             Kind::Close => {
                 paths.remove(&tag);
             }
             _ => {}
         }
+        None
     }
 
-    fn on_request(&self, path: &Path, tag: [u8; 8], payload: &[u8], from: SocketAddr) {
+    fn on_request(&self, request: Pending) {
         let Some(enrollment) = self
             .shared
             .enrollments
             .lock()
             .unwrap()
             .iter()
-            .find(|enrollment| enrollment.target_id == path.target)
+            .find(|enrollment| enrollment.target_id == request.target)
             .cloned()
         else {
             return;
@@ -391,9 +435,9 @@ impl WakeRelayPeer {
         let interfaces = self.shared.lan.interfaces();
         let decision = self.shared.relay.lock().unwrap().handle(
             &enrollment,
-            &path.device,
-            from,
-            payload,
+            &request.device,
+            request.from,
+            &request.payload,
             now,
             &interfaces,
         );
@@ -402,17 +446,24 @@ impl WakeRelayPeer {
             Decision::Reply(reply) => reply,
             Decision::Wake { reply, burst } => {
                 self.shared.lan.send(&burst);
-                self.watch(&enrollment, tag, path.session, reply.nonce);
+                self.watch(&enrollment, request.tag, request.session, reply.nonce);
                 reply
             }
         };
         self.shared.status.lock().unwrap().last_wake =
             Some((enrollment.target_name.clone(), now, reply.status));
-        self.send(path, from, Kind::WakeStatus, &reply.encode());
+        let paths = self.shared.paths.lock().unwrap();
+        if let Some(path) = paths
+            .get(&request.tag)
+            .filter(|path| path.session == request.session)
+        {
+            self.send(path, request.from, Kind::WakeStatus, &reply.encode());
+        }
     }
 
-    /// After a burst: looks whether the PC answers on its network, and tells the device once,
-    /// when it does or when [`crate::wake_relay::BOOT_WAIT_SECONDS`] ran out.
+    /// After a burst: looks whether the PC answers on its network, and tells the device when it
+    /// does or when [`crate::wake_relay::BOOT_WAIT_SECONDS`] ran out ([`FINAL_COPIES`] times, as
+    /// one lost datagram must not hide the outcome).
     fn watch(&self, enrollment: &Enrollment, tag: [u8; 8], session: [u8; 16], nonce: [u8; 16]) {
         let target = enrollment
             .address
@@ -440,11 +491,17 @@ impl WakeRelayPeer {
                 answer.elapsed_ms = u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
                 watching.shared.status.lock().unwrap().last_wake =
                     Some((name, unix_now(), status));
-                let paths = watching.shared.paths.lock().unwrap();
-                if let Some(path) = paths.get(&tag).filter(|path| path.session == session)
-                    && let Some(peer) = path.peer
-                {
-                    watching.send(path, peer, Kind::WakeStatus, &answer.encode());
+                for copy in 0..FINAL_COPIES {
+                    if copy > 0 {
+                        thread::sleep(FINAL_GAP);
+                    }
+                    let paths = watching.shared.paths.lock().unwrap();
+                    let Some(path) = paths.get(&tag).filter(|path| path.session == session) else {
+                        return;
+                    };
+                    if let Some(peer) = path.peer {
+                        watching.send(path, peer, Kind::WakeStatus, &answer.encode());
+                    }
                 }
             });
     }

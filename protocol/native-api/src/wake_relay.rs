@@ -24,12 +24,22 @@ pub struct RelayPeer {
 }
 
 /// What a device needs to ask one relay for a wake.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// Its `Debug` leaves the secret out, so a log line never carries it.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RelayCredential {
     pub id: String,
     pub name: String,
     /// The device's wake secret for this relay, 64 hex digits.
     pub secret: String,
+}
+
+impl std::fmt::Debug for RelayCredential {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RelayCredential")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .finish_non_exhaustive()
+    }
 }
 
 /// A device's away wake access to this PC.
@@ -79,7 +89,8 @@ pub enum RelayEnroll {
 }
 
 /// What a relay needs to wake the PC, for the devices the PC lets wake it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// Its `Debug` leaves the secret out, so a log line never carries it.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RelayAssignment {
     pub target_id: String,
     pub target_name: String,
@@ -100,6 +111,22 @@ pub struct RelayAssignment {
     pub refresh_seconds: u32,
 }
 
+impl std::fmt::Debug for RelayAssignment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RelayAssignment")
+            .field("target_id", &self.target_id)
+            .field("target_name", &self.target_name)
+            .field("epoch", &self.epoch)
+            .field("macs", &self.macs)
+            .field("broadcasts", &self.broadcasts)
+            .field("address", &self.address)
+            .field("http_port", &self.http_port)
+            .field("devices", &self.devices)
+            .field("refresh_seconds", &self.refresh_seconds)
+            .finish_non_exhaustive()
+    }
+}
+
 /// `POST /wake/relay/enroll`: the caller's assignment after `enroll`; `null` after the others.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RelayEnrolled {
@@ -107,4 +134,40 @@ pub struct RelayEnrolled {
     pub assignment: Option<RelayAssignment>,
     #[serde(default)]
     pub relays: Vec<RelayPeer>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keys_never_show_in_debug_output() {
+        let secret = "5ec2e75ec2e75ec2e75ec2e75ec2e75ec2e75ec2e75ec2e75ec2e75ec2e75ec2";
+        let bundle = WakeRelayBundle {
+            target_id: "PC".into(),
+            epoch: 1,
+            device: "d".into(),
+            relays: vec![RelayCredential {
+                id: "r".into(),
+                name: "NUC".into(),
+                secret: secret.into(),
+            }],
+        };
+        let assignment = RelayAssignment {
+            target_id: "PC".into(),
+            target_name: "Gaming PC".into(),
+            epoch: 1,
+            secret: secret.into(),
+            macs: Vec::new(),
+            broadcasts: Vec::new(),
+            address: None,
+            http_port: 47989,
+            devices: Vec::new(),
+            refresh_seconds: 300,
+        };
+        for printed in [format!("{bundle:?}"), format!("{assignment:?}")] {
+            assert!(printed.contains("NUC") || printed.contains("Gaming PC"));
+            assert!(!printed.contains(secret), "{printed}");
+        }
+    }
 }

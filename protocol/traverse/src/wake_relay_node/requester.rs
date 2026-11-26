@@ -14,7 +14,8 @@ pub struct RelayInfo {
     pub nat: Nat,
 }
 
-#[derive(Clone, Debug)]
+/// Its `Debug` leaves the secret out, so a log line never carries it.
+#[derive(Clone)]
 pub struct RequestConfig {
     pub target_id: String,
     pub device: DeviceId,
@@ -26,6 +27,17 @@ pub struct RequestConfig {
     pub bind: SocketAddr,
     pub stun_servers: Vec<String>,
     pub bootstrap: Vec<String>,
+}
+
+impl std::fmt::Debug for RequestConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RequestConfig")
+            .field("target_id", &self.target_id)
+            .field("epoch", &self.epoch)
+            .field("known", &self.known)
+            .field("bind", &self.bind)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -168,9 +180,8 @@ fn run(
     let now = node.now();
     let mut puncher = Puncher::new(punch::candidates(&relay.endpoints, relay.nat), now);
     puncher.hold_until(punch::device_deadline(now));
-    let request = WakeRequest::new(&config.target_id, config.device, config.epoch, unix_now())
-        .encode(&config.secret);
-    let nonce = WakeRequest::parse(&request).expect("its own request").nonce;
+    // Made when the path connects, so a slow punch does not age it toward the relay's clock check.
+    let mut request: Option<([u8; crate::wake_relay::REQUEST_BYTES], [u8; 16])> = None;
     let mut sends = 0;
     let mut last_send: Option<Instant> = None;
     let mut sent_burst: Option<(WakeStatus, Instant)> = None;
@@ -190,7 +201,8 @@ fn run(
                 Kind::Punch => puncher.on_punch(from),
                 Kind::PunchAck => puncher.on_ack(from),
                 Kind::WakeStatus => {
-                    let Some(status) = WakeStatus::decode(&payload).filter(|s| s.nonce == nonce)
+                    let Some(status) = WakeStatus::decode(&payload)
+                        .filter(|s| request.as_ref().is_some_and(|(_, nonce)| s.nonce == *nonce))
                     else {
                         continue;
                     };
@@ -218,7 +230,18 @@ fn run(
                         progress(Progress::Requested);
                     }
                     // The same request each time: the relay answers a repeat, never wakes twice.
-                    node.send(relay, &sealer.seal(Kind::WakeRequest, 0, &request));
+                    let (request, _) = request.get_or_insert_with(|| {
+                        let request = WakeRequest::new(
+                            &config.target_id,
+                            config.device,
+                            config.epoch,
+                            unix_now(),
+                        )
+                        .encode(&config.secret);
+                        let nonce = WakeRequest::parse(&request).expect("its own request").nonce;
+                        (request, nonce)
+                    });
+                    node.send(relay, &sealer.seal(Kind::WakeRequest, 0, &request[..]));
                     sends += 1;
                     last_send = Some(Instant::now());
                 }

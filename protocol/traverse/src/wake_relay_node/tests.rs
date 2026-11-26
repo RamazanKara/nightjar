@@ -200,3 +200,41 @@ fn a_device_the_pc_dropped_is_refused_at_once_on_its_open_path() {
     assert!(answer.is_err());
     assert!(lan.bursts.lock().unwrap().is_empty());
 }
+
+#[test]
+fn a_relay_on_several_networks_sends_each_datagram_from_one_address_only() {
+    let interfaces = [
+        Interface {
+            ip: Ipv4Addr::new(192, 168, 1, 10),
+            prefix: 24,
+        },
+        Interface {
+            ip: Ipv4Addr::new(10, 0, 0, 5),
+            prefix: 24,
+        },
+        // A second address on the first network: still one datagram, not two.
+        Interface {
+            ip: Ipv4Addr::new(192, 168, 1, 11),
+            prefix: 24,
+        },
+    ];
+    let to = |ip: [u8; 4]| SocketAddrV4::new(ip.into(), crate::wake_relay::WOL_PORT);
+    let destinations = [
+        to([192, 168, 1, 255]),
+        to([10, 0, 0, 255]),
+        to([172, 16, 0, 255]),
+        to([255, 255, 255, 255]),
+    ];
+    let burst = crate::wake_relay::burst(&[MAC], &destinations);
+    let from = sources(&burst, &interfaces);
+    assert_eq!(from.len(), burst.packets.len());
+    assert!(from.len() <= crate::wake_relay::MAX_BURST_PACKETS);
+    for ((destination, _), source) in burst.packets.iter().zip(&from) {
+        let expected = match destination.ip().octets() {
+            [192, 168, 1, 255] | [255, 255, 255, 255] => Some(Ipv4Addr::new(192, 168, 1, 10)),
+            [10, 0, 0, 255] => Some(Ipv4Addr::new(10, 0, 0, 5)),
+            _ => None,
+        };
+        assert_eq!(*source, expected, "{destination}");
+    }
+}
