@@ -1053,12 +1053,12 @@
             android:title="@string/title_experimental_chipset_tuning"
             android:dialogMessage="@string/summary_experimental_chipset_tuning"
             android:defaultValue="false" />
-        <!-- Listed on a TV (SettingRules.TV_DISPLAY_COMPATIBILITY) or while it is on; read on any device (GameVideoOutput.updateCompositorHeartbeat). -->
+        <!-- On by default on a TV (values-television); listed there, elsewhere with Show debug settings or while it is on (SettingRules.TV_DISPLAY_COMPATIBILITY); read on any device (GameVideoOutput.updateCompositorHeartbeat). -->
         <com.limelight.preferences.MaterialSwitchPreference
             android:key="checkbox_tv_display_compatibility"
             android:title="@string/title_tv_display_compatibility"
             android:dialogMessage="@string/summary_tv_display_compatibility"
-            android:defaultValue="false" />
+            android:defaultValue="@bool/default_tv_display_compatibility" />
         <!-- Both engines; a decoder that takes frames directly has no queue (MoonBridge.setDecodeQueueBound). -->
         <com.limelight.preferences.MaterialListPreference
             android:key="list_decode_queue_frames"

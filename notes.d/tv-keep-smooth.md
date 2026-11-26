@@ -1,2 +1,2 @@
 ## en
-- TV display compatibility is now called Keep TV video smooth. Try it if your TV or TV box starts to stutter after a while unless the performance overlay is shown.
+- TV display compatibility is now called Keep TV video smooth and is on by default on TVs. It keeps TVs and TV boxes from stuttering after a while when the performance overlay is hidden, and on a TCL TV it lowered the delay before frames are shown.

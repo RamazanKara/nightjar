@@ -29,8 +29,8 @@ import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
 
 /**
- * Settings › Advanced › Compatibility › Keep TV video smooth (formerly TV display compatibility): off by default, listed on a TV (FEATURE_LEANBACK)
- * behind Advanced's More row, elsewhere with Show debug settings or while it is on, and read from the stored value on any device.
+ * Settings › Advanced › Compatibility › Keep TV video smooth (formerly TV display compatibility): off by default except on a TV, listed on a TV (FEATURE_LEANBACK)
+ * behind Advanced's More row and on by default there, elsewhere with Show debug settings or while it is on, and read from the stored value on any device.
  * The preference part follows the derflacco fork's TvCompositorPreferenceTest (branch Artemide_Experimental_Async, GPL-3.0, commit 784b4eca).
  */
 @RunWith(org.robolectric.RobolectricTestRunner.class)
@@ -79,6 +79,14 @@ public class TvDisplayCompatibilitySettingTest {
         assertFalse(PreferenceConfiguration.readPreferences(context()).tvDisplayCompatibility);
         PreferenceManager.getDefaultSharedPreferences(context()).edit().putBoolean(KEY, true).commit();
         assertTrue("a phone forced on through the preference", PreferenceConfiguration.readPreferences(context()).tvDisplayCompatibility);
+    }
+
+    @Test
+    @Config(qualifiers = "+television")
+    public void onByDefaultOnATvAndStillOffWhenTurnedOff() {
+        assertTrue(PreferenceConfiguration.readPreferences(context()).tvDisplayCompatibility);
+        PreferenceManager.getDefaultSharedPreferences(context()).edit().putBoolean(KEY, false).commit();
+        assertFalse("a stored choice wins", PreferenceConfiguration.readPreferences(context()).tvDisplayCompatibility);
     }
 
     @Test

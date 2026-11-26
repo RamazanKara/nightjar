@@ -17,7 +17,7 @@
     <string name="title_experimental_chipset_tuning">芯片组调优</string>
     <string name="summary_experimental_chipset_tuning">在某些设备上可能导致无法解码。为 MediaTek 天玑和三星 Exynos 解码器添加额外的低延迟设置，旨在降低解码延迟；其他芯片组不受影响。除非解码器跟不上，否则请保持关闭。</string>
     <string name="title_tv_display_compatibility">保持电视画面流畅</string>
-    <string name="summary_tv_display_compatibility">适用于画面过一段时间就卡顿、冻结、闪烁或重启的电视和电视盒子，前提是画面上没有绘制任何内容，例如性能叠加层。代价是左上角一个近乎黑色的小点，每秒重绘十次。除非你的电视出现这种情况，否则请保持关闭。</string>
+    <string name="summary_tv_display_compatibility">适用于画面过一段时间就卡顿、冻结、闪烁或重启的电视和电视盒子，前提是画面上没有绘制任何内容，例如性能叠加层。电视上默认开启。代价是左上角一个近乎黑色的小点，每秒重绘十次。</string>
     <string name="scut_deleted_pc">电脑已删除</string>
     <string name="scut_not_paired">电脑未配对</string>
     <string name="scut_pc_not_found">未找到电脑</string>

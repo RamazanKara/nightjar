@@ -3268,10 +3268,10 @@ key = "checkbox_tv_display_compatibility"
 category = "category_advanced_compatibility"
 tier = "more"
 kind = "bool"
-xml_default = "false"
+xml_default = "@bool/default_tv_display_compatibility"
 scope = "global"
 shown_only = "on a TV (Android TV), elsewhere with Show debug settings"
-advice = "Off by default; titled Keep TV video smooth. While a stream is shown, a 1 dp nearly black dot in the top-left corner of the video's window (left in right-to-left languages too) changes between two near-black colours every 100 ms, so the app's own layer stays part of what the TV composes. Meant for TVs and TV boxes whose picture stutters after a while, freezes, flashes or restarts while the video is the only thing on screen, and that the performance overlay keeps smooth (two Google TV Streamer owners report stutter building up over 10 to 15 minutes without the overlay). Listed on other devices while Show debug settings is on or while it is on. Its display cost is not measured. Stops while paused, in picture-in-picture and when the stream ends; with the video on an external display the dot sits in that display's window. The stream reads a stored value on any device."
+advice = "On by default on a TV (the television UI mode), off elsewhere; titled Keep TV video smooth. While a stream is shown, a 1 dp nearly black dot in the top-left corner of the video's window (left in right-to-left languages too) changes between two near-black colours every 100 ms, so the app's own layer stays part of what the TV composes. Meant for TVs and TV boxes whose picture stutters after a while, freezes, flashes or restarts while the video is the only thing on screen, and that the performance overlay keeps smooth (two Google TV Streamer owners report stutter building up over 10 to 15 minutes without the overlay). Listed on other devices while Show debug settings is on or while it is on. On a TCL Smart TV Pro (MT9689) it lowered receive to release by about 1 ms at the median and 5 to 7 ms at the 95th percentile; on a Retroid Pocket 6 it changed neither beyond the spread between legs (client/docs/measurements.md). Its composition cost is not measured. Stops while paused, in picture-in-picture and when the stream ends; with the video on an external display the dot sits in that display's window. The stream reads a stored value on any device."
 
 [[android_setting]]
 key = "list_decode_queue_frames"

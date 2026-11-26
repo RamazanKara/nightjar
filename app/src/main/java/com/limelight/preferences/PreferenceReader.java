@@ -351,7 +351,8 @@ final class PreferenceReader {
         config.experimentalPacked444 = PreferenceConfiguration.sharpColor(prefs);
         config.frameWarp = prefs.getBoolean(FRAME_WARP_PREF_STRING, false);
         config.experimentalChipsetTuning = prefs.getBoolean(CHIPSET_TUNING_PREF_STRING, false);
-        config.tvDisplayCompatibility = prefs.getBoolean(TV_DISPLAY_COMPATIBILITY_PREF_STRING, false);
+        config.tvDisplayCompatibility = prefs.getBoolean(TV_DISPLAY_COMPATIBILITY_PREF_STRING,
+                context.getResources().getBoolean(com.limelight.R.bool.default_tv_display_compatibility));
         config.absoluteMouseMode = prefs.getBoolean(ABSOLUTE_MOUSE_MODE_PREF_STRING, DEFAULT_ABSOLUTE_MOUSE_MODE);
         config.enableAudioFx = prefs.getBoolean(ENABLE_AUDIO_FX_PREF_STRING, DEFAULT_ENABLE_AUDIO_FX);
         config.audioPassthrough = prefs.getBoolean(AUDIO_PASSTHROUGH_PREF_STRING, false);
