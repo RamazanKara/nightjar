@@ -429,7 +429,8 @@ impl Streaming {
         self.text_field.apply(window, self.menu_visible);
         self.raise_all_keys();
         self.session.input(|q| pads.release(q));
-        self.set_capture(window, !self.menu_visible);
+        // The launch curtain's buttons keep the pointer until it lifts (`follow_curtain`).
+        self.set_capture(window, !self.menu_visible && !self.curtain_down());
         self.needs_redraw = true;
     }
 

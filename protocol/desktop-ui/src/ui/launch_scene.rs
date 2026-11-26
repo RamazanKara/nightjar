@@ -1,8 +1,9 @@
 //! The launch scene: from Play until the stream takes the window, the game's cover in its own
 //! ambient with one thin ring turning around it, as Nightjar's `ConnectingScreen` on Android. A start
 //! that fails turns it into a card beside the cover, which offers the same start again, the
-//! stream's settings and a test of the network. The scene is the launcher's alone: it is over when
-//! the stream's window takes over, so nothing here runs while a stream does.
+//! stream's settings and a test of the network. The scene is the launcher's: it is over when the
+//! stream's window takes over. A launch curtain (`launch_curtain.rs`) draws its cover, ring and
+//! words the same way over a stream, in the words written out here (`curtain_words`).
 
 use super::design_tokens as t;
 use super::*;
@@ -16,12 +17,12 @@ const COVER_LEAST: f32 = 220.0;
 pub(super) const COVER_MOST: f32 = crate::hosts::COVER_POINTS[1];
 const COVER_WIDE_SHARE: f32 = 0.26;
 /// Where the cover's middle is across the window while connecting, and once the start failed.
-const COVER_AT: f32 = 0.34;
+pub(super) const COVER_AT: f32 = 0.34;
 const COVER_FAILED_AT: f32 = 0.25;
 /// What the cover glows and casts, as on the game's page.
-const GLOW_BLUR: f32 = 110.0;
-const SHADOW_Y: f32 = 30.0;
-const SHADOW_BLUR: f32 = 70.0;
+pub(super) const GLOW_BLUR: f32 = 110.0;
+pub(super) const SHADOW_Y: f32 = 30.0;
+pub(super) const SHADOW_BLUR: f32 = 70.0;
 /// The words' middle across the window, and the most they take.
 const WORDS_AT: f32 = 0.75;
 const WORDS_SHARE: f32 = 0.36;
@@ -75,6 +76,42 @@ pub fn settings_line((width, height, fps, bitrate_kbps): (u32, u32, u32, u32)) -
     format!("{}, {rate}", trf("{} × {} at {} fps", &[&width, &height, &fps]))
 }
 
+/// A launch curtain line (`nightjar_policy::launch_curtain`) in the user's language, `{}` left for
+/// the launcher's name. Each English text is written out so the translation tests find it in every
+/// table; the stream's notices look theirs up by the same English.
+pub(super) fn curtain_words(words: nightjar_policy::launch_curtain::Words) -> &'static str {
+    match words.key {
+        "preparing" => tr("Preparing PC"),
+        "starting" => tr("Starting game"),
+        "opening" => tr("Opening window"),
+        "focusing" => tr("Focusing game"),
+        "updating" => tr("{} is updating"),
+        "updating_any" => tr("A launcher is updating"),
+        "sign_in" => tr("{} wants you to sign in"),
+        "sign_in_any" => tr("A launcher wants you to sign in"),
+        "waiting" => tr("{} is waiting for you"),
+        "waiting_any" => tr("A window on the PC is waiting for you"),
+        "uac" => tr("Windows needs administrator approval on this PC"),
+        "hint" => tr("Show the PC screen to answer it from this device, or cancel the launch."),
+        "show_screen" => tr("Show PC screen"),
+        "still_starting" => tr("Showing PC screen. The game is still starting."),
+        "failed" => tr("The game didn’t start on the PC."),
+        _ => tr(words.en),
+    }
+}
+
+/// The cover's place, its middle `along` the window's width: as tall as the window allows, and
+/// narrow enough in a narrow window to leave the words their room.
+pub(super) fn cover_rect(screen: Rect, along: f32) -> Rect {
+    let cover_h = (screen.height() * COVER_SHARE).clamp(COVER_LEAST, COVER_MOST).min(screen.width() * COVER_WIDE_SHARE * 1.5);
+    Rect::from_center_size(pos2(screen.left() + screen.width() * along, screen.center().y), vec2(cover_h * 2.0 / 3.0, cover_h))
+}
+
+/// The words beside the cover: their middle across the window and the most they take.
+pub(super) fn words_column(screen: Rect) -> (f32, f32) {
+    (screen.left() + screen.width() * WORDS_AT, (screen.width() * WORDS_SHARE).min(WORDS_MOST))
+}
+
 /// The scene's backdrop: the cover's ambient, or the tile's for a game without art.
 fn scene_want(view: &View<'_>, launch: &ConnectingView) -> backdrop::Want {
     match view.hosts.get(launch.host_id).and_then(|pc| pc.art.get(&launch.app_id)) {
@@ -98,7 +135,7 @@ fn opening(ctx: &egui::Context) -> u64 {
 /// The one thin ring around the cover: faint all the way round, and on it an arc in the page's
 /// ink, lit at its head and gone at its tail, which turns while the start runs and holds still
 /// with reduced motion.
-fn turning_ring(out: &mut Vec<egui::Shape>, ctx: &egui::Context, cover: Rect) {
+pub(super) fn turning_ring(out: &mut Vec<egui::Shape>, ctx: &egui::Context, cover: Rect) {
     let radius = cover.height() * RING;
     let track = if high_contrast() { t::HC_COLOR_RIM } else { shade::SKY_RING.get() };
     out.push(egui::Shape::circle_stroke(cover.center(), radius, Stroke::new(1.0, track)));
@@ -205,10 +242,9 @@ impl Launcher {
         let under = ui.painter().clone();
         let backdrop_slot = under.add(egui::Shape::Noop);
 
-        let cover_h = (screen.height() * COVER_SHARE).clamp(COVER_LEAST, COVER_MOST).min(screen.width() * COVER_WIDE_SHARE * 1.5);
         let target = if failed.is_some() { COVER_FAILED_AT } else { COVER_AT };
         let along = spring::animate(&ctx, Id::unique(("launch-cover-x", opening)), target, MOVE_TUNE);
-        let cover = Rect::from_center_size(pos2(screen.left() + screen.width() * along, screen.center().y), vec2(cover_h * 2.0 / 3.0, cover_h));
+        let cover = cover_rect(screen, along);
         let cover_response = ui.interact(cover, Id::unique("launch-cover"), Sense::hover());
         cover_response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, launch.title()));
         let mut out = Vec::new();
@@ -229,8 +265,7 @@ impl Launcher {
 
     /// Beside the cover while connecting: the game, its PC, the stage, and Cancel.
     fn connecting_words(&mut self, ui: &mut Ui, screen: Rect, cover: Rect, launch: &ConnectingView, commands: &mut Vec<Command>) {
-        let width = (screen.width() * WORDS_SHARE).min(WORDS_MOST);
-        let middle = screen.left() + screen.width() * WORDS_AT;
+        let (middle, width) = words_column(screen);
         let lay = |text: &str, font: egui::FontId, ink: Color32, rows: usize| {
             let mut job = egui::text::LayoutJob::simple(text.to_owned(), font, ink, width);
             job.wrap.max_rows = rows;
@@ -440,6 +475,15 @@ mod tests {
     fn the_settings_line_says_size_rate_and_bitrate() {
         assert_eq!(settings_line((1920, 1080, 60, 20_000)), "1920 × 1080 at 60 fps, 20 Mbps");
         assert_eq!(settings_line((2560, 1440, 120, 12_500)), "2560 × 1440 at 120 fps, 12.5 Mbps");
+    }
+
+    #[test]
+    fn the_curtain_says_what_android_says_in_every_line() {
+        use crate::strings::{with_lang, Lang};
+        for words in nightjar_policy::launch_curtain::ALL {
+            assert_eq!(with_lang(Lang::En, || curtain_words(words)), words.en, "{}", words.key);
+            assert_ne!(with_lang(Lang::De, || curtain_words(words)), words.en, "{} has no German", words.key);
+        }
     }
 
     #[test]

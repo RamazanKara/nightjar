@@ -126,6 +126,8 @@ pub struct Facts {
     pub pipeline_rates: bool,
     /// The host pauses and resumes the game on request (Quick Suspend, 0x554B).
     pub quick_suspend: bool,
+    /// The host follows the game's start for a launch curtain (0x5548), as this launch asked.
+    pub launch_curtain: bool,
     pub clock_sync: bool,
     pub display_caps: bool,
     pub cursor_shapes: bool,

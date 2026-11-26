@@ -126,6 +126,13 @@ impl Streaming {
         phase::reset_display_timing();
         let reconnect_recovery = connecting.plan.recovery.is_some();
         let dvr = facts.stream_dvr.then(dvr::Dvr::default);
+        // A launch asks for the curtain on a stream with a picture from a PC that follows a game's start.
+        let curtain = launch_curtain::StreamCurtain::start(
+            facts.role == AppRole::Stream && connecting.plan.info.capabilities.has(Feature::LaunchCurtain),
+            facts.launch_curtain,
+            connecting.plan.native.as_ref().is_some_and(|native| native.capabilities.features.iter().any(|f| f == nightjar_core::http::native_api::feature::LAUNCH_CURTAIN)),
+            Instant::now(),
+        );
         let mut streaming = Self {
             usb,
             usb_refused,
@@ -236,6 +243,7 @@ impl Streaming {
             host_audio: Default::default(),
             guests: Default::default(),
             quick_suspend,
+            curtain,
             pending_command: None,
             bitrate_busy: false,
             packed_hint_shown: false,

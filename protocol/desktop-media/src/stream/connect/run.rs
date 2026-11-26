@@ -79,6 +79,9 @@ pub(crate) fn connect(
         rtx_hdr: settings.rtx_hdr,
         rtx_video: settings.rtx_video,
         hdr_static_only: settings.hdr_format.static_metadata_only(),
+        // Asked only of a host that follows a game's start, for a stream with a picture; its own
+        // setting decides whether the stream's DESCRIBE offers the curtain.
+        launch_curtain: true,
         ..Default::default()
     };
     if plan.record.server_certificate.is_none() {
@@ -540,6 +543,9 @@ pub(crate) fn connect(
         quick_suspend: outcome
             .host_control_messages
             .contains(&rubylight_protocol::quick_suspend::QUICK_SUSPEND_MESSAGE_TYPE),
+        launch_curtain: outcome
+            .host_control_messages
+            .contains(&rubylight_protocol::launch_curtain::LAUNCH_CURTAIN_STATE_MESSAGE_TYPE),
         display_caps: outcome
             .host_control_messages
             .contains(&rubylight_protocol::control::DISPLAY_CAPS_MESSAGE_TYPE),

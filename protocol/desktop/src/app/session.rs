@@ -98,9 +98,11 @@ impl App {
         }
         // SAFETY: a live window.
         let focused = unsafe { SDL_GetWindowFlags(self.window) & SDL_WINDOW_INPUT_FOCUS != 0 };
-        if focused {
+        // The launch curtain's buttons keep the pointer; the stream takes it as the curtain lifts.
+        let curtain = streaming.curtain_down();
+        if focused && !curtain {
             streaming.set_capture(self.window, true);
-        } else {
+        } else if !curtain {
             streaming.capture_on_focus();
         }
         let (pyrowave, notices_changed) = match self.hosts.get_mut(streaming.host_id) {
@@ -412,6 +414,7 @@ impl App {
         }
         streaming.follow_text_field(window);
         streaming.follow_fullscreen(window);
+        streaming.follow_curtain(window);
         #[cfg(windows)]
         streaming.follow_tab_chord(window);
         streaming.pump();
@@ -421,7 +424,8 @@ impl App {
         }
         let pad_active = streaming.sends_controllers() || streaming.menu_visible;
         let direct_pad_us = streaming.direct_motion.last_pad_activity_us();
-        let menu_visible = streaming.menu_visible;
+        // The launch curtain's ring turns as the menu animates.
+        let menu_visible = streaming.menu_visible || streaming.curtain_down();
         let wait = if renderer_lost || streaming.exit.is_some() { stream::Wait::Now } else { streaming.wait() };
         self.wait_stream_events(wait, menu_frame, menu_visible, pad_active, direct_pad_us);
         // A held D-pad or stick steps the stream menu again, as in the launcher.
@@ -439,13 +443,14 @@ impl App {
         // Never touch the renderer once the device was lost or the stream already decided to exit.
         if let Some(exit) = streaming.exit.take() { return self.finish_stream_exit(exit); }
         // Without a new picture (a still desktop, a paused game) the menu draws when egui asks.
-        if streaming.menu_visible && self.gui.repaint_in(menu_frame).is_some_and(|wait| wait.is_zero()) {
+        if (streaming.menu_visible || streaming.curtain_down()) && self.gui.repaint_in(menu_frame).is_some_and(|wait| wait.is_zero()) {
             streaming.needs_redraw = true;
         }
         streaming.pump_touchpad(window);
         streaming.pump();
         if let Some(host) = self.hosts.get(streaming.host_id) {
             self.overlay.hints = host.native.session_hints();
+            self.overlay.curtain_art = streaming.curtain_down().then(|| host.art.get(&streaming.app().id).cloned()).flatten();
         }
         if std::mem::take(&mut streaming.close_session_page_requested) {
             self.overlay.close_session_page(streaming);
@@ -590,11 +595,14 @@ impl App {
             return;
         }
         let Some((streaming, _)) = self.streaming.as_mut() else { return };
-        // Microphone only's window has its own buttons; its chords still reach the stream.
-        if streaming.mic_only() && !matches!(kind, SDL_EVENT_QUIT | SDL_EVENT_WINDOW_CLOSE_REQUESTED
+        // Microphone only's window has its own buttons; its chords still reach the stream. The
+        // launch curtain's buttons take the pointer while it is down.
+        let curtain = streaming.curtain_takes_pointer() && matches!(kind, SDL_EVENT_MOUSE_MOTION | SDL_EVENT_MOUSE_BUTTON_DOWN
+            | SDL_EVENT_MOUSE_BUTTON_UP | SDL_EVENT_MOUSE_WHEEL | SDL_EVENT_WINDOW_MOUSE_LEAVE);
+        if curtain || (streaming.mic_only() && !matches!(kind, SDL_EVENT_QUIT | SDL_EVENT_WINDOW_CLOSE_REQUESTED
             | SDL_EVENT_WINDOW_FOCUS_LOST | SDL_EVENT_WINDOW_FOCUS_GAINED
             | SDL_EVENT_AUDIO_DEVICE_ADDED | SDL_EVENT_AUDIO_DEVICE_REMOVED
-            | SDL_EVENT_RENDER_DEVICE_RESET | SDL_EVENT_RENDER_DEVICE_LOST) {
+            | SDL_EVENT_RENDER_DEVICE_RESET | SDL_EVENT_RENDER_DEVICE_LOST)) {
             self.gui.handle(event, Scale::of(self.window));
             streaming.needs_redraw = true;
         }

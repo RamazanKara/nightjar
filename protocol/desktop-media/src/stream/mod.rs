@@ -111,6 +111,7 @@ mod stats;
 mod input;
 mod render;
 mod notices;
+mod launch_curtain;
 mod microphone_watch;
 use microphone_watch::{MICROPHONE_BUSY_EVERY, MicrophoneBusyWatch};
 
@@ -396,6 +397,8 @@ pub struct Streaming {
     pub guests: guests::Guests,
     /// Suspend game and Resume game, on a PC that announced Quick Suspend (0x554B).
     pub quick_suspend: quick_suspend::QuickSuspend,
+    /// The launch curtain over the picture while the game starts; None without one.
+    curtain: Option<launch_curtain::StreamCurtain>,
     pub pending_command: Option<usize>,
     pub bitrate_busy: bool,
     /// The toast that packed full chroma's copies leave the decoder behind was shown (`doctor::packed_hint`).

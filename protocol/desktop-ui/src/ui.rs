@@ -24,6 +24,7 @@ mod hero_stage;
 mod home;
 mod host_details_limiter;
 mod icons;
+pub mod launch_curtain;
 mod launch_scene;
 mod latency_bench;
 mod library;

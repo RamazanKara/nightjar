@@ -1,6 +1,7 @@
-//! What egui draws over the picture: the stream's HUD (the statistics capsule, the toasts and the
-//! prompts of a stream without a picture, `ui::stream_hud`), the Session and graphics page, the
-//! sheet of shortcuts, and the Control Center (`control_center.rs` hosts it).
+//! What egui draws over the picture: the launch curtain while the game starts (`ui::launch_curtain`),
+//! the stream's HUD (the statistics capsule, the toasts and the prompts of a stream without a
+//! picture, `ui::stream_hud`), the Session and graphics page, the sheet of shortcuts, and the
+//! Control Center (`control_center.rs` hosts it).
 
 use super::*;
 
@@ -21,6 +22,8 @@ pub(crate) struct StreamOverlay {
     pub(crate) menu_page: stream_menu::Page,
     pub(crate) menu_hotkey: Option<nightjar_policy::stream_menu::Hotkey>,
     pub(crate) menu_hotkeys: Vec<nightjar_policy::stream_menu::Hotkey>,
+    /// The game's cover from the launcher's PC, while the launch curtain is down.
+    pub(crate) curtain_art: Option<nightjar_desktop_ui::hosts::Art>,
 }
 
 impl StreamOverlay {
@@ -93,7 +96,8 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     if !s.menu_visible {
         s.settle_bitrate_slider(nightjar_desktop_ui::stream_overlay_widgets::take_pending_bitrate_slider(&gui.ctx));
     }
-    if !s.overlay_visible && toast.is_none() && !input_only && !s.menu_visible {
+    let curtain = s.curtain_view();
+    if !s.overlay_visible && toast.is_none() && !input_only && !s.menu_visible && curtain.is_none() {
         return false;
     }
     let mode = s.overlay_mode;
@@ -104,7 +108,7 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     gui.set_readable(s.menu_visible || input_only);
     // The menu and the screens that take input always run egui. The overlay repaints the shapes it
     // drew while what it shows is unchanged: its lines change once a second, not every present.
-    let live = s.menu_visible || mic_only || input_only;
+    let live = s.menu_visible || mic_only || input_only || curtain.is_some();
     let compact_device_line = (s.overlay_visible
         && mode == config::OverlayMode::Compact
         && s.compact_overlay_device_info()
@@ -117,6 +121,15 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     }
     let output = gui.run(window, renderer, |ui| {
         let ctx = ui.ctx().clone();
+        // The curtain in the root layer, opaque over the picture; the menu and the toasts draw over it.
+        if let Some(view) = &curtain {
+            let scene = ui::launch_curtain::Scene { game: &s.facts.app_name, pc: &s.facts.host_name, host_id: s.host_id, app_id: s.app().id, art: overlay.curtain_art.as_ref(), view };
+            match ui::launch_curtain::show(ui, &scene) {
+                Some(ui::launch_curtain::Pressed::ShowScreen) => s.curtain_show_screen(),
+                Some(ui::launch_curtain::Pressed::Cancel) => s.curtain_cancel(),
+                None => {}
+            }
+        }
         // The prompts of a stream without a picture stand on the HUD's surface, as the statistics do.
         if mic_only {
             ui::stream_hud::prompt(&ctx, "mic-only", |ui| {

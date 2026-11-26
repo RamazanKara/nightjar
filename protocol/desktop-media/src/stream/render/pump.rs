@@ -329,12 +329,10 @@ impl Streaming {
             }
             None => Wait::For(Duration::from_millis(if self.controller_mouse_active || self.guide_waiting || self.audio_status.0.iter().any(|flags| *flags != 0) { 20 } else if self.overlay_visible { 250 } else { 500 })),
         };
-        // A hide from the PC waiting out its delay, and a held shortcut's release, wake the loop when due.
+        // A hide from the PC waiting out its delay, a held shortcut's release and the launch
+        // curtain's quiet watch wake the loop when due.
         let now = Instant::now();
-        let wake = match (self.cursor.hide_in(now), self.shortcut_release_in(now)) {
-            (Some(hide), Some(release)) => Some(hide.min(release)),
-            (hide, release) => hide.or(release),
-        };
+        let wake = [self.cursor.hide_in(now), self.shortcut_release_in(now), self.curtain_wake_in(now)].into_iter().flatten().min();
         match (wait, wake) {
             (Wait::For(wait), Some(wake)) => Wait::For(wait.min(wake)),
             (Wait::Precise(wait), Some(wake)) => Wait::Precise(wait.min(wake)),

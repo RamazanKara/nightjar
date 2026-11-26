@@ -129,7 +129,8 @@ impl Streaming {
                 right_alt_as_meta: self.settings.right_alt_as_meta,
             }),
             clicks: (ours && !self.absolute).then_some(direct_motion::ClickRules { nav_buttons: self.settings.mouse_nav_buttons }),
-            pads: !self.menu_visible && self.facts.role != AppRole::RemoteMonitor && self.settings.controllers && !self.plan.mic_only
+            // The launch curtain's A and B are the main loop's (`curtain_press`).
+            pads: !self.menu_visible && !self.curtain_down() && self.facts.role != AppRole::RemoteMonitor && self.settings.controllers && !self.plan.mic_only
                 && (focused || self.settings.background_controllers),
         }
     }
@@ -223,8 +224,9 @@ impl Streaming {
                     }
                     if self.facts.touch && self.captured && matches!(b.which, SDL_TOUCH_MOUSEID | SDL_PEN_MOUSEID) { return; }
                     if !self.captured {
-                        // The first click only takes the pointer.
-                        if b.down {
+                        // The first click only takes the pointer; the launch curtain's buttons
+                        // have it while the curtain is down.
+                        if b.down && !self.curtain_down() {
                             self.set_capture(window, true);
                             if self.absolute {
                                 self.absolute_position(b.x, b.y, window, renderer);
@@ -301,6 +303,8 @@ impl Streaming {
                         self.session.input(|q| pads.announce_new(q));
                     }
                 }
+                // The launch curtain's A and B, while it is down; the input filter leaves them here.
+                SDL_EVENT_GAMEPAD_BUTTON_DOWN if self.curtain_press(launch_curtain::pad_press(event.gbutton.button, pads.swap_face_buttons)) => {}
                 _ => {
                     // A controller event the input filter applied while the loop waited in the
                     // present: only its action is left.
@@ -446,6 +450,10 @@ impl Streaming {
                 }
                 // F12 is the main loop's (a screenshot); the rest are the launcher's.
                 _ => {}
+            }
+            // Enter and Escape on the launch curtain, while it is down.
+            if self.curtain_press(launch_curtain::key_press(k.scancode)) {
+                return;
             }
         }
         let Some(KeyInput { code, modifiers, flags }) =
