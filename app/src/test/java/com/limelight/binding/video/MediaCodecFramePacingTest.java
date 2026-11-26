@@ -187,7 +187,12 @@ public class MediaCodecFramePacingTest {
             ShadowSystemClock.advanceBy(Duration.ofSeconds(2));
             MediaCodecDecoderRenderer renderer = renderer(activity.get(), mode);
             renderer.setStreamFrameRateMilliHz(60_000);
+            // The output path reads one pinned instant (nowNs/elapsedNs), and each frame's age is
+            // counted back from it, so a slow scheduler never ages a frame or cuts a drain short.
+            long clockNs = System.nanoTime();
+            renderer.testClockNs = clockNs;
             Result result = new Result();
+            QueuedCodec.clockNs = clockNs;
             QueuedCodec.renderer = renderer;
             QueuedCodec.stats = ReflectionHelpers.getField(renderer, "frameLatencyStats");
             QueuedCodec.agesMs = agesMs;
@@ -222,6 +227,8 @@ public class MediaCodecFramePacingTest {
         static MediaCodecDecoderRenderer renderer;
         static FrameLatencyStats stats;
         static long[] agesMs;
+        // The renderer's pinned clock (testClockNs) that the ages count back from.
+        static long clockNs;
         static boolean formatChange;
         static boolean stopOnDrop;
         static Result result;
@@ -235,8 +242,7 @@ public class MediaCodecFramePacingTest {
             if (index >= agesMs.length) {
                 return formatChange ? MediaCodec.INFO_OUTPUT_FORMAT_CHANGED : MediaCodec.INFO_TRY_AGAIN_LATER;
             }
-            long now = System.nanoTime();
-            long enqueue = now - agesMs[index] * 1_000_000L;
+            long enqueue = clockNs - agesMs[index] * 1_000_000L;
             info.presentationTimeUs = index + 1;
             stats.onDecoderInput(index + 1, info.presentationTimeUs, enqueue, enqueue, enqueue, (char) 0);
             return index;
