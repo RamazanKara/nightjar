@@ -21,4 +21,5 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Two identical devices are on the same port number of different USB controllers, so Nightjar can’t tell them apart for usbipd-win. Plug one into another port, then press Refresh.", "两个相同的设备接在不同 USB 控制器的同一编号端口上，因此 Nightjar 无法为 usbipd-win 区分它们。请将其中一个插到其他端口，然后点击刷新。"),
     ("A program on this computer holds the device, so usbipd-win can’t take it. Close that program, then retry.", "这台计算机上的某个程序正在占用该设备，因此 usbipd-win 无法接管。请关闭该程序，然后重试。"),
     ("Another driver has this device ({}). Forward it with usbipd-win, which leaves that driver on it, or install WinUSB for it.", "该设备由另一个驱动程序（{}）控制。请通过 usbipd-win 转发它（保留该驱动程序），或为它安装 WinUSB。"),
+    ("Frame Warp needs the current version of Nightjar and of the PC’s streaming app, so this stream runs without it.", "Frame Warp 需要最新版本的 Nightjar 和电脑的串流应用，因此此次串流不使用它。"),
 ];
