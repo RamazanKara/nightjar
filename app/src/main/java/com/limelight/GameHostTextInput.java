@@ -164,8 +164,18 @@ final class GameHostTextInput {
         boolean points = finger ? !TouchMode.isRelative(game.touchInput.touchMode()) :
                 event.isFromSource(InputDevice.SOURCE_MOUSE) && !event.isFromSource(InputDevice.SOURCE_MOUSE_RELATIVE);
         float y = Float.NaN;
-        if (points && game.streamView.getHeight() > 0) {
-            y = (event.getY(event.getActionIndex()) + game.touchInput.getStreamViewOffsetY(view)) / game.streamView.getHeight();
+        int streamHeight = game.streamView.getHeight();
+        if (points && streamHeight > 0) {
+            float streamY = event.getY(event.getActionIndex()) + game.touchInput.getStreamViewOffsetY(view);
+            float minY = 0, maxY = streamHeight;
+            if (game.desktopGestures != null && game.desktopGestures.viewport().isTransformed()) {
+                com.limelight.ui.DesktopViewport vp = game.desktopGestures.viewport();
+                minY = vp.y();
+                maxY = vp.y() + streamHeight * vp.scale();
+            }
+            if (streamY >= minY && streamY <= maxY) {
+                y = streamY / streamHeight;
+            }
         }
         hostKeyboard.onPress(y, SystemClock.uptimeMillis());
     }

@@ -174,18 +174,27 @@ public class StreamView extends FrameLayout {
 
     public StreamView(Context context) {
         super(context);
+        init();
     }
 
     public StreamView(Context context, AttributeSet attrs) {
         super(context, attrs);
+        init();
     }
 
     public StreamView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        init();
     }
 
     public StreamView(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
+        init();
+    }
+
+    private void init() {
+        setClipChildren(false);
+        setClipToPadding(false);
     }
 
     @Override

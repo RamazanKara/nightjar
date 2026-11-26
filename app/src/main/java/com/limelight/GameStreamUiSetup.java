@@ -466,6 +466,9 @@ final class GameStreamUiSetup {
         game.desktopGestures = new DesktopGestures(game, game.streamView,
                 game.touchInput::cancelHostTouchInput, game.touchInput::clickRightMouseButton);
         game.trackpadPointer.setViewport(game.desktopGestures.viewport());
+        game.desktopGestures.setOnTransformChanged(() -> {
+            if (game.trackpadPointer != null) game.trackpadPointer.syncCursor();
+        });
         if (game.app.getRole() != NvApp.Role.REMOTE_MONITOR) {
             String profile = TouchLayout.profileKey(
                     game.getIntent().getStringExtra(Game.EXTRA_PC_UUID), game.app.getAppUuid(), game.app.getAppId());

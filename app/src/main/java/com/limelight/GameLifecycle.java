@@ -88,6 +88,9 @@ final class GameLifecycle {
                     game.trackpadPointer.stopMomentum();
                     game.trackpadPointer.setCursorShown(false);
                 }
+                if (game.desktopGestures != null) {
+                    game.desktopGestures.reset();
+                }
 
                 // Update GameManager state to indicate we're in PiP (still gaming, but interruptible)
                 UiHelper.notifyStreamEnteringPiP(game);

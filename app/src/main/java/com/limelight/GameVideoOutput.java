@@ -247,6 +247,7 @@ final class GameVideoOutput {
 
     void toggleDesktopZoom() {
         game.desktopGestures.setEnabled(!game.desktopGestures.enabled());
+        if (game.trackpadPointer != null) game.trackpadPointer.syncCursor();
         if (game.desktopGestures.enabled()) game.messages.alert(R.string.desktop_zoom_help, Toast.LENGTH_LONG);
     }
 
