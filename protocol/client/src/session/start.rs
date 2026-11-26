@@ -496,7 +496,11 @@ pub(super) fn start(
             codec,
             rubylight_protocol::audio_ext::CODEC_AC3 | rubylight_protocol::audio_ext::CODEC_EAC3
         ) {
-            receiver.assemble_frames();
+            if outcome.audio_unchunked {
+                receiver.unchunked_frames();
+            } else {
+                receiver.assemble_frames();
+            }
         }
         let Some(socket) = parts.audio_socket.as_ref() else {
             parts.audio_renderer = Some(renderer);
