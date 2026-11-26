@@ -140,6 +140,7 @@ public class PcView extends NightjarActivity implements AdapterFragmentCallbacks
         public void onServiceDisconnected(ComponentName className) {
             managerBinder = null;
             runningPolling = false;
+            viewChrome.setDiscovering(false);
         }
     };
 
@@ -374,6 +375,7 @@ public class PcView extends NightjarActivity implements AdapterFragmentCallbacks
                 }
             });
             runningPolling = true;
+            viewChrome.setDiscovering(true);
         }
     }
 
@@ -392,6 +394,7 @@ public class PcView extends NightjarActivity implements AdapterFragmentCallbacks
             }
 
             runningPolling = false;
+            viewChrome.setDiscovering(false);
         }
     }
 

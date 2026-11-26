@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A PC on a handheld and a TV: a flat card on the sky with its monitor, its name and its state. As with a library poster, the
+<!-- A PC on a handheld and a TV: a panel on the stage with its display, its name and its state. As with a library poster, the
      root's padding is the glow's reach, the ring is a view around the card in that padding, and the root's animator scales and
      lifts the lot. The ids are the phone row's, so PcGridAdapter fills both. A TV says what OK does in the hints line; a handheld,
-     which is also touched, shows the action on the card (PcGridAdapter). -->
+     which is also touched, shows the action on the card: amber on the PC that leads the page, quiet on the rest (PcGridAdapter). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content"

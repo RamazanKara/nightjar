@@ -89,18 +89,6 @@ public class StageView extends View {
         return AppTheme.look(context) == AppTheme.Look.DAY ? color(context, R.color.nj_day_tint_separator) : color(context, R.color.nj_tint_separator);
     }
 
-    /** The accent as ink, for an action that is not filled with it. */
-    public static int accentInk(Context context) {
-        switch (AppTheme.look(context)) {
-            case DAY:
-                return color(context, R.color.nj_day_color_moon_ink);
-            case HIGH_CONTRAST:
-                return color(context, R.color.nj_hc_color_moon);
-            default:
-                return color(context, R.color.nj_color_moon_ink);
-        }
-    }
-
     /**
      * Puts the stage behind an art-less page that is built on a plain content view, such as Settings' sub-pages. Call after
      * setContentView.
