@@ -50,6 +50,10 @@ pub enum Kind {
     Close = 5,
     /// Keeps the NATs' mappings open while the path is idle.
     Keepalive = 6,
+    /// A device asks a wake relay to wake its PC ([`crate::wake_relay::WakeRequest`]).
+    WakeRequest = 7,
+    /// A wake relay's answer, always shorter than the request ([`crate::wake_relay::WakeStatus`]).
+    WakeStatus = 8,
 }
 
 impl Kind {
@@ -61,6 +65,8 @@ impl Kind {
             4 => Kind::Media,
             5 => Kind::Close,
             6 => Kind::Keepalive,
+            7 => Kind::WakeRequest,
+            8 => Kind::WakeStatus,
             _ => return None,
         })
     }

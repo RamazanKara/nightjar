@@ -17,7 +17,7 @@ use std::{
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Behaviour {
+pub(crate) enum Behaviour {
     /// No NAT: the address is public, and nothing is filtered.
     Open,
     /// Endpoint-independent mapping and filtering.
@@ -115,14 +115,17 @@ impl Nat {
     }
 }
 
-struct Peer {
+pub(crate) struct Peer {
     internal: SocketAddr,
     nat: Nat,
     puncher: Option<Puncher>,
-    sealer: Sealer,
+    pub(crate) sealer: Sealer,
     opener: Opener,
     reliable: Reliable,
     events: Vec<Event>,
+    /// Opened datagrams of the kinds the simulator leaves to the test (the wake relay's), with
+    /// where they came from.
+    pub(crate) inbox: Vec<(Kind, Vec<u8>, SocketAddr)>,
     /// Where this peer's STUN servers saw it, and what that says about its NAT.
     endpoints: Vec<SocketAddr>,
     kind: NatKind,
@@ -145,6 +148,7 @@ impl Peer {
             opener: Opener::new(receive, tag),
             reliable: Reliable::new(initiator),
             events: Vec::new(),
+            inbox: Vec::new(),
             endpoints: Vec::new(),
             kind: NatKind::Unknown,
         };
@@ -158,7 +162,7 @@ impl Peer {
         peer
     }
 
-    fn connected(&self) -> Option<SocketAddr> {
+    pub(crate) fn connected(&self) -> Option<SocketAddr> {
         match self.puncher.as_ref()?.state() {
             punch::State::Connected(peer) => Some(peer),
             _ => None,
@@ -166,15 +170,20 @@ impl Peer {
     }
 }
 
-struct World {
-    peers: [Peer; 2],
+pub(crate) struct World {
+    pub(crate) peers: [Peer; 2],
     in_air: Vec<(Millis, usize, SocketAddr, SocketAddr, Vec<u8>)>,
-    now: Millis,
+    pub(crate) now: Millis,
 }
 
 impl World {
     fn new(host: Behaviour, device: Behaviour) -> Self {
-        let keys = Keys::new([7; 32]).path(&[1; 16], &[2; 16]);
+        Self::with_secret(host, device, [7; 32])
+    }
+
+    /// Peer 0 (the host, or a wake relay) and peer 1 (the device) on the path `secret` keys.
+    pub(crate) fn with_secret(host: Behaviour, device: Behaviour, secret: [u8; 32]) -> Self {
+        let keys = Keys::new(secret).path(&[1; 16], &[2; 16]);
         let host_public = Ipv4Addr::new(198, 51, 100, 1);
         let device_public = Ipv4Addr::new(203, 0, 113, 1);
         let address = |public: Ipv4Addr, private: Ipv4Addr, behaviour: Behaviour, port: u16| {
@@ -210,7 +219,7 @@ impl World {
         }
     }
 
-    fn send(&mut self, from: usize, to: SocketAddr, datagram: Vec<u8>) {
+    pub(crate) fn send(&mut self, from: usize, to: SocketAddr, datagram: Vec<u8>) {
         let peer = &mut self.peers[from];
         let source = peer.nat.outbound(peer.internal, to);
         self.in_air
@@ -264,12 +273,15 @@ impl World {
                     }
                 }
                 Kind::Stream => peer.reliable.handle(&opened.payload, now),
+                kind @ (Kind::WakeRequest | Kind::WakeStatus) => {
+                    peer.inbox.push((kind, opened.payload, source))
+                }
                 _ => {}
             }
         }
     }
 
-    fn step(&mut self) {
+    pub(crate) fn step(&mut self) {
         for index in 0..2 {
             let now = self.now;
             let punches = self.peers[index]
@@ -298,7 +310,7 @@ impl World {
     /// The device starts punching from the host's record and publishes its own, holding its
     /// puncher as `ClientTunnel` does; the host starts when its DHT poll finds the device's
     /// record, `host_delay` later. True when both ends connect.
-    fn punch(&mut self, host_delay: Millis) -> bool {
+    pub(crate) fn punch(&mut self, host_delay: Millis) -> bool {
         let host_candidates = punch::candidates(&self.peers[1].endpoints, self.peers[1].kind);
         let device_candidates = punch::candidates(&self.peers[0].endpoints, self.peers[0].kind);
         let mut device = Puncher::new(device_candidates, self.now);

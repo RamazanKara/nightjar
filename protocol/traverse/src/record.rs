@@ -31,6 +31,23 @@ pub const MAX_ENDPOINTS: usize = 8;
 pub enum Role {
     Host = 1,
     Client = 2,
+    /// An away wake relay's record ([`crate::wake_relay`]): its endpoints and session, under a
+    /// device's wake secret, never a host's internet play one.
+    WakeRelay = 3,
+    /// A device asking a wake relay for a wake: its endpoints, and the relay session it read.
+    WakeRequester = 4,
+}
+
+impl Role {
+    fn from_byte(byte: u8) -> Option<Self> {
+        Some(match byte {
+            1 => Role::Host,
+            2 => Role::Client,
+            3 => Role::WakeRelay,
+            4 => Role::WakeRequester,
+            _ => return None,
+        })
+    }
 }
 
 pub fn window(unix_seconds: u64) -> u64 {
@@ -216,11 +233,7 @@ impl Record {
         if reader.byte()? != VERSION {
             return None;
         }
-        let role = match reader.byte()? {
-            1 => Role::Host,
-            2 => Role::Client,
-            _ => return None,
-        };
+        let role = Role::from_byte(reader.byte()?)?;
         let time = u64::from_be_bytes(reader.take(8)?.try_into().unwrap());
         let session = reader.take(16)?.try_into().unwrap();
         let peer_session = reader.take(16)?.try_into().unwrap();
@@ -375,8 +388,19 @@ mod tests {
             Some(record.clone())
         );
         assert_eq!(Record::open(&other, Role::Host, &sealed), None);
-        // A host record does not pass as a device's.
+        // A host record does not pass as a device's, nor as a wake relay's.
         assert_eq!(Record::open(&keys, Role::Client, &sealed), None);
+        assert_eq!(Record::open(&keys, Role::WakeRelay, &sealed), None);
+        let mut relay = record.clone();
+        relay.role = Role::WakeRelay;
+        relay.ports = None;
+        let sealed_relay = relay.seal(&keys, [5; 12]);
+        assert_eq!(
+            Record::open(&keys, Role::WakeRelay, &sealed_relay),
+            Some(relay)
+        );
+        assert_eq!(Record::open(&keys, Role::Host, &sealed_relay), None);
+        assert_eq!(Record::open(&keys, Role::WakeRequester, &sealed_relay), None);
 
         let window = window(record.time);
         let item = record.item(&keys, window, [4; 12]);
@@ -413,6 +437,15 @@ mod tests {
         assert_ne!(a.target(Role::Host, 5), b.target(Role::Host, 5));
         assert_ne!(a.target(Role::Host, 5), a.target(Role::Host, 6));
         assert_ne!(a.target(Role::Host, 5), a.target(Role::Client, 5));
+        // The wake relay's roles name other items than internet play's, under the same secret.
+        for wake in [Role::WakeRelay, Role::WakeRequester] {
+            assert_ne!(a.target(wake, 5), a.target(Role::Host, 5));
+            assert_ne!(a.target(wake, 5), a.target(Role::Client, 5));
+        }
+        assert_ne!(
+            a.target(Role::WakeRelay, 5),
+            a.target(Role::WakeRequester, 5)
+        );
         let path = a.path(&[1; 16], &[2; 16]);
         assert_eq!(path, a.path(&[1; 16], &[2; 16]));
         assert_ne!(path.host_to_client, path.client_to_host);

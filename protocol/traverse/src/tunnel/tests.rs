@@ -222,8 +222,8 @@ fn only_a_devices_punches_carry_its_clock() {
         let mut buffer = [0u8; 256];
         let (length, _) = peer.recv_from(&mut buffer).unwrap();
         let opener = match role {
-            Role::Client => &keys.client_to_host,
-            Role::Host => &keys.host_to_client,
+            Role::Client | Role::WakeRequester => &keys.client_to_host,
+            Role::Host | Role::WakeRelay => &keys.host_to_client,
         };
         let opened = Opener::new(opener, keys.tag)
             .open(&buffer[..length])

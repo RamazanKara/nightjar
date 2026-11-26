@@ -197,8 +197,8 @@ impl Tunnel {
         bridge: Bridge,
     ) -> io::Result<Self> {
         let (send_key, receive_key) = match role {
-            Role::Host => (keys.host_to_client, keys.client_to_host),
-            Role::Client => (keys.client_to_host, keys.host_to_client),
+            Role::Host | Role::WakeRelay => (keys.host_to_client, keys.client_to_host),
+            Role::Client | Role::WakeRequester => (keys.client_to_host, keys.host_to_client),
         };
         let now = node.now();
         let mut media = Vec::with_capacity(CHANNELS);
@@ -471,7 +471,8 @@ impl Tunnel {
                 self.close("the other side ended the connection");
                 return;
             }
-            Kind::Keepalive => {}
+            // A wake relay's datagrams never belong on a tunnel's path.
+            Kind::Keepalive | Kind::WakeRequest | Kind::WakeStatus => {}
         }
         self.publish(&inner);
         drop(inner);

@@ -15,6 +15,9 @@
 //! with ChaCha20-Poly1305 ([`wire`]). The client sees the host at a loopback address with the
 //! host's own port numbers ([`tunnel`]), so Moonlight's protocol runs on top unchanged.
 //!
+//! The same records and punched paths carry an away wake ([`wake_relay`], [`wake_relay_node`]):
+//! a device away asks an always-on paired device on the PC's network to send it Wake-on-LAN.
+//!
 //! Everything that decides is sans-IO and tested without a network, including an in-process
 //! NAT simulator (`sim`, tests only) with full-cone, restricted, port-restricted and symmetric
 //! NATs. [`node`], [`host`] and [`client`] drive it over real sockets.
@@ -35,6 +38,8 @@ pub mod record;
 pub mod stream;
 pub mod stun;
 pub mod tunnel;
+pub mod wake_relay;
+pub mod wake_relay_node;
 pub mod wire;
 
 #[cfg(test)]

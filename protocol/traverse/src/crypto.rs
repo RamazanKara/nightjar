@@ -69,6 +69,16 @@ pub fn sha1(parts: &[&[u8]]) -> [u8; 20] {
     out
 }
 
+pub fn sha256(parts: &[&[u8]]) -> [u8; 32] {
+    let mut context = digest::Context::new(&digest::SHA256);
+    for part in parts {
+        context.update(part);
+    }
+    let mut out = [0; 32];
+    out.copy_from_slice(context.finish().as_ref());
+    out
+}
+
 /// Random bytes from the system's generator.
 pub fn random<const N: usize>() -> [u8; N] {
     let mut bytes = [0; N];
