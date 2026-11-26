@@ -91,7 +91,7 @@ pub(super) const SOURCES: [(&str, &str); 86] = [
 ];
 
 /// Read for its marked texts and its toasts only: the stream code keeps its own overlay lines.
-pub(super) const MARKED_ONLY: [(&str, &str); 33] = [
+pub(super) const MARKED_ONLY: [(&str, &str); 34] = [
     ("glyphs.rs", include_str!("../../../../desktop-ui/src/glyphs.rs")),
     ("host_error.rs", include_str!("../../host_error.rs")),
     ("stream_types.rs", include_str!("../../stream_types.rs")),

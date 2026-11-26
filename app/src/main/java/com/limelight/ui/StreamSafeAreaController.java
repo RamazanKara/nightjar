@@ -1,5 +1,6 @@
 package com.limelight.ui;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -164,6 +165,8 @@ public final class StreamSafeAreaController implements DisplayManager.DisplayLis
 
     @Override public void onDisplayRemoved(int displayId) {}
 
+    // lastRotation starts at -1 (no rotation seen yet), which is not a Surface.ROTATION_* value.
+    @SuppressLint("WrongConstant")
     @Override
     public void onDisplayChanged(int displayId) {
         // A 180° turn reaches only here: the cutout moved to the other side, and the offset with it.
