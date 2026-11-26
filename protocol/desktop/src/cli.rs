@@ -19,6 +19,10 @@
 //! paired or cannot be reached, and 1 when the app list cannot be read ([`run_list`]).
 //!
 //! `nightjar <pairing link>` is how the system opens a `rubylight:` link (see `link_channel`).
+//!
+//! `nightjar wake-relay [--name <name>] [--enroll]` runs this device as an away wake relay for
+//! the paired PCs that offer one, until Ctrl-C; `nightjar wake-relay --leave` leaves them all
+//! ([`wake_relay`]).
 
 use std::ffi::OsString;
 use nightjar_core::http::App;
@@ -27,6 +31,8 @@ use crate::config::{AudioChannels, CodecPreference, DecoderPreference, FramePaci
 
 mod launch;
 pub use launch::{find_host, CliLaunch, HostEntry, Seen, Step};
+mod wake_relay;
+pub use wake_relay::{run as run_wake_relay, WakeRelay};
 #[cfg(test)]
 use launch::{find_app, AppsSeen, HostSeen, LAUNCH_LIMIT, START_LIMIT};
 #[cfg(test)]
@@ -34,13 +40,15 @@ use nightjar_core::http::AppControl;
 #[cfg(test)]
 use std::time::{Duration, Instant};
 
-pub const USAGE: &str = "usage: nightjar [--kms | --no-kms] [--version | --host <name|uuid> [--app <name|uuid>] [--quit-on-exit] [stream options] | [stream options] stream <host> <app> | list <host> [--verbose] | <pairing link>]
+pub const USAGE: &str = "usage: nightjar [--kms | --no-kms] [--version | --host <name|uuid> [--app <name|uuid>] [--quit-on-exit] [stream options] | [stream options] stream <host> <app> | list <host> [--verbose] | wake-relay [--name <name>] [--enroll] | wake-relay --leave | <pairing link>]
 stream options, as moonlight-qt's: --resolution <W>x<H>, --720, --1080, --1440, --4K, --fps <n>, --bitrate <Kbps>,
   --packet-size <bytes>, --video-codec auto|H.264|HEVC|AV1, --video-decoder auto|software|hardware, --audio-config stereo|5.1-surround|7.1-surround,
   --display-mode fullscreen|windowed|borderless, --capture-system-keys never|fullscreen|always, and these with their --no- forms:
   --hdr, --vsync, --frame-pacing, --performance-overlay, --quit-after, --yuv444, --audio-on-host, --absolute-mouse,
   --game-optimization, --multi-controller, --swap-gamepad-buttons, --background-gamepad
-  --kms, --no-kms: on Linux, draw straight to the display (DRM/KMS) or through the desktop, whatever Display output says";
+  --kms, --no-kms: on Linux, draw straight to the display (DRM/KMS) or through the desktop, whatever Display output says
+wake-relay: wake the paired PCs that offer Away wake relay for their devices that are away, until stopped (Ctrl-C); --name names
+  this relay on the PCs, --enroll enrolls again with PCs that refused it, --leave leaves every PC and deletes the saved keys";
 
 /// Not the link itself: it holds a PIN and passphrase, and this goes to the log.
 const LINK_NOT_ALONE: &str = "a pairing link is the only argument";
@@ -309,6 +317,8 @@ pub enum Parsed {
     Launch(Launch),
     /// moonlight-qt's `list <host>`: print the PC's apps and exit, without a window.
     List(List),
+    /// `wake-relay`: relay wakes for the paired PCs in the foreground, without a window.
+    WakeRelay(WakeRelay),
     /// A link the system opened with Nightjar, as it came: the window asks before it pairs, or
     /// refuses it. Text that is not valid is empty here, and refused the same way.
     Link(String),
@@ -330,6 +340,9 @@ pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Parsed, String
     let mut words: Vec<String> = Vec::new();
     // `list`'s own options.
     let mut list_flags: Vec<String> = Vec::new();
+    // `wake-relay`'s own options.
+    let mut relay_name = None;
+    let mut relay_flags: Vec<String> = Vec::new();
     let mut first = true;
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -373,6 +386,13 @@ pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Parsed, String
             "--version" if inline.is_none() => return Ok(Parsed::Version),
             "--quit-on-exit" if inline.is_none() => quit_on_exit = true,
             "--verbose" | "--csv" if inline.is_none() => list_flags.push(flag.clone()),
+            "--enroll" | "--leave" if inline.is_none() => relay_flags.push(flag.clone()),
+            "--name" => {
+                if relay_name.replace(value_of(inline)?).is_some() {
+                    return Err("--name is given twice".into());
+                }
+                relay_flags.push(flag.clone());
+            }
             "--host" | "--app" => {
                 let value = value_of(inline)?;
                 let slot = if flag == "--host" {
@@ -402,12 +422,21 @@ pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Parsed, String
             }
             // moonlight-qt finds its action anywhere among the words.
             _ if !flag.starts_with('-')
-                && (!words.is_empty() || flag.eq_ignore_ascii_case("stream") || flag.eq_ignore_ascii_case("list")) =>
+                && (!words.is_empty() || ["stream", "list", "wake-relay"].iter().any(|w| flag.eq_ignore_ascii_case(w))) =>
             {
                 words.push(flag.clone());
             }
             _ => return Err(format!("unknown argument {flag}")),
         }
+    }
+    if words.first().is_some_and(|w| w.eq_ignore_ascii_case("wake-relay")) {
+        if words.len() > 1 || host.is_some() || app.is_some() || quit_on_exit || options.any() || !list_flags.is_empty() {
+            return Err("wake-relay takes only --name, --enroll or --leave".into());
+        }
+        return wake_relay::options(relay_name, &relay_flags).map(Parsed::WakeRelay);
+    }
+    if let Some(flag) = relay_flags.first() {
+        return Err(format!("{flag} needs wake-relay"));
     }
     if words.first().is_some_and(|w| w.eq_ignore_ascii_case("list")) {
         if host.is_some() || app.is_some() || quit_on_exit || options.any() {

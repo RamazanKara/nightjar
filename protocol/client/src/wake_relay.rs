@@ -11,6 +11,11 @@ use rubylight_traverse::wake_relay::{Enrollment, parse_hex, parse_mac};
 use rubylight_traverse::wake_relay_node::requester::RequestConfig;
 use std::net::{Ipv4Addr, SocketAddr};
 
+/// The relay's own side: which PCs it asks, and what it keeps of their answers.
+pub mod driver;
+/// The relay's saved assignments, `wake-relay.json`.
+pub mod saved;
+
 /// The enrollment a relay runs for one PC, from its assignment. `None` when the secret or a
 /// device id is malformed; MACs and addresses that do not parse, or that a relay must not
 /// send to (multicast MACs, public addresses), are left out.

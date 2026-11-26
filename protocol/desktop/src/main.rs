@@ -268,6 +268,18 @@ fn main() {
             };
             std::process::exit(code);
         }
+        // `wake-relay`: status lines on stdout until stopped, without a window or the log.
+        Ok(cli::Parsed::WakeRelay(relay)) => {
+            cli::use_parent_console();
+            let code = match Store::open() {
+                Ok(store) => cli::run_wake_relay(&relay, &store),
+                Err(e) => {
+                    eprintln!("nightjar: no config directory: {e}");
+                    1
+                }
+            };
+            std::process::exit(code);
+        }
         // An open window takes the link; this start ends here, before it touches the log.
         Ok(cli::Parsed::Link(link)) => {
             if link_channel::send(&link) {
