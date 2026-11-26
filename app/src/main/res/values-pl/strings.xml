@@ -573,4 +573,8 @@
     <string name="full_range_vulkan_unavailable">Pełny zakres pominięty, brak Vulkan: czerń może być błędna. Wyłącz „Pełny zakres kolorów”.</string>
     <string name="launch_warning_virtual_display_unavailable">Ekran wirtualny komputera jest niedostępny, więc ten strumień pokazuje jego fizyczny ekran.</string>
     <string name="launch_warning_virtual_display_disabled_by_client">To urządzenie poprosiło o własny ekran komputera, więc strumień nie używa ekranu wirtualnego.</string>
+    <string name="frame_warp_update_host">Frame Warp jest wyłączony: wymaga aktualnej wersji Nightjar i aplikacji do streamingu na komputerze.</string>
+    <string name="frame_warp_overlay_update_host">Frame Warp: wymaga aktualnej wersji na komputerze</string>
+    <string name="frame_warp_overlay_confidence">%1$s, pewność %2$s%%</string>
+    <string name="frame_warp_overlay_confidence_gyro">%1$s, pewność %2$s%%, żyroskop dopasowany</string>
 </resources>

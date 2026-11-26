@@ -39,6 +39,7 @@ fn params<'a>(
         hdr_formats_offered: 0,
         audio_codec: 0,
         audio_codecs_offered: 0,
+        audio_codec_accept: None,
         video_fec_percentage: None,
         max_video_packet: 0,
     }

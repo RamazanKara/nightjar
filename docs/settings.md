@@ -155,7 +155,7 @@ Tier: Main rows show when a section opens; More rows fold behind the section's l
 | Microphone gain<br>`seekbar_mic_gain` | More | 100% | 25%–400%; step 5% | Raise if the PC hears you too quietly, lower if it hears you too loudly. Applied before sending; loud peaks are rounded off rather than clipped. 100 % leaves the sound as it is. Shown while Send microphone to the PC is On. |
 | Mute audio<br>`checkbox_mute_audio` | More | Off | On; Off | Enable to stream without sound on this device, for example while the PC plays it (see Play audio on the PC too) or the device sits in a quiet place. Audio passthrough is not asked for. Applies to the next stream. |
 | Allow system audio effects<br>`checkbox_enable_audiofx` | More | Off | On; Off | Enable for Android equalizers or effects. Can add delay and changes the audio output path. |
-| Audio passthrough<br>`checkbox_audio_passthrough` | More | Off | On; Off | Enable for a receiver, soundbar or TV that decodes Dolby Digital or Dolby Digital Plus, or takes multichannel PCM as is. Asks a Rubylight PC for a format the audio output reports it plays, and keeps Opus otherwise. Dolby comes in 32 ms frames, so sound arrives later than Opus. Android 10 and later; hidden elsewhere. |
+| Audio passthrough<br>`checkbox_audio_passthrough` | More | Off | On; Off | Enable for a receiver, soundbar or TV that decodes Dolby Digital or Dolby Digital Plus, or takes multichannel PCM as is. Asks the PC for a format the audio output reports it plays, and keeps Opus otherwise. Dolby comes in 32 ms frames, so sound arrives later than Opus. Android 10 and later; hidden elsewhere. |
 
 ### App
 

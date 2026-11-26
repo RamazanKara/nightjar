@@ -314,9 +314,10 @@ pub(super) fn start(
         )?;
     parts.control = Some(control.clone());
     if let Some(warp) = config.frame_warp.as_ref().filter(|_| !config.remote_monitor) {
-        let request = warp.request(true);
-        match control.send(ClientMessage::FrameWarpRequest(request)) {
-            Ok(()) => listener.log("Frame Warp: asked the host for its model, tags and HUD mask"),
+        // A host that did not announce the meta (0x5549) refuses the request here: nothing goes
+        // out, and the stream runs without Frame Warp.
+        match control.send(ClientMessage::FrameWarpRequest(warp.request(true))) {
+            Ok(()) => listener.log("Frame Warp: asked the host for its model, tags, HUD mask and meta"),
             Err(error) => listener.log(&format!("Frame Warp: the host does not offer it ({error:?})")),
         }
     }
@@ -496,7 +497,11 @@ pub(super) fn start(
             codec,
             rubylight_protocol::audio_ext::CODEC_AC3 | rubylight_protocol::audio_ext::CODEC_EAC3
         ) {
-            receiver.assemble_frames();
+            if outcome.audio_unchunked {
+                receiver.unchunked_frames();
+            } else {
+                receiver.assemble_frames();
+            }
         }
         let Some(socket) = parts.audio_socket.as_ref() else {
             parts.audio_renderer = Some(renderer);

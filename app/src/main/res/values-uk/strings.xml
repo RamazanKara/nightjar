@@ -573,4 +573,8 @@
     <string name="full_range_vulkan_unavailable">Повний діапазон відкинуто, Vulkan нема: чорний може бути хибним. Вимкніть цей діапазон.</string>
     <string name="launch_warning_virtual_display_unavailable">Віртуальний дисплей ПК недоступний, тому ця трансляція показує його фізичний дисплей.</string>
     <string name="launch_warning_virtual_display_disabled_by_client">Цей пристрій запросив власний дисплей ПК, тому трансляція не використовує віртуальний дисплей.</string>
+    <string name="frame_warp_update_host">Frame Warp вимкнено: потрібна поточна версія Nightjar і застосунку для трансляції на ПК.</string>
+    <string name="frame_warp_overlay_update_host">Frame Warp: потрібна поточна версія на ПК</string>
+    <string name="frame_warp_overlay_confidence">%1$s, впевненість %2$s%%</string>
+    <string name="frame_warp_overlay_confidence_gyro">%1$s, впевненість %2$s%%, гіроскоп зафіксовано</string>
 </resources>

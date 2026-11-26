@@ -241,7 +241,7 @@ impl ControlSession {
         }
         if let ClientMessage::FrameWarpRequest(request) = message {
             // As for cursor shapes: accepted from just before an enable goes out.
-            self.frame_warp_on = request.enabled;
+            self.frame_warp_on = request.base.enabled;
         }
         if !self.queue(&message) {
             if matches!(message, ClientMessage::CursorShapeRequest { .. }) {
@@ -684,7 +684,10 @@ impl ControlSession {
             ptype::CURSOR_SHAPE if extensions && self.cursor_shapes => {
                 Some(events::cursor_shape(p))
             }
-            ptype::FRAME_WARP_MODEL | ptype::FRAME_WARP_TAGS | ptype::FRAME_WARP_MASK
+            ptype::FRAME_WARP_MODEL
+            | ptype::FRAME_WARP_TAGS
+            | ptype::FRAME_WARP_MASK
+            | ptype::FRAME_WARP_V2_META
                 if extensions && self.frame_warp_on =>
             {
                 self.frame_warp_message(message_type, p)
@@ -721,6 +724,13 @@ impl ControlSession {
                 let tags = Tags::decode(p)?;
                 if let Some(warp) = warp {
                     warp.on_tags(&tags);
+                }
+                None
+            }
+            ptype::FRAME_WARP_V2_META => {
+                let meta = rubylight_protocol::frame_warp_v2::FrameWarpV2Meta::decode(p)?;
+                if let Some(warp) = warp {
+                    warp.on_meta(meta);
                 }
                 None
             }

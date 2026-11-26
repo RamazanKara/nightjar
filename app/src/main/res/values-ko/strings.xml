@@ -573,4 +573,8 @@
     <string name="full_range_vulkan_unavailable">풀 레인지 미적용, Vulkan 없음: 검은색이 틀릴 수 있습니다. “풀 레인지 색상”을 끄세요.</string>
     <string name="launch_warning_virtual_display_unavailable">PC의 가상 디스플레이를 사용할 수 없어 이 스트림은 실제 디스플레이를 표시합니다.</string>
     <string name="launch_warning_virtual_display_disabled_by_client">이 기기가 PC 자체 디스플레이를 요청해서 스트림은 가상 디스플레이를 사용하지 않습니다.</string>
+    <string name="frame_warp_update_host">Frame Warp가 꺼졌습니다: 최신 버전의 Nightjar와 PC 스트리밍 앱이 필요합니다.</string>
+    <string name="frame_warp_overlay_update_host">Frame Warp: PC에 최신 버전이 필요합니다</string>
+    <string name="frame_warp_overlay_confidence">%1$s, 신뢰도 %2$s%%</string>
+    <string name="frame_warp_overlay_confidence_gyro">%1$s, 신뢰도 %2$s%%, 자이로 고정</string>
 </resources>

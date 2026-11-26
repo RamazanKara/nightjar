@@ -16,6 +16,7 @@ pub mod continue_here;
 pub mod control_center;
 pub mod controller;
 pub mod controllers;
+pub mod display_profile;
 pub mod full_chroma;
 pub mod game_info;
 pub mod gamepad_constants;

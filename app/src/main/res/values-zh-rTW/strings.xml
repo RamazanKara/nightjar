@@ -573,4 +573,8 @@
     <string name="full_range_vulkan_unavailable">解碼器捨棄了全範圍色彩且無法使用 Vulkan，黑色可能不正確。請關閉「全範圍色彩」。</string>
     <string name="launch_warning_virtual_display_unavailable">電腦的虛擬顯示器無法使用，因此此串流顯示其實體顯示器。</string>
     <string name="launch_warning_virtual_display_disabled_by_client">此裝置要求使用電腦本身的顯示器，因此串流不使用虛擬顯示器。</string>
+    <string name="frame_warp_update_host">Frame Warp 已關閉：需要最新版本的 Nightjar 與電腦上的串流應用程式。</string>
+    <string name="frame_warp_overlay_update_host">Frame Warp：電腦需要最新版本</string>
+    <string name="frame_warp_overlay_confidence">%1$s，信賴度 %2$s%%</string>
+    <string name="frame_warp_overlay_confidence_gyro">%1$s，信賴度 %2$s%%，陀螺儀已鎖定</string>
 </resources>

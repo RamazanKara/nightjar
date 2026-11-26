@@ -573,4 +573,8 @@
     <string name="full_range_vulkan_unavailable">Faixa completa ignorada e sem Vulkan: pretos errados. Desative “Faixa de cor completa”.</string>
     <string name="launch_warning_virtual_display_unavailable">A tela virtual do PC não está disponível, então esta transmissão mostra a tela física.</string>
     <string name="launch_warning_virtual_display_disabled_by_client">Este dispositivo pediu a tela do próprio PC, então a transmissão não usa uma tela virtual.</string>
+    <string name="frame_warp_update_host">Frame Warp está desligado: precisa da versão atual do Nightjar e do app de streaming do PC.</string>
+    <string name="frame_warp_overlay_update_host">Frame Warp: precisa da versão atual no PC</string>
+    <string name="frame_warp_overlay_confidence">%1$s, confiança %2$s%%</string>
+    <string name="frame_warp_overlay_confidence_gyro">%1$s, confiança %2$s%%, giroscópio travado</string>
 </resources>

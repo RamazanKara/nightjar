@@ -277,6 +277,9 @@ pub struct SdpParams<'a> {
     pub audio_codec: u8,
     /// The host's `DescribeInfo::audio_codecs`.
     pub audio_codecs_offered: u8,
+    /// The token of the AC3 or E-AC3 offer to accept with `x-ss-audio-codec-accept`
+    /// (`rtsp::dolby_ss::pick`), as the host spelled it; `None` sends nothing.
+    pub audio_codec_accept: Option<&'a str>,
     /// `x-ml-video.fecPercentage` ([`FecChoice::summary_percentage`]), with
     /// `x-ml-video.fecSummaryVersion:1`, for a host whose FEC control the handshake turned on
     /// (`RtspOutcome::fec_summaries`); `None` sends neither.
@@ -604,6 +607,9 @@ pub fn generate(p: &SdpParams<'_>) -> Sdp {
         }
         if let Some(codec) = one_offered_bit(p.audio_codec, p.audio_codecs_offered) {
             a.add(rubylight_protocol::audio_ext::CODEC_ANNOUNCE_ATTRIBUTE, codec);
+        }
+        if let Some(token) = p.audio_codec_accept {
+            a.add("x-ss-audio-codec-accept", token);
         }
         if quad[0] >= 7 {
             a.add(

@@ -573,4 +573,8 @@
     <string name="full_range_vulkan_unavailable">Voller Farbbereich verworfen, kein Vulkan: Schwarz evtl. falsch. Option ausschalten.</string>
     <string name="launch_warning_virtual_display_unavailable">Das virtuelle Display des PCs ist nicht verfügbar, deshalb zeigt dieser Stream sein physisches Display.</string>
     <string name="launch_warning_virtual_display_disabled_by_client">Dieses Gerät hat das eigene Display des PCs angefordert, deshalb nutzt der Stream kein virtuelles Display.</string>
+    <string name="frame_warp_update_host">Frame Warp ist aus: Es braucht die aktuelle Version von Nightjar und der Streaming-App auf dem PC.</string>
+    <string name="frame_warp_overlay_update_host">Frame Warp: braucht die aktuelle Version auf dem PC</string>
+    <string name="frame_warp_overlay_confidence">%1$s, Zuverlässigkeit %2$s%%</string>
+    <string name="frame_warp_overlay_confidence_gyro">%1$s, Zuverlässigkeit %2$s%%, Gyro erfasst</string>
 </resources>
