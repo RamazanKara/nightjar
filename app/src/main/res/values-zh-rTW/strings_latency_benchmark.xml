@@ -21,4 +21,5 @@
     <string name="latency_benchmark_copied">已複製結果</string>
     <string name="latency_benchmark_report_form">開啟表單</string>
     <string name="latency_benchmark_paste_hint">已複製結果。請貼到表單中。</string>
+    <string name="latency_benchmark_audio_unavailable">回報的音訊：此裝置不提供</string>
 </resources>

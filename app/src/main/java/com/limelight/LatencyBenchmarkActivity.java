@@ -129,13 +129,20 @@ public class LatencyBenchmarkActivity extends NightjarActivity implements Choreo
         return ((AudioManager) getSystemService(AUDIO_SERVICE)).getProperty(name);
     }
 
+    /**
+     * The audio output the device reports. One it does not report is said once, in words: its rate and buffer are numbers
+     * with units, and "no data yet" in their place read as "no data yet Hz".
+     */
+    static String audioLine(android.content.Context context, String rate, String burst) {
+        if (rate == null || burst == null) return context.getString(R.string.latency_benchmark_audio_unavailable);
+        return context.getString(R.string.latency_benchmark_audio, rate, burst);
+    }
+
     private void showResults() {
         StringBuilder text = new StringBuilder(getString(R.string.latency_benchmark_display, panelHz()));
-        String rate = audioProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE);
-        String burst = audioProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER);
+        text.append('\n').append(audioLine(this, audioProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE),
+                audioProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER)));
         String unknown = getString(R.string.latency_unavailable);
-        text.append('\n').append(getString(R.string.latency_benchmark_audio,
-                rate == null ? unknown : rate, burst == null ? unknown : burst));
         int[] labels = {R.string.latency_benchmark_frame, R.string.latency_benchmark_callback,
                 R.string.latency_benchmark_input, R.string.latency_benchmark_timer};
         for (int metric = 0; metric < labels.length; metric++) {

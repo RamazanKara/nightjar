@@ -20,4 +20,5 @@
     <string name="latency_benchmark_copied">Results copied</string>
     <string name="latency_benchmark_report_form">Open report form</string>
     <string name="latency_benchmark_paste_hint">Results copied. Paste them into the form.</string>
+    <string name="latency_benchmark_audio_unavailable">Reported audio: not available on this device</string>
 </resources>
