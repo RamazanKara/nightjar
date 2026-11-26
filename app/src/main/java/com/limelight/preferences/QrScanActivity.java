@@ -37,6 +37,9 @@ public class QrScanActivity extends NightjarActivity {
             task -> new Thread(task, "QR scan"));
     private TextView status;
     private PreviewView preview;
+    private com.limelight.ui.ViewfinderFrame frameView;
+    /** How long the lit corners stay before the scan closes. */
+    static final long RECOGNISED_MS = 240;
     private volatile boolean found;
     // The analysis thread's copy of the frame, reused while the size stays.
     private byte[] frame;
@@ -51,6 +54,7 @@ public class QrScanActivity extends NightjarActivity {
         UiHelper.notifyNewRootView(this);
         status = findViewById(R.id.qr_scan_status);
         preview = findViewById(R.id.qr_scan_preview);
+        frameView = findViewById(R.id.qr_scan_frame);
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             cameraFailed(null);
@@ -101,7 +105,9 @@ public class QrScanActivity extends NightjarActivity {
         if (PairingLink.parse(text) != null) {
             found = true;
             setResult(RESULT_OK, new Intent().putExtra(EXTRA_LINK, text));
-            finish();
+            // The corners light up in the accent, long enough to be seen, then the pairing goes on.
+            frameView.setRecognised(true);
+            frameView.postDelayed(this::finish, RECOGNISED_MS);
         } else {
             status.setText(PairingLink.looksLikeLink(text) ? R.string.addpc_qr_invalid : R.string.qr_scan_not_pairing);
         }
