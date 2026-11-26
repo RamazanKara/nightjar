@@ -125,10 +125,14 @@ pub enum Feature {
     /// features, so it is known only after [`super::HostCapabilities::with_native`]. Whether
     /// the replay buffer runs for a stream travels in the stream's DVR state.
     StreamDvr,
+    /// Waking this PC from away through an always-on paired device on its network
+    /// (`AwayWakeRelayVersion`, and `wake.relay` in native features with the launch permission
+    /// or Host control). Known only after [`super::HostCapabilities::with_native`].
+    AwayWakeRelay,
 }
 
 impl Feature {
-    pub const ALL: [Feature; 56] = [
+    pub const ALL: [Feature; 57] = [
         Feature::Permissions,
         Feature::OtpPairing,
         Feature::Clipboard,
@@ -185,6 +189,7 @@ impl Feature {
         Feature::PairingApprove,
         Feature::QuickSuspend,
         Feature::StreamDvr,
+        Feature::AwayWakeRelay,
     ];
 }
 
@@ -326,6 +331,8 @@ pub struct Evidence {
     /// -1 without `RustHostInternetPlayVersion` (paired serverinfo only), 0 when the host has
     /// Play over the internet off.
     pub internet_play_version: i32,
+    /// -1 without `AwayWakeRelayVersion`: the host lets a paired device on its network wake it.
+    pub away_wake_relay_version: i32,
     /// `usb`, `clipboard.image` and `folders` in the native features, and the device's `usb`
     /// and `shared_folders` permissions.
     pub usb_offered: bool,
@@ -357,6 +364,8 @@ pub struct Evidence {
     pub quick_suspend_offered: bool,
     /// `stream.dvr` in native features.
     pub stream_dvr_offered: bool,
+    /// `wake.relay` in native features, with the launch permission or Host control.
+    pub wake_relay_offered: bool,
     /// `MaxVideoPacket`: the largest video packet this host accepts, including a client's
     /// 32-byte encryption header. 0 when the host offers no more than stock Moonlight's 1400.
     pub max_video_packet: u16,

@@ -1,0 +1,25 @@
+{
+  "enabled": true,
+  "target_id": "4F1C2B7A-90DE-4C1B-8E2A-5D3F6A7B8C9D",
+  "epoch": 1,
+  "relays": [
+    {
+      "id": "9f2c7b1e4d6a8c0b3e5f7a9d1c3b5e7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b",
+      "name": "Living Room NUC",
+      "enrolled_unix": 1795000000,
+      "last_seen_unix": 1795003600
+    }
+  ],
+  "bundle": {
+    "target_id": "4F1C2B7A-90DE-4C1B-8E2A-5D3F6A7B8C9D",
+    "epoch": 1,
+    "device": "1a3c5e7b9d1f3a5c7e9b9f2c7b1e4d6a8c0b3e5f7a9d1c3b5e7f9a1c3e5b7d9f",
+    "relays": [
+      {
+        "id": "9f2c7b1e4d6a8c0b3e5f7a9d1c3b5e7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b",
+        "name": "Living Room NUC",
+        "secret": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+      }
+    ]
+  }
+}

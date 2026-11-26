@@ -5,7 +5,7 @@
   "nativeCapabilities": {
     "api_version": 1,
     "host": {"name": "Rubylight files fixture", "version": "3.1.0", "unique_id": "3c0f8a52-6b7d-4c1e-9a0b-2f6e1d8c4a71"},
-    "features": ["library", "files.upload", "files.download"],
+    "features": ["library", "files.upload", "files.download", "wake.relay"],
     "permissions": {"list": true, "view": true, "launch": true, "host_control": false, "file_upload": true, "file_download": true}
   },
   "features": {
@@ -64,6 +64,7 @@
     "host_update": "unsupported",
     "pairing_approve": "unsupported",
     "quick_suspend": "unsupported",
-    "stream_dvr": "unsupported"
+    "stream_dvr": "unsupported",
+    "away_wake_relay": "supported"
   }
 }

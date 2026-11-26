@@ -97,6 +97,7 @@ public class HostCapabilitiesContractTest {
             case PAIRING_APPROVE: return "pairing_approve";
             case QUICK_SUSPEND: return "quick_suspend";
             case STREAM_DVR: return "stream_dvr";
+            case AWAY_WAKE_RELAY: return "away_wake_relay";
             default: return null;
         }
     }

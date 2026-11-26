@@ -117,6 +117,7 @@ fn feature_name(feature: Feature) -> &'static str {
         Feature::PairingApprove => "pairing_approve",
         Feature::QuickSuspend => "quick_suspend",
         Feature::StreamDvr => "stream_dvr",
+        Feature::AwayWakeRelay => "away_wake_relay",
     }
 }
 

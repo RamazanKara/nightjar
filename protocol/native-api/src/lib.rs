@@ -24,6 +24,7 @@ pub mod radeon;
 pub mod session;
 pub mod usb;
 pub mod wake;
+pub mod wake_relay;
 
 /// The version this crate describes. It is also the `NativeApiVersion` value
 /// a paired client sees in `/serverinfo`.
@@ -108,4 +109,8 @@ pub mod feature {
     /// `DELETE /dvr/clips/{id}` answer: the host keeps instant-replay clips. Whether the
     /// replay buffer runs for this stream is in `GET /dvr`.
     pub const STREAM_DVR: &str = "stream.dvr";
+    /// [`crate::wake_relay`]: `GET /wake/relay` and `POST /wake/relay/enroll` answer, while the
+    /// host's `away_wake_relay` (with Play over the internet) is on: a paired device on the PC's
+    /// network wakes it for a device that is away.
+    pub const WAKE_RELAY: &str = "wake.relay";
 }

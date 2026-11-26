@@ -1,0 +1,24 @@
+{
+  "assignment": {
+    "target_id": "4F1C2B7A-90DE-4C1B-8E2A-5D3F6A7B8C9D",
+    "target_name": "Gaming PC",
+    "epoch": 1,
+    "secret": "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
+    "macs": ["10:7b:44:0a:0b:0c"],
+    "broadcasts": ["192.168.1.255"],
+    "address": "192.168.1.30",
+    "http_port": 47989,
+    "devices": [
+      "1a3c5e7b9d1f3a5c7e9b9f2c7b1e4d6a8c0b3e5f7a9d1c3b5e7f9a1c3e5b7d9f"
+    ],
+    "refresh_seconds": 300
+  },
+  "relays": [
+    {
+      "id": "9f2c7b1e4d6a8c0b3e5f7a9d1c3b5e7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b",
+      "name": "Living Room NUC",
+      "enrolled_unix": 1795000000,
+      "last_seen_unix": 1795003600
+    }
+  ]
+}

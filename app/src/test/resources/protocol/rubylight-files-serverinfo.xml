@@ -9,7 +9,7 @@
   <PairStatus>1</PairStatus><currentgame>0</currentgame><currentgameuuid></currentgameuuid><state>SUNSHINE_SERVER_FREE</state>
   <LocalIP>192.0.2.16</LocalIP><mac>00:00:00:00:00:00</mac><MaxLumaPixelsHEVC>1869449984</MaxLumaPixelsHEVC>
   <ServerCodecModeSupport>126026497</ServerCodecModeSupport>
-  <RustHostVersion>3.1.0</RustHostVersion><RustHostEncoderBitrateKbps>0</RustHostEncoderBitrateKbps>
+  <RustHostVersion>3.1.0</RustHostVersion><AwayWakeRelayVersion>1</AwayWakeRelayVersion><RustHostEncoderBitrateKbps>0</RustHostEncoderBitrateKbps>
   <RustHostInitialEncoderBitrateKbps>0</RustHostInitialEncoderBitrateKbps><RustHostSessionCount></RustHostSessionCount>
   <RustHostPendingSessionCount></RustHostPendingSessionCount><RustHostApplicationActive></RustHostApplicationActive>
   <RustHostProfile></RustHostProfile><PyroWaveHostLinkMbps>1000</PyroWaveHostLinkMbps>

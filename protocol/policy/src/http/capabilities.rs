@@ -490,6 +490,16 @@ impl Evidence {
                     serverinfo
                 }
             }
+            // Both halves: the serverinfo field says the host has it on, the native feature
+            // that this device may fetch its wake bundle.
+            Feature::AwayWakeRelay => {
+                let version = self.serverinfo_version(self.away_wake_relay_version);
+                if version.is_supported() {
+                    self.native_feature(self.wake_relay_offered, None)
+                } else {
+                    version
+                }
+            }
         }
     }
 
@@ -587,6 +597,8 @@ impl HostCapabilities {
         evidence.quick_suspend_offered = listed(rubylight_native_api::feature::QUICK_SUSPEND)
             && (permissions.launch || permissions.host_control);
         evidence.stream_dvr_offered = listed(rubylight_native_api::feature::STREAM_DVR);
+        evidence.wake_relay_offered =
+            listed("wake.relay") && (permissions.launch || permissions.host_control);
         Self::from_evidence(evidence)
     }
 

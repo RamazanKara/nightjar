@@ -523,3 +523,49 @@ fn stream_dvr_needs_the_serverinfo_field_and_the_native_feature() {
     let back = HostCapabilities::from_versioned_json(&offered.to_versioned_json().unwrap());
     assert!(back.has(Feature::StreamDvr));
 }
+
+#[test]
+fn away_wake_relay_needs_the_serverinfo_field_and_the_native_feature() {
+    let on =
+        include_str!("../../../../app/src/test/resources/protocol/rubylight-files-serverinfo.xml");
+    let off =
+        include_str!("../../../../app/src/test/resources/protocol/rubylight-30-serverinfo.xml");
+    let native = |features: &str, launch: bool, host_control: bool| -> NativeCapabilities {
+        serde_json::from_str(&format!(
+            r#"{{"api_version":1,"host":{{"name":"RL","version":"7.0.0","unique_id":"rl"}},"features":[{features}],"permissions":{{"list":true,"view":true,"launch":{launch},"host_control":{host_control}}}}}"#
+        ))
+        .unwrap()
+    };
+    let base = HostCapabilities::from_server_info_xml(on).unwrap();
+    assert_eq!(
+        base.availability(Feature::AwayWakeRelay),
+        Availability::Unknown
+    );
+    let listed = r#""wake.relay""#;
+    assert!(base
+        .with_native(&native(listed, true, false))
+        .has(Feature::AwayWakeRelay));
+    assert!(base
+        .with_native(&native(listed, false, true))
+        .has(Feature::AwayWakeRelay));
+    // Without either permission the host refuses the bundle, so it is not offered.
+    assert_eq!(
+        base.with_native(&native(listed, false, false))
+            .availability(Feature::AwayWakeRelay),
+        Availability::NEVER
+    );
+    assert_eq!(
+        base.with_native(&native(r#""library""#, true, true))
+            .availability(Feature::AwayWakeRelay),
+        Availability::NEVER
+    );
+    // A host without the serverinfo field (or with the setting off) never offers it, whatever
+    // its native API lists.
+    let old = HostCapabilities::from_server_info_xml(off).unwrap();
+    assert!(!old
+        .with_native(&native(listed, true, true))
+        .has(Feature::AwayWakeRelay));
+    let wakes = base.with_native(&native(listed, true, false));
+    let restored = HostCapabilities::from_versioned_json(&wakes.to_versioned_json().unwrap());
+    assert!(restored.has(Feature::AwayWakeRelay));
+}

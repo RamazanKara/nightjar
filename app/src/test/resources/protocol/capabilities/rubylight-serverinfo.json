@@ -58,6 +58,7 @@
     "host_update": "unsupported:update_host",
     "pairing_approve": "unsupported:update_host",
     "quick_suspend": "unsupported",
-    "stream_dvr": "unsupported"
+    "stream_dvr": "unsupported",
+    "away_wake_relay": "unsupported"
   }
 }

@@ -106,6 +106,7 @@ impl Evidence {
             stream_dvr_version: -1,
             nvidia_enhancements: 0,
             internet_play_version: -1,
+            away_wake_relay_version: -1,
             ..Default::default()
         };
         let (mut encoder, mut initial_encoder) = (false, false);
@@ -175,6 +176,9 @@ impl Evidence {
                 }
                 "RustHostInternetPlayVersion" => {
                     e.internet_play_version = unsigned(&text, 0xFFFF) as i32
+                }
+                "AwayWakeRelayVersion" => {
+                    e.away_wake_relay_version = unsigned(&text, 0xFFFF) as i32
                 }
                 rubylight_protocol::video_packet::SERVERINFO_FIELD => {
                     e.max_video_packet = video_packet_offer(&text)

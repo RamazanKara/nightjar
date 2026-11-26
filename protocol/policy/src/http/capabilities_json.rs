@@ -131,6 +131,10 @@ impl Evidence {
             "internetPlayVersion".into(),
             Value::from(self.internet_play_version),
         );
+        map.insert(
+            "awayWakeRelayVersion".into(),
+            Value::from(self.away_wake_relay_version),
+        );
         map.insert("usbOffered".into(), Value::from(self.usb_offered));
         map.insert("usbPermission".into(), Value::from(self.usb_permission));
         map.insert(
@@ -154,6 +158,10 @@ impl Evidence {
         );
         map.insert("updateOffered".into(), Value::from(self.update_offered));
         map.insert("pairingOffered".into(), Value::from(self.pairing_offered));
+        map.insert(
+            "wakeRelayOffered".into(),
+            Value::from(self.wake_relay_offered),
+        );
         map.insert(
             "pairingPermission".into(),
             Value::from(self.pairing_permission),
@@ -298,6 +306,7 @@ impl Evidence {
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
             internet_play_version: opt_i32("internetPlayVersion", -1)?,
+            away_wake_relay_version: opt_i32("awayWakeRelayVersion", -1)?,
             usb_offered: opt_bool("usbOffered")?,
             usb_permission: opt_bool("usbPermission")?,
             image_clipboard_offered: opt_bool("imageClipboardOffered")?,
@@ -313,6 +322,7 @@ impl Evidence {
             update_offered: opt_bool("updateOffered")?,
             pairing_offered: opt_bool("pairingOffered")?,
             pairing_permission: opt_bool("pairingPermission")?,
+            wake_relay_offered: opt_bool("wakeRelayOffered")?,
             continue_here_offered: opt_bool("continueHereOffered")?,
             quick_suspend_version: opt_i32("quickSuspendVersion", -1)?,
             quick_suspend_offered: opt_bool("quickSuspendOffered")?,
