@@ -1,4 +1,5 @@
-- Fixes startup crash on devices whose graphics driver has no 24-bit colour mode with a depth buffer.
-- Adds HDR format under More video settings: disable Dolby Vision or stream plain HDR10 only.
-- Turns Speed up frame hand-off on by default to reduce frame display latency spikes.
-- Keep TV video smooth now turns on automatically without a visible corner dot when TV display pacing stalls, while keeping the switch for starting with it on.
+- Pinch to zoom freely (0.5x–4x) and drag the stream past black borders so corner controls stay reachable.
+- Fixes startup crash on devices with no 24-bit colour + depth mode.
+- Adds HDR format under More video settings (turn Dolby Vision off or stream plain HDR10 only).
+- Speed up frame hand-off is now on by default.
+- Keep TV video smooth activates automatically without a visible corner dot when TV display pacing stalls; toggle remains for starting with it on.
