@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "session_active": true,
+  "caller_is_owner": true,
+  "window_seconds": 30,
+  "encoder": {
+    "backend": "amf",
+    "codec": "hevc",
+    "hdr": false,
+    "width": 2560,
+    "height": 1440,
+    "fps": 120,
+    "live_bitrate_kbps": 36000,
+    "fec_percent": 20
+  },
+  "host_stages": {
+    "pictures": 3560,
+    "late_pictures": 94,
+    "dominant_stage": "encode",
+    "lost_us": {
+      "capture": 18200,
+      "convert": 11400,
+      "encode": 642500,
+      "packetize": 4100,
+      "send": 22000
+    },
+    "pipeline_rates": {
+      "source_mhz": 118400,
+      "capture_mhz": 118400,
+      "submit_mhz": 102100,
+      "output_mhz": 101800,
+      "repeat_mhz": 1200
+    }
+  },
+  "active_trials": [
+    {
+      "trial_id": "t-3",
+      "remedy": "bitrate_stepdown",
+      "applied_value": 36000,
+      "previous_value": 45000,
+      "can_undo": true
+    }
+  ],
+  "eligible_remedies": [
+    {
+      "id": "bitrate_stepdown",
+      "configurable": false,
+      "target_kbps": null,
+      "reason": "trial_active",
+      "message": "A lower bitrate is already being tried. Undo it first."
+    }
+  ]
+}

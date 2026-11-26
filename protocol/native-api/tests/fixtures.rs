@@ -591,3 +591,23 @@ fn quick_suspend_round_trips() {
     assert_eq!(refused.reason, "anti_cheat_detected");
     assert_eq!(feature::QUICK_SUSPEND, "session.quick_suspend");
 }
+
+#[test]
+fn stream_doctor_round_trips() {
+    use rubylight_native_api::doctor::{DoctorSnapshot, HostStage, RemedyId, WINDOW_SECONDS};
+    let snapshot: DoctorSnapshot = round_trip("stream_doctor");
+    assert_eq!(snapshot.window_seconds, WINDOW_SECONDS);
+    let stages = snapshot.host_stages.expect("stages");
+    assert_eq!(stages.dominant_stage, Some(HostStage::Encode));
+    assert_eq!(stages.lost_us.encode, 642_500);
+    let trial = &snapshot.active_trials[0];
+    assert_eq!(
+        (trial.remedy, trial.applied_value, trial.previous_value),
+        (RemedyId::BitrateStepdown, 36_000, 45_000)
+    );
+    assert_eq!(
+        snapshot.eligible_remedies[0].reason.as_deref(),
+        Some("trial_active")
+    );
+    assert_eq!(feature::STREAM_DOCTOR_V2, "stream.doctor_v2");
+}

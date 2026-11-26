@@ -10,6 +10,7 @@
 pub mod audio;
 pub mod capabilities;
 pub mod coop;
+pub mod doctor;
 pub mod dvr;
 pub mod error;
 pub mod files;
@@ -113,4 +114,7 @@ pub mod feature {
     /// host's `away_wake_relay` (with Play over the internet) is on: a paired device on the PC's
     /// network wakes it for a device that is away.
     pub const WAKE_RELAY: &str = "wake.relay";
+    /// [`crate::doctor`]: `GET /stream/doctor` reads which host stage lost the caller's stream
+    /// time, and `POST /stream/doctor/apply` applies or undoes a session-only remedy.
+    pub const STREAM_DOCTOR_V2: &str = "stream.doctor_v2";
 }
