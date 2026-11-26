@@ -91,7 +91,12 @@ public final class HdrFormatPolicy {
      * PyroWave Main10 streams. Rubylight 3.0 rc hosts refuse HLG there.
      */
     public static final int PYROWAVE_HLG = 0x80;
-    public static final int OFFER_FLAGS = PYROWAVE_HLG;
+    /**
+     * Offer flag (rubylight_protocol::hdr::DV_81_FULL_RANGE): the host sends {@link #DV_81} full
+     * range. Beside DV_81 it also marks, to and from the engine, a stream asked for that way.
+     */
+    public static final int DV_81_FULL_RANGE = 0x40;
+    public static final int OFFER_FLAGS = PYROWAVE_HLG | DV_81_FULL_RANGE;
 
     public static final String MIME_DOLBY_VISION = "video/dolby-vision";
 

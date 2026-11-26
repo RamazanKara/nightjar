@@ -379,6 +379,9 @@ pub(crate) fn connect(
             settings.experimental_packed_444,
             reads_dolby_vision(),
         )),
+        // The draw pass takes only peaks from the RPUs, so it takes 8.1 full range where the host
+        // offers it; the ANNOUNCE asks only then (sdp).
+        dolby_vision_full_range: settings.full_range,
         ..Default::default()
     };
     let host = HostInfo {

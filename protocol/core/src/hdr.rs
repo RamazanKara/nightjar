@@ -30,8 +30,12 @@ pub const DOLBY_VISION_AV1: u8 = DV_101;
 /// learns it here first and still asks for [`HLG`]. Offer flags count down from the top bit and
 /// formats up from the bottom, so the two never meet.
 pub const PYROWAVE_HLG: u8 = 0x80;
+/// Offer flag, not a format: the host can send [`DV_81`] full range, with RPUs that describe
+/// full range. A client asks with [`FULL_RANGE_ANNOUNCE_ATTRIBUTE`]; without it a Dolby Vision
+/// stream is limited range.
+pub const DV_81_FULL_RANGE: u8 = 0x40;
 /// Every offer flag this version defines; never a format, so `hdrFormat` refuses them.
-pub const OFFER_FLAGS: u8 = PYROWAVE_HLG;
+pub const OFFER_FLAGS: u8 = PYROWAVE_HLG | DV_81_FULL_RANGE;
 
 /// Serverinfo element: the formats the host can encode and its offer flags, decimal 0-255.
 pub const SERVERINFO_FIELD: &str = "HdrFormats";
@@ -39,6 +43,9 @@ pub const SERVERINFO_FIELD: &str = "HdrFormats";
 pub const DESCRIBE_ATTRIBUTE: &str = "x-rl-video.hdrFormats";
 /// ANNOUNCE attribute: the one format the client picked.
 pub const ANNOUNCE_ATTRIBUTE: &str = "x-rl-video[0].hdrFormat";
+/// ANNOUNCE attribute, `1`: the [`DV_81`] stream is full range. Sent only with the
+/// [`DV_81_FULL_RANGE`] offer flag and a full-range `encoderCscMode`.
+pub const FULL_RANGE_ANNOUNCE_ATTRIBUTE: &str = "x-rl-video[0].dolbyVisionFullRange";
 
 /// `format` is exactly one bit this version defines.
 pub fn single_bit(format: u8) -> bool {
@@ -73,7 +80,10 @@ mod tests {
     #[test]
     fn offer_flags_are_not_formats() {
         assert_eq!(PYROWAVE_HLG, 0x80);
+        assert_eq!(DV_81_FULL_RANGE, 0x40);
         assert_eq!(OFFER_FLAGS & ALL, 0);
+        assert!(!single_bit(DV_81_FULL_RANGE));
+        assert!(!single_bit(DV_81_FULL_RANGE | DV_81));
         assert!(!single_bit(PYROWAVE_HLG));
         assert!(!single_bit(PYROWAVE_HLG | HLG));
     }

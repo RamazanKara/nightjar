@@ -296,6 +296,39 @@ fn hdr_format_and_audio_codec_are_sent_only_when_asked_for_and_offered() {
 }
 
 #[test]
+fn full_range_dolby_vision_needs_the_format_the_offer_full_range_and_consent() {
+    use rubylight_protocol::hdr::{ALL, DV_81, DV_81_FULL_RANGE, DV_84, DV_101, PQ};
+    const KEY: &str = "x-rl-video[0].dolbyVisionFullRange";
+    let ask = |format: u32, bit: u8, offered: u8, color_range: i32, consent: bool| {
+        let config = StreamConfig {
+            color_range,
+            dolby_vision_full_range: consent,
+            ..Default::default()
+        };
+        let mut p = params(&config, SUNSHINE, "10.0.0.7", format);
+        (p.hdr_format, p.hdr_formats_offered) = (bit, offered);
+        let sdp = generate(&p);
+        let sent = attribute(&sdp.text, KEY).is_some();
+        assert_eq!(sent, sdp.dolby_vision_full_range);
+        (sent, sdp.color_range)
+    };
+    let offered = ALL | DV_81_FULL_RANGE;
+    let hevc = VIDEO_FORMAT_H265_MAIN10;
+    let (full, limited) = (COLOR_RANGE_FULL, COLOR_RANGE_LIMITED);
+    assert_eq!(ask(hevc, DV_81, offered, full, true), (true, full));
+    assert_eq!(ask(hevc, DV_81, offered, full, false), (false, limited));
+    assert_eq!(ask(hevc, DV_81, ALL, full, true), (false, limited));
+    assert_eq!(ask(hevc, DV_81, offered, limited, true), (false, limited));
+    assert_eq!(ask(hevc, DV_84, offered, full, true), (false, limited));
+    assert_eq!(ask(VIDEO_FORMAT_AV1_MAIN10, DV_101, offered, full, true), (false, limited));
+    // No Dolby Vision announced: the stream keeps its range without the key.
+    assert_eq!(ask(hevc, PQ, offered, full, true), (false, full));
+    assert_eq!(ask(VIDEO_FORMAT_AV1_MAIN10, DV_81, offered, full, true), (false, full));
+    assert_eq!(ask(VIDEO_FORMAT_H265_REXT10_444, DV_81, offered, full, true), (false, full));
+    assert_eq!(ask(VIDEO_FORMAT_H265, DV_81, offered, full, true), (false, full));
+}
+
+#[test]
 fn row_order_is_requested_only_for_pyrowave_with_records_and_the_setting() {
     const ROW_ORDER: &str = "x-ss-video[0].pyrowaveRowOrder";
     for (format, records, row_order, sent) in [

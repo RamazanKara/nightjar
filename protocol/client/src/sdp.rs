@@ -188,6 +188,10 @@ pub struct StreamConfig {
     /// The HDR format to ask a Rubylight 3.0 host for (one `rubylight_protocol::hdr` bit), 0 for
     /// stock HDR. The ANNOUNCE carries it only under [`SdpParams::hdr_format`]'s rules.
     pub hdr_format: u8,
+    /// The platform takes a Dolby Vision 8.1 stream full range. The ANNOUNCE asks for it only
+    /// with that format, [`COLOR_RANGE_FULL`] and the host's
+    /// [`hdr::DV_81_FULL_RANGE`](rubylight_protocol::hdr::DV_81_FULL_RANGE) offer flag.
+    pub dolby_vision_full_range: bool,
     /// The video FEC to ask a Foundation Sunshine host for in the ANNOUNCE
     /// ([`SdpParams::video_fec_percentage`]); Rubylight hosts take it at launch instead.
     pub video_fec: FecChoice,
@@ -224,6 +228,7 @@ impl Default for StreamConfig {
             pyrowave_records_supported: false,
             pyrowave_row_order: false,
             hdr_format: 0,
+            dolby_vision_full_range: false,
             video_fec: FecChoice::Host,
         }
     }
@@ -262,7 +267,8 @@ pub struct SdpParams<'a> {
     /// 0 sends nothing and streams stock HDR. Sent only on a 10-bit (HDR) stream, Dolby Vision
     /// 8.1 and 8.4 only on HEVC and 10.1 only on AV1, HLG on PyroWave only with the host's
     /// PyroWave HLG offer flag, and only when `hdr_formats_offered` has it. A Dolby Vision
-    /// stream is limited range, whatever [`StreamConfig::color_range`] says.
+    /// stream is limited range, whatever [`StreamConfig::color_range`] says, unless
+    /// [`StreamConfig::dolby_vision_full_range`] applies.
     pub hdr_format: u8,
     /// The host's `DescribeInfo::hdr_formats`, its offer flags included.
     pub hdr_formats_offered: u8,
@@ -348,8 +354,11 @@ pub struct Sdp {
     pub audio_packet_duration_ms: u8,
     /// The HDR format the description asks for, 0 for none (stock HDR).
     pub hdr_format: u8,
-    /// The color range the description asks for: limited with a Dolby Vision format.
+    /// The color range the description asks for: limited with a Dolby Vision format, unless
+    /// `dolby_vision_full_range`.
     pub color_range: i32,
+    /// The description asks for a full-range Dolby Vision 8.1 stream.
+    pub dolby_vision_full_range: bool,
 }
 
 /// The URL form of an address: IPv6 in brackets.
@@ -537,6 +546,12 @@ pub fn generate(p: &SdpParams<'_>) -> Sdp {
     } else {
         None
     };
+    // Only a generation that is sent `encoderCscMode` can ask for full range.
+    let dolby_vision_full_range = quad[0] >= 7
+        && hdr_format == Some(rubylight_protocol::hdr::DV_81)
+        && p.hdr_formats_offered & rubylight_protocol::hdr::DV_81_FULL_RANGE != 0
+        && c.color_range == COLOR_RANGE_FULL
+        && c.dolby_vision_full_range;
     let channels = c.audio.channel_count as i32;
     if quad[0] >= 4 {
         let slices = match (p.video_capabilities >> 24) as u8 {
@@ -583,6 +598,9 @@ pub fn generate(p: &SdpParams<'_>) -> Sdp {
         // the keys.
         if let Some(hdr_format) = hdr_format {
             a.add(rubylight_protocol::hdr::ANNOUNCE_ATTRIBUTE, hdr_format);
+        }
+        if dolby_vision_full_range {
+            a.add(rubylight_protocol::hdr::FULL_RANGE_ANNOUNCE_ATTRIBUTE, 1);
         }
         if let Some(codec) = one_offered_bit(p.audio_codec, p.audio_codecs_offered) {
             a.add(rubylight_protocol::audio_ext::CODEC_ANNOUNCE_ATTRIBUTE, codec);
@@ -634,14 +652,17 @@ pub fn generate(p: &SdpParams<'_>) -> Sdp {
     } else {
         (false, 5)
     };
-    // The host's RPUs describe limited-range video. Host 6.4.1 sends a full-range stream without
-    // RPUs, which takes an NVIDIA Shield down (nightjar#193).
-    let color_range =
-        if hdr_format.is_some_and(|bit| bit & rubylight_protocol::hdr::DOLBY_VISION != 0) {
-            COLOR_RANGE_LIMITED
-        } else {
-            c.color_range
-        };
+    // The host's RPUs describe limited-range video unless full range was asked for above. Host
+    // 6.4.1 sends a full-range stream without RPUs, which takes an NVIDIA Shield down
+    // (nightjar#193).
+    let color_range = if hdr_format
+        .is_some_and(|bit| bit & rubylight_protocol::hdr::DOLBY_VISION != 0)
+        && !dolby_vision_full_range
+    {
+        COLOR_RANGE_LIMITED
+    } else {
+        c.color_range
+    };
     if quad[0] >= 7 {
         a.add(
             "x-nv-video[0].encoderCscMode",
@@ -664,6 +685,7 @@ pub fn generate(p: &SdpParams<'_>) -> Sdp {
         audio_packet_duration_ms: duration,
         hdr_format: hdr_format.unwrap_or(0),
         color_range,
+        dolby_vision_full_range,
     }
 }
 

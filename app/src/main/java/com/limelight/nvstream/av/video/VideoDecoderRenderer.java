@@ -48,7 +48,16 @@ public abstract class VideoDecoderRenderer {
     /** The video formats to negotiate once pickHdrFormat chose {@code hdrFormat}: the same unless it needs another codec. */
     public int videoFormatsForHdrFormat(int hdrFormat, int videoFormats) { return videoFormats; }
 
-    /** What this stream's ANNOUNCE asked for (0 for stock HDR10), set right before setup. */
+    /**
+     * {@code hdrFormat} as the engine is asked for it: with HdrFormatPolicy.DV_81_FULL_RANGE
+     * beside it when this renderer takes that Dolby Vision stream full range.
+     */
+    public int hdrFormatRequest(int hdrFormat) { return hdrFormat; }
+
+    /**
+     * What this stream's ANNOUNCE asked for (0 for stock HDR10), DV_81_FULL_RANGE beside a full-range
+     * Dolby Vision stream, set right before setup.
+     */
     public void setAnnouncedHdrFormat(int format) {}
 
     public int setChromaPacking(int version, int width, int height, int colorSpace, int colorRange) {

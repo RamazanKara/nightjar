@@ -214,6 +214,7 @@ impl Handshake {
                 sdp: String::new(),
                 host_packed444_modes: 0,
                 hdr_format: 0,
+                dolby_vision_full_range: false,
                 fec_summaries: false,
             },
         })
@@ -411,6 +412,7 @@ impl Handshake {
         self.out.high_quality_surround_enabled = sdp.high_quality_surround_enabled;
         self.out.audio_packet_duration_ms = sdp.audio_packet_duration_ms;
         self.out.hdr_format = sdp.hdr_format;
+        self.out.dolby_vision_full_range = sdp.dolby_vision_full_range;
         self.out.config.color_range = sdp.color_range;
         self.out.sdp = sdp.text.clone();
         sdp.text

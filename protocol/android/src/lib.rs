@@ -185,6 +185,9 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarJni_startConnecti
     stream.client_wireless = client_wireless == JNI_TRUE;
     stream.audio_passthrough = extras::audio_passthrough(audio_passthrough);
     stream.hdr_format = hdr_format as u8 & rubylight_protocol::hdr::ALL;
+    // Java adds the flag when its Dolby Vision decoder takes the stream full range.
+    stream.dolby_vision_full_range =
+        hdr_format as u8 & rubylight_protocol::hdr::DV_81_FULL_RANGE != 0;
     stream.video_fec = extras::video_fec(video_fec_percentage);
     let config = SessionConfig {
         stream,

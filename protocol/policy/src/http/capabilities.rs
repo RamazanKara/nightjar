@@ -559,7 +559,10 @@ impl HostCapabilities {
     pub fn hdr_formats(&self) -> i32 {
         if self.has(Feature::DolbyVision) || self.has(Feature::Hlg) {
             self.evidence.as_ref().map_or(0, |e| {
-                e.hdr_formats & i32::from(rubylight_protocol::hdr::ALL | 0x80)
+                e.hdr_formats
+                    & i32::from(
+                        rubylight_protocol::hdr::ALL | rubylight_protocol::hdr::OFFER_FLAGS,
+                    )
             })
         } else {
             0

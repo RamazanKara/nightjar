@@ -243,6 +243,31 @@ public class MediaCodecDolbyVisionTest {
     }
 
     @Test
+    public void fullRangeDolbyVisionOpensFullRangeOnlyWhenTheAnnounceAskedForIt() {
+        try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
+            PreferenceConfiguration prefs = new PreferenceConfiguration();
+            prefs.videoFormat = PreferenceConfiguration.FormatOption.AUTO;
+            prefs.fullRange = true;
+            MediaCodecDecoderRenderer renderer = new MediaCodecDecoderRenderer(activity.get(), prefs, null, 0, false,
+                    true, "", null);
+            int hevc = MoonBridge.VIDEO_FORMAT_H265_MAIN10;
+            int asked = HdrFormatPolicy.DV_81 | HdrFormatPolicy.DV_81_FULL_RANGE;
+            assertEquals(asked, renderer.hdrFormatRequest(HdrFormatPolicy.DV_81));
+            assertEquals(HdrFormatPolicy.PQ, renderer.hdrFormatRequest(HdrFormatPolicy.PQ));
+
+            assertEquals(PROFILE_8, decoderFor(renderer, hevc, asked));
+            assertEquals(HdrFormatPolicy.DV_81, renderer.getAnnouncedHdrFormat());
+            assertEquals(MoonBridge.COLOR_RANGE_FULL, renderer.getPreferredColorRange());
+            // The ANNOUNCE did not ask for full range: the same decoder, limited range (nightjar#193).
+            assertEquals(PROFILE_8, decoderFor(renderer, hevc, HdrFormatPolicy.DV_81));
+            assertEquals(MoonBridge.COLOR_RANGE_LIMITED, renderer.getPreferredColorRange());
+
+            prefs.fullRange = false;
+            assertEquals(HdrFormatPolicy.DV_81, renderer.hdrFormatRequest(HdrFormatPolicy.DV_81));
+        }
+    }
+
+    @Test
     public void theDolbyVisionFormatNamesTheProfileOfTheStreamsCodec() {
         try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
             MediaCodecDecoderRenderer renderer = renderer(activity.get());

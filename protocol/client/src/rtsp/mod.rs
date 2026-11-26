@@ -216,6 +216,8 @@ pub struct RtspOutcome {
     pub host_packed444_modes: u8,
     /// The HDR format the ANNOUNCE asked for (one `rubylight_protocol::hdr` bit), 0 for stock.
     pub hdr_format: u8,
+    /// The ANNOUNCE asked for that Dolby Vision 8.1 stream full range.
+    pub dolby_vision_full_range: bool,
     /// Foundation Sunshine's client FEC control is on (V+'s `VideoFecControlSupported`): the
     /// ANNOUNCE carried `x-ml-video.fecPercentage`, and the control stream sends 0x5510
     /// summaries. Never with PyroWave, nor for a host that takes Rubylight's 0x5539 reports.

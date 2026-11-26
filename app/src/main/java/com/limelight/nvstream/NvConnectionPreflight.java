@@ -561,7 +561,7 @@ final class NvConnectionPreflight {
                     }
                     MoonBridge.setNetworkGracePeriodMs(NetworkGrace.nativeMilliseconds(hintPrefs.networkGraceSeconds));
                     MoonBridge.requestPacked444(context.streamConfig.isPacked444());
-                    MoonBridge.requestHdrFormat(context.hdrFormat);
+                    MoonBridge.requestHdrFormat(videoDecoderRenderer.hdrFormatRequest(context.hdrFormat));
                     MoonBridge.requestVideoFec((context.fecChoice != null ? context.fecChoice : FecChoice.HOST).summaryPercentage());
                     MoonBridge.requestPyroWaveEarly(PyroWaveDecoderRenderer.wantsEarlyRecords(
                             pyroWave, conn.hostDetails.caps.has(HostCapabilities.Feature.PYROWAVE_RECORDS),

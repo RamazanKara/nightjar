@@ -216,7 +216,11 @@ pub(super) fn start(
     }
     listener.host_control_messages(&outcome.host_control_messages);
     listener.host_packed444_modes(outcome.host_packed444_modes);
-    listener.announced_hdr_format(outcome.hdr_format);
+    listener.announced_hdr_format(if outcome.dolby_vision_full_range {
+        outcome.hdr_format | rubylight_protocol::hdr::DV_81_FULL_RANGE
+    } else {
+        outcome.hdr_format
+    });
     listener.stage_complete(Stage::RtspHandshake);
     check_interrupt(Stage::RtspHandshake)?;
 

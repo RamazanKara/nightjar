@@ -122,6 +122,45 @@ public class FrameWarpHdrFormatTest {
         assertEquals(MoonBridge.COLOR_RANGE_FULL, directRenderer.getPreferredColorRange());
     }
 
+    @Test
+    public void fullRangeAsksFor81FullRangeWhereThePcSendsIt() {
+        PreferenceConfiguration full = prefs(false, false);
+        full.enableHdr = true;
+        full.fullRange = true;
+        MediaCodecDecoderRenderer renderer = renderer(full);
+        ReflectionHelpers.setField(renderer, "dolbyVisionAv1Decoder", decoder("c2.dolby.decoder.av1",
+                HdrFormatPolicy.MIME_DOLBY_VISION, CodecProfileLevel.DolbyVisionProfileDvav110));
+        int offered = OFFERED | HdrFormatPolicy.DV_81_FULL_RANGE | HdrFormatPolicy.DV_84 | HdrFormatPolicy.DV_101;
+        int formats = MoonBridge.VIDEO_FORMAT_H265_MAIN10 | MoonBridge.VIDEO_FORMAT_AV1_MAIN10;
+        // 8.1 alone, before 10.1, where the PC sends it full range.
+        assertEquals(HdrFormatPolicy.DV_81, renderer.pickHdrFormat(offered, formats, false, false));
+        // Without 8.1 or without the offer flag, Dolby Vision stays, in limited range (nightjar#193).
+        assertEquals(HdrFormatPolicy.DV_101, renderer.pickHdrFormat(offered & ~HdrFormatPolicy.DV_81, formats, false, false));
+        assertEquals(HdrFormatPolicy.DV_101,
+                renderer.pickHdrFormat(offered & ~HdrFormatPolicy.DV_81_FULL_RANGE, formats, false, false));
+
+        // AV1 alone (the codec forced to AV1) cannot carry 8.1: 10.1, in limited range, as before.
+        assertEquals(HdrFormatPolicy.DV_101,
+                renderer.pickHdrFormat(offered, MoonBridge.VIDEO_FORMAT_AV1_MAIN10, false, false));
+
+        // The engine announces it with the flag: the decoder opens full range, and only then.
+        renderer.setAnnouncedHdrFormat(HdrFormatPolicy.DV_81 | HdrFormatPolicy.DV_81_FULL_RANGE);
+        assertEquals(HdrFormatPolicy.DV_81, renderer.getAnnouncedHdrFormat());
+        assertEquals(MoonBridge.COLOR_RANGE_FULL, renderer.getPreferredColorRange());
+        renderer.setAnnouncedHdrFormat(HdrFormatPolicy.DV_81);
+        assertEquals(MoonBridge.COLOR_RANGE_LIMITED, renderer.getPreferredColorRange());
+
+        // Every profile 8 decoder takes it, a Shield's included.
+        ReflectionHelpers.setField(renderer, "dolbyVisionDecoder", decoder("OMX.Nvidia.DOVI.decode",
+                HdrFormatPolicy.MIME_DOLBY_VISION, CodecProfileLevel.DolbyVisionProfileDvheSt));
+        assertEquals(HdrFormatPolicy.DV_81, renderer.pickHdrFormat(offered, formats, false, false));
+        assertEquals(HdrFormatPolicy.DV_81 | HdrFormatPolicy.DV_81_FULL_RANGE,
+                renderer.hdrFormatRequest(HdrFormatPolicy.DV_81));
+        full.fullRange = false;
+        assertEquals(HdrFormatPolicy.DV_81, renderer.hdrFormatRequest(HdrFormatPolicy.DV_81));
+        assertEquals(HdrFormatPolicy.DV_101, renderer.pickHdrFormat(offered, formats, false, false));
+    }
+
     private static PreferenceConfiguration prefs(boolean frameWarp, boolean vulkanRender) {
         PreferenceConfiguration prefs = new PreferenceConfiguration();
         prefs.width = 3040;

@@ -534,10 +534,17 @@ final class MediaCodecCodecSelector {
             }
             vulkan = true;
         }
-        // With "Full color range" on, a Dolby Vision stream still asks for limited range (sdp,
-        // getPreferredColorRange) and the host codes it limited range with its RPUs (nightjar#193).
-        int dolbyVisionDecoders = (r.dolbyVisionDecoder != null ? HdrFormatPolicy.DOLBY_VISION_HEVC : 0) |
-                (r.dolbyVisionAv1Decoder != null ? HdrFormatPolicy.DOLBY_VISION_AV1 : 0);
+        // With "Full color range" on, Dolby Vision 8.1 stays full range from a PC that offers it
+        // (hdrFormatRequest), then 8.1 alone where HEVC Main10 can carry it. Elsewhere a Dolby Vision
+        // stream asks for limited range (sdp, getPreferredColorRange) and the host codes it so with
+        // its RPUs (nightjar#193).
+        boolean fullRangeDolbyVision = r.prefs.fullRange && r.dolbyVisionDecoder != null &&
+                (videoFormats & MoonBridge.VIDEO_FORMAT_H265_MAIN10) != 0 &&
+                (hostHdrFormats & HdrFormatPolicy.DV_81) != 0 &&
+                (hostHdrFormats & HdrFormatPolicy.DV_81_FULL_RANGE) != 0;
+        int dolbyVisionDecoders = fullRangeDolbyVision ? HdrFormatPolicy.DV_81 :
+                (r.dolbyVisionDecoder != null ? HdrFormatPolicy.DOLBY_VISION_HEVC : 0) |
+                        (r.dolbyVisionAv1Decoder != null ? HdrFormatPolicy.DOLBY_VISION_AV1 : 0);
         int format = HdrFormatPolicy.pick(hostHdrFormats, displayTypes, dolbyVisionDecoders, videoFormats, surface);
         // Game says these once per PC (takeVulkanHdrLimit, takePyroWaveHdrLimit).
         if (vulkan) {
@@ -588,9 +595,11 @@ final class MediaCodecCodecSelector {
     }
 
     void setAnnouncedHdrFormat(int format) {
-        r.announcedHdrFormat = format;
+        r.announcedHdrFormat = format & ~HdrFormatPolicy.DV_81_FULL_RANGE;
+        r.dolbyVisionFullRange = (format & HdrFormatPolicy.DV_81_FULL_RANGE) != 0;
         r.dolbyVisionFailed = false;
-        if (format != 0) LimeLog.info("HDR format announced: " + HdrFormatPolicy.name(format));
+        if (format != 0) LimeLog.info("HDR format announced: " + HdrFormatPolicy.name(r.announcedHdrFormat) +
+                (r.dolbyVisionFullRange ? " full range" : ""));
     }
 
     MediaCodecInfo dolbyVisionDecoderForStream() {

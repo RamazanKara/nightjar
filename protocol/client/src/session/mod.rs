@@ -302,7 +302,8 @@ pub trait Listener: Send + Sync {
     /// its next launch (which comes before DESCRIBE).
     fn host_packed444_modes(&self, _modes: u8) {}
     /// The HDR format this stream's ANNOUNCE asked for (one `rubylight_protocol::hdr` bit, 0 for
-    /// stock HDR), called with [`Listener::host_packed444_modes`]: before the decoder's setup, so
+    /// stock HDR), with the `hdr::DV_81_FULL_RANGE` flag beside a Dolby Vision 8.1 asked for full
+    /// range; called with [`Listener::host_packed444_modes`]: before the decoder's setup, so
     /// it decodes what the host was actually asked for.
     fn announced_hdr_format(&self, _format: u8) {}
     /// The stream ended without [`Session::stop`]: the host's reason, a control stream

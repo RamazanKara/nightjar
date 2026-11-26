@@ -48,6 +48,8 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
 
     MediaCodecInfo avcDecoder, hevcDecoder, av1Decoder, hevcDecoder10, av1Decoder10, dolbyVisionDecoder, dolbyVisionAv1Decoder;
     volatile int announcedHdrFormat;
+    // The announced Dolby Vision 8.1 stream was asked for full range.
+    volatile boolean dolbyVisionFullRange;
     volatile boolean dolbyVisionFailed, dolbyVisionActive, reconfigureRequested, packedTenBitOffered, fullRangeFallbackAttempted, rebuildForVulkan, stopping;
     String vividSeiDropDecoder, packedTenBitIssue, glRenderer;
     volatile byte[] currentHdrMetadata, uncheckedHdrStaticInfo;
@@ -296,6 +298,11 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     public static HdrFormatPolicy.DrawnSurface vulkanSurface(PreferenceConfiguration prefs, boolean frameWarpListed) { return MediaCodecCodecSelector.vulkanSurface(prefs, frameWarpListed); }
     @Override public int pickHdrFormat(int hostHdrFormats, int videoFormats, boolean packed444, boolean frameWarpListed) { return codecSelector.pickHdrFormat(hostHdrFormats, videoFormats, packed444, frameWarpListed); }
     @Override public int videoFormatsForHdrFormat(int hdrFormat, int videoFormats) { return codecSelector.videoFormatsForHdrFormat(hdrFormat, videoFormats); }
+    // pickHdrFormat chose 8.1 with full range on only where the PC and the decoder take it.
+    @Override public int hdrFormatRequest(int hdrFormat) {
+        return prefs.fullRange && hdrFormat == HdrFormatPolicy.DV_81 ?
+                hdrFormat | HdrFormatPolicy.DV_81_FULL_RANGE : hdrFormat;
+    }
     @Override public void setAnnouncedHdrFormat(int format) { codecSelector.setAnnouncedHdrFormat(format); }
     public int getAnnouncedHdrFormat() { return announcedHdrFormat; }
     public int getStreamTransfer() { return HdrFormatPolicy.transfer(announcedHdrFormat); }
@@ -315,9 +322,10 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     public Integer getDecodedTransfer() { return codecSelector.getDecodedTransfer(); }
     @Override public int setChromaPacking(int version, int width, int height, int colorSpace, int colorRange) { return codecSelector.setChromaPacking(version, width, height, colorSpace, colorRange); }
     public int getPreferredColorSpace() { return codecSelector.getPreferredColorSpace(); }
-    // A Dolby Vision ANNOUNCE asks for limited range (nightjar-core's sdp), its base layer included.
+    // A Dolby Vision ANNOUNCE asks for limited range (nightjar-core's sdp), its base layer included,
+    // unless it asked for 8.1 full range.
     public int getPreferredColorRange() {
-        return prefs.fullRange && (announcedHdrFormat & HdrFormatPolicy.DOLBY_VISION) == 0 ?
+        return prefs.fullRange && (dolbyVisionFullRange || (announcedHdrFormat & HdrFormatPolicy.DOLBY_VISION) == 0) ?
                 MoonBridge.COLOR_RANGE_FULL : MoonBridge.COLOR_RANGE_LIMITED;
     }
     public int getActiveVideoFormat() { return this.videoFormat; }
