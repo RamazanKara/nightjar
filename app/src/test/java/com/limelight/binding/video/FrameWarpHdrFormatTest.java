@@ -127,6 +127,7 @@ public class FrameWarpHdrFormatTest {
         PreferenceConfiguration full = prefs(false, false);
         full.enableHdr = true;
         full.fullRange = true;
+        full.videoFormat = PreferenceConfiguration.FormatOption.AUTO;
         MediaCodecDecoderRenderer renderer = renderer(full);
         ReflectionHelpers.setField(renderer, "dolbyVisionAv1Decoder", decoder("c2.dolby.decoder.av1",
                 HdrFormatPolicy.MIME_DOLBY_VISION, CodecProfileLevel.DolbyVisionProfileDvav110));
@@ -142,6 +143,10 @@ public class FrameWarpHdrFormatTest {
         // AV1 alone (the codec forced to AV1) cannot carry 8.1: 10.1, in limited range, as before.
         assertEquals(HdrFormatPolicy.DV_101,
                 renderer.pickHdrFormat(offered, MoonBridge.VIDEO_FORMAT_AV1_MAIN10, false, false));
+        // Forced AV1 still offers HEVC as a fallback, but the stream is AV1: 10.1 again.
+        full.videoFormat = PreferenceConfiguration.FormatOption.FORCE_AV1;
+        assertEquals(HdrFormatPolicy.DV_101, renderer.pickHdrFormat(offered, formats, false, false));
+        full.videoFormat = PreferenceConfiguration.FormatOption.AUTO;
 
         // The engine announces it with the flag: the decoder opens full range, and only then.
         renderer.setAnnouncedHdrFormat(HdrFormatPolicy.DV_81 | HdrFormatPolicy.DV_81_FULL_RANGE);

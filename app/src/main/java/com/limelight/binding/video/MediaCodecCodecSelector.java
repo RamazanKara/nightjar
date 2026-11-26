@@ -535,11 +535,14 @@ final class MediaCodecCodecSelector {
             vulkan = true;
         }
         // With "Full color range" on, Dolby Vision 8.1 stays full range from a PC that offers it
-        // (hdrFormatRequest), then 8.1 alone where HEVC Main10 can carry it. Elsewhere a Dolby Vision
-        // stream asks for limited range (sdp, getPreferredColorRange) and the host codes it so with
-        // its RPUs (nightjar#193).
+        // (hdrFormatRequest), then 8.1 alone where the stream will be HEVC Main10: a forced AV1 still
+        // offers HEVC as a fallback, but the PC sends AV1, which cannot carry 8.1. Elsewhere a Dolby
+        // Vision stream asks for limited range (sdp, getPreferredColorRange) and the host codes it so
+        // with its RPUs (nightjar#193).
         boolean fullRangeDolbyVision = r.prefs.fullRange && r.dolbyVisionDecoder != null &&
                 (videoFormats & MoonBridge.VIDEO_FORMAT_H265_MAIN10) != 0 &&
+                (r.prefs.videoFormat == PreferenceConfiguration.FormatOption.AUTO ||
+                        (videoFormats & MoonBridge.VIDEO_FORMAT_MASK_AV1) == 0) &&
                 (hostHdrFormats & HdrFormatPolicy.DV_81) != 0 &&
                 (hostHdrFormats & HdrFormatPolicy.DV_81_FULL_RANGE) != 0;
         int dolbyVisionDecoders = fullRangeDolbyVision ? HdrFormatPolicy.DV_81 :
