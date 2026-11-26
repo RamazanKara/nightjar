@@ -1,2 +1,0 @@
-## en
-- **Keep TV video smooth** now activates automatically without a visible corner dot: `CompositorWatch` detects stalled display scanout callbacks or sustained post-handoff display judder and attaches an invisible `1×1` transparent `SurfaceControl` layer (`1 Hz`, off the UI thread on Android 10+ `SurfaceView`; `1×1` near-zero-alpha fallback on older Android/`TextureView`), keeping the setting off by default while letting affected TVs toggle it on from stream start.
