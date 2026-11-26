@@ -45,7 +45,9 @@ import android.widget.AbsListView;
 
 import androidx.annotation.VisibleForTesting;
 
+import javax.microedition.khronos.egl.EGL10;
 import javax.microedition.khronos.egl.EGLConfig;
+import javax.microedition.khronos.egl.EGLDisplay;
 import javax.microedition.khronos.opengles.GL10;
 
 public class PcView extends NightjarActivity implements AdapterFragmentCallbacks {
@@ -240,6 +242,7 @@ public class PcView extends NightjarActivity implements AdapterFragmentCallbacks
         final GlPreferences glPrefs = GlPreferences.readPreferences(this);
         if (!glPrefs.savedFingerprint.equals(Build.FINGERPRINT) || glPrefs.glRenderer.isEmpty()) {
             GLSurfaceView surfaceView = new GLSurfaceView(this);
+            surfaceView.setEGLConfigChooser(new ProbeConfigChooser());
             surfaceView.setRenderer(new GLSurfaceView.Renderer() {
                 @Override
                 public void onSurfaceCreated(GL10 gl10, EGLConfig eglConfig) {
@@ -261,6 +264,32 @@ public class PcView extends NightjarActivity implements AdapterFragmentCallbacks
         else {
             LimeLog.info("Cached GL Renderer: " + glPrefs.glRenderer);
             completeOnCreate();
+        }
+    }
+
+    /**
+     * The renderer probe reads only GL_RENDERER. GLSurfaceView's default chooser insists on
+     * RGB888 with a depth buffer and throws on devices that have none, ending the app at
+     * start; any window config will do. A class of its own, so PcView's methods name no EGL
+     * type. After Moonlight V+ (qiin2333/moonlight-vplus, GPL-3.0, PcView.kt, pull request 848).
+     */
+    private static final class ProbeConfigChooser implements GLSurfaceView.EGLConfigChooser {
+        @Override
+        public EGLConfig chooseConfig(EGL10 egl, EGLDisplay display) {
+            int[] attributes = {
+                    EGL10.EGL_RED_SIZE, 4,
+                    EGL10.EGL_GREEN_SIZE, 4,
+                    EGL10.EGL_BLUE_SIZE, 4,
+                    EGL10.EGL_SURFACE_TYPE, EGL10.EGL_WINDOW_BIT,
+                    EGL10.EGL_NONE
+            };
+            EGLConfig[] configs = new EGLConfig[1];
+            int[] count = new int[1];
+            if (!egl.eglChooseConfig(display, attributes, configs, configs.length, count)
+                    || count[0] <= 0 || configs[0] == null) {
+                throw new IllegalArgumentException("No EGL window config for the GL renderer probe");
+            }
+            return configs[0];
         }
     }
 
