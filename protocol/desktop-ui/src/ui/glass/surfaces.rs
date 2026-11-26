@@ -303,7 +303,7 @@ pub fn surface(out: &mut Vec<Shape>, ctx: &Context, rect: Rect, r: f32, material
     let shade = Color32::from_gray((recipe.brightness * 255.0).round() as u8);
     match tier {
         Tier::Solid => {}
-        Tier::Live => image(out, ctx, rect, r, LIVE_BACKDROP, uv_in(screen, rect), shade),
+        Tier::Lens | Tier::Live => image(out, ctx, rect, r, LIVE_BACKDROP, uv_in(screen, rect), shade),
         Tier::Baked => {
             let behind = backdrop(ctx);
             // Under the layers, so a cross-fade from nothing has the canvas behind it.
@@ -328,7 +328,7 @@ pub fn surface(out: &mut Vec<Shape>, ctx: &Context, rect: Rect, r: f32, material
             }
         }
     }
-    finish(out, ctx, rect, r, &recipe);
+    finish_banded(out, ctx, rect, r, &recipe, Some((material, tier)));
 }
 
 /// The stream menu's glass over a stream's video: shadow, fill, sheen and rim of the baked recipe,
@@ -366,7 +366,15 @@ pub fn without_backdrop(out: &mut Vec<Shape>, ctx: &Context, rect: Rect, r: f32,
 
 /// What every glass surface has over its backdrop: fill, sheen, rim.
 fn finish(out: &mut Vec<Shape>, ctx: &Context, rect: Rect, r: f32, recipe: &Recipe) {
+    finish_banded(out, ctx, rect, r, recipe, None);
+}
+
+/// [`finish`], with the lens tier's edge band of `band` between the fill and the sheen.
+fn finish_banded(out: &mut Vec<Shape>, ctx: &Context, rect: Rect, r: f32, recipe: &Recipe, band: Option<(Material, Tier)>) {
     solid(out, ctx, rect, r, recipe.fill);
+    if let Some((material, tier)) = band {
+        crate::ui::glass_lens::paint(out, ctx, rect, r, material, tier, recipe);
+    }
     if recipe.sheen_top.a() > 0 && recipe.sheen_end > 0.0 {
         let end = recipe.sheen_end;
         let sheen = gradient(

@@ -215,4 +215,14 @@ impl Stage for SdlStage<'_> {
     fn release(&mut self) {
         self.chain.release();
     }
+
+    fn driver(&self) -> String {
+        // SAFETY: a live renderer; SDL owns the returned name.
+        let name = unsafe { SDL_GetRendererName(self.renderer) };
+        if name.is_null() {
+            return String::new();
+        }
+        // SAFETY: a NUL-terminated string SDL keeps for the renderer's life.
+        unsafe { std::ffi::CStr::from_ptr(name) }.to_string_lossy().into_owned()
+    }
 }

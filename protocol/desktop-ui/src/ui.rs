@@ -11,6 +11,7 @@ pub mod demo;
 mod dialogs;
 pub mod files;
 pub mod glass;
+mod glass_lens;
 mod first_run;
 mod game;
 mod help;
