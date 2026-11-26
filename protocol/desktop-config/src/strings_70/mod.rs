@@ -17,3 +17,15 @@ pub(crate) mod uk;
 pub(crate) mod vi;
 pub(crate) mod zh_hans;
 pub(crate) mod zh_hant;
+
+#[cfg(test)]
+mod tests {
+    use crate::strings::{translate, Lang};
+
+    #[test]
+    fn lookups_reach_the_7_0_tables() {
+        assert_eq!(translate(Lang::De, "Frame limiter"), "Bildratenbegrenzer");
+        assert_eq!(translate(Lang::En, "Frame limiter"), "Frame limiter");
+        assert!(Lang::De.texts().any(|t| t == "Bildratenbegrenzer"), "fonts see the 7.0 text");
+    }
+}
