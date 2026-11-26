@@ -210,7 +210,14 @@ public class HomeHeroStageTest {
         assertTrue("its heading is above the tab bar: " + (topOf(heading) + heading.getHeight()) + " of " + dock,
                 topOf(heading) + heading.getHeight() <= dock);
         if (!halfACover) return;
-        assertTrue("and so is the upper half of its covers: " + (topOf(covers) + covers.getHeight() / 2) + " of " + dock,
+        View words = item.findViewById(R.id.hero_words);
+        String where = String.format(java.util.Locale.ROOT, "; list %d+%d..%d-%d, hero %d words %d+%d (pad %d) cards %d+%d play %d+%d,"
+                        + " shelf %d heading %d+%d covers %d+%d (pad %d/%d), density %.2f", topOf(list), list.getPaddingTop(),
+                topOf(list) + list.getHeight(), list.getPaddingBottom(), topOf(item), topOf(words), words.getHeight(),
+                words.getPaddingTop(), topOf(cards), cards.getHeight(), topOf(play), play.getHeight(), topOf(shelf), topOf(heading),
+                heading.getHeight(), topOf(covers), covers.getHeight(), covers.getPaddingTop(), covers.getPaddingBottom(),
+                home.getResources().getDisplayMetrics().density);
+        assertTrue("and so is the upper half of its covers: " + (topOf(covers) + covers.getHeight() / 2) + " of " + dock + where,
                 topOf(covers) + covers.getHeight() / 2 <= dock);
     }
 
