@@ -86,7 +86,9 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         PadEditor editor = (PadEditor) frame.getChildAt(frame.getChildCount() - 1);
         View surface = editor.getChildAt(0);
         float density = frame.getContext().getResources().getDisplayMetrics().density;
-        float outline = PadPainter.OUTLINE_DP * density;
+        float outline = PadEditorSurface.OUTLINE_DP * density;
+        // A sized edge lands on the grid, or on a line worth sharing within the snap distance.
+        float snap = frame.getResources().getDimension(com.limelight.R.dimen.nj_pad_studio_snap_distance) + .5f;
         editor.select(PadLayout.Control.FACE);
         float[] before = editor.draft().bounds(PadLayout.Control.FACE, surface.getWidth(), surface.getHeight(), density,
                 new float[4]);
@@ -98,8 +100,8 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
                 new float[4]);
         assertEquals("The right edge stays", before[0] + before[2], wide[0] + wide[2], .5f);
         assertEquals("The bottom edge stays", before[1] + before[3], wide[1] + wide[3], .5f);
-        assertEquals("200 px wider, on the 8 dp grid", before[2] + 200, wide[2], PadEditor.GRID_DP * density / 2 + .5f);
-        assertEquals("As tall, give or take the grid", before[3], wide[3], PadEditor.GRID_DP * density / 2 + .5f);
+        assertEquals("200 px wider, give or take a snap", before[2] + 200, wide[2], snap);
+        assertEquals("As tall to the pixel: the finger never moved up or down", before[3], wide[3], .05f);
         PadLayout.Spec spec = editor.draft().spec(PadLayout.Control.FACE);
         assertTrue(spec.widthScale + " x " + spec.heightScale, spec.widthScale > spec.heightScale + .5f);
 
@@ -109,7 +111,7 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         float[] low = editor.draft().bounds(PadLayout.Control.FACE, surface.getWidth(), surface.getHeight(), density,
                 new float[4]);
         assertEquals(widthScale, spec.widthScale, 1e-4);
-        assertEquals(wide[3] - 100, low[3], PadEditor.GRID_DP * density / 2 + .5f);
+        assertEquals(wide[3] - 100, low[3], snap);
         assertEquals("The bottom edge still stays", before[1] + before[3], low[1] + low[3], .5f);
 
         // A handle cannot shrink a control below a full touch, nor drag it past the surface.
@@ -442,21 +444,10 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         controller.finishEditing(false);
     }
 
-    @Test public void alignmentLinesUpCentresAndEdgesWithinHalfAGridStep() {
-        float[] other = {0, 50, 100};
-        assertEquals("Every line 3 px off: one nudge", -3, PadEditor.alignNudge(3, 53, 103, other, 3, 4), 0);
-        assertTrue("Too far", Float.isNaN(PadEditor.alignNudge(10, 60, 110, other, 3, 4)));
-        assertEquals("An edge meets the other side's", -2, PadEditor.alignNudge(102, 152, 202, other, 3, 4), 0);
-        assertEquals("The nearest wins", .5f, PadEditor.alignNudge(-1, 49, 99, new float[] {0, 50, 100, 99.5f, 100, 100.5f}, 6, 4), 0);
-        float[] guides = new float[3];
-        assertEquals("Edge on edge", 1, PadEditor.alignedLines(100, 150, 200, other, 3, guides));
-        assertEquals(100, guides[0], 0);
-        assertEquals("A centre never lines up with an edge", 0, PadEditor.alignedLines(25, 50.4f, 75.6f, new float[] {
-                10, 20, 50}, 3, guides));
-        assertEquals("All three", 3, PadEditor.alignedLines(0, 50, 100, other, 3, guides));
-    }
-
-    /** A control dragged near another's centre line lands on it and shows a guide until the finger lifts. */
+    /**
+     * A control dragged near another's centre line lands on it and shows a guide until the finger lifts.
+     * {@link PadSnapGridTest} has the geometry, {@link PadEditorStudioTest} the other lines.
+     */
     @Test public void aDraggedControlLinesUpWithAnotherAndShowsAGuide() {
         ModernController controller = controller(GAME);
         controller.startEditing();

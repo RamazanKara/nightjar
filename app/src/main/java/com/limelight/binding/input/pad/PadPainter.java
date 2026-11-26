@@ -2,11 +2,8 @@ package com.limelight.binding.input.pad;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.RectF;
-
-import androidx.core.content.ContextCompat;
 
 import com.limelight.R;
 import com.limelight.binding.input.LayoutStick;
@@ -105,19 +102,12 @@ final class PadPainter {
     static final float EDGE_DP = 3;
     /** A Steam trackpad's and the pointer touchpad's corner radius, as a share of their shorter side. */
     static final float PAD_CORNER = .2f, TOUCHPAD_CORNER = .18f;
-    /** How far outside a control's box the editor draws its outline and, at the outline's corners, its handles. */
-    static final float OUTLINE_DP = 3;
-    /** The radius of the editor's round corner handles. */
-    static final float HANDLE_DP = 6;
     /** A stick's cap is this much denser than a body, so it reads as a cap over its base; and how lit a held one is. */
     private static final float CAP_DENSITY = 1.8f, CAP_HELD = .35f;
 
     final PadSkin70 skin;
-    final int accent;
     final float density;
     private final float edgeStroke;
-    private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG), stroke = new Paint(Paint.ANTI_ALIAS_FLAG),
-            dashed = new Paint(Paint.ANTI_ALIAS_FLAG);
     final RectF rect = new RectF(), chip = new RectF();
     /** The face letters and shoulder names; the layout editor changes it and every view redraws. */
     private PadLayout.Glyph glyph = PadLayout.Glyph.XBOX;
@@ -137,17 +127,8 @@ final class PadPainter {
         mouseWord = context.getString(R.string.pad_touchpad_chip_mouse);
         cameraWord = context.getString(R.string.pad_touchpad_chip_camera);
         edgeStroke = STROKE_DP * density;
-        accent = ContextCompat.getColor(context, R.color.night_primary);
-        stroke.setStyle(Paint.Style.STROKE);
-        dashed.setStyle(Paint.Style.STROKE);
-        dashed.setStrokeWidth(2 * density);
-        dashed.setPathEffect(new DashPathEffect(new float[] {6 * density, 4 * density}, 0));
         halo = new PadPainterHalo(this);
         controls = new PadPainterControls(this);
-    }
-
-    int accent() {
-        return accent;
     }
 
     /**
@@ -244,30 +225,6 @@ final class PadPainter {
             case FACE_BUTTON: controls.drawFaceButton(canvas, control, left, top, width, height, state); break;
             case DPAD_ARM: controls.drawDpadArm(canvas, control, left, top, width, height, state); break;
             default: controls.drawRound(canvas, control, left, top, width, height, state); break;
-        }
-    }
-
-    /** The editor's outline around a control: dashed amber with round corner handles when selected, a faint line otherwise. */
-    void drawOutline(Canvas canvas, float left, float top, float width, float height, boolean selected) {
-        float pad = OUTLINE_DP * density, radius = 12 * density;
-        rect.set(left - pad, top - pad, left + width + pad, top + height + pad);
-        if (selected) {
-            dashed.setColor(accent);
-            canvas.drawRoundRect(rect, radius, radius, dashed);
-            // Corner handles: dragging one sizes the control's width and height (PadEditor).
-            float h = HANDLE_DP * density;
-            fill.setColor(0xFFFFFFFF);
-            stroke.setColor(accent);
-            stroke.setStrokeWidth(2 * density);
-            for (int corner = 0; corner < 4; corner++) {
-                float x = (corner & 1) != 0 ? rect.right : rect.left, y = (corner & 2) != 0 ? rect.bottom : rect.top;
-                canvas.drawCircle(x, y, h, fill);
-                canvas.drawCircle(x, y, h, stroke);
-            }
-        } else {
-            stroke.setColor(0x38FFFFFF);
-            stroke.setStrokeWidth(density);
-            canvas.drawRoundRect(rect, radius, radius, stroke);
         }
     }
 
