@@ -359,7 +359,7 @@ mod tests {
         };
         let wire = state.encode().unwrap();
         assert_eq!(wire.len(), MAX_BYTES);
-        assert!(MAX_BYTES <= 562);
+        const { assert!(MAX_BYTES <= 562) };
         assert_eq!(CurtainState::decode(&wire), Some(state));
     }
 
