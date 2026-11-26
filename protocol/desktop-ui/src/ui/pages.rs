@@ -1,6 +1,7 @@
 //! A PC's own pages (details, address, co-op sessions, shared folders) and the profile,
 //! shortcut and controller pages.
 
+use super::host_details_limiter::value_row;
 use super::*;
 
 impl Launcher {
@@ -234,14 +235,14 @@ impl Launcher {
         let running = state == Some(CheckState::Running);
         column(ui, SETTINGS_W, |ui| {
             section(ui, "PC");
-            detail(ui, tr("Streaming app"), &software);
-            detail(ui, tr("Address"), host.connect_address());
+            value_row(ui, tr("Streaming app"), &software);
+            value_row(ui, tr("Address"), host.connect_address());
             if let Some(gpu) = host.info.as_ref().and_then(|info| info.gpu_type.as_deref()).filter(|gpu| !gpu.is_empty()) {
-                detail(ui, tr("GPU"), gpu);
+                value_row(ui, tr("GPU"), gpu);
             }
-            ui.add_space(8.0);
             match &web_ui {
                 None => {}
+                // The last row of the PC's group.
                 Some(Ok(url)) => {
                     // The address goes inside the card it belongs to, not loose under it.
                     let about = format!("{}
@@ -254,6 +255,7 @@ impl Launcher {
                 }
                 // The PC has a web UI, but its saved address makes no link to it.
                 Some(Err(why)) => {
+                    ui.add_space(space::S);
                     ui.label(RichText::new(tr("The PC’s web UI")).font(semibold(text::BODY)).color(ON_SURFACE));
                     ui.label(RichText::new(why).color(ERROR));
                 }
@@ -277,6 +279,10 @@ impl Launcher {
                 } else {
                     commands.push(Command::RemoteCheck(id));
                 }
+            }
+            if state.is_some() {
+                // What the check says keeps clear of the focus ring of its button over it.
+                ui.add_space(space::XS);
             }
             match &state {
                 None => {}
@@ -702,13 +708,14 @@ pub(super) fn remote_report(ui: &mut Ui, report: &crate::host_page::Report) {
         ui.add_space(6.0);
         ui.label(RichText::new(tr(route)).color(ON_SURFACE_VARIANT));
     }
-    ui.add_space(6.0);
+    // What was measured, as one group of read-only rows under what the check says.
+    ui.add_space(space::XS);
     let unmeasured = || tr("Not measured").to_owned();
     let ms = |v: Option<f64>| v.map_or_else(unmeasured, |v| trf("{} ms", &[&format!("{v:.1}")]));
-    detail(ui, tr("Network path"), tr(report.path.unwrap_or(en("Unavailable"))));
-    detail(ui, tr("HTTPS request average"), &ms(report.latency_ms));
-    detail(ui, tr("Jitter"), &ms(report.jitter_ms));
-    detail(ui, tr("Failed requests"), &report.loss_percent.map_or_else(unmeasured, |v| trf("{} %", &[&format!("{v:.0}")])));
+    value_row(ui, tr("Network path"), tr(report.path.unwrap_or(en("Unavailable"))));
+    value_row(ui, tr("HTTPS request average"), &ms(report.latency_ms));
+    value_row(ui, tr("Jitter"), &ms(report.jitter_ms));
+    value_row(ui, tr("Failed requests"), &report.loss_percent.map_or_else(unmeasured, |v| trf("{} %", &[&format!("{v:.0}")])));
     ui.label(
         RichText::new(tr("These are application-request measurements, not video packet loss or input latency."))
             .font(regular(text::CAPTION))

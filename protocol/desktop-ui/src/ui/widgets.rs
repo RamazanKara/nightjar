@@ -562,14 +562,6 @@ pub(super) fn scroll_fades<R>(ui: &Ui, list: &egui::scroll_area::ScrollAreaOutpu
     }
 }
 
-/// A line of a details page: what it is, and its value.
-pub(super) fn detail(ui: &mut Ui, label: &str, value: &str) {
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new(label).font(semibold(text::BODY)).color(ON_SURFACE));
-        ui.label(RichText::new(value).font(regular(text::BODY)).color(ON_SURFACE_VARIANT));
-    });
-}
-
 pub(crate) fn section(ui: &mut Ui, title: &str) {
     section_at(ui, title, &mut None);
 }
