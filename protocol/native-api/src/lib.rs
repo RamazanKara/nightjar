@@ -10,6 +10,7 @@
 pub mod audio;
 pub mod capabilities;
 pub mod coop;
+pub mod dvr;
 pub mod error;
 pub mod files;
 pub mod folders;
@@ -103,4 +104,8 @@ pub mod feature {
     /// [`crate::quick_suspend`]: `GET /session/suspend`, `POST /session/suspend` and
     /// `POST /session/resume`, while Quick Suspend is on in the host's settings.
     pub const QUICK_SUSPEND: &str = "session.quick_suspend";
+    /// [`crate::dvr`]: `GET /dvr`, `POST /dvr/clip`, `POST /dvr/record`, `GET /dvr/clips` and
+    /// `DELETE /dvr/clips/{id}` answer: the host keeps instant-replay clips. Whether the
+    /// replay buffer runs for this stream is in `GET /dvr`.
+    pub const STREAM_DVR: &str = "stream.dvr";
 }
