@@ -147,7 +147,8 @@ mod tests {
                 .nth(1)
                 .and_then(|rest| rest.split("</string>").next())
                 .unwrap_or_else(|| panic!("Android has no quick_suspend_{}", words.key));
-            assert_eq!(text.replace("\'", "'"), words.en, "{}", words.key);
+            // Android escapes an apostrophe as `\'`.
+            assert_eq!(text.replace("\\'", "'"), words.en, "{}", words.key);
         }
     }
 }
