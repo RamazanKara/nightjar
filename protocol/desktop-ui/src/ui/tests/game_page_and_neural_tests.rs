@@ -507,10 +507,11 @@ fn a_covers_dots_open_its_menu_on_homes_shelves() {
     let host = f.hosts.list[0].record.unique_id.clone();
     f.l.favourites = vec![crate::config::Favourite { host, install_id: "install-3".into(), app_id: 1003, title: "Game 03".into() }];
     f.settle();
-    // The arrows reach the favourite's cover, first of the page's "Game 03"s; its rect holds its caption.
+    // Tab reaches the favourite's cover, first of the page's "Game 03"s; its rect holds its caption.
+    // (Try again has the focus, Play being off; egui's arrows go by distance and pass a lone cover far left.)
     let mut cover = None;
-    for _ in 0..8 {
-        f.press(Key::ArrowDown);
+    for _ in 0..12 {
+        f.press(Key::Tab);
         f.settle();
         let caption = f.placed.iter().find(|(t, ..)| t == "Game 03").map(|p| p.1).unwrap_or_else(|| panic!("{:?}", f.drawn));
         let rect = f.ctx.memory(|m| m.focused()).and_then(|i| f.ctx.read_response(i)).map(|r| r.rect);
@@ -519,7 +520,7 @@ fn a_covers_dots_open_its_menu_on_homes_shelves() {
             break;
         }
     }
-    let cover = cover.expect("the arrows reach the favourite");
+    let cover = cover.expect("Tab reaches the favourite");
     let foot = cover.top() + cover_height(cover.width());
     let at = pos2(cover.right() - 8.0 - 15.0, foot - 8.0 - 15.0);
     f.frame(vec![egui::Event::PointerMoved(at)]);

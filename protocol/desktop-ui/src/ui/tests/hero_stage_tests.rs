@@ -188,7 +188,10 @@ fn with_no_games_home_is_the_dark_stage_and_one_line() {
     let way = f.placed.iter().find(|(t, ..)| t == "Go to PCs").map(|p| p.1).expect("the way to games");
     let middle = f.size.x / 2.0;
     assert!((words.center().x - middle).abs() < 2.0 && (way.center().x - middle).abs() < 2.0, "centred: {words:?} {way:?}");
-    assert!(words.bottom() <= way.top(), "the way under the line");
+    assert!(words.bottom() + 12.0 <= way.top(), "the way under the line, apart: {words:?} {way:?}");
+    // The stage keeps the hero's height: the PCs' shelf starts under it, not under the button.
+    let pcs = f.placed.iter().filter(|(t, ..)| t == "PCs").map(|p| p.1).find(|r| r.top() > way.bottom()).expect("the PCs' shelf");
+    assert!(pcs.top() >= chrome::PAGE_TOP + 220.0, "under the stage: {pcs:?}, the way {way:?}");
     assert_eq!(f.drawn.iter().filter(|t| *t == line).count(), 1, "said once: {:?}", f.drawn);
 }
 

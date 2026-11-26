@@ -418,8 +418,10 @@ fn home_view_changes_layout_grouping_and_card_size_in_place() {
 
     f.press(Key::Escape);
     assert!(matches!(f.l.dialog, Dialog::None));
+    // The hero grew with the window: View is where the taller page draws it now.
+    let view = row(&f, "View");
     let focused = f.ctx.memory(|m| m.focused()).and_then(|id| f.ctx.read_response(id)).map(|r| r.rect).expect("focus");
-    assert!(focused.contains_rect(view), "back on View: {focused:?}");
+    assert!(focused.contains_rect(view), "back on View: {focused:?} {view:?}");
 }
 
 /// List: the pad's Down walks from line to line, and A on a line opens its game.

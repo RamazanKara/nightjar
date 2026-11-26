@@ -424,10 +424,16 @@ impl Launcher {
         job.halign = Align::Center;
         let line = ui.painter().layout_job(job);
         let line_h = line.size().y;
-        let top = block.top() + ((height - line_h - space::S - CONTROL_HEIGHT) * EMPTY_ABOVE).max(0.0);
+        // The way (`empty_library_way`) keeps `space::S` above itself: as much again parts it from the line.
+        let top = block.top() + ((height - line_h - 2.0 * space::S - CONTROL_HEIGHT) * EMPTY_ABOVE).max(0.0);
         ui.painter().galley(pos2(block.center().x, top), line, ink);
-        let way = Rect::from_min_max(pos2(block.left(), top + line_h), block.right_bottom());
+        let way = Rect::from_min_max(pos2(block.left(), top + line_h + space::S), block.right_bottom());
         ui.scope_builder(UiBuilder::new().max_rect(way).layout(Layout::top_down(Align::Center)), |ui| self.empty_library_way(ui, view, commands));
+        // The scope leaves the cursor under its button: the stage keeps its height, the shelves stay under it.
+        let rest = block.bottom() - ui.cursor().top();
+        if rest > 0.0 {
+            ui.add_space(rest);
+        }
     }
 }
 

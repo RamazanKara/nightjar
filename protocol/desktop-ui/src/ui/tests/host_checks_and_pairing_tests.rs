@@ -197,7 +197,8 @@ fn cover_art_fills_its_box_cropped_never_squashed() {
     assert!(close(cover_uv(vec2(300.0, 400.0), poster), (0.0, 1.0), (0.0, 1.0)), "3:4 art shows whole");
     assert!(close(cover_uv(vec2(600.0, 400.0), poster), (0.25, 0.75), (0.0, 1.0)), "wide art loses its sides");
     assert!(close(cover_uv(vec2(300.0, 800.0), poster), (0.0, 1.0), (0.25, 0.75)), "tall art loses top and bottom");
-    // And Home draws it that way: the art's texture is sampled from its middle half only.
+    // And Home draws it that way: the art's texture is sampled from its middle half only, on the hero's
+    // cover and the shelf's. The stage's art behind the hero covers its own wide box (`hero_stage::art`).
     let mut f = home_with_games(1);
     let texture = f.ctx.load_texture("wide", egui::ColorImage::new([6, 4], vec![Color32::GRAY; 24]), egui::TextureOptions::LINEAR);
     let pc = &mut f.hosts.list[0];
@@ -212,7 +213,9 @@ fn cover_art_fills_its_box_cropped_never_squashed() {
     let us: Vec<f32> = primitives
         .iter()
         .filter_map(|p| match &p.primitive {
-            egui::epaint::Primitive::Mesh(mesh) if mesh.texture_id == texture.id() => Some(mesh.vertices.iter().map(|v| v.uv.x)),
+            egui::epaint::Primitive::Mesh(mesh) if mesh.texture_id == texture.id() && mesh.calc_bounds().aspect_ratio() < 1.0 => {
+                Some(mesh.vertices.iter().map(|v| v.uv.x))
+            }
             _ => None,
         })
         .flatten()
