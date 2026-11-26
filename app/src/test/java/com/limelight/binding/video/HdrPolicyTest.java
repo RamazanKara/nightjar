@@ -8,6 +8,7 @@ import android.view.Display;
 import com.limelight.binding.video.HdrPolicy.Metadata;
 import com.limelight.binding.video.HdrPolicy.Refusal;
 import com.limelight.binding.video.HdrPolicy.Status;
+import com.limelight.nvstream.http.HostCapabilities;
 
 import org.junit.Test;
 
@@ -116,6 +117,14 @@ public class HdrPolicyTest {
                 MediaFormat.COLOR_TRANSFER_ST2084));
         // A decoder that leaves the transfer out gives nothing to object to.
         assertEquals(Status.QUIET, HdrPolicy.status(true, true, true, Metadata.USABLE, null));
+    }
+
+    @Test
+    public void aPcWithoutCachedCapabilitiesOffersNoHdrFormats() {
+        int formats = HostCapabilities.UNKNOWN.hdrFormats();
+        assertEquals(0, formats);
+        assertEquals(Refusal.DISPLAY_WITHOUT_HDR10,
+                HdrPolicy.displayRefusal(33, true, new int[] {HLG}, null, formats));
     }
 
     @Test

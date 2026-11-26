@@ -343,7 +343,7 @@ impl Streaming {
                     .configure_abr(&AbrRequest::balanced_up_to(max_kbps))
                     .map(Some)
                     .map_err(|e| trf(MSG_HOST_ABR_START_FAILED, &[&e])),
-                Ok(_) | Err(HttpError::NotFound(_)) => Ok(None),
+                Ok(_) => Ok(None),
                 Err(e) => Err(trf(MSG_HOST_ABR_START_FAILED, &[&e])),
             };
             if matches!(result, Ok(Some(_))) && !start.turned_on() {

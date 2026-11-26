@@ -349,9 +349,12 @@ impl HostClient {
         }
     }
 
-    /// Whether the PC runs Foundation's bitrate controller. 404 on other hosts.
+    /// Whether the PC runs Foundation's bitrate controller. Other PCs answer 404: not supported.
     pub fn abr_capabilities(&self) -> Result<AbrCapabilities, Error> {
-        self.foundation_json("api/abr/capabilities", None, ABR_TIMEOUT)
+        match self.foundation_json("api/abr/capabilities", None, ABR_TIMEOUT) {
+            Err(Error::NotFound(_)) => Ok(AbrCapabilities::default()),
+            answer => answer,
+        }
     }
 
     /// Turns host ABR on or off for this device's running stream.

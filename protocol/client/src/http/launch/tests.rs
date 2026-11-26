@@ -185,6 +185,20 @@ fn clipboard_sync_is_asked_only_of_a_rubylight_host() {
             .query(&rubylight(), false)
             .replace("&corever=1", "&rlClipboardSync=1&corever=1")
     );
+    // Remote Input syncs too; a Remote Monitor never asks.
+    for (role, asks) in [(AppRole::InputOnly, true), (AppRole::RemoteMonitor, false)] {
+        let launch = LaunchRequest {
+            role,
+            clipboard_sync: true,
+            ..request()
+        };
+        let query = launch.query(&rubylight(), false);
+        assert_eq!(
+            query.contains("&rlClipboardSync=1"),
+            asks,
+            "{role:?}: {query}"
+        );
+    }
     // Other hosts get exactly today's query.
     let caps = HostCapabilities::UNKNOWN;
     assert_eq!(asked.query(&caps, false), request().query(&caps, false));

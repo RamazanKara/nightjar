@@ -444,7 +444,10 @@ impl LaunchRequest {
         if let Some(fec) = self.fec.filter(|_| caps.has(Feature::ClientFec)) {
             q.push_str(&format!("&{LAUNCH_PARAMETER}={}", fec.as_param()));
         }
-        if self.clipboard_sync && caps.family() == Family::Rubylight {
+        if self.clipboard_sync
+            && self.role != AppRole::RemoteMonitor
+            && caps.family() == Family::Rubylight
+        {
             q.push_str(&format!("&{}=1", clipboard_sync::LAUNCH_PARAMETER));
         }
         if self.rate_change {

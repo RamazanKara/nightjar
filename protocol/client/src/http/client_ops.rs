@@ -241,7 +241,8 @@ impl HostClient {
             "cancel",
             None,
             LONG_CONNECT_TIMEOUT,
-            Some(READ_TIMEOUT),
+            // The PC answers once the game has closed, which may take a while.
+            None,
         )?;
         if xml::parse_reply(&raw)?.required_text("cancel")? == "0" {
             return Ok(false);

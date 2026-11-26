@@ -236,6 +236,18 @@ public class NvHTTPLaunchParityTest {
             }
             assertTrue(server, NvHTTP.asksClipboardSync(context));
             assertEquals(server, plain.replace("&corever=1", "") + "&" + ClipboardSync.LAUNCH_PARAMETER + "=1&corever=1", asked);
+
+            // The Remote Input and Remote Monitor tiles: asking and syncing go together.
+            for (int appId : new int[] {2147483506, 2147483505}) {
+                NvApp app = new NvApp("Tile", appId, false);
+                boolean asks = app.getRole() == NvApp.Role.INPUT_ONLY;
+                assertTrue(asks || app.getRole() == NvApp.Role.REMOTE_MONITOR);
+                context.streamConfig = new StreamConfiguration.Builder().setApp(app).setClipboardSync(true).build();
+                String message = server + " " + app.getRole();
+                assertEquals(message, asks, NvHTTP.getLaunchQuery(context, appId, false)
+                        .contains(ClipboardSync.LAUNCH_PARAMETER + "=1"));
+                assertEquals(message, asks, NvHTTP.asksClipboardSync(context));
+            }
         }
         assertTrue(seen.contains(HostCapabilities.Family.RUBYLIGHT));
         assertTrue(seen.size() > 1);

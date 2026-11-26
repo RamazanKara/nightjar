@@ -470,13 +470,16 @@ impl HostClient {
             Scheme::Https => (self.https_port(true)?, Some(self.tls()?)),
         };
         let target = self.url_target(path, query);
+        let timeouts = Timeouts { connect, read };
+        #[cfg(test)]
+        tests::SENT.with_borrow_mut(|sent| sent.push((path.to_owned(), timeouts)));
         let response = transport::get(
             &Request {
                 host: &self.host,
                 port,
                 target: &target,
                 tls,
-                timeouts: Timeouts { connect, read },
+                timeouts,
                 body_limit,
             },
             &self.cancel,

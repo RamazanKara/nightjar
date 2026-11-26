@@ -55,7 +55,7 @@ final class NvHttpLaunch {
 
     static boolean asksClipboardSync(ConnectionContext context) {
         NvApp app = context.streamConfig.getApp();
-        return app != null && app.getRole() == NvApp.Role.STREAM && context.streamConfig.getClipboardSync()
+        return app != null && app.getRole() != NvApp.Role.REMOTE_MONITOR && context.streamConfig.getClipboardSync()
                 && getLaunchQuery(context, app.getAppId(), false).contains("&rlClipboardSync=1");
     }
 

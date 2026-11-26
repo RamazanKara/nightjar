@@ -181,7 +181,7 @@ public final class HostCapabilities {
         this.family = Family.UNKNOWN;
         this.hostVersion = null;
         this.nativeApiVersion = -1;
-        this.hdrFormats = -1;
+        this.hdrFormats = 0;
         this.maxVideoPacket = 0;
         this.nvidiaEnhancements = 0;
         this.nativeFeatures = 0;
