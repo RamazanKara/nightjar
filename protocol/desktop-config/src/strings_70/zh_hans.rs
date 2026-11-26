@@ -5,4 +5,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Frame limiter", "帧率限制器"),
     ("Frame limiter on the virtual display", "虚拟显示器上的帧率限制器"),
     ("Frame limit", "帧率上限"),
+    ("Smooth TV", "流畅电视"),
+    ("Wi-Fi / Away", "Wi-Fi / 外出"),
 ];

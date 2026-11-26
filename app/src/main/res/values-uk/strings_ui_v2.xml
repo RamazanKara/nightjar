@@ -15,6 +15,8 @@
     <string name="stream_bitrate_manual">Задати бітрейт</string>
     <string-array name="stream_preset_names">
         <item>Рідна (рекомендовано)</item>
+        <item>Плавний ТБ</item>
+        <item>Wi-Fi / Поза домом</item>
         <item>Економія заряду</item>
     </string-array>
     <string name="applist_menu_show_app">Показати гру</string>

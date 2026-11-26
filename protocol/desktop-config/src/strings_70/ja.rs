@@ -5,4 +5,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Frame limiter", "フレームリミッター"),
     ("Frame limiter on the virtual display", "仮想ディスプレイのフレームリミッター"),
     ("Frame limit", "フレームレート上限"),
+    ("Smooth TV", "なめらか TV"),
+    ("Wi-Fi / Away", "Wi-Fi / 外出先"),
 ];

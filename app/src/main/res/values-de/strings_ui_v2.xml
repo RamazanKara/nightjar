@@ -15,6 +15,8 @@
     <string name="stream_bitrate_manual">Bitrate festlegen</string>
     <string-array name="stream_preset_names">
         <item>Nativ (empfohlen)</item>
+        <item>Flüssig am TV</item>
+        <item>Wi-Fi / Unterwegs</item>
         <item>Akku sparen</item>
     </string-array>
     <string name="applist_menu_show_app">Spiel einblenden</string>

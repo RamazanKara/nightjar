@@ -5,4 +5,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Frame limiter", "Limitador de quadros"),
     ("Frame limiter on the virtual display", "Limitador de quadros na tela virtual"),
     ("Frame limit", "Limite de quadros"),
+    ("Smooth TV", "TV suave"),
+    ("Wi-Fi / Away", "Wi-Fi / Fora de casa"),
 ];

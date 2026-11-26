@@ -14,6 +14,8 @@
     <string name="stream_bitrate_manual">Set bitrate</string>
     <string-array name="stream_preset_names">
         <item>Native (recommended)</item>
+        <item>Smooth TV</item>
+        <item>Wi-Fi / Away</item>
         <item>Battery saver</item>
     </string-array>
     <string name="applist_menu_show_app">Show game</string>

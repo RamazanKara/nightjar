@@ -5,4 +5,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Frame limiter", "Kare sınırlayıcı"),
     ("Frame limiter on the virtual display", "Sanal ekranda kare sınırlayıcı"),
     ("Frame limit", "Kare sınırı"),
+    ("Smooth TV", "Akıcı TV"),
+    ("Wi-Fi / Away", "Wi-Fi / Dışarıda"),
 ];

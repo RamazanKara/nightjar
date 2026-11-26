@@ -345,21 +345,21 @@ Tier: Main rows show when a section opens; More rows fold behind the section's l
 
 ## Presets
 
-Both presets stream at this screen's own resolution and keep the selected codec, HDR and Sharper colored text choices. Named profiles and saved PC and game values take priority. The selected chip says Custom when values do not match a preset.
+Every preset keeps the selected codec, HDR and Sharper colored text choices. Named profiles and saved PC and game values take priority. The selected chip says Custom when values do not match a preset.
 
-| Setting | Native (recommended) | Battery saver |
-| --- | --- | --- |
-| Resolution | This screen's resolution | This screen's resolution |
-| Frame rate | Screen maximum (rounded, 1–1000 FPS) | 30 FPS |
-| Bitrate | Default for that resolution, frame rate and codec | Default for that resolution, frame rate and codec |
-| Variable refresh rate | Off | Off |
-| Upscaling | Off | Off |
-| Frame pacing | Lowest latency | Balanced with FPS limit |
-| Lower refresh rate | Off | On, or On, matched to the game, where that was chosen |
-| Decoder performance hints | On | Off |
-| Boost GPU performance for PyroWave | Unchanged | Off |
+| Setting | Native (recommended) | Smooth TV | Wi-Fi / Away | Battery saver |
+| --- | --- | --- | --- | --- |
+| Resolution | This screen's resolution | This screen's resolution | Two thirds of this screen's resolution (fixed, 1080p gives 720p) | This screen's resolution |
+| Frame rate | Screen maximum (rounded, 1–1000 FPS) | Screen maximum | 60 FPS, or the screen maximum below that | 30 FPS |
+| Bitrate | Default for that resolution, frame rate and codec | Default for that resolution, frame rate and codec | Default for that resolution, frame rate and codec | Default for that resolution, frame rate and codec |
+| Variable refresh rate | Off | Off | Off | Off |
+| Upscaling | Off | Off | Off | Off |
+| Frame pacing | Lowest latency | Smoothest video | Balanced | Balanced with FPS limit |
+| Lower refresh rate | Off | Off | Off | On, or On, matched to the game, where that was chosen |
+| Decoder performance hints | On | On | On | Off |
+| Boost GPU performance for PyroWave | Unchanged | Unchanged | Unchanged | Off |
 
-Native also turns these back on: Android low-latency mode, Chipset low-latency mode, Phone performance hints, Keep only the newest frame (Balanced in Frame pacing), Instant mouse and pen input, Prioritize stream traffic.
+Native also turns these back on; the other presets leave them as they are: Android low-latency mode, Chipset low-latency mode, Phone performance hints, Keep only the newest frame (Balanced in Frame pacing), Instant mouse and pen input, Prioritize stream traffic.
 
 ## Profiles
 
@@ -491,7 +491,7 @@ The PC puts its displays back when the stream ends. Separated displays still sha
 
 This section covers the desktop client on Windows, Linux and macOS. Rows that exist on only some of them say so; every other row is on all three. On macOS, Command takes the place of Ctrl in the settings shortcuts below (Command+F, Command+=), and the stream's key combinations use Control and Option in place of Ctrl and Alt.
 
-The desktop client's **Settings** has the same eight sections as Android, in the same order and with the same labels, Debug last, with **Profiles** above them. A wide window lists them on the left, with the open section's rows on the right; a narrow one shows them as chips above the rows. Each section shows its main rows first, the same ones as on Android, then **More … settings (n)**, which opens the section's other rows in the same groups as on Android and reads **Fewer … settings** while open. A section without a main row on this computer (Advanced on most computers) lists its rows straight away. Some rows show only with the setting they belong to (Stick for scrolling with Controller mouse mode, for example) and are left out of the count while it is off; their values are kept. The rows a PC's, game's or profile's settings or the stream menu can make act are always listed and say why while the main settings leave them nothing to do: Minimum resolution and Minimum frame rate ("Not used without Automatic quality"), Upscaling sharpness ("Not used with" an upscaler that doesn't sharpen), Overlay position ("Not used without Performance overlay") and Second screen resolution ("Not used without Dual screen mode"). **IGDB client secret** is left out until the IGDB client ID is set, unless it holds a secret; search finds it either way. **Debug** is listed only once **App → Show debug settings** is on, while one of its settings is changed, or while it is open from a search or a link; search finds its rows either way. **Search settings** at the top (Ctrl+F) finds rows in every section by name, description, section or group, folded rows included; Escape leaves the field, then clears the search. A row changed from its default has **Reset** beside it, and **App → Reset all settings** puts every row back to its default after a confirmation. Above the main settings' rows, **Presets** offers Native (recommended) and Battery saver, as on Android. A preset asks first, then sets the resolution, frame rate, bitrate, variable refresh rate, upscaling and frame pacing; Native also puts Balanced back to keeping only the newest frame and turns Instant mouse and pen input and Prioritize stream traffic back on. The row reads Custom once any of them is changed.
+The desktop client's **Settings** has the same eight sections as Android, in the same order and with the same labels, Debug last, with **Profiles** above them. A wide window lists them on the left, with the open section's rows on the right; a narrow one shows them as chips above the rows. Each section shows its main rows first, the same ones as on Android, then **More … settings (n)**, which opens the section's other rows in the same groups as on Android and reads **Fewer … settings** while open. A section without a main row on this computer (Advanced on most computers) lists its rows straight away. Some rows show only with the setting they belong to (Stick for scrolling with Controller mouse mode, for example) and are left out of the count while it is off; their values are kept. The rows a PC's, game's or profile's settings or the stream menu can make act are always listed and say why while the main settings leave them nothing to do: Minimum resolution and Minimum frame rate ("Not used without Automatic quality"), Upscaling sharpness ("Not used with" an upscaler that doesn't sharpen), Overlay position ("Not used without Performance overlay") and Second screen resolution ("Not used without Dual screen mode"). **IGDB client secret** is left out until the IGDB client ID is set, unless it holds a secret; search finds it either way. **Debug** is listed only once **App → Show debug settings** is on, while one of its settings is changed, or while it is open from a search or a link; search finds its rows either way. **Search settings** at the top (Ctrl+F) finds rows in every section by name, description, section or group, folded rows included; Escape leaves the field, then clears the search. A row changed from its default has **Reset** beside it, and **App → Reset all settings** puts every row back to its default after a confirmation. Above the main settings' rows, **Presets** offers Native (recommended), Smooth TV, Wi-Fi / Away and Battery saver, as on Android (Wi-Fi / Away sets Native resolution at 67 % and 60 FPS, since the settings page does not know the display's top rate). A preset asks first, then sets the resolution, frame rate, bitrate, variable refresh rate, upscaling and frame pacing; Native also puts Balanced back to keeping only the newest frame and turns Instant mouse and pen input and Prioritize stream traffic back on. The row reads Custom once any of them is changed.
 
 ### PC, game and profile settings
 

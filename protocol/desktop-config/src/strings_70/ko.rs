@@ -5,4 +5,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Frame limiter", "프레임 제한기"),
     ("Frame limiter on the virtual display", "가상 디스플레이의 프레임 제한기"),
     ("Frame limit", "프레임 제한"),
+    ("Smooth TV", "부드러운 TV"),
+    ("Wi-Fi / Away", "Wi-Fi / 외부"),
 ];

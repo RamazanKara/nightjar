@@ -91,6 +91,42 @@ fn a_preset_sets_and_reads_the_desktops_settings() {
     assert_eq!(preset_value(Preset::BatterySaver), "Battery saver");
 }
 
+/// Smooth TV and Wi-Fi / Away set their own values and read as themselves; each of the four reads
+/// as no other, and Native and Battery saver set exactly what they did before there were four.
+#[test]
+fn the_four_presets_set_their_own_values_and_read_as_themselves() {
+    use crate::config::FramePacing;
+    let start = Settings { drop_late_frames: false, unbatched_input: false, network_priority: false, ..Settings::default() };
+    for preset in Preset::ALL {
+        let mut s = start.clone();
+        apply_preset(&mut s, preset);
+        assert_eq!(presets::chosen(&preset_current(&s, true)), Some(preset), "{preset:?}: {s:?}");
+        for other in Preset::ALL.into_iter().filter(|o| *o != preset) {
+            assert!(!other.matches(&preset_current(&s, true)), "{other:?} reads {preset:?}'s values");
+        }
+        let switches = (s.drop_late_frames, s.unbatched_input, s.network_priority);
+        assert_eq!(switches, if preset == Preset::Native { (true, true, true) } else { (false, false, false) }, "{preset:?}");
+        assert!(!s.host_frame_times && s.bitrate_kbps == 0 && (s.width, s.height) == (0, 0), "{preset:?}");
+    }
+    let set = |preset| {
+        let mut s = start.clone();
+        apply_preset(&mut s, preset);
+        (s.native_scale, s.fps, s.frame_pacing)
+    };
+    assert_eq!(set(Preset::Native), (100, 0, FramePacing::Latency));
+    assert_eq!(set(Preset::SmoothTv), (100, 0, FramePacing::Smoothness));
+    assert_eq!(set(Preset::WifiAway), (67, 60, FramePacing::Balanced));
+    assert_eq!(set(Preset::BatterySaver), (100, 30, FramePacing::CapFps));
+    // Wi-Fi / Away's 67 % is two thirds of the display (the Native picker's step).
+    assert_eq!(nightjar_policy::resolution_scale::scaled(1920, 1080, 67), (1280, 720));
+    let mut s = start.clone();
+    apply_preset(&mut s, Preset::WifiAway);
+    s.native_scale = 75;
+    assert_eq!(presets::chosen(&preset_current(&s, true)), None, "another step is Custom");
+    assert_eq!(preset_value(Preset::SmoothTv), "Smooth TV");
+    assert_eq!(preset_value(Preset::WifiAway), "Wi-Fi / Away");
+}
+
 /// Frame pacing is one row over its three keys, as on Android: Balanced's newest frame and the
 /// PC's frame times are among its choices. Every saved combination reads as the pacing a stream
 /// runs, and saving that choice back changes nothing a stream uses.

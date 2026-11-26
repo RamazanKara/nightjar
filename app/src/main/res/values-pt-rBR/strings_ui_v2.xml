@@ -15,6 +15,8 @@
     <string name="stream_bitrate_manual">Definir taxa de bits</string>
     <string-array name="stream_preset_names">
         <item>Nativo (recomendado)</item>
+        <item>TV suave</item>
+        <item>Wi-Fi / Fora de casa</item>
         <item>Economia de bateria</item>
     </string-array>
     <string name="applist_menu_show_app">Mostrar jogo</string>

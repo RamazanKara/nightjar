@@ -6,6 +6,8 @@ use super::*;
 pub(in crate::ui) fn preset_label(preset: Preset) -> &'static str {
     match preset {
         Preset::Native => en("Native (recommended)"),
+        Preset::SmoothTv => en("Smooth TV"),
+        Preset::WifiAway => en("Wi-Fi / Away"),
         Preset::BatterySaver => en("Battery saver"),
     }
 }
@@ -23,18 +25,23 @@ pub(in crate::ui) fn preset_value(preset: Preset) -> String {
 pub(super) fn preset_key(preset: Preset) -> &'static str {
     match preset {
         Preset::Native => "preset-native",
+        Preset::SmoothTv => "preset-smooth-tv",
+        Preset::WifiAway => "preset-wifi-away",
         Preset::BatterySaver => "preset-battery-saver",
     }
 }
 
-/// The settings a preset is compared with (`nightjar_policy::presets`). Resolution, bitrate, VRR
-/// and upscaling read as the preset's at their defaults: Native, Automatic, VRR where the display
-/// has it, bilinear. The latency switches are the three the desktop has of Android's.
+/// The settings a preset is compared with (`nightjar_policy::presets`). Bitrate, VRR and upscaling
+/// read as the preset's at their defaults: Automatic, VRR where the display has it, bilinear; the
+/// resolution as a Native step (100 % or Wi-Fi / Away's two thirds). The latency switches are the
+/// three the desktop has of Android's. The page doesn't know the display's rate, so Wi-Fi / Away's
+/// 60 fps is not capped by it here.
 pub(in crate::ui) fn preset_current(s: &Settings, vrr_offered: bool) -> presets::Current {
     let defaults = Settings::default();
+    let scale = crate::stream_types::normalize_native_scale(s.native_scale);
     presets::Current {
-        native_resolution: (s.width == 0 || s.height == 0)
-            && crate::stream_types::normalize_native_scale(s.native_scale) == 100,
+        resolution_scale: (s.width == 0 || s.height == 0).then_some(scale).filter(|scale| *scale == 100 || *scale == presets::WIFI_AWAY_SCALE),
+        screen_fps: None,
         fps_follows_screen: s.fps == 0,
         fps: s.fps,
         default_bitrate: s.bitrate_kbps == 0,
@@ -45,7 +52,8 @@ pub(in crate::ui) fn preset_current(s: &Settings, vrr_offered: bool) -> presets:
             _ if s.host_frame_times => None,
             FramePacing::Latency => Some(presets::Pacing::Latency),
             FramePacing::CapFps => Some(presets::Pacing::CapFps),
-            FramePacing::Balanced | FramePacing::Smoothness => None,
+            FramePacing::Balanced => Some(presets::Pacing::Balanced),
+            FramePacing::Smoothness => Some(presets::Pacing::Smoothness),
         },
         latency_switches_on: s.drop_late_frames && s.unbatched_input && s.network_priority,
         power: None,
@@ -65,14 +73,16 @@ pub(in crate::ui) fn preset_section(section: &str) -> bool {
 /// and 4:4:4 choices stay as they are.
 pub(in crate::ui) fn apply_preset(s: &mut Settings, preset: Preset) {
     let defaults = Settings::default();
-    (s.width, s.height, s.native_scale) = (0, 0, 100);
-    s.fps = preset.fps().unwrap_or(0);
+    (s.width, s.height, s.native_scale) = (0, 0, preset.resolution_scale());
+    s.fps = preset.fps(None).unwrap_or(0);
     s.bitrate_kbps = 0;
     s.vrr = defaults.vrr;
     s.upscaling = defaults.upscaling;
     s.frame_pacing = match preset.pacing() {
         presets::Pacing::Latency => FramePacing::Latency,
         presets::Pacing::CapFps => FramePacing::CapFps,
+        presets::Pacing::Balanced => FramePacing::Balanced,
+        presets::Pacing::Smoothness => FramePacing::Smoothness,
     };
     s.host_frame_times = false;
     if preset.sets_latency_switches() {

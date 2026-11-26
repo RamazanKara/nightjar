@@ -582,7 +582,7 @@ def generate_settings_md_body(cat, root=ROOT):
     source = (java / "preferences/StreamPreset.java").read_text(encoding="utf-8")
     presets = re.findall(r"^    ([A-Z_]+)[,;]$", source, re.M)
     names = array("@array/stream_preset_names")
-    if presets != ["NATIVE", "BATTERY_SAVER"] or len(names) != len(presets):
+    if presets != ["NATIVE", "SMOOTH_TV", "WIFI_AWAY", "BATTERY_SAVER"] or len(names) != len(presets):
         raise ValueError("Review the changed presets")
     block = source.split("LATENCY_SWITCHES = {", 1)[1].split("};", 1)[0]
     switches = re.findall(r'^\s+(?:"([a-z_]+)"|PreferenceConfiguration\.([A-Z_]+)),$', block, re.M)
@@ -597,21 +597,21 @@ def generate_settings_md_body(cat, root=ROOT):
     lines += [
         "## Presets",
         "",
-        "Both presets stream at this screen's own resolution and keep the selected codec, HDR and Sharper colored text choices. Named profiles and saved PC and game values take priority. The selected chip says Custom when values do not match a preset.",
+        "Every preset keeps the selected codec, HDR and Sharper colored text choices. Named profiles and saved PC and game values take priority. The selected chip says Custom when values do not match a preset.",
         "",
         "| Setting | " + " | ".join(names) + " |",
-        "| --- | --- | --- |",
-        "| Resolution | This screen's resolution | This screen's resolution |",
-        f"| Frame rate | Screen maximum (rounded, {bounds[1]}–{bounds[2]} FPS) | 30 FPS |",
-        "| Bitrate | Default for that resolution, frame rate and codec | Default for that resolution, frame rate and codec |",
-        "| Variable refresh rate | Off | Off |",
-        "| Upscaling | Off | Off |",
-        "| Frame pacing | Lowest latency | Balanced with FPS limit |",
-        f"| {resolve('@string/title_lower_refresh')} | Off | On, or On, matched to the game, where that was chosen |",
-        "| Decoder performance hints | On | Off |",
-        f"| {resolve('@string/title_gpu_max_clocks')} | Unchanged | Off |",
+        "| --- | --- | --- | --- | --- |",
+        "| Resolution | This screen's resolution | This screen's resolution | Two thirds of this screen's resolution (fixed, 1080p gives 720p) | This screen's resolution |",
+        f"| Frame rate | Screen maximum (rounded, {bounds[1]}–{bounds[2]} FPS) | Screen maximum | 60 FPS, or the screen maximum below that | 30 FPS |",
+        "| Bitrate | Default for that resolution, frame rate and codec | Default for that resolution, frame rate and codec | Default for that resolution, frame rate and codec | Default for that resolution, frame rate and codec |",
+        "| Variable refresh rate | Off | Off | Off | Off |",
+        "| Upscaling | Off | Off | Off | Off |",
+        "| Frame pacing | Lowest latency | Smoothest video | Balanced | Balanced with FPS limit |",
+        f"| {resolve('@string/title_lower_refresh')} | Off | Off | Off | On, or On, matched to the game, where that was chosen |",
+        "| Decoder performance hints | On | On | On | Off |",
+        f"| {resolve('@string/title_gpu_max_clocks')} | Unchanged | Unchanged | Unchanged | Off |",
         "",
-        "Native also turns these back on: " + ", ".join(switch_titles) + ".",
+        "Native also turns these back on; the other presets leave them as they are: " + ", ".join(switch_titles) + ".",
         "",
         "## Profiles",
         "",
