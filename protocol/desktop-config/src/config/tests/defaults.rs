@@ -30,6 +30,15 @@ fn native_scale_defaults_normalizes_and_scales_preserving_aspect() {
     let uw = Display { width: 3440, height: 1440, refresh_hz: 144.0, refresh_reported: true };
     assert_eq!(scaled_native_resolution(uw, 75), (2580, 1080));
     assert_eq!(scaled_native_resolution(uw, 50), (1720, 720));
+    // #137: the picker's steps, 67 % being exactly two thirds.
+    assert_eq!(crate::stream_types::NATIVE_SCALES, [85, 75, 67, 50]);
+    let p1080 = Display { width: 1920, height: 1080, refresh_hz: 60.0, refresh_reported: true };
+    assert_eq!(scaled_native_resolution(p1080, 67), (1280, 720));
+    assert_eq!(scaled_native_resolution(p1080, 85), (1632, 918));
+    assert_eq!(scaled_native_resolution(p1080, 75), (1440, 810));
+    assert_eq!(scaled_native_resolution(p1080, 50), (960, 540));
+    let k4 = Display { width: 3840, height: 2160, refresh_hz: 60.0, refresh_reported: true };
+    assert_eq!(scaled_native_resolution(k4, 67), (2560, 1440));
 
     let scaled = Settings { native_scale: 75, ..Settings::default() };
     let (w, h, _, _) = stream_mode(&scaled, uw);
