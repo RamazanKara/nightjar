@@ -22,7 +22,7 @@ use std::net::TcpListener;
 use std::sync::{Arc, Mutex, OnceLock};
 
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../native-api/tests/fixtures");
-const NAMES: [&str; 19] = [
+const NAMES: [&str; 20] = [
     "capabilities",
     "library",
     "session",
@@ -30,6 +30,7 @@ const NAMES: [&str; 19] = [
     "radeon",
     "settings_write",
     "error",
+    "error_explained",
     "wake",
     "audio",
     "audio_write",
@@ -91,6 +92,9 @@ fn the_hosts_fixtures_parse_and_write_back() {
     assert_eq!((write.gpu, write.changes.len()), (11520, 2));
     let error: ErrorBody = round_trip("error");
     assert_eq!(error.error.code, ErrorCode::HostControlRequired);
+    let explained: ErrorBody = round_trip("error_explained");
+    assert_eq!(explained.error.code, ErrorCode::DriverRejected);
+    assert!(explained.error.title.is_some() && explained.error.technical_detail.is_some());
     let wake: Wake = round_trip("wake");
     assert_eq!(wake.primary.as_deref(), Some("02:7C:16:B4:13:4F"));
     assert_eq!(
@@ -337,12 +341,7 @@ fn paired_client(host: &MockHost) -> HostClient {
 
 fn error_body(code: ErrorCode, message: &str) -> String {
     serde_json::to_string(&ErrorBody {
-        error: ApiError {
-            code,
-            message: message.into(),
-            setting: None,
-            retry_after_ms: None,
-        },
+        error: ApiError::new(code, message),
     })
     .unwrap()
 }

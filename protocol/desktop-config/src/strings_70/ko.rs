@@ -51,4 +51,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The PC couldn’t pause or resume the game. It resumes what it paused as soon as it can.", "PC가 게임을 일시 중지하거나 재개하지 못했습니다. 일시 중지한 항목은 가능한 한 빨리 재개합니다."),
     ("Play a game together with other devices, each in its own copy of the game on this PC. Join a running session here, or start one with “<game> (Co-op)” in the library.", "이 PC에서 각자 게임 사본을 실행하며 다른 기기와 함께 플레이합니다. 여기에서 실행 중인 세션에 참가하거나 라이브러리의 “<game> (Co-op)”으로 시작하세요."),
     ("The PC is busy with another co-op session.", "PC가 다른 Co-op 세션으로 사용 중입니다."),
+    ("What to do: {}", "해결 방법: {}"),
+    ("Technical details: {}", "기술 세부 정보: {}"),
 ];

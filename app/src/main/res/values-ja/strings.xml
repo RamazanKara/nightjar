@@ -582,4 +582,6 @@
     <string name="hdr_format_auto">自動</string>
     <string name="hdr_format_no_dolby_vision">Dolby Vision なし</string>
     <string name="hdr_format_hdr10">HDR10 のみ</string>
+    <string name="host_error_next_step">対処方法: %1$s</string>
+    <string name="host_error_technical_detail">技術的な詳細: %1$s</string>
 </resources>

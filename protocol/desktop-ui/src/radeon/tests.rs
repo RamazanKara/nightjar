@@ -242,7 +242,7 @@ fn a_pending_change_says_what_the_session_end_restores() {
 fn api_error(status: u16, code: ErrorCode, setting: Option<&str>) -> Error {
     Error::Api {
         status,
-        error: ApiError { code, message: "host words".into(), setting: setting.map(str::to_owned), retry_after_ms: None },
+        error: Box::new(ApiError { setting: setting.map(str::to_owned), ..ApiError::new(code, "host words") }),
     }
 }
 
@@ -263,6 +263,26 @@ fn failures_follow_the_hosts_code_and_name_the_setting() {
     assert_eq!(generic.text(), "host words", "an error we have no text for shows the host's");
     let unreachable = Failure::of(&Error::Io(std::io::Error::from(std::io::ErrorKind::TimedOut)), None);
     assert_eq!(unreachable.text(), "Cannot reach the PC.");
+}
+
+#[test]
+fn a_host_that_explains_adds_its_next_step_and_detail() {
+    let explained = |code| {
+        let mut error = ApiError::new(code, "host words");
+        error.title = Some("Host title".into());
+        error.next_step = Some("Host step.".into());
+        error.technical_detail = Some("ADLX_FAIL".into());
+        Error::Api { status: 409, error: Box::new(error) }
+    };
+    let rejected = Failure::of(&explained(ErrorCode::DriverRejected), None);
+    assert_eq!(
+        rejected.text(),
+        "The graphics driver rejected this change.\n\nWhat to do: Host step.\n\nTechnical details: ADLX_FAIL",
+        "Nightjar's words lead; the host's title would repeat them"
+    );
+    let generic = Failure::of(&explained(ErrorCode::Internal), None);
+    assert_eq!(generic.text(), "Host title\n\nhost words\n\nWhat to do: Host step.\n\nTechnical details: ADLX_FAIL");
+    assert_eq!(crate::session_page::exit_failure_text(&generic), generic.text());
 }
 
 #[test]

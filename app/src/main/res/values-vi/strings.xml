@@ -582,4 +582,6 @@
     <string name="hdr_format_auto">Tự động</string>
     <string name="hdr_format_no_dolby_vision">Không dùng Dolby Vision</string>
     <string name="hdr_format_hdr10">Chỉ HDR10</string>
+    <string name="host_error_next_step">Cách khắc phục: %1$s</string>
+    <string name="host_error_technical_detail">Chi tiết kỹ thuật: %1$s</string>
 </resources>

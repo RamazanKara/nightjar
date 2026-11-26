@@ -51,4 +51,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The PC couldn’t pause or resume the game. It resumes what it paused as soon as it can.", "PC はゲームを一時停止または再開できませんでした。一時停止したものはできるだけ早く再開します。"),
     ("Play a game together with other devices, each in its own copy of the game on this PC. Join a running session here, or start one with “<game> (Co-op)” in the library.", "このPC上でそれぞれ自分のゲームのコピーを動かして、他のデバイスと一緒にプレイします。実行中のセッションにここから参加するか、ライブラリの「<game> (Co-op)」で開始してください。"),
     ("The PC is busy with another co-op session.", "PCは別のCo-opセッションで使用中です。"),
+    ("What to do: {}", "対処方法: {}"),
+    ("Technical details: {}", "技術的な詳細: {}"),
 ];

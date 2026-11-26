@@ -582,4 +582,6 @@
     <string name="hdr_format_auto">Автоматически</string>
     <string name="hdr_format_no_dolby_vision">Без Dolby Vision</string>
     <string name="hdr_format_hdr10">Только HDR10</string>
+    <string name="host_error_next_step">Что делать: %1$s</string>
+    <string name="host_error_technical_detail">Технические подробности: %1$s</string>
 </resources>

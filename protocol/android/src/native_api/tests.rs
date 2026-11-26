@@ -20,12 +20,7 @@ impl Fake {
         if let Some(code) = self.fail {
             return Err(Error::Api {
                 status: code.status(),
-                error: ApiError {
-                    code,
-                    message: "Turn on Host control for this device.".into(),
-                    setting: Some("chill.enabled".into()),
-                    retry_after_ms: Some(250),
-                },
+                error: Box::new(ApiError::new(code, "Turn on Host control for this device.").for_setting("chill.enabled").retry_after(250)),
             });
         }
         Ok(serde_json::from_str(
@@ -92,12 +87,7 @@ impl Host for Fake {
         if let Some(code) = self.fail {
             return Err(Error::Api {
                 status: code.status(),
-                error: ApiError {
-                    code,
-                    message: "Start a stream first.".into(),
-                    setting: None,
-                    retry_after_ms: None,
-                },
+                error: Box::new(ApiError::new(code, "Start a stream first.")),
             });
         }
         Ok(CouchMenu { open })
@@ -121,13 +111,7 @@ impl Host for Fake {
         if let Some(code) = self.fail {
             return Err(Error::Api {
                 status: code.status(),
-                error: ApiError {
-                    code,
-                    message: "Turn on “Can join co-op games” for this device in the Rubylight console."
-                        .into(),
-                    setting: None,
-                    retry_after_ms: None,
-                },
+                error: Box::new(ApiError::new(code, "Turn on “Can join co-op games” for this device in the Rubylight console.")),
             });
         }
         Ok(CoopJoined {
@@ -211,12 +195,7 @@ impl Host for Fake {
         if pin == "0000" {
             return Err(Error::Api {
                 status: 422,
-                error: ApiError {
-                    code: ErrorCode::Unknown,
-                    message: "That is not the PIN TV shows.".into(),
-                    setting: None,
-                    retry_after_ms: None,
-                },
+                error: Box::new(ApiError::new(ErrorCode::Unknown, "That is not the PIN TV shows.")),
             });
         }
         Ok(PairingApproved { name: "TV".into() })
@@ -261,12 +240,7 @@ impl Host for Fake {
         if let Some(code) = self.fail {
             return Err(Error::Api {
                 status: code.status(),
-                error: ApiError {
-                    code,
-                    message: "This session belongs to another device.".into(),
-                    setting: None,
-                    retry_after_ms: None,
-                },
+                error: Box::new(ApiError::new(code, "This session belongs to another device.")),
             });
         }
         Ok(serde_json::from_str(AUDIO).unwrap())
@@ -501,6 +475,29 @@ fn other_errors_have_a_kind_and_the_status_when_the_host_answered() {
     ))));
     assert_eq!(io["error"]["kind"], "network");
     assert!(io["error"].get("http_status").is_none());
+}
+
+#[test]
+fn the_hosts_plain_english_parts_reach_java_only_when_sent() {
+    let mut error = ApiError::new(ErrorCode::DriverRejected, "wrote 3 and the driver reads back 1");
+    error.title = Some("The graphics driver refused the change".into());
+    error.next_step = Some("Choose another value.".into());
+    error.technical_detail = Some("ADLX_FAIL".into());
+    let explained = Error::Api { status: 409, error: Box::new(error) };
+    for envelope in [error_envelope(&explained), crate::http::error_json(&explained)] {
+        let body = parse(&envelope);
+        assert_eq!(body["error"]["message"], "wrote 3 and the driver reads back 1");
+        assert_eq!(body["error"]["title"], "The graphics driver refused the change");
+        assert_eq!(body["error"]["next_step"], "Choose another value.");
+        assert_eq!(body["error"]["technical_detail"], "ADLX_FAIL");
+    }
+    let old = Error::Api { status: 409, error: Box::new(ApiError::new(ErrorCode::HostInUse, "TV is streaming from this PC.")) };
+    for envelope in [error_envelope(&old), crate::http::error_json(&old)] {
+        let body = parse(&envelope);
+        for part in ["title", "next_step", "technical_detail"] {
+            assert!(body["error"].get(part).is_none(), "{part}: {body}");
+        }
+    }
 }
 
 #[test]

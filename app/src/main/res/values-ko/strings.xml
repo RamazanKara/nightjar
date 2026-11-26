@@ -582,4 +582,6 @@
     <string name="hdr_format_auto">자동</string>
     <string name="hdr_format_no_dolby_vision">Dolby Vision 제외</string>
     <string name="hdr_format_hdr10">HDR10만</string>
+    <string name="host_error_next_step">해결 방법: %1$s</string>
+    <string name="host_error_technical_detail">기술 세부 정보: %1$s</string>
 </resources>

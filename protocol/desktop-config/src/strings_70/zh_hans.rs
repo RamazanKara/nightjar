@@ -51,4 +51,6 @@ pub const TABLE: &[(&str, &str)] = &[
     ("The PC couldn’t pause or resume the game. It resumes what it paused as soon as it can.", "电脑未能暂停或恢复游戏。它会尽快恢复已暂停的内容。"),
     ("Play a game together with other devices, each in its own copy of the game on this PC. Join a running session here, or start one with “<game> (Co-op)” in the library.", "与其他设备一起玩游戏，每台设备在此电脑上运行自己的游戏副本。在这里加入正在进行的会话，或从游戏库中的“<游戏> (Co-op)”启动一个。"),
     ("The PC is busy with another co-op session.", "电脑正忙于另一个合作会话。"),
+    ("What to do: {}", "解决办法：{}"),
+    ("Technical details: {}", "技术详情：{}"),
 ];

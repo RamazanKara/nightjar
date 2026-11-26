@@ -582,4 +582,6 @@
     <string name="hdr_format_auto">自動</string>
     <string name="hdr_format_no_dolby_vision">不使用 Dolby Vision</string>
     <string name="hdr_format_hdr10">僅 HDR10</string>
+    <string name="host_error_next_step">解決方法：%1$s</string>
+    <string name="host_error_technical_detail">技術詳情：%1$s</string>
 </resources>

@@ -582,4 +582,6 @@
     <string name="hdr_format_auto">Otomatik</string>
     <string name="hdr_format_no_dolby_vision">Dolby Vision olmadan</string>
     <string name="hdr_format_hdr10">Yalnızca HDR10</string>
+    <string name="host_error_next_step">Ne yapmalı: %1$s</string>
+    <string name="host_error_technical_detail">Teknik ayrıntılar: %1$s</string>
 </resources>
