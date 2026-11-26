@@ -65,9 +65,9 @@ impl Dvr {
         let op = self.answered(clip.request_id);
         match clip.outcome {
             Outcome::Saved if op == Some(Op::StopRecord) => {
-                trf("Recording saved ({}, {})", &[&clock(u32::from(clip.duration_secs)), &size(clip.file_bytes)])
+                trf("Recording saved ({0}, {1})", &[&clock(u32::from(clip.duration_secs)), &size(clip.file_bytes)])
             }
-            Outcome::Saved => trf("Clip saved ({} s, {})", &[&clip.duration_secs, &size(clip.file_bytes)]),
+            Outcome::Saved => trf("Clip saved ({0} s, {1})", &[&clip.duration_secs, &size(clip.file_bytes)]),
             Outcome::Refused | Outcome::Failed => reason_text(clip.reason).to_owned(),
         }
     }

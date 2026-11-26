@@ -128,7 +128,7 @@ pub enum Feature {
 }
 
 impl Feature {
-    pub const ALL: [Feature; 55] = [
+    pub const ALL: [Feature; 56] = [
         Feature::Permissions,
         Feature::OtpPairing,
         Feature::Clipboard,
