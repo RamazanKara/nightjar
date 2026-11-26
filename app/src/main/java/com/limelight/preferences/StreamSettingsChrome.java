@@ -171,8 +171,11 @@ final class StreamSettingsChrome {
         activity.contextLabel.setVisibility(activity.searchQuery.isEmpty() ? View.GONE : View.VISIBLE);
         TextView large = activity.findViewById(R.id.settings_title);
         if (activity.twoPane) {
-            large.setText(activity.searchQuery.isEmpty() && activity.section != null
-                    ? StreamSettings.sectionTitle(activity.section) : R.string.settings_search_results);
+            // The pane's title names its section. The search results already have theirs beside the bar's back arrow, so the
+            // pane opens on their count instead of saying "Search results" a second time.
+            boolean searching = !activity.searchQuery.isEmpty();
+            large.setVisibility(searching ? View.GONE : View.VISIBLE);
+            if (!searching && activity.section != null) large.setText(StreamSettings.sectionTitle(activity.section));
         }
         updateNavigation();
         updateChips();
