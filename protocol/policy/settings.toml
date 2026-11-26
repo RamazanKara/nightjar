@@ -3371,9 +3371,9 @@ key = "checkbox_submit_hint"
 category = "category_debug_decoder"
 tier = "more"
 kind = "bool"
-xml_default = "false"
+xml_default = "true"
 scope = "global"
-advice = "Off by default, under Debug's More rows. Also reports the threads that hand frames to the decoder (the receive thread and the input worker) to Android's performance hints. On a Retroid Pocket 6 it made no measurable difference, idle or with its CPUs fully loaded; turn it on to compare."
+advice = "On by default, under Debug's More rows. Also reports the threads that hand frames to the decoder (the receive thread and the input worker) to Android's performance hints. On a TCL Smart TV Pro (MediaTek MT9689) it lowered receive to release by about 1 ms at the median and 4 to 6 ms at the 95th percentile; on a Retroid Pocket 6 it made no measurable difference. Turn it off to compare."
 
 [[android_setting]]
 key = "checkbox_codec_direct"

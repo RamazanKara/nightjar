@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">Acelerar la entrega de fotogramas</string>
-    <string name="summary_submit_hint">Para comparar. La indicación de rendimiento también cubre el hilo que alimenta al decodificador; no fue más rápido al medirlo en nuestros dispositivos. Déjalo desactivado.</string>
+    <string name="summary_submit_hint">Para comparar. La indicación de rendimiento también cubre los hilos que alimentan al decodificador; eso redujo la latencia en un TCL TV. Déjalo activado.</string>
     <string name="title_covering_decoder_size">Preparar el decodificador para plegar</string>
     <string name="summary_covering_decoder_size">Para plegables: dimensiona el decodificador de antemano para la pantalla más grande, así el primer plegado o giro no requiere reiniciar el decodificador. Desactívalo de nuevo si el vídeo se detiene o muestra errores.</string>
     <string name="title_pyrowave_preacquire">PyroWave: imagen de pantalla anticipada</string>

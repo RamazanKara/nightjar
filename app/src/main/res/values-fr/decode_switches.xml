@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">Accélérer la remise des images</string>
-    <string name="summary_submit_hint">Pour comparer. L’indication de performances couvre aussi le thread qui alimente le décodeur ; ce n’était pas plus rapide dans nos mesures sur nos appareils. Laissez-le désactivé.</string>
+    <string name="summary_submit_hint">Pour comparer. L’indication de performances couvre aussi les threads qui alimentent le décodeur, ce qui a réduit le délai sur un TCL TV. Laissez-le activé.</string>
     <string name="title_covering_decoder_size">Préparer le décodeur au pliage</string>
     <string name="summary_covering_decoder_size">Pour les appareils pliables : dimensionne d’emblée le décodeur pour le plus grand écran, pour que le premier pliage ou la première rotation ne redémarre pas le décodeur. Désactivez-le à nouveau si la vidéo s’arrête ou affiche des erreurs.</string>
     <string name="title_pyrowave_preacquire">PyroWave : image d\'écran anticipée</string>

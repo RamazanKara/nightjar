@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">Velocizza la consegna dei fotogrammi</string>
-    <string name="summary_submit_hint">Per fare confronti. Il suggerimento prestazioni copre anche il thread che alimenta il decoder; sui nostri dispositivi non è risultato più veloce. Lascialo disattivato.</string>
+    <string name="summary_submit_hint">Per fare confronti. Il suggerimento prestazioni copre anche i thread che alimentano il decoder, cosa che ha ridotto il ritardo su una TV TCL. Lascialo attivato.</string>
     <string name="title_covering_decoder_size">Prepara il decoder alla piegatura</string>
     <string name="summary_covering_decoder_size">Per i pieghevoli: dimensiona fin dall’inizio il decoder per lo schermo più grande, così la prima piegatura o rotazione non richiede un riavvio del decoder. Disattivalo di nuovo se il video si ferma o mostra errori.</string>
     <string name="title_pyrowave_preacquire">PyroWave: immagine dello schermo anticipata</string>

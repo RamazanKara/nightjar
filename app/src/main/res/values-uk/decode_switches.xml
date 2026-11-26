@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">Пришвидшити передавання кадрів</string>
-    <string name="summary_submit_hint">Для порівняння. Підказка продуктивності охоплює й потік, що передає дані декодеру; на наших пристроях у вимірюваннях швидше не стало. Залиште вимкненим.</string>
+    <string name="summary_submit_hint">Для порівняння. Підказка продуктивності охоплює й потоки, що передають дані декодеру; на TCL TV це зменшило затримку. Залиште увімкненим.</string>
     <string name="title_covering_decoder_size">Підготувати декодер до складання</string>
     <string name="summary_covering_decoder_size">Для складаних пристроїв: заздалегідь задає розмір декодера під більший екран, щоб перше складання чи поворот обходилися без перезапуску декодера. Вимкніть, якщо відео зупиняється або з’являються помилки.</string>
     <string name="title_pyrowave_preacquire">PyroWave: ранній образ екрана</string>

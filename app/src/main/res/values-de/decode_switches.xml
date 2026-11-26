@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">Frame-Übergabe beschleunigen</string>
-    <string name="summary_submit_hint">Zum Vergleichen. Die Leistungssteuerung erfasst auch den Thread, der den Decoder versorgt; auf unseren Geräten war es in Messungen nicht schneller. Lass es aus.</string>
+    <string name="summary_submit_hint">Zum Vergleichen. Die Leistungssteuerung erfasst auch die Threads, die den Decoder versorgen; das hat die Verzögerung auf einem TCL-TV gesenkt. Lass es an.</string>
     <string name="title_covering_decoder_size">Decoder aufs Falten vorbereiten</string>
     <string name="summary_covering_decoder_size">Für faltbare Geräte: Legt den Decoder vorab für den größeren Bildschirm aus, damit das erste Falten oder Drehen keinen Decoder-Neustart braucht. Schalte es wieder aus, wenn das Video stehen bleibt oder Fehler zeigt.</string>
     <string name="title_pyrowave_preacquire">PyroWave: Bildschirmbild früher holen</string>

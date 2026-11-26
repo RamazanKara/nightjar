@@ -132,3 +132,15 @@ Measured on a Retroid Pocket 6 (120 Hz panel, HEVC 1080p60 20 Mbps, Smoothest pa
 | Decoder priority for receiving | 8 loops, CPUs ≥ 95 % busy | 1.39 / 3.61, 1.39 / 3.68, 1.33 / 3.27, 1.38 / 3.61 | 1.39 / 3.39, 1.38 / 3.29, 1.37 / 3.34, 1.37 / 3.50 | Off 3, 1, 1, 1; On 0, 2, 1, 0 |
 
 With 8 loops, Decoder priority for receiving had a p95 receive-to-release of 3.29 to 3.50 ms (mean 3.38) against 3.27 to 3.68 ms Off (mean 3.54) over four legs each, with the median unchanged at about 1.38 ms: lower on average, but one Off leg (3.27 ms) beat every On leg. Idle, the arms overlapped (p95 4.46 to 4.63 ms both). Speed up frame hand-off moved neither the median nor the p95 beyond the spread between legs of one arm, idle or under load. Catch-up drops stayed at three or fewer per 90-second leg; with Decoder priority for receiving there were 6 over the four Off load legs and 3 over the four On legs. The hand-off worker (InputSubmit) was handed only one or two units per stream, the start of the stream, so the second submit thread the hint setting adds was in the session but did almost no work; a decoder that stalls would exercise it, and this one never did.
+
+## Speed up frame hand-off at the app's defaults
+
+Measured on 2026-11-26 with a debug build of main (`88fe00458e`): HEVC 1080p60 at 20 Mbps from an isolated test host on this PC over Wi-Fi, Lowest latency pacing, Decoder priority for receiving, Direct submit and Prioritize stream traffic on (the defaults), 90 s per leg in the order off, on, on, off (`tools/hw/settings_ab.py run --setting submit --defaults`). Receive to release from Nightjar's latency CSV after the first 5 s.
+
+| Device | Load | Off p50 / p95 ms (each leg) | On p50 / p95 ms (each leg) |
+| --- | --- | --- | --- |
+| Retroid Pocket 6 (120 Hz panel) | idle | 6.21 / 8.39, 6.21 / 9.04 | 6.32 / 8.69, 6.28 / 8.60 |
+| Retroid Pocket 6 | 8 busy loops, CPUs 100 % busy | 4.67 / 6.84, 4.69 / 6.94 | 5.43 / 9.60, 4.76 / 7.21 |
+| TCL Smart TV Pro (MediaTek MT9689, Android 14, 60 Hz) | idle | 16.77 / 25.56, 16.46 / 23.62 | 15.83 / 19.26, 15.59 / 19.75 |
+
+On the TCL both legs with it on beat both legs without it: about 1 ms off the median and 4 to 6 ms off the 95th percentile, with the decoder's own input to output unchanged (8.04 to 8.16 ms median), so the gain is in the threads that feed and release frames. On the Retroid the arms overlapped idle and under load, apart from one loaded leg with it on (p95 9.60 ms). It is on by default since. One Retroid leg (idle, off) received only 46 frames a second from the host; its median matched the other legs. With the CPUs loaded, the Retroid released frames about 1.5 ms sooner and decoded in 0.9 instead of 1.64 ms (median input to output), whatever the setting: its clocks stay higher under load.

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">Acelerar a entrega de quadros</string>
-    <string name="summary_submit_hint">Para comparação. A dica de desempenho também inclui a thread que alimenta o decodificador; nas medições, não foi mais rápido nos nossos dispositivos. Deixe desativado.</string>
+    <string name="summary_submit_hint">Para comparação. A dica de desempenho também inclui as threads que alimentam o decodificador, o que reduziu o atraso em uma TV TCL. Deixe ativado.</string>
     <string name="title_covering_decoder_size">Preparar o decodificador para dobrar</string>
     <string name="summary_covering_decoder_size">Para dobráveis: dimensiona o decodificador já para a tela maior, assim a primeira dobra ou giro não exige reiniciar o decodificador. Desative de novo se o vídeo parar ou mostrar erros.</string>
     <string name="title_pyrowave_preacquire">PyroWave: imagem de tela antecipada</string>

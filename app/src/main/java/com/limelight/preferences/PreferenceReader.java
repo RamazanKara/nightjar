@@ -380,7 +380,7 @@ final class PreferenceReader {
                 config.videoFormat != PreferenceConfiguration.FormatOption.FORCE_PYROWAVE;
         config.unbatchedInput = prefs.getBoolean(UNBATCHED_INPUT_PREF_STRING, true);
         config.networkPriority = prefs.getBoolean(NETWORK_PRIORITY_PREF_STRING, true);
-        config.submitHint = prefs.getBoolean(SUBMIT_HINT_PREF_STRING, false);
+        config.submitHint = prefs.getBoolean(SUBMIT_HINT_PREF_STRING, true);
         config.coveringDecoderSize = prefs.getBoolean(COVERING_DECODER_SIZE_PREF_STRING, false);
         config.pyroWavePreacquire = prefs.getBoolean(PYROWAVE_PREACQUIRE_PREF_STRING, false);
         config.receiveDecodePriority = prefs.getBoolean(RECEIVE_DECODE_PRIORITY_PREF_STRING, true);

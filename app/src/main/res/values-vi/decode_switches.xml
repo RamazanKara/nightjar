@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">Tăng tốc chuyển khung hình</string>
-    <string name="summary_submit_hint">Dùng để so sánh. Gợi ý hiệu năng bao gồm cả luồng cấp dữ liệu cho bộ giải mã; đo trên thiết bị của chúng tôi thì không nhanh hơn. Nên để tắt.</string>
+    <string name="summary_submit_hint">Dùng để so sánh. Gợi ý hiệu năng bao gồm cả các luồng cấp dữ liệu cho bộ giải mã, giúp giảm độ trễ trên TV TCL. Nên để bật.</string>
     <string name="title_covering_decoder_size">Chuẩn bị bộ giải mã khi gập</string>
     <string name="summary_covering_decoder_size">Dành cho máy màn hình gập: đặt sẵn kích thước bộ giải mã cho màn hình lớn hơn, nên lần gập hoặc xoay đầu tiên không cần khởi động lại bộ giải mã. Tắt lại nếu video dừng hoặc bị lỗi hình.</string>
     <string name="title_pyrowave_preacquire">PyroWave: lấy sớm ảnh màn hình</string>

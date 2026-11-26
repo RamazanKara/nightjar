@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">加快影格交付</string>
-    <string name="summary_submit_hint">用於比較。效能提示也涵蓋向解碼器送入資料的執行緒；在我們的裝置上測得並沒有更快。請保持關閉。</string>
+    <string name="summary_submit_hint">用於比較。效能提示也涵蓋向解碼器送入資料的執行緒，這降低了 TCL 電視上的延遲。請保持開啟。</string>
     <string name="title_covering_decoder_size">為折疊準備解碼器</string>
     <string name="summary_covering_decoder_size">適用於折疊式裝置：預先依較大的螢幕設定解碼器大小，這樣第一次折疊或旋轉時不必重新啟動解碼器。如果視訊停止或出現錯誤，請重新關閉。</string>
     <string name="title_pyrowave_preacquire">PyroWave 提前取得螢幕影像</string>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">프레임 전달 가속</string>
-    <string name="summary_submit_hint">비교용입니다. 성능 힌트가 디코더에 데이터를 공급하는 스레드도 포함합니다. 저희 기기에서 측정했을 때 더 빨라지지 않았습니다. 꺼 두세요.</string>
+    <string name="summary_submit_hint">비교용입니다. 성능 힌트가 디코더에 데이터를 공급하는 스레드도 포함하며, 이로 인해 TCL TV에서 지연이 줄었습니다. 켜 두세요.</string>
     <string name="title_covering_decoder_size">접기에 맞춘 디코더 준비</string>
     <string name="summary_covering_decoder_size">폴더블 기기용입니다. 디코더 크기를 미리 더 큰 화면에 맞춰 두어, 처음 접거나 돌릴 때 디코더를 다시 시작하지 않아도 됩니다. 영상이 멈추거나 오류가 보이면 다시 끄세요.</string>
     <string name="title_pyrowave_preacquire">PyroWave 화면 이미지 미리 가져오기</string>

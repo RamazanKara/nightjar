@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">フレーム受け渡しの高速化</string>
-    <string name="summary_submit_hint">比較用です。パフォーマンス ヒントの対象に、デコーダーへデータを渡すスレッドも含めます。当方のデバイスでの測定では速くなりませんでした。オフのままにしてください。</string>
+    <string name="summary_submit_hint">比較用です。パフォーマンス ヒントの対象に、デコーダーへデータを渡すスレッドも含めます。これにより TCL TV での遅延が減りました。オンのままにしてください。</string>
     <string name="title_covering_decoder_size">折りたたみに備えたデコーダー</string>
     <string name="summary_covering_decoder_size">折りたたみデバイス向けです。あらかじめ大きいほうの画面に合わせてデコーダーのサイズを確保し、最初の折りたたみや回転でデコーダーを再起動せずに済むようにします。映像が止まる、またはエラーが出る場合はオフに戻してください。</string>
     <string name="title_pyrowave_preacquire">PyroWave 画面イメージの先行取得</string>

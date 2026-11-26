@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">Szybsze przekazywanie klatek</string>
-    <string name="summary_submit_hint">Do porównań. Wskazówka wydajności obejmuje też wątek, który zasila dekoder; w pomiarach na naszych urządzeniach nie było szybciej. Zostaw wyłączone.</string>
+    <string name="summary_submit_hint">Do porównań. Wskazówka wydajności obejmuje też wątki, które zasilają dekoder; dzięki temu zmniejszyło się opóźnienie na telewizorze TCL. Zostaw włączone.</string>
     <string name="title_covering_decoder_size">Dekoder gotowy na składanie</string>
     <string name="summary_covering_decoder_size">Dla urządzeń składanych: od razu ustawia rozmiar dekodera dla większego ekranu, więc pierwsze złożenie lub obrót nie wymaga restartu dekodera. Wyłącz ponownie, jeśli wideo się zatrzymuje lub pokazuje błędy.</string>
     <string name="title_pyrowave_preacquire">PyroWave: wcześniejszy obraz ekranu</string>

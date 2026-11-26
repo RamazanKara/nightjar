@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_submit_hint">Kare aktarımını hızlandır</string>
-    <string name="summary_submit_hint">Karşılaştırma içindir. Performans ipucu, kod çözücüyü besleyen iş parçacığını da kapsar; cihazlarımızdaki ölçümlerde daha hızlı çıkmadı. Kapalı bırakın.</string>
+    <string name="summary_submit_hint">Karşılaştırma içindir. Performans ipucu, kod çözücüyü besleyen iş parçacıklarını da kapsar; bu, bir TCL televizyonda gecikmeyi düşürdü. Açık bırakın.</string>
     <string name="title_covering_decoder_size">Kod çözücüyü katlamaya hazırla</string>
     <string name="summary_covering_decoder_size">Katlanabilir cihazlar için: kod çözücüyü baştan büyük ekrana göre boyutlandırır; böylece ilk katlama veya döndürmede kod çözücünün yeniden başlaması gerekmez. Video durur veya hatalı görünürse yeniden kapatın.</string>
     <string name="title_pyrowave_preacquire">PyroWave: erken ekran görüntüsü</string>
