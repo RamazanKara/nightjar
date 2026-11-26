@@ -549,6 +549,10 @@ public class PreferenceConfiguration extends SettingsCatalogGen {
         return PreferenceMigrations.migrateReceiveDecodePriorityDefault(prefs);
     }
 
+    static boolean migrateSubmitHintDefault(SharedPreferences prefs) {
+        return PreferenceMigrations.migrateSubmitHintDefault(prefs);
+    }
+
     static void retireEngineChoice(SharedPreferences prefs) {
         PreferenceMigrations.retireEngineChoice(prefs);
     }

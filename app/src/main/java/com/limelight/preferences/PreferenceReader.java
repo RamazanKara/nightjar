@@ -119,6 +119,9 @@ final class PreferenceReader {
         if (PreferenceMigrations.migrateReceiveDecodePriorityDefault(prefs)) {
             com.limelight.LimeLog.info("Decoder priority for receiving switched to its new default: on");
         }
+        if (PreferenceMigrations.migrateSubmitHintDefault(prefs)) {
+            com.limelight.LimeLog.info("Speed up frame hand-off switched to its new default: on");
+        }
         FoldedChoice.migrate(prefs);
         PreferenceConfiguration config = new PreferenceConfiguration();
 
