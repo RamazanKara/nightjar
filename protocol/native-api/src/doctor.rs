@@ -141,9 +141,9 @@ pub struct EligibleRemedy {
     /// The bitrate a [`RemedyId::BitrateStepdown`] asks for.
     #[serde(default)]
     pub target_kbps: Option<u32>,
-    /// Why not, by a stable name (`not_owner`, `at_minimum`,
-    /// `automatic_bitrate`, `trial_active`, `bitrate_unknown`, or one from a
-    /// newer host); null when configurable.
+    /// Why not, by a stable name (`not_owner`, `permission_required`,
+    /// `at_minimum`, `trial_active`, `bitrate_unknown`, or one from a newer
+    /// host); null when configurable.
     #[serde(default)]
     pub reason: Option<String>,
     /// The same in plain English, null when configurable.
