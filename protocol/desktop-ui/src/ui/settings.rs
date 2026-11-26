@@ -398,48 +398,81 @@ impl Launcher {
     }
 
     /// Presets: Android's chips for one-tap sets of resolution, frame rate and bitrate, the one
-    /// the settings are marked, else the value says Custom. A chip asks before it replaces them
-    /// (`Dialog::ConfirmPreset`).
+    /// the settings are marked, else the value says Custom as strongly as the label. A chip asks
+    /// before it replaces them (`Dialog::ConfirmPreset`). The chips are one line beside the label
+    /// where the row has room for both and under it where it has not: one line while they fit,
+    /// then two lines of two with shared columns as on a phone, then a chip a line.
     fn presets_row(&mut self, ui: &mut Ui) {
+        /// The least the label keeps beside the chips.
+        const LABEL_MIN: f32 = 120.0;
         let vrr_offered = self.tearing_supported || cfg!(not(windows));
         let chosen = presets::chosen(&preset_current(&self.settings, vrr_offered));
         let value = chosen.map_or_else(|| tr("Custom").to_owned(), preset_value);
         let mut asked = None;
         group_row(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.set_min_height(design_tokens::SIZE_ROW_HEIGHT - 2.0 * 8.0);
-                // The label takes what the chips leave inside the row, so the chips end at the
-                // row's right edge: a wider row would widen the whole page of rows below it. The
-                // chips' width is the last frame's, their labels' before the first.
-                let chips_id = Id::unique("settings-preset-chips");
-                let chips_w = ui.data(|d| d.get_temp::<f32>(chips_id)).unwrap_or_else(|| {
-                    let font = semibold(text::CAPTION);
-                    Preset::ALL.iter().map(|&p| ui.painter().layout_no_wrap(tr(preset_label(p)).to_owned(), font.clone(), Color32::WHITE).size().x + 40.0).sum()
-                });
-                let gap = ui.spacing().item_spacing.x;
-                let label_w = (ui.available_width() - gap - chips_w).max(120.0);
+            // The chips' widths decide where they go, and beside the label they end at the row's
+            // right edge: a wider row would widen the whole page of rows below it. The widths are
+            // the last frame's, their labels' before the first.
+            let chips_id = Id::unique("settings-preset-chips");
+            let wide = ui.data(|d| d.get_temp::<[f32; 4]>(chips_id)).unwrap_or_else(|| {
+                let font = semibold(text::CAPTION);
+                Preset::ALL.map(|p| ui.painter().layout_no_wrap(tr(preset_label(p)).to_owned(), font.clone(), Color32::WHITE).size().x + 40.0)
+            });
+            let gap = ui.spacing().item_spacing.x;
+            let room = ui.available_width();
+            let line = wide.iter().sum::<f32>() + 3.0 * gap;
+            let columns = (wide[0].max(wide[2]), wide[1].max(wide[3]));
+            let beside = room - gap - line >= LABEL_MIN;
+            let per_line = if line <= room { 4 } else if columns.0 + gap + columns.1 <= room { 2 } else { 1 };
+            let label = |ui: &mut Ui, width: f32| {
                 ui.vertical(|ui| {
-                    ui.set_width(label_w);
+                    ui.set_width(width);
                     ui.spacing_mut().item_spacing.y = 2.0;
                     ui.label(RichText::new(tr("Presets")).font(semibold(text::BODY)).color(ON_SURFACE));
-                    ui.label(RichText::new(value).font(regular(text::CAPTION)).color(ON_SURFACE_VARIANT));
+                    // No preset: the settings are the player's own.
+                    let words = RichText::new(value.as_str());
+                    ui.label(if chosen.is_some() { words.font(regular(text::CAPTION)).color(ON_SURFACE_VARIANT) } else { words.font(semibold(text::CAPTION)).color(ON_SURFACE) });
                 });
-                let start = ui.cursor().left();
-                let mut end = start;
-                for preset in Preset::ALL {
-                    let chip = section_chip(ui, preset_label(preset), chosen == Some(preset));
-                    name_for_readers(ui, &chip, preset_label(preset), en("One-tap sets of resolution, frame rate and bitrate."));
-                    self.focus_item(&chip, preset_key(preset), false);
-                    end = chip.rect.right();
-                    if chip.clicked() {
-                        asked = Some(preset);
+            };
+            let mut measured = wide;
+            let mut chip = |ui: &mut Ui, at: usize| {
+                let preset = Preset::ALL[at];
+                let chip = section_chip(ui, preset_label(preset), chosen == Some(preset));
+                name_for_readers(ui, &chip, preset_label(preset), en("One-tap sets of resolution, frame rate and bitrate."));
+                self.focus_item(&chip, preset_key(preset), false);
+                measured[at] = chip.rect.width();
+                if chip.clicked() {
+                    asked = Some(preset);
+                }
+            };
+            if beside {
+                ui.horizontal(|ui| {
+                    ui.set_min_height(design_tokens::SIZE_ROW_HEIGHT - 2.0 * 8.0);
+                    label(ui, room - gap - line);
+                    for at in 0..4 {
+                        chip(ui, at);
                     }
+                });
+            } else {
+                label(ui, room);
+                ui.add_space(space::XS);
+                ui.spacing_mut().item_spacing.y = gap;
+                for first in (0..4).step_by(per_line) {
+                    ui.horizontal(|ui| {
+                        for at in first..first + per_line {
+                            chip(ui, at);
+                            // Two lines of two: the second chips start under each other.
+                            if per_line == 2 && at == first {
+                                ui.add_space(columns.0 - wide[first]);
+                            }
+                        }
+                    });
                 }
-                if (end - start - chips_w).abs() > 0.5 {
-                    ui.data_mut(|d| d.insert_temp(chips_id, end - start));
-                    ui.ctx().request_repaint();
-                }
-            });
+            }
+            if measured.iter().zip(&wide).any(|(now, before)| (now - before).abs() > 0.5) {
+                ui.data_mut(|d| d.insert_temp(chips_id, measured));
+                ui.ctx().request_repaint();
+            }
         });
         if let Some(preset) = asked {
             self.dialog = Dialog::ConfirmPreset(preset);

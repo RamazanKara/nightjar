@@ -287,9 +287,9 @@ fn settings_preview_screenshots() {
         scroll_row_to(&mut f, "HDR", 190.0);
         f.shoot(&dir, &format!("preview-hdr-{name}"));
     }
-    // The presets row over Video's rows, with a preset chosen and with none (Custom), down to
-    // the width where its chips wrap.
-    for width in [1280.0, 900.0, 760.0] {
+    // The presets row over Video's rows, with a preset chosen and with none (Custom): beside
+    // the label, under it, and as two lines of two.
+    for width in [1280.0, 900.0, 680.0, 520.0] {
         if !"presets".contains(&only) {
             continue;
         }
