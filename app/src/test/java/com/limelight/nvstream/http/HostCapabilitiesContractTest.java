@@ -99,6 +99,7 @@ public class HostCapabilitiesContractTest {
             case STREAM_DVR: return "stream_dvr";
             case AWAY_WAKE_RELAY: return "away_wake_relay";
             case STREAM_DOCTOR_V2: return "stream_doctor_v2";
+            case LAUNCH_CURTAIN: return "launch_curtain";
             default: return null;
         }
     }

@@ -133,10 +133,15 @@ pub enum Feature {
     /// this stream's time and steps its bitrate down for this stream on request. Known only
     /// after [`super::HostCapabilities::with_native`], and only with View or Launch.
     StreamDoctorV2,
+    /// Launch curtain (`LaunchCurtainVersion`, or native `session.launch_curtain`): a launch may
+    /// ask with `rlLaunchCurtain=1` for the start's state (0x5548), so the client keeps its own
+    /// screen over the stream until the game's window is in front. Only while the host's
+    /// `launch_curtain` setting is on.
+    LaunchCurtain,
 }
 
 impl Feature {
-    pub const ALL: [Feature; 58] = [
+    pub const ALL: [Feature; 59] = [
         Feature::Permissions,
         Feature::OtpPairing,
         Feature::Clipboard,
@@ -195,6 +200,7 @@ impl Feature {
         Feature::StreamDvr,
         Feature::AwayWakeRelay,
         Feature::StreamDoctorV2,
+        Feature::LaunchCurtain,
     ];
 }
 
@@ -373,6 +379,10 @@ pub struct Evidence {
     pub wake_relay_offered: bool,
     /// `stream.doctor_v2` in native features, with View or Launch.
     pub stream_doctor_offered: bool,
+    /// -1 without `LaunchCurtainVersion`: the host does not follow a game's start for a curtain.
+    pub launch_curtain_version: i32,
+    /// `session.launch_curtain` in native features.
+    pub launch_curtain_offered: bool,
     /// `MaxVideoPacket`: the largest video packet this host accepts, including a client's
     /// 32-byte encryption header. 0 when the host offers no more than stock Moonlight's 1400.
     pub max_video_packet: u16,

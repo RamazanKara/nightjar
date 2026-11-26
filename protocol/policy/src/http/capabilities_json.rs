@@ -186,6 +186,14 @@ impl Evidence {
             "streamDoctorOffered".into(),
             Value::from(self.stream_doctor_offered),
         );
+        map.insert(
+            "launchCurtainVersion".into(),
+            Value::from(self.launch_curtain_version),
+        );
+        map.insert(
+            "launchCurtainOffered".into(),
+            Value::from(self.launch_curtain_offered),
+        );
         if let Some(version) = &self.rust_host_version {
             map.insert("rustHostVersion".into(), Value::from(version.as_str()));
         }
@@ -332,6 +340,8 @@ impl Evidence {
             quick_suspend_offered: opt_bool("quickSuspendOffered")?,
             stream_dvr_offered: opt_bool("streamDvrOffered")?,
             stream_doctor_offered: opt_bool("streamDoctorOffered")?,
+            launch_curtain_version: opt_i32("launchCurtainVersion", -1)?,
+            launch_curtain_offered: opt_bool("launchCurtainOffered")?,
             max_video_packet,
         })
     }

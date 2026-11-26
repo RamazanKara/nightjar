@@ -281,6 +281,9 @@ pub enum ControlEvent {
     StreamDvrState(rubylight_protocol::stream_dvr::HostState),
     /// How a clip or a recording ended (0x554A), with the request's id.
     StreamDvrClip(rubylight_protocol::stream_dvr::ClipResult),
+    /// The host's launch curtain state (0x5548) for a launch that asked, for
+    /// `nightjar_policy::launch_curtain`. Never coalesced.
+    LaunchCurtain(rubylight_protocol::launch_curtain::CurtainState),
     ConnectionStatus(ConnectionStatus),
     /// Client roaming started, moved the stream, gave up, or was not needed.
     Roam(RoamEvent),
@@ -497,6 +500,15 @@ pub(crate) fn quick_suspend(p: &[u8]) -> Option<ControlEvent> {
         Message::State(state) => Some(ControlEvent::QuickSuspend(state)),
         Message::Request(_) => None,
     }
+}
+
+/// A launch curtain state: its header and texts, and a newer host may append fields; one that
+/// breaks the format's rules is dropped.
+pub(crate) fn launch_curtain(p: &[u8]) -> Option<ControlEvent> {
+    if p.len() > 1024 {
+        return None;
+    }
+    rubylight_protocol::launch_curtain::CurtainState::decode(p).map(ControlEvent::LaunchCurtain)
 }
 
 /// A rate change result: 20 bytes, and a newer host may append fields. Anything over 256

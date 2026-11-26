@@ -540,6 +540,46 @@ fn quick_suspend_goes_both_ways_only_once_announced() {
 }
 
 #[test]
+fn launch_curtain_states_are_heard_only_once_announced() {
+    use rubylight_protocol::launch_curtain::{CurtainState, Phase, PromptKind};
+    let state = CurtainState {
+        phase: Phase::AttentionNeeded,
+        flags: 0x08,
+        prompt: PromptKind::Update,
+        sequence: 3,
+        elapsed_ms: 4_000,
+        launcher: "steam".into(),
+        title: "Steam - Updating".into(),
+        reason: String::new(),
+    };
+    let mut s = ControlSession::new(
+        HostCapabilities {
+            control_messages: vec![0x5530, 0x5548],
+            ..rubylight()
+        },
+        &KEY,
+        SessionOptions::default(),
+    );
+    let t0 = Instant::now();
+    s.start(t0);
+    host_reads(&mut s);
+    let frame = state.encode().unwrap();
+    s.handle_datagram(t0, &from_host(1, 0x5548, &frame)).unwrap();
+    // A short frame and one of version 0 are no state.
+    s.handle_datagram(t0, &from_host(2, 0x5548, &frame[..10]))
+        .unwrap();
+    let mut zero = frame.clone();
+    zero[0] = 0;
+    s.handle_datagram(t0, &from_host(3, 0x5548, &zero)).unwrap();
+    assert_eq!(s.take_events(), [ControlEvent::LaunchCurtain(state.clone())]);
+
+    // A launch that did not ask hears nothing, even if the host sends it.
+    let mut bare = session(SessionOptions::default());
+    bare.handle_datagram(t0, &from_host(1, 0x5548, &frame)).unwrap();
+    assert_eq!(bare.take_events(), []);
+}
+
+#[test]
 fn rubylight_messages_need_announcement() {
     let mut s = session(SessionOptions::default());
     let caps = DisplayCaps {

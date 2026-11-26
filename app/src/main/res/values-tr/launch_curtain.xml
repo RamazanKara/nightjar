@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_curtain_preparing">Bilgisayar hazırlanıyor</string>
+    <string name="launch_curtain_starting">Oyun başlatılıyor</string>
+    <string name="launch_curtain_opening">Pencere açılıyor</string>
+    <string name="launch_curtain_focusing">Oyun öne getiriliyor</string>
+    <string name="launch_curtain_updating">%1$s güncelleniyor</string>
+    <string name="launch_curtain_updating_any">Bir başlatıcı güncelleniyor</string>
+    <string name="launch_curtain_sign_in">%1$s oturum açmanı istiyor</string>
+    <string name="launch_curtain_sign_in_any">Bir başlatıcı oturum açmanı istiyor</string>
+    <string name="launch_curtain_waiting">%1$s seni bekliyor</string>
+    <string name="launch_curtain_waiting_any">Bilgisayardaki bir pencere seni bekliyor</string>
+    <string name="launch_curtain_uac">Windows bu bilgisayarda yönetici onayı istiyor</string>
+    <string name="launch_curtain_hint">Bu cihazdan yanıtlamak için bilgisayar ekranını göster veya başlatmayı iptal et.</string>
+    <string name="launch_curtain_show_screen">Bilgisayar ekranını göster</string>
+    <string name="launch_curtain_still_starting">Bilgisayar ekranı gösteriliyor. Oyun hâlâ başlıyor.</string>
+    <string name="launch_curtain_failed">Oyun bilgisayarda başlamadı.</string>
+</resources>

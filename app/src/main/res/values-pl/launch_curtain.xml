@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_curtain_preparing">Przygotowywanie komputera</string>
+    <string name="launch_curtain_starting">Uruchamianie gry</string>
+    <string name="launch_curtain_opening">Otwieranie okna</string>
+    <string name="launch_curtain_focusing">Przenoszenie gry na pierwszy plan</string>
+    <string name="launch_curtain_updating">%1$s się aktualizuje</string>
+    <string name="launch_curtain_updating_any">Launcher się aktualizuje</string>
+    <string name="launch_curtain_sign_in">%1$s prosi o zalogowanie się</string>
+    <string name="launch_curtain_sign_in_any">Launcher prosi o zalogowanie się</string>
+    <string name="launch_curtain_waiting">%1$s czeka na ciebie</string>
+    <string name="launch_curtain_waiting_any">Okno na komputerze czeka na ciebie</string>
+    <string name="launch_curtain_uac">Windows wymaga zgody administratora na tym komputerze</string>
+    <string name="launch_curtain_hint">Pokaż ekran komputera, aby odpowiedzieć z tego urządzenia, albo anuluj uruchamianie.</string>
+    <string name="launch_curtain_show_screen">Pokaż ekran komputera</string>
+    <string name="launch_curtain_still_starting">Pokazuję ekran komputera. Gra wciąż się uruchamia.</string>
+    <string name="launch_curtain_failed">Gra nie uruchomiła się na komputerze.</string>
+</resources>

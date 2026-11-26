@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_curtain_preparing">Préparation du PC</string>
+    <string name="launch_curtain_starting">Lancement du jeu</string>
+    <string name="launch_curtain_opening">Ouverture de la fenêtre</string>
+    <string name="launch_curtain_focusing">Mise au premier plan du jeu</string>
+    <string name="launch_curtain_updating">%1$s se met à jour</string>
+    <string name="launch_curtain_updating_any">Un lanceur se met à jour</string>
+    <string name="launch_curtain_sign_in">%1$s vous demande de vous connecter</string>
+    <string name="launch_curtain_sign_in_any">Un lanceur vous demande de vous connecter</string>
+    <string name="launch_curtain_waiting">%1$s vous attend</string>
+    <string name="launch_curtain_waiting_any">Une fenêtre du PC vous attend</string>
+    <string name="launch_curtain_uac">Windows demande l’approbation d’un administrateur sur ce PC</string>
+    <string name="launch_curtain_hint">Affichez l’écran du PC pour répondre depuis cet appareil, ou annulez le lancement.</string>
+    <string name="launch_curtain_show_screen">Afficher l’écran du PC</string>
+    <string name="launch_curtain_still_starting">Écran du PC affiché. Le jeu est encore en cours de lancement.</string>
+    <string name="launch_curtain_failed">Le jeu n’a pas démarré sur le PC.</string>
+</resources>

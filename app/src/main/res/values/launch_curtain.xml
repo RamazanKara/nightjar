@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_curtain_preparing">Preparing PC</string>
+    <string name="launch_curtain_starting">Starting game</string>
+    <string name="launch_curtain_opening">Opening window</string>
+    <string name="launch_curtain_focusing">Focusing game</string>
+    <string name="launch_curtain_updating">%1$s is updating</string>
+    <string name="launch_curtain_updating_any">A launcher is updating</string>
+    <string name="launch_curtain_sign_in">%1$s wants you to sign in</string>
+    <string name="launch_curtain_sign_in_any">A launcher wants you to sign in</string>
+    <string name="launch_curtain_waiting">%1$s is waiting for you</string>
+    <string name="launch_curtain_waiting_any">A window on the PC is waiting for you</string>
+    <string name="launch_curtain_uac">Windows needs administrator approval on this PC</string>
+    <string name="launch_curtain_hint">Show the PC screen to answer it from this device, or cancel the launch.</string>
+    <string name="launch_curtain_show_screen">Show PC screen</string>
+    <string name="launch_curtain_still_starting">Showing PC screen. The game is still starting.</string>
+    <string name="launch_curtain_failed">The game didn’t start on the PC.</string>
+</resources>

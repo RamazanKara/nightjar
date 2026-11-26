@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_curtain_preparing">Đang chuẩn bị PC</string>
+    <string name="launch_curtain_starting">Đang khởi động trò chơi</string>
+    <string name="launch_curtain_opening">Đang mở cửa sổ</string>
+    <string name="launch_curtain_focusing">Đang đưa trò chơi lên trước</string>
+    <string name="launch_curtain_updating">%1$s đang cập nhật</string>
+    <string name="launch_curtain_updating_any">Một trình khởi chạy đang cập nhật</string>
+    <string name="launch_curtain_sign_in">%1$s yêu cầu bạn đăng nhập</string>
+    <string name="launch_curtain_sign_in_any">Một trình khởi chạy yêu cầu bạn đăng nhập</string>
+    <string name="launch_curtain_waiting">%1$s đang chờ bạn</string>
+    <string name="launch_curtain_waiting_any">Một cửa sổ trên PC đang chờ bạn</string>
+    <string name="launch_curtain_uac">Windows cần quản trị viên phê duyệt trên PC này</string>
+    <string name="launch_curtain_hint">Hiện màn hình PC để trả lời từ thiết bị này, hoặc hủy khởi chạy.</string>
+    <string name="launch_curtain_show_screen">Hiện màn hình PC</string>
+    <string name="launch_curtain_still_starting">Đang hiện màn hình PC. Trò chơi vẫn đang khởi động.</string>
+    <string name="launch_curtain_failed">Trò chơi chưa khởi động được trên PC.</string>
+</resources>

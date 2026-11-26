@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_curtain_preparing">Підготовка ПК</string>
+    <string name="launch_curtain_starting">Запуск гри</string>
+    <string name="launch_curtain_opening">Відкриття вікна</string>
+    <string name="launch_curtain_focusing">Виведення гри на передній план</string>
+    <string name="launch_curtain_updating">%1$s оновлюється</string>
+    <string name="launch_curtain_updating_any">Лаунчер оновлюється</string>
+    <string name="launch_curtain_sign_in">%1$s просить увійти в обліковий запис</string>
+    <string name="launch_curtain_sign_in_any">Лаунчер просить увійти в обліковий запис</string>
+    <string name="launch_curtain_waiting">%1$s чекає на вас</string>
+    <string name="launch_curtain_waiting_any">Вікно на ПК чекає на вас</string>
+    <string name="launch_curtain_uac">Windows потребує дозволу адміністратора на цьому ПК</string>
+    <string name="launch_curtain_hint">Покажіть екран ПК, щоб відповісти з цього пристрою, або скасуйте запуск.</string>
+    <string name="launch_curtain_show_screen">Показати екран ПК</string>
+    <string name="launch_curtain_still_starting">Показано екран ПК. Гра ще запускається.</string>
+    <string name="launch_curtain_failed">Гра не запустилася на ПК.</string>
+</resources>

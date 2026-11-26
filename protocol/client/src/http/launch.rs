@@ -77,6 +77,10 @@ pub struct LaunchRequest {
     /// Asks a Rubylight host for clipboard sync (`rlClipboardSync=1`); it offers 0x5508 on
     /// DESCRIBE when the device's clipboard permissions allow it.
     pub clipboard_sync: bool,
+    /// Asks a host that follows a game's start ([`Feature::LaunchCurtain`]) for its curtain
+    /// state (`rlLaunchCurtain=1`, control message 0x5548), so the client can cover the PC's
+    /// desktop and launchers until the game is in front. Only a stream with a picture asks.
+    pub launch_curtain: bool,
     /// The display's luminance, sent at launch to hosts other than Rubylight (which gets it in
     /// the DisplayCaps control message); `None` leaves it to the host.
     pub display_luminance: Option<DisplayLuminance>,
@@ -124,6 +128,7 @@ impl Default for LaunchRequest {
             rate_change: false,
             confirm_replace: false,
             clipboard_sync: false,
+            launch_curtain: false,
             display_luminance: None,
             rtx_hdr: None,
             rtx_video: None,
@@ -464,6 +469,12 @@ impl LaunchRequest {
         }
         if self.rate_change {
             q.push_str(&format!("&{}=1", rate_change::LAUNCH_PARAMETER));
+        }
+        if self.launch_curtain && self.role == AppRole::Stream && caps.has(Feature::LaunchCurtain) {
+            q.push_str(&format!(
+                "&{}=1",
+                rubylight_protocol::launch_curtain::LAUNCH_PARAMETER
+            ));
         }
         if !input_only {
             for (name, value) in rubylight_protocol::nvidia_enhance::launch_parameters(

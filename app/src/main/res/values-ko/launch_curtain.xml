@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_curtain_preparing">PC 준비 중</string>
+    <string name="launch_curtain_starting">게임 시작 중</string>
+    <string name="launch_curtain_opening">창 여는 중</string>
+    <string name="launch_curtain_focusing">게임을 앞으로 가져오는 중</string>
+    <string name="launch_curtain_updating">%1$s 업데이트 중</string>
+    <string name="launch_curtain_updating_any">런처 업데이트 중</string>
+    <string name="launch_curtain_sign_in">%1$s에 로그인해야 합니다</string>
+    <string name="launch_curtain_sign_in_any">런처에 로그인해야 합니다</string>
+    <string name="launch_curtain_waiting">%1$s에서 입력을 기다리고 있습니다</string>
+    <string name="launch_curtain_waiting_any">PC의 창이 입력을 기다리고 있습니다</string>
+    <string name="launch_curtain_uac">이 PC에서 Windows가 관리자 승인을 요청합니다</string>
+    <string name="launch_curtain_hint">PC 화면을 표시해 이 기기에서 응답하거나 실행을 취소하세요.</string>
+    <string name="launch_curtain_show_screen">PC 화면 표시</string>
+    <string name="launch_curtain_still_starting">PC 화면을 표시합니다. 게임이 아직 시작 중입니다.</string>
+    <string name="launch_curtain_failed">PC에서 게임이 시작되지 않았습니다.</string>
+</resources>

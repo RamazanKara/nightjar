@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_curtain_preparing">Подготовка ПК</string>
+    <string name="launch_curtain_starting">Запуск игры</string>
+    <string name="launch_curtain_opening">Открытие окна</string>
+    <string name="launch_curtain_focusing">Вывод игры на передний план</string>
+    <string name="launch_curtain_updating">%1$s обновляется</string>
+    <string name="launch_curtain_updating_any">Лаунчер обновляется</string>
+    <string name="launch_curtain_sign_in">%1$s просит войти в аккаунт</string>
+    <string name="launch_curtain_sign_in_any">Лаунчер просит войти в аккаунт</string>
+    <string name="launch_curtain_waiting">%1$s ждёт вас</string>
+    <string name="launch_curtain_waiting_any">Окно на ПК ждёт вас</string>
+    <string name="launch_curtain_uac">Windows запрашивает разрешение администратора на этом ПК</string>
+    <string name="launch_curtain_hint">Покажите экран ПК, чтобы ответить с этого устройства, или отмените запуск.</string>
+    <string name="launch_curtain_show_screen">Показать экран ПК</string>
+    <string name="launch_curtain_still_starting">Показан экран ПК. Игра ещё запускается.</string>
+    <string name="launch_curtain_failed">Игра не запустилась на ПК.</string>
+</resources>

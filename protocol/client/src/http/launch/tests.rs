@@ -210,6 +210,35 @@ fn clipboard_sync_is_asked_only_of_a_rubylight_host() {
 }
 
 #[test]
+fn launch_curtain_is_asked_only_of_a_host_that_offers_it_for_a_picture() {
+    let xml = RUBYLIGHT.replace(
+        "</root>",
+        "<LaunchCurtainVersion>1</LaunchCurtainVersion></root>",
+    );
+    let offered = ServerInfo::parse(&xml, 47989).unwrap().capabilities;
+    let asked = LaunchRequest {
+        launch_curtain: true,
+        ..request()
+    };
+    assert_eq!(
+        asked.query(&offered, false),
+        request()
+            .query(&offered, false)
+            .replace("&corever=1", "&rlLaunchCurtain=1&corever=1")
+    );
+    // Remote Input and Remote Monitor show no game's start.
+    for role in [AppRole::InputOnly, AppRole::RemoteMonitor] {
+        let launch = LaunchRequest { role, ..asked.clone() };
+        assert!(!launch.query(&offered, false).contains("rlLaunchCurtain"));
+    }
+    // A host without the setting on, and every other host, get exactly today's query.
+    for caps in [rubylight(), HostCapabilities::UNKNOWN] {
+        assert_eq!(asked.query(&caps, false), request().query(&caps, false));
+    }
+    assert!(!request().query(&offered, false).contains("rlLaunchCurtain"));
+}
+
+#[test]
 fn image_enhancement_choices_go_only_for_what_the_host_offers() {
     let chosen = LaunchRequest {
         rtx_hdr: Some(true),

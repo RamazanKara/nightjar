@@ -606,3 +606,34 @@ fn stream_doctor_v2_needs_the_native_feature_and_view_or_launch() {
         .unwrap();
     assert!(HostCapabilities::from_versioned_json(&json).has(Feature::StreamDoctorV2));
 }
+
+#[test]
+fn launch_curtain_needs_the_serverinfo_field_or_the_native_feature() {
+    let xml =
+        include_str!("../../../../app/src/test/resources/protocol/rubylight-30-serverinfo.xml");
+    let native = |features: &str| {
+        serde_json::from_str::<NativeCapabilities>(&format!(
+            r#"{{"api_version":1,"host":{{"name":"RL","version":"7.0.0","unique_id":"rl"}},"features":[{features}],"permissions":{{"list":true,"view":true,"launch":true,"host_control":false}}}}"#
+        ))
+        .unwrap()
+    };
+    let off = HostCapabilities::from_server_info_xml(xml).unwrap();
+    assert_eq!(
+        off.availability(Feature::LaunchCurtain),
+        Availability::Unsupported(None)
+    );
+    assert!(!off.with_native(&native("")).has(Feature::LaunchCurtain));
+    assert!(
+        off.with_native(&native(r#""session.launch_curtain""#))
+            .has(Feature::LaunchCurtain)
+    );
+    // Known from serverinfo alone, before a launch.
+    let on_xml = xml.replace(
+        "</root>",
+        "<LaunchCurtainVersion>1</LaunchCurtainVersion></root>",
+    );
+    let on = HostCapabilities::from_server_info_xml(&on_xml).unwrap();
+    assert!(on.has(Feature::LaunchCurtain));
+    let json = on.to_versioned_json().unwrap();
+    assert!(HostCapabilities::from_versioned_json(&json).has(Feature::LaunchCurtain));
+}

@@ -501,6 +501,9 @@ impl Evidence {
                 }
             }
             Feature::StreamDoctorV2 => self.native_feature(self.stream_doctor_offered, None),
+            // Read before a launch, from serverinfo; the native feature says the same.
+            Feature::LaunchCurtain if self.launch_curtain_offered => Availability::Supported,
+            Feature::LaunchCurtain => self.serverinfo_version(self.launch_curtain_version),
         }
     }
 
@@ -603,6 +606,7 @@ impl HostCapabilities {
         // Reading it takes View or Launch; a remedy takes Launch, which the host checks.
         evidence.stream_doctor_offered = listed(rubylight_native_api::feature::STREAM_DOCTOR_V2)
             && (permissions.view || permissions.launch);
+        evidence.launch_curtain_offered = listed(rubylight_native_api::feature::LAUNCH_CURTAIN);
         Self::from_evidence(evidence)
     }
 

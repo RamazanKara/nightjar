@@ -723,6 +723,11 @@ impl ControlSession {
             {
                 events::stream_dvr(p)
             }
+            ptype::LAUNCH_CURTAIN
+                if extensions && self.caps.supports_control_message(ptype::LAUNCH_CURTAIN) =>
+            {
+                events::launch_curtain(p)
+            }
             _ => None,
         };
         if let Some(event) = event {

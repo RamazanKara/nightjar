@@ -28,6 +28,7 @@ pub mod http;
 pub mod input_glyphs;
 pub mod internet_path;
 pub mod launch;
+pub mod launch_curtain;
 pub mod library_order;
 pub mod mdns;
 pub mod mic_route;

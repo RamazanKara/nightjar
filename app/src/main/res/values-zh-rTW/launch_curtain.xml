@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_curtain_preparing">正在準備電腦</string>
+    <string name="launch_curtain_starting">正在啟動遊戲</string>
+    <string name="launch_curtain_opening">正在開啟視窗</string>
+    <string name="launch_curtain_focusing">正在將遊戲切到前景</string>
+    <string name="launch_curtain_updating">%1$s 正在更新</string>
+    <string name="launch_curtain_updating_any">啟動器正在更新</string>
+    <string name="launch_curtain_sign_in">%1$s 需要你登入</string>
+    <string name="launch_curtain_sign_in_any">啟動器需要你登入</string>
+    <string name="launch_curtain_waiting">%1$s 正在等你操作</string>
+    <string name="launch_curtain_waiting_any">電腦上有視窗正在等你操作</string>
+    <string name="launch_curtain_uac">Windows 需要在這台電腦上取得系統管理員核准</string>
+    <string name="launch_curtain_hint">顯示電腦畫面以便在此裝置上處理，或取消啟動。</string>
+    <string name="launch_curtain_show_screen">顯示電腦畫面</string>
+    <string name="launch_curtain_still_starting">正在顯示電腦畫面。遊戲仍在啟動。</string>
+    <string name="launch_curtain_failed">遊戲未能在電腦上啟動。</string>
+</resources>

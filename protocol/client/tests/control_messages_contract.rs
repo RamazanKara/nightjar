@@ -93,6 +93,23 @@ fn moonbridge_names_the_3_0_control_messages_as_rubylight_protocol_defines_them(
     assert_eq!(listed, defined);
 }
 
+/// The launch curtain (0x5548) is a 7.0 message the Rust engine reads itself; MoonBridge does
+/// not name it. Its id is the one the host announces, and only a launch that asked hears it.
+#[test]
+fn the_engine_hears_the_launch_curtain_under_its_registered_id() {
+    use rubylight_protocol::ids::RUBYLIGHT_7_CONTROL_IDS;
+    use rubylight_protocol::launch_curtain::LAUNCH_CURTAIN_STATE_MESSAGE_TYPE;
+    assert!(RUBYLIGHT_7_CONTROL_IDS.contains(&LAUNCH_CURTAIN_STATE_MESSAGE_TYPE));
+    assert!(CONTROL_IDS
+        .iter()
+        .any(|(id, name)| *id == LAUNCH_CURTAIN_STATE_MESSAGE_TYPE && *name == "launch curtain"));
+    assert_eq!(
+        nightjar_core::control::wire::ptype::LAUNCH_CURTAIN,
+        LAUNCH_CURTAIN_STATE_MESSAGE_TYPE
+    );
+    assert!(!named().values().any(|id| *id == LAUNCH_CURTAIN_STATE_MESSAGE_TYPE));
+}
+
 /// Quick Suspend (0x554B) is a 7.0 message the Rust engine sends and reads itself; MoonBridge
 /// does not name it, so it stays out of the file above. Its id is the one the host announces.
 #[test]

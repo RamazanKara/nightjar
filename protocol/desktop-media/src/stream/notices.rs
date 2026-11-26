@@ -288,6 +288,7 @@ impl Streaming {
             ControlEvent::QuickSuspend(report) => self.quick_suspend_state(report),
             ControlEvent::StreamDvrState(state) => self.dvr_state(state),
             ControlEvent::StreamDvrClip(clip) => self.dvr_clip(&clip),
+            ControlEvent::LaunchCurtain(_) => {}
             ControlEvent::ClockSync { reply, received } => {
                 let receive_us = session::now_us().saturating_sub(received.elapsed().as_micros() as u64);
                 self.offset.add(&reply, receive_us);

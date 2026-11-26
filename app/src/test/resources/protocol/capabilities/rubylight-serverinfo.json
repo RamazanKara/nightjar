@@ -60,6 +60,7 @@
     "quick_suspend": "unsupported",
     "stream_dvr": "unsupported",
     "away_wake_relay": "unsupported",
-    "stream_doctor_v2": "unsupported:update_host"
+    "stream_doctor_v2": "unsupported:update_host",
+    "launch_curtain": "unsupported"
   }
 }

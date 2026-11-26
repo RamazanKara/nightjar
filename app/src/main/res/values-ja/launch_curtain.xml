@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_curtain_preparing">PC を準備中</string>
+    <string name="launch_curtain_starting">ゲームを起動中</string>
+    <string name="launch_curtain_opening">ウィンドウを開いています</string>
+    <string name="launch_curtain_focusing">ゲームを前面に表示中</string>
+    <string name="launch_curtain_updating">%1$s を更新中</string>
+    <string name="launch_curtain_updating_any">ランチャーを更新中</string>
+    <string name="launch_curtain_sign_in">%1$s へのサインインが必要です</string>
+    <string name="launch_curtain_sign_in_any">ランチャーへのサインインが必要です</string>
+    <string name="launch_curtain_waiting">%1$s が操作を待っています</string>
+    <string name="launch_curtain_waiting_any">PC のウィンドウが操作を待っています</string>
+    <string name="launch_curtain_uac">この PC で Windows が管理者の承認を求めています</string>
+    <string name="launch_curtain_hint">PC の画面を表示してこのデバイスから応答するか、起動をキャンセルしてください。</string>
+    <string name="launch_curtain_show_screen">PC の画面を表示</string>
+    <string name="launch_curtain_still_starting">PC の画面を表示しています。ゲームはまだ起動中です。</string>
+    <string name="launch_curtain_failed">PC でゲームが起動しませんでした。</string>
+</resources>

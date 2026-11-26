@@ -73,6 +73,9 @@ pub mod ptype {
     pub const QUICK_SUSPEND: u16 = rubylight_protocol::quick_suspend::QUICK_SUSPEND_MESSAGE_TYPE;
     /// Rubylight's Stream DVR (both ways): clip and recording requests, the host's state.
     pub const STREAM_DVR: u16 = rubylight_protocol::stream_dvr::DVR_STATE_MESSAGE_TYPE;
+    /// Rubylight's launch curtain: the host's state of a game's start (host to client).
+    pub const LAUNCH_CURTAIN: u16 =
+        rubylight_protocol::launch_curtain::LAUNCH_CURTAIN_STATE_MESSAGE_TYPE;
 }
 
 /// ENet channels of the control stream (`CTRL_CHANNEL_*`).

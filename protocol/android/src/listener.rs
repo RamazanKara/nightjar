@@ -514,6 +514,8 @@ impl Listener for Events {
                 args.push(bridge::long(bytes));
                 b.post(m.dvr_clip, &args);
             }
+            // The launch curtain reaches the Java side in its own change.
+            ControlEvent::LaunchCurtain(_) => {}
             // The session reports terminations through connection_terminated.
             ControlEvent::Terminated { .. } => {}
         }

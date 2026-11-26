@@ -104,6 +104,7 @@ impl Evidence {
             second_screen_version: -1,
             quick_suspend_version: -1,
             stream_dvr_version: -1,
+            launch_curtain_version: -1,
             nvidia_enhancements: 0,
             internet_play_version: -1,
             away_wake_relay_version: -1,
@@ -166,6 +167,9 @@ impl Evidence {
                 "QuickSuspendVersion" => e.quick_suspend_version = unsigned(&text, 0xFFFF) as i32,
                 rubylight_protocol::stream_dvr::SERVERINFO_FIELD => {
                     e.stream_dvr_version = unsigned(&text, 0xFFFF) as i32
+                }
+                "LaunchCurtainVersion" => {
+                    e.launch_curtain_version = unsigned(&text, 0xFFFF) as i32
                 }
                 "NvidiaEnhancements" => {
                     e.nvidia_enhancements =
