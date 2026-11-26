@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn wavelet_frames_reuse_pooled_buffers_across_allocations() {
-        // Isolated pool prevents parallel wavelet tests from resetting the size mid-assertion (DM-L12).
+        // Isolated pool prevents parallel wavelet tests from resetting the size mid-assertion.
         let mut pool = Pool { raw: ptr::null_mut(), bytes: 0 };
         let first = alloc_from(&mut pool, 64, 32).expect("first wavelet frame");
         let first_info = first.info();

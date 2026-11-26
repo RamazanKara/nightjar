@@ -531,7 +531,7 @@ mod tests {
         s.set_slot(99);
         assert_eq!(s.slot, 4);
 
-        // EVIOCGKEY resync releases BTN_LEFT if its release event was dropped (DM-L27).
+        // EVIOCGKEY resync releases BTN_LEFT if its release event was dropped.
         assert_eq!(s.event(EV_KEY, BTN_LEFT, 1), None);
         let f = s.event(EV_SYN, SYN_REPORT, 0).unwrap();
         assert!(f.button);

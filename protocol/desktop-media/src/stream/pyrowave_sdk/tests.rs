@@ -183,7 +183,7 @@ fn a_probe_result_is_kept_per_adapter_and_plane_format() {
         })
     };
     assert_eq!(ask(first, false, Err("no subgroup size control".into())), Err("no subgroup size control".into()));
-    // Transient probe errors are not cached so subsequent asks retry cleanly (DM-L18).
+    // Transient probe errors are not cached so subsequent asks retry cleanly.
     assert_eq!(ask(first, false, Ok(())), Ok(()));
     // Once a probe succeeds it is remembered per adapter + plane format without re-probing.
     assert_eq!(ask(first, false, Err("unexpected re-probe".into())), Ok(()));

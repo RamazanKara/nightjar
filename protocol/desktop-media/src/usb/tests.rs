@@ -37,7 +37,7 @@ fn automatic_devices_attach_once_per_plug_in_on_any_port_and_retry_failures() {
     assert_eq!(auto_due(&local, &auto, |_| false, &mut tried, t0), vec![puck.clone()]);
     // Not again while it stays plugged in and attach succeeded / was user-detached.
     assert!(auto_due(&local, &auto, |_| false, &mut tried, t0 + Duration::from_secs(30)).is_empty());
-    // Failed automatic attach retries after cooldown while staying plugged in (DM-L1).
+    // Failed automatic attach retries after cooldown while staying plugged in.
     tried.insert("1-2".into(), Some(t0 + Duration::from_secs(10)));
     assert!(auto_due(&local, &auto, |_| false, &mut tried, t0 + Duration::from_secs(5)).is_empty());
     assert_eq!(auto_due(&local, &auto, |_| false, &mut tried, t0 + Duration::from_secs(10)), vec![puck]);
@@ -448,7 +448,7 @@ fn winusb_overlapped_cancel_preserves_econnreset_and_error_87_does_not_retry() {
     assert_eq!(overlapped_error_to_errno(1167, None), wire::ENODEV);
     assert_eq!(overlapped_error_to_errno(31, None), wire::EPIPE);
 
-    // Item 18 + DM-I1: concurrent pipelined iso submissions start ContinueStream=false then true without gaps.
+    // Concurrent pipelined iso submissions start ContinueStream=false then true without gaps.
     let ep = Arc::new(Mutex::new(IsoEndpointState::default()));
     let submitted = Arc::new(Mutex::new(Vec::<bool>::new()));
     let gate = Arc::new(std::sync::Barrier::new(3));

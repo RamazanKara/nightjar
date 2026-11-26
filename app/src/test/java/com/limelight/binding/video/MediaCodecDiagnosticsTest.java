@@ -134,7 +134,7 @@ public class MediaCodecDiagnosticsTest {
             String preConfig = MediaCodecOverlayReport.formatRendererException(renderer, new RuntimeException("boom"), "\n");
             assertTrue(preConfig.startsWith("PreOutputConfigErrorFormat:"));
 
-            // AS-L14: a rollover right before stream end with empty .tmp must preserve .prev as the final CSV.
+            // a rollover right before stream end with empty .tmp must preserve .prev as the final CSV.
             java.io.File files = activity.get().getFilesDir();
             java.io.File prev = new java.io.File(files, MediaCodecDecoderRenderer.LATENCY_CSV_NAME + ".prev");
             java.io.File out = new java.io.File(files, MediaCodecDecoderRenderer.LATENCY_CSV_NAME);
