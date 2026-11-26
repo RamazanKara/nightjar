@@ -500,6 +500,7 @@ impl Evidence {
                     version
                 }
             }
+            Feature::StreamDoctorV2 => self.native_feature(self.stream_doctor_offered, None),
         }
     }
 
@@ -599,6 +600,9 @@ impl HostCapabilities {
         evidence.stream_dvr_offered = listed(rubylight_native_api::feature::STREAM_DVR);
         evidence.wake_relay_offered =
             listed("wake.relay") && (permissions.launch || permissions.host_control);
+        // Reading it takes View or Launch; a remedy takes Launch, which the host checks.
+        evidence.stream_doctor_offered = listed(rubylight_native_api::feature::STREAM_DOCTOR_V2)
+            && (permissions.view || permissions.launch);
         Self::from_evidence(evidence)
     }
 

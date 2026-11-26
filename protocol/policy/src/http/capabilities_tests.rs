@@ -569,3 +569,40 @@ fn away_wake_relay_needs_the_serverinfo_field_and_the_native_feature() {
     let restored = HostCapabilities::from_versioned_json(&wakes.to_versioned_json().unwrap());
     assert!(restored.has(Feature::AwayWakeRelay));
 }
+
+#[test]
+fn stream_doctor_v2_needs_the_native_feature_and_view_or_launch() {
+    let xml =
+        include_str!("../../../../app/src/test/resources/protocol/rubylight-30-serverinfo.xml");
+    let native = |features: &str, view: bool, launch: bool| {
+        serde_json::from_str::<NativeCapabilities>(&format!(
+            r#"{{"api_version":1,"host":{{"name":"RL","version":"7.0.0","unique_id":"rl"}},"features":[{features}],"permissions":{{"list":true,"view":{view},"launch":{launch},"host_control":false}}}}"#
+        ))
+        .unwrap()
+    };
+    let host = HostCapabilities::from_server_info_xml(xml).unwrap();
+    let listed = r#""stream.doctor_v2""#;
+    assert!(
+        host.with_native(&native(listed, true, false))
+            .has(Feature::StreamDoctorV2)
+    );
+    assert!(
+        host.with_native(&native(listed, false, true))
+            .has(Feature::StreamDoctorV2)
+    );
+    assert!(
+        !host
+            .with_native(&native(listed, false, false))
+            .has(Feature::StreamDoctorV2)
+    );
+    assert!(
+        !host
+            .with_native(&native("", true, true))
+            .has(Feature::StreamDoctorV2)
+    );
+    let json = host
+        .with_native(&native(listed, true, true))
+        .to_versioned_json()
+        .unwrap();
+    assert!(HostCapabilities::from_versioned_json(&json).has(Feature::StreamDoctorV2));
+}

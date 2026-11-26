@@ -84,7 +84,8 @@ public final class HostCapabilities {
         PAIRING_APPROVE(0),
         QUICK_SUSPEND(0),
         STREAM_DVR(0),
-        AWAY_WAKE_RELAY(0);
+        AWAY_WAKE_RELAY(0),
+        STREAM_DOCTOR_V2(0);
 
         @StringRes public final int label;
 

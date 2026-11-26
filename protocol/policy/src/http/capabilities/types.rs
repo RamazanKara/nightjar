@@ -129,10 +129,14 @@ pub enum Feature {
     /// (`AwayWakeRelayVersion`, and `wake.relay` in native features with the launch permission
     /// or Host control). Known only after [`super::HostCapabilities::with_native`].
     AwayWakeRelay,
+    /// Stream Doctor 2.0 (native `stream.doctor_v2`): the host names which of its stages lost
+    /// this stream's time and steps its bitrate down for this stream on request. Known only
+    /// after [`super::HostCapabilities::with_native`], and only with View or Launch.
+    StreamDoctorV2,
 }
 
 impl Feature {
-    pub const ALL: [Feature; 57] = [
+    pub const ALL: [Feature; 58] = [
         Feature::Permissions,
         Feature::OtpPairing,
         Feature::Clipboard,
@@ -190,6 +194,7 @@ impl Feature {
         Feature::QuickSuspend,
         Feature::StreamDvr,
         Feature::AwayWakeRelay,
+        Feature::StreamDoctorV2,
     ];
 }
 
@@ -366,6 +371,8 @@ pub struct Evidence {
     pub stream_dvr_offered: bool,
     /// `wake.relay` in native features, with the launch permission or Host control.
     pub wake_relay_offered: bool,
+    /// `stream.doctor_v2` in native features, with View or Launch.
+    pub stream_doctor_offered: bool,
     /// `MaxVideoPacket`: the largest video packet this host accepts, including a client's
     /// 32-byte encryption header. 0 when the host offers no more than stock Moonlight's 1400.
     pub max_video_packet: u16,

@@ -182,6 +182,10 @@ impl Evidence {
             "streamDvrOffered".into(),
             Value::from(self.stream_dvr_offered),
         );
+        map.insert(
+            "streamDoctorOffered".into(),
+            Value::from(self.stream_doctor_offered),
+        );
         if let Some(version) = &self.rust_host_version {
             map.insert("rustHostVersion".into(), Value::from(version.as_str()));
         }
@@ -327,6 +331,7 @@ impl Evidence {
             quick_suspend_version: opt_i32("quickSuspendVersion", -1)?,
             quick_suspend_offered: opt_bool("quickSuspendOffered")?,
             stream_dvr_offered: opt_bool("streamDvrOffered")?,
+            stream_doctor_offered: opt_bool("streamDoctorOffered")?,
             max_video_packet,
         })
     }
