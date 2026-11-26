@@ -114,7 +114,10 @@ fn crash_dumps(dir: &Path) -> Vec<(String, u64)> {
         .filter_map(|entry| {
             let name = entry.file_name().to_string_lossy().into_owned();
             let dump = name.starts_with("nightjar-crash-") && name.ends_with(".dmp");
-            Some((name, entry.metadata().ok()?.len())).filter(|_| dump)
+            if !dump {
+                return None;
+            }
+            Some((name, entry.metadata().ok()?.len()))
         })
         .collect();
     dumps.sort();
