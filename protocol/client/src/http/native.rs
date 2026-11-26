@@ -15,6 +15,7 @@ use super::native_api::error::ErrorBody;
 use super::native_api::radeon::{Radeon, SettingsWrite};
 use super::native_api::session::{ActionId, CouchMenu, CouchMenuRequest, Session};
 use super::native_api::wake::Wake;
+use super::native_api::wake_relay::{RelayEnroll, RelayEnrolled, WakeRelayInfo};
 use super::native_api::PREFIX;
 use super::neural::{Neural, NeuralWrite};
 use super::transport::{self, Body, Request, Timeouts};
@@ -232,6 +233,20 @@ impl HostClient {
         let body = serde_json::to_vec(&request)
             .map_err(|e| Error::InvalidArgument(format!("pairing approval: {e}")))?;
         self.native("pairing/approve", Some(&body), MAX_JSON_BYTES, ACTION_READ_TIMEOUT)
+    }
+
+    /// The PC's wake relays and, with Launch applications, this device's keys for them. Only
+    /// when the capabilities list `wake.relay`.
+    pub fn wake_relay(&self) -> Result<WakeRelayInfo, Error> {
+        self.native("wake/relay", None, MAX_JSON_BYTES, READ_TIMEOUT)
+    }
+
+    /// Enrolls this device as one of the PC's wake relays, refreshes its assignment, leaves, or
+    /// (Host control) revokes another relay or rotates the PC's wake keys.
+    pub fn enroll_wake_relay(&self, action: &RelayEnroll) -> Result<RelayEnrolled, Error> {
+        let body = serde_json::to_vec(action)
+            .map_err(|e| Error::InvalidArgument(format!("wake relay: {e}")))?;
+        self.native("wake/relay/enroll", Some(&body), MAX_JSON_BYTES, ACTION_READ_TIMEOUT)
     }
 
     /// Ends a waiting device's request, and answers the devices still waiting.

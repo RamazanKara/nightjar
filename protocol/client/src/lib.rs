@@ -34,6 +34,7 @@ pub mod timing_record;
 pub mod update;
 pub mod usb;
 pub mod video;
+pub mod wake_relay;
 pub mod wol;
 
 #[cfg(test)]
