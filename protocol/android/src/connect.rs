@@ -17,9 +17,10 @@ use nightjar_core::connect::negotiate::{
     negotiate_video_formats, pyro_wave_hdr_lost, sharp_color_input,
 };
 use nightjar_core::connect::preflight::{
-    JumboPreflight, RouteLocation, effective_android_requested_packet_size, first_bitrate_kbps,
-    jumbo_preflight, location_for_route, probes_first_bitrate, pyro_wave_link_notice,
-    pyro_wave_start_kbps, reset_packet_size, run_jumbo_probe,
+    JumboPreflight, JumboSkip, RouteLocation, effective_android_requested_packet_size,
+    first_bitrate_kbps, jumbo_preflight, location_for_route, probes_first_bitrate,
+    pyro_wave_link_notice, pyro_wave_start_kbps, reset_packet_size, resume_packet_size,
+    run_jumbo_probe,
 };
 use nightjar_core::http::{self, pace::Measurement};
 use nightjar_core::sharp_color::{Pick, Why};
@@ -603,6 +604,7 @@ pub(crate) fn resolve_packet_size_values(
     requested_packet_size: i32,
     jumbo_frames: bool,
     auto_reconnect: bool,
+    negotiated_packet_size: i32,
     probe_fn: impl FnMut(u32, u32, u32, u32) -> Result<Measurement, http::Error>,
 ) -> [i32; 2] {
     let base_loc = match location_ordinal {
@@ -627,6 +629,11 @@ pub(crate) fn resolve_packet_size_values(
         auto_reconnect,
     );
     match plan {
+        // A resume keeps the running session's packets, as on desktop (0: none negotiated).
+        JumboPreflight::Skip(JumboSkip::Resume) => {
+            let negotiated = negotiated_packet_size.max(0) as u32;
+            [resume_packet_size(negotiated, route_pkt, req), 0]
+        }
         JumboPreflight::Skip(_) => [reset_packet_size(route_pkt, req), 0],
         JumboPreflight::Probe { candidate } => {
             let outcome = run_jumbo_probe(candidate, route_pkt, req, jumbo_frames, probe_fn);
@@ -648,6 +655,7 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarSessionJni_resolv
     requested_packet_size: jint,
     jumbo_frames: jboolean,
     auto_reconnect: jboolean,
+    negotiated_packet_size: jint,
     host_callback: JObject,
 ) -> jintArray {
     let out = resolve_packet_size_values(
@@ -659,6 +667,7 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarSessionJni_resolv
         requested_packet_size,
         jumbo_frames != 0,
         auto_reconnect != 0,
+        negotiated_packet_size,
         |kbps, size, fps, pace| {
             if host_callback.is_null() {
                 return Err(http::Error::Cancelled);

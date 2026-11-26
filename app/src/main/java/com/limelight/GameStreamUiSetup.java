@@ -407,6 +407,8 @@ final class GameStreamUiSetup {
                 .setRefreshRate(streamRefreshRate)
                 .setApp(game.app)
                 .setResumeOnly(game.streamRecovery.isResumeOnlyStream())
+                .setResumePacketSize(game.getIntent().getIntExtra(GameRecovery.EXTRA_RECOVERY_PACKET_SIZE, -1),
+                        game.getIntent().getLongExtra(GameRecovery.EXTRA_RECOVERY_PACKET_NETWORK, 0))
                 .setJoinRunning(game.streamRecovery.isJoinRunningStream())
                 .setAllowIdleSessionEnd(!game.getIntent().getBooleanExtra(Game.EXTRA_RECOVERY_MEDIA_FAILURE, false))
                 .setNeverReplace(com.limelight.console.OpenPlay.isAutoStart(game.getIntent()))

@@ -340,6 +340,28 @@ public class GameRecoveryLifecycleTest {
         }
     }
 
+    @Test public void aTripResumeAndADropsRecoveryCarryThePacketSizeWithItsNetwork() throws Exception {
+        MuteConnection jumbo = new MuteConnection() {
+            @Override public int resumePacketSize() { return 8192; }
+            @Override public long resumePacketNetwork() { return 42; }
+        };
+        Game left = establishedGame();
+        ReflectionHelpers.setField(left, "conn", jumbo);
+        Game dropped = establishedGame();
+        ReflectionHelpers.setField(dropped, "conn", jumbo);
+        try {
+            Intent trip = leaveAndComeBack(left, 1000);
+            assertTrue(dropped.streamRecovery.tryAutomaticRecovery());
+            for (Intent again : new Intent[] {trip, awaitRecoveryLaunch(dropped, 10)}) {
+                assertEquals(8192, again.getIntExtra("rubylight.recoveryPacketSize", 0));
+                assertEquals(42, again.getLongExtra("rubylight.recoveryPacketNetwork", 0));
+            }
+        } finally {
+            cleanupRecovery(left);
+            cleanupRecovery(dropped);
+        }
+    }
+
     @Test public void leavingADelayedLockResumeCancelsItBeforeAnotherActivityStarts() throws Exception {
         Game game = establishedGame();
         try {

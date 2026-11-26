@@ -379,7 +379,7 @@ public class RoamingNetworkTrackerTest {
                         Thread.currentThread().interrupt();
                     }
                     return MoonBridge.NETWORK_CARRIES_ON;
-                });
+                }, () -> {});
         lockedWatch.callback.onLost(wifi);
         Thread cbThread = new Thread(() -> lockedWatch.callback.onCapabilitiesChanged(otherWifi, caps));
         cbThread.start();
@@ -411,7 +411,7 @@ public class RoamingNetworkTrackerTest {
                             () -> { if (stopped.get()) returnedAfterStop.incrementAndGet(); }),
                     metered -> (iter % 3 == 2 && probeCalls.getAndIncrement() > 0)
                             ? MoonBridge.NETWORK_CANNOT_CONTINUE
-                            : MoonBridge.NETWORK_CARRIES_ON);
+                            : MoonBridge.NETWORK_CARRIES_ON, () -> {});
             if (iter % 3 == 2) {
                 watch.callback.onLost(wifi);
                 watch.callback.onCapabilitiesChanged(otherWifi, caps);

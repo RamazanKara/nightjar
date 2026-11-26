@@ -34,15 +34,11 @@ final class RoamingNetworkWatch {
     private final EngineProbe engineProbe;
     private boolean stopped;
 
-    private RoamingNetworkWatch(ConnectivityManager connMgr, Network streamNetwork,
-                                NvConnectionListener listener) {
-        this(connMgr, streamNetwork, listener, RoamingNetworkWatch::askEngine);
-    }
-
+    /** {@code moved} runs when the stream's network is lost or its route moves. */
     RoamingNetworkWatch(ConnectivityManager connMgr, Network streamNetwork,
-                        NvConnectionListener listener, EngineProbe engineProbe) {
+                        NvConnectionListener listener, EngineProbe engineProbe, Runnable moved) {
         this.connMgr = connMgr;
-        this.engineProbe = engineProbe;
+        this.engineProbe = noting(engineProbe, moved);
         this.trackerHandle = NightjarPolicyJni.roamingCreate(
                 streamNetwork != null, streamNetwork != null ? streamNetwork.getNetworkHandle() : 0L);
         this.reaper = HandleReaper.register(this, trackerHandle, NightjarPolicyJni::roamingDestroy);
@@ -75,6 +71,7 @@ final class RoamingNetworkWatch {
                     }
                     if (NightjarPolicyJni.roamingOnLost(trackerHandle, network.getNetworkHandle())) {
                         LimeLog.warning("The stream's network was lost");
+                        moved.run();
                         // Under the lock, so stop() returning means no report is still on its way.
                         listener.streamNetworkLost();
                     }
@@ -157,13 +154,24 @@ final class RoamingNetworkWatch {
         return connMgr == null ? null : connMgr.getActiveNetwork();
     }
 
-    static RoamingNetworkWatch start(Context context, Network streamNetwork, NvConnectionListener listener) {
+    /** {@code probe}, running {@code moved} for every change that moved the stream's route, lost first or not. */
+    static EngineProbe noting(EngineProbe probe, Runnable moved) {
+        return metered -> {
+            int change = probe.networkChanged(metered);
+            if (change != MoonBridge.NETWORK_CARRIES_ON) moved.run();
+            return change;
+        };
+    }
+
+    static RoamingNetworkWatch start(Context context, Network streamNetwork, NvConnectionListener listener,
+                                     Runnable moved) {
         ConnectivityManager connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         if (connMgr == null) {
             LimeLog.warning("Roaming: no ConnectivityManager; not roaming");
             return null;
         }
-        RoamingNetworkWatch watch = new RoamingNetworkWatch(connMgr, streamNetwork, listener);
+        RoamingNetworkWatch watch = new RoamingNetworkWatch(connMgr, streamNetwork, listener,
+                RoamingNetworkWatch::askEngine, moved);
         try {
             connMgr.registerDefaultNetworkCallback(watch.callback);
         } catch (RuntimeException e) {

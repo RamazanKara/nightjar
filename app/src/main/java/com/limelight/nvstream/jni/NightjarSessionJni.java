@@ -187,6 +187,7 @@ public final class NightjarSessionJni {
             int requestedPacketSize,
             boolean jumboFrames,
             boolean autoReconnect,
+            int negotiatedPacketSize,
             LinkProbe hostCallback);
 
     // --- Launch / Resume / Quit / ConfirmReplace ---

@@ -89,6 +89,8 @@ public class NvConnection {
     boolean nativeStarted;
     volatile boolean nativeConnected;
     RoamingNetworkWatch roamingWatch;
+    // The stream's network was lost or its route moved (RoamingNetworkWatch): jumbo passed on the old path.
+    volatile boolean networkMoved;
     String packedHdrDropAtLaunch;
     long lastServerCommandTime;
 
@@ -217,6 +219,22 @@ public class NvConnection {
 
     public ComputerDetails getHostDetails() { return hostDetails; }
     public int getStartBitrateKbps() { return context.startBitrateKbps; }
+
+    /**
+     * The packet size a reconnect of this session keeps, as desktop's carried_packet_size: the negotiated
+     * one, or the one this start was given when it negotiated none (negative: none). 0, which asks for
+     * normal packets, once the network was lost or moved under the stream: another path may drop jumbo
+     * packets whole.
+     */
+    public int resumePacketSize() {
+        if (networkMoved) return 0;
+        return context.negotiatedPacketSize > 0 ? context.negotiatedPacketSize : context.streamConfig.getResumePacketSize();
+    }
+
+    /** The network {@link #resumePacketSize} was negotiated on (Network.getNetworkHandle; 0: none). */
+    public long resumePacketNetwork() {
+        return context.negotiatedPacketSize > 0 ? context.packetNetwork : context.streamConfig.getResumePacketNetwork();
+    }
 
     // --- Hardware Metrics Polling ---
 

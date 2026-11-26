@@ -50,6 +50,8 @@ public class StreamConfiguration {
     private boolean enableAdaptiveResolution;
     private boolean playLocalAudio;
     private int maxPacketSize;
+    private int resumePacketSize;
+    private long resumePacketNetwork;
     private int remote;
     private MoonBridge.AudioConfiguration audioConfiguration;
     private int supportedVideoFormats;
@@ -82,6 +84,17 @@ public class StreamConfiguration {
         /** Recovery must never launch, replace or terminate an application. */
         public StreamConfiguration.Builder setResumeOnly(boolean resumeOnly) {
             config.resumeOnly = resumeOnly;
+            return this;
+        }
+
+        /**
+         * The packet size the session negotiated and the network it did so on (Network.getNetworkHandle). A
+         * resume-only start on that network keeps it (0 asks for normal packets); on another network, or with
+         * a negative size (the default), it probes jumbo as a launch does.
+         */
+        public StreamConfiguration.Builder setResumePacketSize(int resumePacketSize, long network) {
+            config.resumePacketSize = resumePacketSize;
+            config.resumePacketNetwork = network;
             return this;
         }
 
@@ -298,6 +311,7 @@ public class StreamConfiguration {
         this.launchRefreshRate = 60;
         this.bitrate = 10000;
         this.maxPacketSize = 1024;
+        this.resumePacketSize = -1;
         this.remote = STREAM_CFG_AUTO;
         this.sops = true;
         this.enableAdaptiveResolution = false;
@@ -360,6 +374,14 @@ public class StreamConfiguration {
 
     public NvApp getApp() {
         return app;
+    }
+
+    public int getResumePacketSize() {
+        return resumePacketSize;
+    }
+
+    public long getResumePacketNetwork() {
+        return resumePacketNetwork;
     }
 
     public boolean isNeverReplace() {

@@ -56,6 +56,11 @@ final class GameRecovery {
     // The step automatic quality had reached, {width, height, fps}, which an automatic reconnect returns to.
     static final String EXTRA_RECOVERY_QUALITY_STEP = "rubylight.recoveryQualityStep";
 
+    // The packet size a reconnect carries and the network that negotiated it (NvConnection.resumePacketSize
+    // and resumePacketNetwork): a resume-only start keeps the size only on that network.
+    static final String EXTRA_RECOVERY_PACKET_SIZE = "rubylight.recoveryPacketSize";
+    static final String EXTRA_RECOVERY_PACKET_NETWORK = "rubylight.recoveryPacketNetwork";
+
     // On a resume after the user's own trip away: the failure budget {attempts, started, left at,
     // connected for} as the trip began, which the resumed activity starts with.
     private static final String EXTRA_TRIP_BUDGET = "rubylight.tripBudget";
@@ -83,6 +88,10 @@ final class GameRecovery {
         // Only the press that asked for it joins: a recovery checks what it finds.
         again.removeExtra(EXTRA_JOIN_RUNNING);
         putSessionBitrate(again, false);
+        if (game.conn != null) {
+            again.putExtra(EXTRA_RECOVERY_PACKET_SIZE, game.conn.resumePacketSize())
+                    .putExtra(EXTRA_RECOVERY_PACKET_NETWORK, game.conn.resumePacketNetwork());
+        }
         return again;
     }
 

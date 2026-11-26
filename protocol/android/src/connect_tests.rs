@@ -51,38 +51,126 @@ fn resolve_packet_size_auto_vpn_uses_1024_while_explicit_remote_keeps_1392() {
         panic!("probe should not run for remote or resume")
     };
     assert_eq!(
-        resolve_packet_size_values(0, false, true, 8192, true, 1392, false, false, probe_unused),
+        resolve_packet_size_values(
+            0,
+            false,
+            true,
+            8192,
+            true,
+            1392,
+            false,
+            false,
+            0,
+            probe_unused
+        ),
         [1024, 0]
     );
     assert_eq!(
-        resolve_packet_size_values(0, false, true, 8192, true, 1392, true, false, probe_unused),
+        resolve_packet_size_values(
+            0,
+            false,
+            true,
+            8192,
+            true,
+            1392,
+            true,
+            false,
+            0,
+            probe_unused
+        ),
         [1024, 0]
     );
     assert_eq!(
-        resolve_packet_size_values(2, false, true, 8192, true, 1392, false, false, probe_unused),
+        resolve_packet_size_values(
+            2,
+            false,
+            true,
+            8192,
+            true,
+            1392,
+            false,
+            false,
+            0,
+            probe_unused
+        ),
         [1392, 0]
     );
     assert_eq!(
-        resolve_packet_size_values(0, false, true, 8192, true, 1200, false, false, probe_unused),
+        resolve_packet_size_values(
+            0,
+            false,
+            true,
+            8192,
+            true,
+            1200,
+            false,
+            false,
+            0,
+            probe_unused
+        ),
         [1200, 0]
     );
     // Resume skips jumbo probe even on Local + jumbo_frames = true.
     assert_eq!(
-        resolve_packet_size_values(1, true, false, 8192, true, 1392, true, true, probe_unused),
+        resolve_packet_size_values(
+            1,
+            true,
+            false,
+            8192,
+            true,
+            1392,
+            true,
+            true,
+            0,
+            probe_unused
+        ),
         [1392, 0]
     );
     // Non-jumbo LAN keeps 1392 without probing, and custom 1200 stays 1200 even with jumbo on.
     assert_eq!(
-        resolve_packet_size_values(0, true, false, 8192, true, 1392, false, false, probe_unused),
+        resolve_packet_size_values(
+            0,
+            true,
+            false,
+            8192,
+            true,
+            1392,
+            false,
+            false,
+            0,
+            probe_unused
+        ),
         [1392, 0]
     );
     assert_eq!(
-        resolve_packet_size_values(0, true, false, 8192, true, 1200, true, false, probe_unused),
+        resolve_packet_size_values(
+            0,
+            true,
+            false,
+            8192,
+            true,
+            1200,
+            true,
+            false,
+            0,
+            probe_unused
+        ),
         [1200, 0]
     );
     // Explicit Remote skips jumbo even when jumbo_frames = true.
     assert_eq!(
-        resolve_packet_size_values(2, true, false, 8192, true, 1392, true, false, probe_unused),
+        resolve_packet_size_values(
+            2,
+            true,
+            false,
+            8192,
+            true,
+            1392,
+            true,
+            false,
+            0,
+            probe_unused
+        ),
         [1392, 0]
     );
 }
@@ -114,6 +202,7 @@ fn resolve_packet_size_probes_jumbo_for_android_default_1392_on_lan() {
             1392,
             true,
             false,
+            0,
             |_, size, _, _| {
                 probed_sizes.push(size);
                 Ok(passing.clone())
@@ -131,8 +220,82 @@ fn resolve_packet_size_probes_jumbo_for_android_default_1392_on_lan() {
             1392,
             true,
             false,
+            0,
             |_, _, _, _| Err(http::Error::Io(std::io::Error::other("jumbo loss"))),
         );
         assert_eq!(fail_res, [1392, 1]);
     }
+}
+
+#[test]
+fn a_resume_keeps_the_running_sessions_packet_size() {
+    let probe_unused =
+        |_, _, _, _| -> Result<Measurement, http::Error> { panic!("a resume does not probe") };
+    // LAN, jumbo frames on: the negotiated size is asked again, 0 falls back to the route's.
+    for (negotiated, expected) in [(8160, 8160), (0, 1392)] {
+        assert_eq!(
+            resolve_packet_size_values(
+                0,
+                true,
+                false,
+                8192,
+                true,
+                1392,
+                true,
+                true,
+                negotiated,
+                probe_unused
+            ),
+            [expected, 0]
+        );
+    }
+    // Back over a VPN, or with jumbo frames off, the carried size is not used.
+    assert_eq!(
+        resolve_packet_size_values(
+            0,
+            false,
+            true,
+            8192,
+            true,
+            1392,
+            true,
+            true,
+            8160,
+            probe_unused
+        ),
+        [1024, 0]
+    );
+    assert_eq!(
+        resolve_packet_size_values(
+            0,
+            true,
+            false,
+            8192,
+            true,
+            1392,
+            false,
+            true,
+            8160,
+            probe_unused
+        ),
+        [1392, 0]
+    );
+    // A fresh launch still probes, whatever an earlier session negotiated.
+    let mut probed = 0;
+    let fresh = resolve_packet_size_values(
+        0,
+        true,
+        false,
+        8192,
+        true,
+        1392,
+        true,
+        false,
+        8160,
+        |_, _, _, _| {
+            probed += 1;
+            Err(http::Error::Cancelled)
+        },
+    );
+    assert_eq!((probed, fresh), (1, [1392, 1]));
 }

@@ -216,7 +216,9 @@ pub fn run_jumbo_probe(
             JumboProbeOutcome {
                 packet_size: reset_packet_size(route_packet_size, requested_packet_size),
                 passed: false,
-                fallback_notice: jumbo_frames,
+                // 400: the PC refuses probes while it holds a session, so the path was not tested.
+                fallback_notice: jumbo_frames
+                    && !matches!(err, http::Error::Status { code: 400, .. }),
             }
         }
     }
@@ -476,5 +478,23 @@ mod tests {
         assert!(!out.passed);
         assert!(out.fallback_notice);
         assert_eq!(sizes, vec![jumbo_probe_size(8192)]);
+    }
+
+    #[test]
+    fn jumbo_probe_a_busy_pc_refuses_gives_no_notice() {
+        let out = run_jumbo_probe(8192, 1392, 0, true, |_, _, _, _| {
+            Err(http::Error::Status {
+                code: 400,
+                message: String::new(),
+            })
+        });
+        assert_eq!(
+            out,
+            JumboProbeOutcome {
+                packet_size: 1392,
+                passed: false,
+                fallback_notice: false
+            }
+        );
     }
 }

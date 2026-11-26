@@ -10,10 +10,12 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
 import android.preference.PreferenceManager;
 
 import com.limelight.nvstream.av.video.VideoDecoderRenderer;
 import com.limelight.nvstream.http.ComputerDetails;
+import com.limelight.nvstream.http.HostHttpResponseException;
 import com.limelight.nvstream.http.LimelightCryptoProvider;
 import com.limelight.nvstream.http.NvApp;
 import com.limelight.nvstream.http.NvHTTP;
@@ -29,12 +31,15 @@ import org.robolectric.annotation.Config;
 import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 import org.robolectric.shadows.ShadowConnectivityManager;
+import org.robolectric.shadows.ShadowNetwork;
 import org.robolectric.shadows.ShadowNetworkCapabilities;
+import org.robolectric.shadows.ShadowNetworkInfo;
 
 import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.*;
 
@@ -68,6 +73,11 @@ public class NvConnectionPacketSizeTest {
 
     private static NvConnection startStream(String hostAddress, int remoteCfg, int maxPacketSize,
             String serverInfoXml) throws Exception {
+        return startStream(hostAddress, remoteCfg, maxPacketSize, serverInfoXml, config -> {});
+    }
+
+    private static NvConnection startStream(String hostAddress, int remoteCfg, int maxPacketSize,
+            String serverInfoXml, Consumer<StreamConfiguration.Builder> start) throws Exception {
         FakeHost.initial = serverInfoXml;
         FakeHost.resumeFailure = null;
         FakeHost.resumeResult = true;
@@ -78,12 +88,13 @@ public class NvConnectionPacketSizeTest {
 
         NvApp app = new NvApp("Game", 73, false);
         app.setAppUuid("game-a");
+        StreamConfiguration.Builder config = new StreamConfiguration.Builder().setApp(app)
+                .setResolution(1280, 720).setRefreshRate(60).setRemoteConfiguration(remoteCfg)
+                .setMaxPacketSize(maxPacketSize).setSupportedVideoFormats(MoonBridge.VIDEO_FORMAT_H264);
+        start.accept(config);
         NvConnection connection = new NvConnection(RuntimeEnvironment.getApplication(),
                 new ComputerDetails.AddressTuple(hostAddress, 47989), 47984, "device",
-                new StreamConfiguration.Builder().setApp(app).setResolution(1280, 720).setRefreshRate(60)
-                        .setRemoteConfiguration(remoteCfg).setMaxPacketSize(maxPacketSize)
-                        .setSupportedVideoFormats(MoonBridge.VIDEO_FORMAT_H264).build(),
-                crypto(), null);
+                config.build(), crypto(), null);
         NvConnectionListener listener = (NvConnectionListener) Proxy.newProxyInstance(
                 NvConnectionListener.class.getClassLoader(), new Class<?>[] {NvConnectionListener.class},
                 (proxy, method, args) -> null);
@@ -191,6 +202,101 @@ public class NvConnectionPacketSizeTest {
         assertFalse(tunnelConn.context.jumboFallback);
     }
 
+    private static final String RUNNING_JUMBO_HOST_XML = "<root status_code=\"200\"><appversion>7.1.431.0</appversion>"
+            + "<uniqueid>test-host</uniqueid><HttpsPort>47984</HttpsPort><state>SUNSHINE_SERVER_BUSY</state>"
+            + "<currentgame>73</currentgame><currentgameuuid>game-a</currentgameuuid><PairStatus>1</PairStatus>"
+            + "<ServerCodecModeSupport>8388609</ServerCodecModeSupport>"
+            + "<MaxVideoPacket>8192</MaxVideoPacket><PyroWaveHostLinkMbps>1000</PyroWaveHostLinkMbps>"
+            + "<PyroWaveUdpProbeVersion>1</PyroWaveUdpProbeVersion>"
+            + "<PyroWaveUdpHandshakeVersion>1</PyroWaveUdpHandshakeVersion>"
+            + "<PyroWaveUdpProbeBurstVersion>1</PyroWaveUdpProbeBurstVersion>"
+            + "<PyroWaveWireBudgetVersion>1</PyroWaveWireBudgetVersion></root>";
+
+    /** Makes a network of {@code type} the default one, on a LAN; the type is its netId here. */
+    private static Network useNetwork(int type) {
+        ConnectivityManager connMgr = (ConnectivityManager) RuntimeEnvironment.getApplication()
+                .getSystemService(Context.CONNECTIVITY_SERVICE);
+        ShadowConnectivityManager shadow = Shadows.shadowOf(connMgr);
+        NetworkInfo info = ShadowNetworkInfo.newInstance(
+                NetworkInfo.DetailedState.CONNECTED, type, 0, true, NetworkInfo.State.CONNECTED);
+        shadow.addNetwork(ShadowNetwork.newInstance(type), info);
+        shadow.setActiveNetworkInfo(info);
+        setActiveNetwork(NetworkCapabilities.TRANSPORT_WIFI, true);
+        Network active = connMgr.getActiveNetwork();
+        assertNotEquals(0, active.getNetworkHandle());
+        return active;
+    }
+
+    private static NvConnection resume(int packetSize, Network negotiatedOn) throws Exception {
+        PreferenceManager.getDefaultSharedPreferences(RuntimeEnvironment.getApplication()).edit()
+                .putBoolean("jumbo_frames", true).commit();
+        NvConnection resumed = startStream("192.0.2.1", StreamConfiguration.STREAM_CFG_AUTO, 1392,
+                RUNNING_JUMBO_HOST_XML, config -> config.setResumeOnly(true)
+                        .setResumePacketSize(packetSize, negotiatedOn.getNetworkHandle()));
+        assertEquals(List.of("resume"), FakeHost.requests);
+        return resumed;
+    }
+
+    @Test
+    public void aProbeTheBusyPcRefusesCountsAsNotProbed() throws Exception {
+        Network wifi = useNetwork(ConnectivityManager.TYPE_WIFI);
+
+        NvConnection resumed = resume(-1, wifi);
+        assertEquals(List.of(8160), FakeHost.probedPacketSizes);
+        assertEquals(1392, NvConnectionHapticsFlagTest.CapturingBridge.packetSize);
+        assertFalse("no fallback notice", resumed.context.jumboFallback);
+    }
+
+    @Test
+    public void aResumeOnTheSameNetworkKeepsTheRunningSessionsPacketSize() throws Exception {
+        Network wifi = useNetwork(ConnectivityManager.TYPE_WIFI);
+
+        NvConnection resumed = resume(8192, wifi);
+        assertTrue(FakeHost.probedPacketSizes.isEmpty());
+        assertEquals(8192, NvConnectionHapticsFlagTest.CapturingBridge.packetSize);
+        assertEquals(8192, resumed.resumePacketSize());
+        assertEquals(wifi.getNetworkHandle(), resumed.resumePacketNetwork());
+
+        Runnable moved = () -> resumed.networkMoved = true;
+        RoamingNetworkWatch.noting(metered -> MoonBridge.NETWORK_CARRIES_ON, moved).networkChanged(false);
+        assertEquals(8192, resumed.resumePacketSize());
+        RoamingNetworkWatch.noting(metered -> MoonBridge.NETWORK_CANNOT_CONTINUE, moved).networkChanged(false);
+        assertEquals(0, resumed.resumePacketSize());
+
+        // A start that never got as far as negotiating hands on what it was given.
+        NvConnection unstarted = new NvConnection(RuntimeEnvironment.getApplication(),
+                new ComputerDetails.AddressTuple("192.0.2.1", 47989), 47984, "device",
+                new StreamConfiguration.Builder().setResumePacketSize(8192, 42).build(), crypto(), null);
+        assertEquals(8192, unstarted.resumePacketSize());
+        assertEquals(42, unstarted.resumePacketNetwork());
+    }
+
+    @Test
+    public void afterTheStreamsNetworkIsLostAResumeOnAnotherCarriesNoPacketSize() throws Exception {
+        Network ethernet = useNetwork(ConnectivityManager.TYPE_ETHERNET);
+        NvConnection docked = resume(8192, ethernet);
+        assertEquals(8192, docked.resumePacketSize());
+
+        ConnectivityManager connMgr = (ConnectivityManager) RuntimeEnvironment.getApplication()
+                .getSystemService(Context.CONNECTIVITY_SERVICE);
+        NvConnectionListener listener = (NvConnectionListener) Proxy.newProxyInstance(
+                NvConnectionListener.class.getClassLoader(), new Class<?>[] {NvConnectionListener.class},
+                (proxy, method, args) -> null);
+        RoamingNetworkWatch watch = new RoamingNetworkWatch(connMgr, ethernet, listener,
+                metered -> MoonBridge.NETWORK_CARRIES_ON, () -> docked.networkMoved = true);
+        watch.callback.onLost(ethernet);
+        watch.stop();
+        assertEquals(0, docked.resumePacketSize());
+
+        // Even a size handed on before the loss was reported stays with the network that negotiated it.
+        useNetwork(ConnectivityManager.TYPE_WIFI);
+        NvConnection undocked = resume(8192, ethernet);
+        assertEquals(List.of(8160), FakeHost.probedPacketSizes);
+        assertEquals(1392, NvConnectionHapticsFlagTest.CapturingBridge.packetSize);
+        assertEquals(1392, undocked.resumePacketSize());
+        assertNotEquals(ethernet.getNetworkHandle(), undocked.resumePacketNetwork());
+    }
+
     @Test
     public void jniResolvePacketSizePreflightDistinguishesAutoVpnFromExplicitRemote() {
         List<Integer> probedSizes = new ArrayList<>();
@@ -212,29 +318,29 @@ public class NvConnectionPacketSizeTest {
         };
 
         int[] autoVpn = NightjarSessionJni.resolvePacketSizePreflight(
-                0, false, true, 8192, true, 1392, true, false, passingProbe);
+                0, false, true, 8192, true, 1392, true, false, 0, passingProbe);
         assertArrayEquals(new int[] {1024, 0}, autoVpn);
         assertTrue(probedSizes.isEmpty());
 
         int[] explicitRemote = NightjarSessionJni.resolvePacketSizePreflight(
-                2, false, true, 8192, true, 1392, true, false, passingProbe);
+                2, false, true, 8192, true, 1392, true, false, 0, passingProbe);
         assertArrayEquals(new int[] {1392, 0}, explicitRemote);
         assertTrue(probedSizes.isEmpty());
 
         int[] autoLanPass = NightjarSessionJni.resolvePacketSizePreflight(
-                0, true, false, 8192, true, 1392, true, false, passingProbe);
+                0, true, false, 8192, true, 1392, true, false, 0, passingProbe);
         assertArrayEquals(new int[] {8192, 0}, autoLanPass);
         assertEquals(List.of(8160, 1392), probedSizes);
 
         probedSizes.clear();
         int[] localLanPass = NightjarSessionJni.resolvePacketSizePreflight(
-                1, true, false, 8192, true, 1392, true, false, passingProbe);
+                1, true, false, 8192, true, 1392, true, false, 0, passingProbe);
         assertArrayEquals(new int[] {8192, 0}, localLanPass);
         assertEquals(List.of(8160, 1392), probedSizes);
 
         probedSizes.clear();
         int[] autoLanFail = NightjarSessionJni.resolvePacketSizePreflight(
-                0, true, false, 8192, true, 1392, true, false, failingProbe);
+                0, true, false, 8192, true, 1392, true, false, 0, failingProbe);
         assertArrayEquals(new int[] {1392, 1}, autoLanFail);
         assertEquals(List.of(8160), probedSizes);
     }
@@ -257,6 +363,10 @@ public class NvConnectionPacketSizeTest {
         @Implementation public PyroWavePace.Result probePyroWaveUdp(int kbps, int packetSize, int fps, int paceKbps)
                 throws IOException {
             probedPacketSizes.add(packetSize);
+            // As the real host while it holds a session (nvhttp/probe.rs).
+            if (initial.contains("SUNSHINE_SERVER_BUSY")) {
+                throw new HostHttpResponseException(400, "Stop streaming before testing bandwidth");
+            }
             if (probeUdpFailure != null) throw probeUdpFailure;
             if (probeUdpResult != null) return probeUdpResult;
             PyroWavePace.Result r = new PyroWavePace.Result();

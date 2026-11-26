@@ -490,12 +490,19 @@ final class NvConnectionPreflight {
                 }
             }
         };
+        // A resume keeps its packet size only on the network that negotiated it: another path may drop
+        // jumbo packets whole.
+        Network network = RoamingNetworkWatch.defaultNetwork(appContext);
+        context.packetNetwork = network != null ? network.getNetworkHandle() : 0;
+        boolean keepsPacketSize = context.streamConfig.isResumeOnly() && context.streamConfig.getResumePacketSize() >= 0
+                && context.packetNetwork != 0
+                && context.packetNetwork == context.streamConfig.getResumePacketNetwork();
         int[] pktRes = NightjarSessionJni.resolvePacketSizePreflight(
                 locationOrd, context.negotiatedRemoteStreaming != StreamConfiguration.STREAM_CFG_REMOTE,
                 vpnOrTunnel,
                 context.hostCaps.maxVideoPacket(), details.supportsPyroWavePaceCalibration(),
-                context.streamConfig.getMaxPacketSize(), jumboFrames,
-                context.streamConfig.isResumeOnly(), paceProbe);
+                context.streamConfig.getMaxPacketSize(), jumboFrames, keepsPacketSize,
+                context.streamConfig.getResumePacketSize(), paceProbe);
         context.negotiatedPacketSize = pktRes != null && pktRes.length >= 1
                 ? pktRes[0] : context.streamConfig.getMaxPacketSize();
         context.jumboFallback = pktRes != null && pktRes.length >= 2 && pktRes[1] != 0;
@@ -610,7 +617,8 @@ final class NvConnectionPreflight {
                     if (context.jumboFallback) {
                         context.connListener.displayTransientMessage(appContext.getString(R.string.jumbo_frames_fallback));
                     }
-                    conn.roamingWatch = RoamingNetworkWatch.start(appContext, streamNetwork, context.connListener);
+                    conn.roamingWatch = RoamingNetworkWatch.start(appContext, streamNetwork, context.connListener,
+                            () -> conn.networkMoved = true);
                     conn.startInputPolling(hintPrefs.unbatchedInput);
                     NvConnectionAudio.startMicrophone(conn, false);
                     started = true;
