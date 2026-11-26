@@ -17,4 +17,5 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Picture", "Imagen"),
     ("Clips", "Capturas"),
     ("Power", "Energía"),
+    ("Video encoder", "Codificador de vídeo"),
 ];

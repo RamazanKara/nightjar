@@ -17,4 +17,5 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Picture", "畫面"),
     ("Clips", "剪輯"),
     ("Power", "電源"),
+    ("Video encoder", "視訊編碼器"),
 ];

@@ -251,6 +251,17 @@ pub fn hardware(metrics: &HardwareMetrics, debug: bool) -> Vec<(String, String)>
     lines
 }
 
+/// The load of the PC's video encoder as the overlay's lines say it ("22.5%"), for the Control
+/// Center's status row: the busiest GPU's, and `None` where the PC sends none.
+pub fn encoder_load(metrics: &HardwareMetrics) -> Option<String> {
+    let busiest = metrics
+        .gpus
+        .iter()
+        .filter_map(|gpu| gpu.metrics.get("gpu_encoder_percent").map(|load| load as f32))
+        .fold(None, |most: Option<f32>, load| Some(most.map_or(load, |most| most.max(load))))?;
+    Some(format!("{}%", value(Some(busiest), 1)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -385,5 +396,18 @@ mod tests {
         let debug = hardware(&encoding, true);
         assert_eq!(debug[4], ("Video encoder".to_owned(), "22.5%".to_owned()));
         assert_eq!(debug.len(), 9);
+    }
+
+    /// The Control Center's status row says what the overlay's line says, and nothing for a PC
+    /// that sends no encoder load.
+    #[test]
+    fn the_encoder_load_reads_as_the_overlay_says_it() {
+        let silent = HardwareMetrics::parse(r#"{"version":1,"sampled_at_unix_ms":1,"interval_ms":1000,"cpu":{},
+            "gpus":[{"id":0,"name":"","metrics":{"gpu_usage_percent":10}}]}"#).unwrap();
+        assert_eq!(encoder_load(&silent), None);
+        let encoding = HardwareMetrics::parse(r#"{"version":1,"sampled_at_unix_ms":1,"interval_ms":1000,"cpu":{},
+            "gpus":[{"id":0,"name":"","metrics":{"gpu_encoder_percent":0}},{"id":1,"name":"","metrics":{"gpu_encoder_percent":22.5}}]}"#).unwrap();
+        assert_eq!(encoder_load(&encoding).as_deref(), Some("22.5%"));
+        assert_eq!(hardware(&encoding, true).iter().filter(|(key, _)| key == "Video encoder").map(|(_, load)| load.as_str()).collect::<Vec<_>>(), ["0.0%", "22.5%"]);
     }
 }

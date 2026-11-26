@@ -693,7 +693,9 @@ fn every_bound_key_has_a_handler() {
     let main = strip(include_str!("main.rs")).to_owned()
         + strip(include_str!("app/launcher.rs"))
         + strip(include_str!("app/session.rs"))
-        + strip(include_str!("app/overlay.rs"));
+        + strip(include_str!("app/overlay.rs"))
+        + strip(include_str!("app/control_center.rs"))
+        + strip(include_str!("app/control_center/pages.rs"));
     let help = strip(include_str!("../../desktop-ui/src/ui/help.rs"));
     for binding in KEYS.iter().cloned().chain(keys_in(Scope::Stream)) {
         let name = format!("Action::{:?}", binding.action);

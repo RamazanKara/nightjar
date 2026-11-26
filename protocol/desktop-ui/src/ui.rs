@@ -31,6 +31,7 @@ pub(crate) mod pcs;
 mod settings;
 mod settings_previews;
 mod spring;
+pub mod stream_hud;
 mod types;
 mod widgets;
 

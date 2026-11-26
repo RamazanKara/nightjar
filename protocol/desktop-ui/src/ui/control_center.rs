@@ -82,7 +82,18 @@ impl State {
     pub fn select(&mut self, ctx: &Context, module: Module) {
         if self.module != module {
             self.module = module;
+            // What had the focus is on the page left.
+            self.focus = None;
             surrender(ctx);
+        }
+    }
+
+    /// A page a card opened was left: the focus goes back to that card. Gone with its card, the
+    /// page's first control takes it.
+    pub fn restore_focus(&self, ctx: &Context) {
+        surrender(ctx);
+        if let Some(id) = self.focus {
+            ctx.memory_mut(|m| m.request_focus(id));
         }
     }
 }

@@ -179,6 +179,18 @@ pub fn wide<R>(ui: &mut Ui, icon: Icon, label: &str, value: Option<&str>, add: i
     inner
 }
 
+/// A row whose control is too wide to sit beside its label in the dock (a list): the label with
+/// its icon, and under it the control, lined up with the label. `add` is told the width it has.
+pub fn stacked<R>(ui: &mut Ui, icon: Icon, label: &str, add: impl FnOnce(&mut Ui, f32) -> R) -> R {
+    crate::menu_style::row(ui, icon, label, |_| {});
+    ui.horizontal(|ui| {
+        ui.add_space(2.0 * crate::menu_style::PAD + ICON - ui.spacing().item_spacing.x);
+        let width = (ui.available_width() - crate::menu_style::PAD).max(96.0);
+        add(ui, width)
+    })
+    .inner
+}
+
 /// A read-only line of status: what it is on the left, how it stands on the right. Not a control,
 /// so focus passes over it. Answers where it was drawn.
 pub fn status_row(ui: &mut Ui, icon: Icon, label: &str, value: &str) -> Rect {

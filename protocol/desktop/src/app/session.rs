@@ -9,6 +9,8 @@ use runtime::{save_stream_settings, REASON_WAIT};
 impl App {
     pub(crate) fn begin_stream(&mut self, connecting: Connecting, session: nightjar_core::session::Session, facts: stream::Facts) {
         self.overlay = StreamOverlay::default();
+        // The Control Center's hints start with what started the stream.
+        self.overlay.input = self.launcher.input_source;
         if let Some(auto) = self.autostream.as_mut() { auto.streaming_began(); }
         if let Some(cli) = self.cli.as_mut() { cli.streaming_began(); }
         let settings = connecting.settings.clone();
@@ -401,7 +403,8 @@ impl App {
                 && self.overlay.session_page.is_none()
                 && streaming.shortcut_sheet.is_none()
             {
-                self.overlay.menu_page = stream_menu::Page::Guests;
+                // Who waits to join is on the Control Center's Guests page.
+                self.overlay.center.select(&self.gui.ctx, nightjar_policy::control_center::Module::Guests);
                 streaming.needs_redraw = true;
             } else {
                 streaming.show_toast(trf("{} wants to join your game", &[&name]));
@@ -596,6 +599,12 @@ impl App {
             streaming.needs_redraw = true;
         }
         streaming.handle(event, self.window, self.renderer, &mut self.pads);
+        // What opened the Control Center names its hints from its first frame on.
+        if streaming.menu_visible
+            && let Some(source) = input_source::of(event, |id| self.pads.real_pad_type(id))
+        {
+            self.overlay.input = source;
+        }
     }
 }
 
