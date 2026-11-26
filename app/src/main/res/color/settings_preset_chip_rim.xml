@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A preset chip's 1 dp rim: the control's, the amber one on the preset in use. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_checked="true" android:color="?attr/glassSelectedRim" />
+    <item android:color="?attr/glassControlRim" />
+</selector>

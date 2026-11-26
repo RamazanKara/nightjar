@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A preset chip's surface: the control tint and its 1 dp rim, the amber container while checked (the colours switch
+     on state_checked), and a pressed wash. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/nj_radius_control" />
+            <solid android:color="@color/settings_preset_chip_fill" />
+            <stroke android:width="1dp" android:color="@color/settings_preset_chip_rim" />
+        </shape>
+    </item>
+    <item>
+        <selector>
+            <item android:state_pressed="true">
+                <shape android:shape="rectangle">
+                    <corners android:radius="@dimen/nj_radius_control" />
+                    <solid android:color="?attr/colorControlHighlight" />
+                </shape>
+            </item>
+            <item android:drawable="@android:color/transparent" />
+        </selector>
+    </item>
+</layer-list>

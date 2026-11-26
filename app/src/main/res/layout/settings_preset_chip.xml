@@ -1,0 +1,16 @@
+<!-- A preset chip (PresetChips): a control tint with its rim, the amber container on the preset in use. At least a touch
+     target tall; a long name wraps inside the chip instead of being cut. -->
+<CheckedTextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_weight="1"
+    android:minHeight="@dimen/nj_size_touch_min"
+    android:gravity="center"
+    android:textAlignment="center"
+    android:paddingStart="@dimen/space_m"
+    android:paddingEnd="@dimen/space_m"
+    android:paddingTop="@dimen/space_s"
+    android:paddingBottom="@dimen/space_s"
+    android:background="@drawable/settings_preset_chip"
+    android:textAppearance="@style/TextAppearance.Nightjar.Label"
+    android:textColor="@color/settings_preset_chip_text" />
