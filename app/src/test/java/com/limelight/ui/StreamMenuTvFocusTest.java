@@ -28,9 +28,10 @@ import static com.limelight.ui.StreamMenu.Item.*;
 import static org.junit.Assert.*;
 
 /**
- * The stream menu on a 1080p TV (nightjar#52, redesigned for nightjar#63): Back opens it with focus on its first
- * tile, Down walks the grid and its rows to Disconnect, Up from the first row reaches the X, and Back again closes
- * the menu without leaving. Set NIGHTJAR_PREVIEW_OUTPUT to capture the sheet, on a TV and on a handheld held sideways.
+ * The Control Center on a 1080p TV (nightjar#52, nightjar#63, redesigned as a dock for 7.0): Back opens it with focus on
+ * its first card, Down walks the cards and rows to Return to stream and Disconnect, the arrow toward the rail reaches
+ * the lit module, and Back again closes it without leaving. Set NIGHTJAR_PREVIEW_OUTPUT to capture the dock, on a TV
+ * and on a handheld held sideways.
  */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 34, application = Application.class, qualifiers = "w960dp-h540dp-land-television-xhdpi")
@@ -88,20 +89,25 @@ public class StreamMenuTvFocusTest {
             // What the sheet does once it is attached, or a page is shown, outside touch mode.
             menu.sheet().focusFirstAction();
             View focused = menu.sheet().getWindow().getDecorView().findFocus();
-            assertSame("focus starts on the first tile, not on Disconnect", menu.row(KEYBOARD), focused);
+            assertEquals(ControlCenterModel.DOCK, menu.sheet().placement());
+            assertSame("focus starts on the first card, not on Disconnect", menu.row(KEYBOARD), focused);
+            assertSame(menu.grid().getChildAt(0), focused);
             assertEquals("the header says the stream's mode, as desktop Nightjar's", "1440p · 144 FPS · HEVC HDR",
                     menu.sheet().subtitle().getText().toString());
-            assertSame("Right is the next tile", menu.grid().getChildAt(1), focused.focusSearch(View.FOCUS_RIGHT));
+            assertSame("Right is the next card", menu.grid().getChildAt(1), focused.focusSearch(View.FOCUS_RIGHT));
+            assertSame("Left from the first column is the rail, on the module that shows",
+                    menu.sheet().railEntry(ControlCenterModel.QUICK), focused.focusSearch(View.FOCUS_LEFT));
 
             View next = focused;
+            boolean passedReturn = false;
             for (int row = 0; row < 16 && next != null && next != menu.row(DISCONNECT); row++) {
-                // As a remote's press does, the grid scrolls the focused tile into view before the next move.
+                // As a remote's press does, the page scrolls the focused card into view before the next move.
                 assertTrue(next.requestFocus());
+                passedReturn |= next == menu.row(CLOSE);
                 next = next.focusSearch(View.FOCUS_DOWN);
             }
-            assertSame("Down through the grid and its rows reaches Disconnect", menu.row(DISCONNECT), next);
-            assertTrue(focused.requestFocus());
-            assertSame("Up from the first row reaches the X", menu.row(CLOSE), focused.focusSearch(View.FOCUS_UP));
+            assertSame("Down through the cards and rows reaches Disconnect", menu.row(DISCONNECT), next);
+            assertTrue("past Return to stream, the first control under the page", passedReturn);
             assertTrue(focused.requestFocus());
             ShadowLooper.idleMainLooper(400, TimeUnit.MILLISECONDS);
             menu.row(KEYBOARD).jumpDrawablesToCurrentState();
@@ -114,23 +120,35 @@ public class StreamMenuTvFocusTest {
     }
 
     /**
-     * A handheld such as the Retroid Pocket held sideways: four tiles to a row, each low enough to show two rows of them
-     * above the status rows and the ways out; then the shortcuts page.
+     * A handheld such as the Retroid Pocket held sideways: the dock at its compact width against the end edge, its cards
+     * two to a row at the design's height, the ways out in sight under them; then the shortcuts page.
      */
     @Test @Config(qualifiers = "w640dp-h360dp-land-xxhdpi")
-    public void aHandheldShowsCompactTilesFourToARow() throws Exception {
+    public void aHandheldShowsTheCompactDockWithItsCardsTwoToARow() throws Exception {
         try (var controller = Robolectric.buildActivity(Activity.class).setup().visible()) {
             Activity activity = controller.get();
             StreamMenu menu = open(activity, new ArrayList<>());
             layOut(menu);
-            assertEquals(4, menu.grid().columns());
-            float density = activity.getResources().getDisplayMetrics().density;
+            android.content.res.Resources res = activity.getResources();
+            assertEquals(ControlCenterModel.DOCK, menu.sheet().placement());
+            View panel = menu.sheet().panel();
+            assertEquals(res.getDimensionPixelSize(R.dimen.nj_size_control_center_width_compact), panel.getWidth());
+            assertEquals("against the end edge, its margin clear of it",
+                    1920 - res.getDimensionPixelSize(R.dimen.control_center_margin), panel.getRight());
+            assertTrue("the picture stays in sight beside it", panel.getLeft() >= 1920 / 3);
+            assertTrue("inside the window", panel.getTop() >= 0 && panel.getBottom() <= 1080);
+            assertEquals(2, menu.grid().columns());
+            float density = res.getDisplayMetrics().density;
             View tile = menu.row(KEYBOARD);
-            assertTrue("a tile is compact: " + tile.getHeight() / density + "dp", tile.getHeight() <= 64 * density);
+            int card = res.getDimensionPixelSize(R.dimen.nj_size_control_center_card);
+            assertTrue("a card keeps the design's height: " + tile.getHeight() / density + "dp",
+                    tile.getHeight() >= card && tile.getHeight() <= card + 24 * density);
+            assertTrue("Return to stream is in sight", menu.sheet().primary().isShown()
+                    && menu.sheet().primary().getHeight() >= 48 * density);
             assertEquals("Keyboard", ((android.widget.TextView) tile).getText().toString());
             assertNoLabelCut(menu);
             capture(activity, menu, "handheld-stream-menu.png");
-            menu.row(SHORTCUTS).performClick();
+            menu.reveal(SHORTCUTS).performClick();
             layOut(menu);
             capture(activity, menu, "handheld-stream-shortcuts.png");
             menu.sheet().dismiss();
@@ -172,6 +190,8 @@ public class StreamMenuTvFocusTest {
         for (int i = 0; i < ((android.view.ViewGroup) footer).getChildCount(); i++) {
             labels.add((android.widget.TextView) ((android.view.ViewGroup) footer).getChildAt(i));
         }
+        labels.add(menu.sheet().primary());
+        for (String module : menu.modules()) labels.add(menu.sheet().railEntry(module));
         for (android.widget.TextView label : labels) {
             android.text.Layout layout = label.getLayout();
             assertNotNull(label.getText().toString(), layout);

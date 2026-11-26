@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Control Center's own measures: what the design tokens (client/design/tokens.json, size.controlCenter*) do not
+         carry yet. They move there when the tokens gain them. -->
+    <!-- Between two cards, and between a card's icon and its name. -->
+    <dimen name="control_center_gap">8dp</dimen>
+    <dimen name="control_center_card_icon">24dp</dimen>
+    <dimen name="control_center_card_pad">14dp</dimen>
+    <!-- A module on the rail: its icon over its name. -->
+    <dimen name="control_center_rail_icon_gap">2dp</dimen>
+    <dimen name="control_center_rail_entry">56dp</dimen>
+    <dimen name="control_center_rail_pad">4dp</dimen>
+    <!-- A module on the sheet's rail across the top: wide enough for its name in every language. -->
+    <dimen name="control_center_rail_entry_width">72dp</dimen>
+    <!-- The dock's gap to the screen's edges on a phone and a handheld; a TV keeps layout.safeTv. -->
+    <dimen name="control_center_margin">12dp</dimen>
+    <!-- The sheet never covers the top of the picture. -->
+    <dimen name="control_center_sheet_top_gap">56dp</dimen>
+    <!-- How far the sheet is dragged down before letting go closes it. -->
+    <dimen name="control_center_sheet_dismiss">96dp</dimen>
+</resources>

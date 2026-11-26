@@ -342,7 +342,6 @@ final class StreamMenuCatalog {
         switch (target) {
             case NATIVE: return R.string.native_menu_row;
             case OVERLAY: return R.string.stream_overlay_page;
-            case MORE: return R.string.stream_menu_more;
             case SHORTCUTS: return R.string.stream_menu_shortcuts;
             default: return title(o.role);
         }
@@ -451,12 +450,15 @@ final class StreamMenuCatalog {
         if (editor != null) editor.commit();
     }
 
-    /** The controller button the user gave this way out under the grid, as its cap ({@code "Y"}), or null. */
-    static String footerHotkey(StreamMenuModel.Layout layout, Item item) {
-        if (layout == null) return null;
-        // In the buttons' own order, as a tile shows the first button that names it.
+    /**
+     * The controller button the user gave this way out under the pages, as its cap ({@code "Y"}), or null.
+     * {@code buttons} is the tile id each button runs, as the model answered; null when it did not.
+     */
+    static String footerHotkey(Map<String, String> buttons, Item item) {
+        if (buttons == null) return null;
+        // In the buttons' own order, as a card shows the first button that names it.
         for (String key : new String[] {"y", "x", "lb", "rb"}) {
-            if (id(item).equals(layout.buttons.get(key))) return key.toUpperCase(Locale.ROOT);
+            if (id(item).equals(buttons.get(key))) return key.toUpperCase(Locale.ROOT);
         }
         return null;
     }

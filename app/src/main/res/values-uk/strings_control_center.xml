@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="control_center_quick">Швидке</string>
+    <string name="control_center_picture">Картинка</string>
+    <string name="control_center_audio">Звук</string>
+    <string name="control_center_clips">Кліпи</string>
+    <string name="control_center_pc">ПК</string>
+    <string name="control_center_controller">Контролер</string>
+    <string name="control_center_guests">Гості</string>
+    <string name="control_center_power">Живлення</string>
+</resources>

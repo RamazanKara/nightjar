@@ -54,8 +54,8 @@ public class StreamMenuNavigationTest {
             menu.show();
             assertEquals("Open World", menu.sheet().heading().toString());
             assertEquals("1440p · 144 FPS · HEVC HDR", menu.sheet().subtitle().getText().toString());
-            // Another page shows its own title and no mode.
-            menu.row(MORE).performClick();
+            // A page a level down shows its own title and no mode.
+            menu.reveal(OVERLAY_PAGE).performClick();
             assertEquals(View.GONE, menu.sheet().subtitle().getVisibility());
             menu.sheet().dismiss();
 
@@ -77,7 +77,7 @@ public class StreamMenuNavigationTest {
             state.bitrateChange = kbps -> kbps;
             StreamMenu menu = new StreamMenu(activity, () -> state, item -> { }, null, null);
             menu.show();
-            MenuRow bitrate = (MenuRow) menu.row(BITRATE);
+            MenuRow bitrate = (MenuRow) menu.reveal(BITRATE);
             assertEquals(BitrateSlider.text(activity, 80000), bitrate.value().toString());
             // Moving the slider moves the row's value with it.
             long now = android.os.SystemClock.uptimeMillis();
@@ -90,7 +90,7 @@ public class StreamMenuNavigationTest {
             state.rateChange = true;
             menu = new StreamMenu(activity, () -> state, item -> { }, null, null);
             menu.show();
-            assertEquals("60 FPS", ((MenuRow) menu.row(RATE_CHANGE)).value().toString());
+            assertEquals("60 FPS", ((MenuRow) menu.reveal(RATE_CHANGE)).value().toString());
             menu.sheet().dismiss();
         }
     }
@@ -104,11 +104,12 @@ public class StreamMenuNavigationTest {
             StreamMenu menu = new StreamMenu(activity, () -> options("rubylight-serverinfo.xml", NvApp.Role.STREAM), chosen::add);
             menu.show();
             View back = menu.sheet().findViewById(R.id.action_sheet_back);
-            assertEquals("The first page has no back arrow", View.GONE, back.getVisibility());
-            menu.row(OVERLAY_PAGE).performClick();
+            assertEquals("A module's page has no back arrow", View.GONE, back.getVisibility());
+            menu.reveal(OVERLAY_PAGE).performClick();
             assertEquals(StreamMenu.Page.OVERLAY, menu.page());
             assertNotNull(menu.row(OVERLAY_DEBUG));
-            assertNull(menu.row(DISCONNECT));
+            assertNotNull("The ways out stand under every page", menu.row(DISCONNECT));
+            assertSame(menu.sheet().exits(), menu.row(DISCONNECT).getParent());
             assertTrue(chosen.isEmpty());
             // Touch has a back arrow on the page; it does what Back does.
             assertEquals(View.VISIBLE, back.getVisibility());
@@ -135,7 +136,7 @@ public class StreamMenuNavigationTest {
             menu.show();
             return new float[] {
                     ((MaterialButton) menu.row(KEYBOARD)).getTextSize(),
-                    ((MaterialButton) menu.row(OVERLAY_PAGE)).getTextSize(),
+                    ((MaterialButton) menu.reveal(OVERLAY_PAGE)).getTextSize(),
                     ((MaterialButton) menu.row(DISCONNECT)).getTextSize()};
         } finally {
             org.robolectric.RuntimeEnvironment.setFontScale(1f);
@@ -166,20 +167,20 @@ public class StreamMenuNavigationTest {
             StreamMenu menu = new StreamMenu(activity, () -> state, chosen::add);
             menu.show();
             for (StreamMenu.Item item : new StreamMenu.Item[]{TOUCH_MODE, ONSCREEN_CONTROLS, CONTROLS_LAYOUT, GAME_CONTROLS, ZOOM}) {
-                assertNull(menu.row(item));
+                assertNull(item.name(), menu.reveal(item));
                 assertFalse(items(menu.entries()).contains(item));
             }
-            assertEquals("Keyboard", menu.row(KEYBOARD).getText().toString());
+            assertEquals(ControlCenterModel.DOCK, menu.sheet().placement());
+            assertEquals("Keyboard", menu.reveal(KEYBOARD).getText().toString());
             assertNotNull(menu.row(DISCONNECT));
-            menu.row(MORE).performClick();
-            assertEquals(StreamMenu.Page.MORE, menu.page());
-            assertNotNull(menu.row(KEYBOARD_KEYS));
-            assertEquals("Open the PC’s menu", menu.row(HOST_MENU).getText().toString());
+            assertNotNull(menu.reveal(KEYBOARD_KEYS));
+            assertEquals(ControlCenterModel.QUICK, menu.module());
+            assertEquals("Open the PC’s menu", menu.reveal(HOST_MENU).getText().toString());
+            assertEquals(ControlCenterModel.PC, menu.module());
             menu.row(HOST_MENU).performClick();
             assertEquals(Arrays.asList(HOST_MENU), chosen);
-            menu.back();
             assertEquals(StreamMenu.Page.MAIN, menu.page());
-            menu.row(OVERLAY_PAGE).performClick();
+            menu.reveal(OVERLAY_PAGE).performClick();
             assertEquals(StreamMenu.Page.OVERLAY, menu.page());
             menu.back();
             assertEquals(StreamMenu.Page.MAIN, menu.page());
@@ -195,7 +196,7 @@ public class StreamMenuNavigationTest {
             for (int key : new int[] {KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_ESCAPE}) {
                 StreamMenu menu = new StreamMenu(activity, () -> options("rubylight-serverinfo.xml", NvApp.Role.STREAM), item -> { });
                 menu.show();
-                menu.row(OVERLAY_PAGE).performClick();
+                menu.reveal(OVERLAY_PAGE).performClick();
                 press(menu, key);
                 assertEquals(StreamMenu.Page.MAIN, menu.page());
                 assertTrue(menu.sheet().isShowing());
@@ -222,13 +223,16 @@ public class StreamMenuNavigationTest {
                     menu.row(KEYBOARD).getText().toString());
             assertFalse("The PC keyboard is an action too", menu.row(PC_KEYBOARD).isCheckable());
             assertEquals(activity.getString(R.string.pc_keyboard_title), menu.row(PC_KEYBOARD).getText().toString());
-            MaterialButton overlay = menu.row(OVERLAY);
+            MaterialButton overlay = menu.reveal(OVERLAY);
             assertTrue(overlay.isCheckable());
             assertFalse(overlay.isChecked());
+            assertTrue("A card says its state in words too",
+                    overlay.getText().toString().endsWith("\n" + activity.getString(R.string.native_off)));
             overlay.performClick();
             assertTrue(menu.row(OVERLAY).isChecked());
-            assertSame("The row is updated, not rebuilt", overlay, menu.row(OVERLAY));
-            menu.row(KEYBOARD).performClick();
+            assertTrue(overlay.getText().toString().endsWith("\n" + activity.getString(R.string.native_on)));
+            assertSame("The card is updated, not rebuilt", overlay, menu.row(OVERLAY));
+            menu.reveal(KEYBOARD).performClick();
             menu.row(DISCONNECT).performClick();
             assertEquals(Arrays.asList(OVERLAY, KEYBOARD, DISCONNECT), chosen);
         }
@@ -254,13 +258,15 @@ public class StreamMenuNavigationTest {
             assertEquals(activity.getString(R.string.stream_audio_unread), menu.audioNote().getText().toString());
             assertTrue(menu.audioNote().isShown());
 
-            // The next answer that works replaces the line with the switches, on the More page.
+            // The next answer that works replaces the line with the switches, on the modules the shared model gives them.
             state.hostAudioUnread = false;
             state.hostAudio = NativeApiFixtures.audio(NativeApiFixtures.audioJson(false, false));
             menu.refresh();
             assertNull(menu.audioNote());
-            menu.row(MORE).performClick();
-            assertNotNull(menu.row(NIGHT_MODE));
+            assertNotNull(menu.reveal(NIGHT_MODE));
+            assertEquals(menu.dock().moduleOf("night_mode"), menu.module());
+            assertNotNull(menu.reveal(HEADPHONE_SURROUND));
+            assertEquals(ControlCenterModel.AUDIO, menu.module());
 
             // Remote Monitor changes nothing on the PC, so it has nothing to say about it either.
             StreamMenu.Options monitor = options(nativeApiHost(), NvApp.Role.REMOTE_MONITOR);
@@ -286,16 +292,20 @@ public class StreamMenuNavigationTest {
             menu.show();
             assertNull(menu.row(NIGHT_MODE));
 
-            // GET /audio answers after the menu opened; the switches sit on the More page.
+            // GET /audio answers after the menu opened; headphone surround brings the Audio module, which the rail gains.
+            assertFalse(menu.modules().contains(ControlCenterModel.AUDIO));
             state.hostAudio = NativeApiFixtures.audio(NativeApiFixtures.audioJson(false, false));
             menu.refresh();
-            assertNull(menu.row(NIGHT_MODE));
-            menu.row(MORE).performClick();
-            MaterialButton night = menu.row(NIGHT_MODE);
-            assertEquals(activity.getString(R.string.stream_night_mode), night.getText().toString());
+            assertNull("Quick stays as it was", menu.row(NIGHT_MODE));
+            assertTrue(menu.modules().contains(ControlCenterModel.AUDIO));
+            MaterialButton surround = menu.reveal(HEADPHONE_SURROUND);
+            assertEquals(ControlCenterModel.AUDIO, menu.module());
+            assertTrue("a switch is a card, wherever the model has it", surround instanceof TileGrid.Tile && surround.isCheckable());
+            MaterialButton night = menu.reveal(NIGHT_MODE);
+            assertEquals(menu.dock().moduleOf("night_mode"), menu.module());
+            assertEquals(activity.getString(R.string.stream_night_mode), night.getText().toString().split("\n")[0]);
             assertTrue(night.isCheckable());
             assertFalse(night.isChecked());
-            assertNotNull(menu.row(HEADPHONE_SURROUND));
 
             // The switch asks; until the host answers it shows the host's state, then the new one in place.
             night.performClick();
@@ -317,14 +327,20 @@ public class StreamMenuNavigationTest {
             activity.setTheme(R.style.StreamTheme);
             StreamMenu menu = new StreamMenu(activity, () -> options("rubylight-serverinfo.xml", NvApp.Role.STREAM), item -> { });
             menu.show();
-            for (StreamMenu.Entry entry : menu.entries()) {
-                View row = menu.row(entry.item);
-                assertTrue(entry.item + " is focusable", row.isFocusable());
-                assertTrue(entry.item + " is clickable", row.isClickable());
+            for (String module : menu.modules()) {
+                menu.select(module);
+                assertEquals(module, menu.module());
+                assertFalse(module + " has something to choose", menu.entries().isEmpty());
+                for (StreamMenu.Entry entry : menu.entries()) {
+                    View row = menu.row(entry.item);
+                    assertTrue(entry.item + " is focusable", row.isFocusable());
+                    assertTrue(entry.item + " is clickable", row.isClickable());
+                }
+                assertTrue(module + " is on the rail", menu.sheet().railEntry(module).isClickable());
             }
-            assertTrue(menu.row(KEYBOARD).isFocusedByDefault());
+            assertTrue(menu.reveal(KEYBOARD).isFocusedByDefault());
             assertFalse(menu.row(DISCONNECT).isFocusedByDefault());
-            menu.row(OVERLAY_PAGE).performClick();
+            menu.reveal(OVERLAY_PAGE).performClick();
             assertTrue("The page's first row takes the focus", menu.row(OVERLAY_OFF).isFocusedByDefault());
         }
     }
@@ -339,7 +355,15 @@ public class StreamMenuNavigationTest {
                     () -> options("butterpollo-viewer-serverinfo.xml", NvApp.Role.INPUT_ONLY), chosen::add);
             menu.show();
             assertFalse("OK right after opening must not disconnect", menu.row(DISCONNECT).isFocusedByDefault());
-            assertTrue("The first tile has the focus", menu.grid().getChildAt(0).isFocusedByDefault());
+            // Nothing to type with: the rail leaves Quick out and opens on the first module that has something.
+            assertFalse(menu.modules().isEmpty());
+            assertEquals(menu.modules().get(0), menu.module());
+            MaterialButton first = menu.sheet().page().firstAction();
+            assertNotNull("the page that opens has something to choose", first);
+            assertTrue("and the focus starts on it", first.isFocusedByDefault());
+            assertNotSame(menu.row(DISCONNECT), first);
+            assertNotNull("Reconnect is on Power", menu.reveal(RECONNECT));
+            assertEquals(ControlCenterModel.POWER, menu.module());
             // Back opened the menu; Back again only closes it.
             menu.sheet().onBackPressed();
             assertFalse(menu.sheet().isShowing());
@@ -350,18 +374,34 @@ public class StreamMenuNavigationTest {
     /** The stream menu on a 1080p TV, both pages: no text under the TV caption size, and the sheet inside the safe area. */
     @Test @Config(qualifiers = "w960dp-h540dp-land-television-xhdpi")
     public void tvMenuTextIsReadableAndTheSheetFitsInsideTheOverscan() {
-        try (var controller = Robolectric.buildActivity(Activity.class).setup()) {
+        try (var controller = Robolectric.buildActivity(Activity.class).setup().visible()) {
             Activity activity = controller.get();
             activity.setTheme(R.style.StreamTheme);
             StreamMenu.Options state = options("rubylight-serverinfo.xml", NvApp.Role.STREAM);
             state.hostMenu = true;
             StreamMenu menu = new StreamMenu(activity, () -> state, item -> { });
             menu.show();
-            assertEquals(java.util.Collections.emptyList(), TvAudit.findings(menu.sheet()));
-            menu.row(OVERLAY_PAGE).performClick();
-            assertEquals(java.util.Collections.emptyList(), TvAudit.findings(menu.sheet()));
+            // Its window is attached once the first frame ran: only then does a view know where on the screen it is.
+            org.robolectric.shadows.ShadowLooper.idleMainLooper(600, java.util.concurrent.TimeUnit.MILLISECONDS);
+            int width = activity.getResources().getDisplayMetrics().widthPixels;
+            int height = activity.getResources().getDisplayMetrics().heightPixels;
+            View window = menu.sheet().getWindow().getDecorView();
+            for (String module : menu.modules()) {
+                menu.select(module);
+                layOut(window, width, height);
+                assertEquals(module, java.util.Collections.emptyList(), TvAudit.findings(window, width, height));
+            }
+            menu.reveal(OVERLAY_PAGE).performClick();
+            layOut(window, width, height);
+            assertEquals(java.util.Collections.emptyList(), TvAudit.findings(window, width, height));
             menu.sheet().dismiss();
         }
+    }
+
+    private static void layOut(View window, int width, int height) {
+        window.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+        window.layout(0, 0, width, height);
     }
 
     /** Disconnect's and End session's confirms say different things: one waits to resume, the other gives the PC back. */

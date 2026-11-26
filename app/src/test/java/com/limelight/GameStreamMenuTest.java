@@ -76,8 +76,9 @@ public class GameStreamMenuTest {
         StreamMenu menu = ReflectionHelpers.getField(game.menuActions, "streamMenuSheet");
         assertNotNull("Back opens the stream menu", menu);
         assertEquals(StreamMenu.Page.MAIN, menu.page());
+        assertEquals(com.limelight.ui.ControlCenterModel.QUICK, menu.module());
         assertNotNull(menu.row(StreamMenu.Item.QUIT_GAME));
-        assertNotNull(menu.row(StreamMenu.Item.BITRATE));
+        assertNotNull(menu.reveal(StreamMenu.Item.BITRATE));
         menu.sheet().dismiss();
         idle();
         assertNull(ReflectionHelpers.getField(game.menuActions, "streamMenuSheet"));
@@ -134,13 +135,13 @@ public class GameStreamMenuTest {
         StreamMenu menu = open(game);
         PreferenceConfiguration prefs = ReflectionHelpers.getField(game, "prefConfig");
         assertFalse(prefs.enablePerfOverlay);
-        menu.row(StreamMenu.Item.OVERLAY).performClick();
+        menu.reveal(StreamMenu.Item.OVERLAY).performClick();
         assertTrue("The overlay toggles in place", prefs.enablePerfOverlay);
         assertEquals(View.VISIBLE, game.findViewById(R.id.performanceOverlayScroll).getVisibility());
         assertTrue(menu.sheet().isShowing());
         assertTrue(menu.row(StreamMenu.Item.OVERLAY).isChecked());
 
-        menu.row(StreamMenu.Item.CLIPBOARD_RECEIVE).performClick();
+        menu.reveal(StreamMenu.Item.CLIPBOARD_RECEIVE).performClick();
         assertFalse(menu.sheet().isShowing());
         idle();
         assertNull(ReflectionHelpers.getField(game.menuActions, "streamMenuSheet"));
@@ -154,7 +155,7 @@ public class GameStreamMenuTest {
         prefs.enablePerfOverlay = true;
         game.findViewById(R.id.performanceOverlayScroll).setVisibility(View.VISIBLE);
         StreamMenu menu = open(game);
-        menu.row(StreamMenu.Item.OVERLAY_PAGE).performClick();
+        menu.reveal(StreamMenu.Item.OVERLAY_PAGE).performClick();
         menu.row(StreamMenu.Item.OVERLAY_BOTTOM_RIGHT).performClick();
         runMenuAction(game);
         assertEquals("bottom_right", stored.getString("performance_overlay_position", ""));
@@ -162,7 +163,7 @@ public class GameStreamMenuTest {
         assertTrue("A corner leaves the overlay on", prefs.enablePerfOverlay);
 
         menu = open(game);
-        menu.row(StreamMenu.Item.OVERLAY_PAGE).performClick();
+        menu.reveal(StreamMenu.Item.OVERLAY_PAGE).performClick();
         menu.row(StreamMenu.Item.OVERLAY_OFF).performClick();
         runMenuAction(game);
         assertFalse(prefs.enablePerfOverlay);
@@ -178,7 +179,7 @@ public class GameStreamMenuTest {
     public void backInTheOverlayPageReturnsToTheStreamMenu() {
         Game game = streamingGame("rubylight-serverinfo.xml");
         StreamMenu menu = open(game);
-        menu.row(StreamMenu.Item.OVERLAY_PAGE).performClick();
+        menu.reveal(StreamMenu.Item.OVERLAY_PAGE).performClick();
         assertEquals(StreamMenu.Page.OVERLAY, menu.page());
         menu.sheet().onBackPressed();
         assertEquals(StreamMenu.Page.MAIN, menu.page());
@@ -194,7 +195,7 @@ public class GameStreamMenuTest {
     public void aUsbDriverPadStepsBackAndChoosesInTheMenu() {
         Game game = streamingGame("rubylight-serverinfo.xml");
         StreamMenu menu = open(game);
-        menu.row(StreamMenu.Item.OVERLAY_PAGE).performClick();
+        menu.reveal(StreamMenu.Item.OVERLAY_PAGE).performClick();
         game.steerStreamMenu(android.view.KeyEvent.KEYCODE_BUTTON_B);
         assertEquals("B returns from the page", StreamMenu.Page.MAIN, menu.page());
         assertTrue(menu.sheet().isShowing());
@@ -231,10 +232,14 @@ public class GameStreamMenuTest {
     public void gameStreamGetsNoHostSectionAndNoQualitySection() {
         Game game = streamingGame("gamestream-serverinfo.xml");
         StreamMenu menu = open(game);
-        for (StreamMenu.Entry entry : menu.entries()) {
-            assertNotEquals(entry.toString(), StreamMenu.Section.HOST, entry.section);
-            assertNotEquals(entry.toString(), StreamMenu.Section.QUALITY, entry.section);
+        for (String module : menu.modules()) {
+            menu.select(module);
+            for (StreamMenu.Entry entry : menu.entries()) {
+                assertNotEquals(entry.toString(), StreamMenu.Section.HOST, entry.section);
+                assertNotEquals(entry.toString(), StreamMenu.Section.QUALITY, entry.section);
+            }
         }
+        assertFalse("nothing of the PC's to show", menu.modules().contains(com.limelight.ui.ControlCenterModel.PC));
         menu.sheet().dismiss();
     }
 

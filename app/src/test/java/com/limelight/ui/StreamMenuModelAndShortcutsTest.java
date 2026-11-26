@@ -52,7 +52,7 @@ public class StreamMenuModelAndShortcutsTest {
                 List<StreamMenu.Item> chosen = new ArrayList<>();
                 StreamMenu menu = new StreamMenu(activity, () -> state, chosen::add, null, new SavedShortcuts());
                 menu.show();
-                MenuRow row = (MenuRow) menu.row(OVERLAY_PAGE);
+                MenuRow row = (MenuRow) menu.reveal(OVERLAY_PAGE);
                 TileGrid.Tile out = (TileGrid.Tile) menu.row(DISCONNECT);
                 assertEquals("Y", row.hotkey());
                 assertEquals("X", out.hotkey());
@@ -124,14 +124,14 @@ public class StreamMenuModelAndShortcutsTest {
             StreamMenu menu = new StreamMenu(activity, () -> state, chosen::add, null, new SavedShortcuts());
             menu.show();
 
-            // Y shows on the tile it was given; Keyboard loses it.
-            assertEquals("Y", ((TileGrid.Tile) menu.row(OVERLAY)).hotkey());
-            assertNull(((TileGrid.Tile) menu.row(KEYBOARD)).hotkey());
+            // Y shows on the card it was given; Keyboard loses it.
+            assertEquals("Y", ((TileGrid.Tile) menu.reveal(OVERLAY)).hotkey());
+            assertNull(((TileGrid.Tile) menu.reveal(KEYBOARD)).hotkey());
             press(menu, KeyEvent.KEYCODE_BUTTON_Y);
             assertEquals(Arrays.asList(OVERLAY), chosen);
             chosen.clear();
-            // LB is off: Shortcuts stays reachable by its tile but the button does nothing.
-            assertNull(((TileGrid.Tile) menu.row(SHORTCUTS)).hotkey());
+            // LB is off: Shortcuts stays reachable by its card but the button does nothing.
+            assertNull(((TileGrid.Tile) menu.reveal(SHORTCUTS)).hotkey());
             press(menu, KeyEvent.KEYCODE_BUTTON_L1);
             assertTrue(chosen.isEmpty());
             // RB on Default keeps its own tile, so Overlay carries the first button that names it and still runs.
@@ -150,7 +150,7 @@ public class StreamMenuModelAndShortcutsTest {
     }
 
     @Test
-    public void theGridIsTheSharedModelsWithItsButtonsTheUsersShortcutsAndAddThenReturnAndTheWaysOut() {
+    public void thePagesAreTheSharedModelsCardsWithItsButtonsTheUsersShortcutsAndAddOverReturnAndTheWaysOut() {
         try (var controller = Robolectric.buildActivity(Activity.class).setup()) {
             Activity activity = controller.get();
             activity.setTheme(R.style.StreamTheme);
@@ -165,47 +165,57 @@ public class StreamMenuModelAndShortcutsTest {
             }, null, saved);
             menu.show();
 
-            // The tiles in the model's order, each the row of its item; the buttons on the model's tiles.
-            StreamMenuModel.Layout layout = menu.layout();
-            TileGrid grid = menu.grid();
-            int statusRows = 0;
-            for (StreamMenuModel.Cell cell : layout.grid) {
-                if (menu.cell(layout.grid.indexOf(cell)) instanceof MenuRow) statusRows++;
+            // Each module's cards in the model's order, each the view of its item; one with a value is a row under them.
+            assertEquals("Quick shows first", ControlCenterModel.QUICK, menu.module());
+            assertEquals(ControlCenterModel.QUICK, menu.modules().get(0));
+            for (String module : menu.modules()) {
+                menu.select(module);
+                ControlCenterModel.Page page = menu.dock().page(module);
+                TileGrid grid = menu.grid();
+                int cards = 0;
+                for (int at = 0; at < page.cards.size(); at++) {
+                    android.view.View view = menu.cell(at);
+                    assertNotNull(module + " card " + at, view);
+                    if (view instanceof MenuRow) continue;
+                    assertSame(module + " card " + at, view, grid.getChildAt(cards++));
+                    assertTrue("the cards scroll", inScroll(view));
+                }
             }
-            assertEquals(layout.grid.size(), grid.getChildCount() + statusRows);
-            assertSame(menu.row(KEYBOARD), grid.getChildAt(0));
-            assertEquals("Y", ((TileGrid.Tile) menu.row(KEYBOARD)).hotkey());
-            assertEquals("X", ((TileGrid.Tile) menu.row(CONTROLLER_MOUSE)).hotkey());
-            assertEquals("RB", ((TileGrid.Tile) menu.row(OVERLAY)).hotkey());
-            assertEquals("LB", ((TileGrid.Tile) menu.row(SHORTCUTS)).hotkey());
-            assertNull(((TileGrid.Tile) menu.row(PC_KEYBOARD)).hotkey());
+            // The buttons on the model's cards, wherever they are.
+            assertEquals("Y", ((TileGrid.Tile) menu.reveal(KEYBOARD)).hotkey());
+            assertFalse("An action carries no state", menu.row(KEYBOARD).isCheckable());
+            assertEquals("X", ((TileGrid.Tile) menu.reveal(CONTROLLER_MOUSE)).hotkey());
             assertTrue("A switch carries its state", menu.row(CONTROLLER_MOUSE).isCheckable());
-            assertFalse("An action does not", menu.row(KEYBOARD).isCheckable());
-            // More, then the user's shortcuts with their keys, then Add.
-            int more = grid.indexOfChild(menu.row(MORE));
-            assertEquals(more + 3, grid.getChildCount() - 1);
-            assertEquals("Snip\nWin + Shift + S", text(grid.getChildAt(more + 1)));
-            assertEquals("Steam overlay\nShift + Tab", text(grid.getChildAt(more + 2)));
-            assertEquals(activity.getString(R.string.keyboard_shortcuts_add), text(grid.getChildAt(more + 3)));
-            assertTrue(items(menu.entries()).containsAll(Arrays.asList(KEYBOARD, OVERLAY, DISCONNECT)));
-            assertFalse("Rarely used items wait on the More page", items(menu.entries()).contains(RECONNECT));
-            // The round X in the header goes back; Disconnect stands in the panel's footer, outside the part that scrolls.
-            assertTrue(menu.sheet().isPanel());
-            assertSame(menu.sheet().panelClose(), menu.row(CLOSE));
-            assertEquals(activity.getString(R.string.stream_tile_return) + ", B", menu.row(CLOSE).getContentDescription().toString());
-            assertFalse("the header does not scroll", inScroll(menu.row(CLOSE)));
+            assertEquals("RB", ((TileGrid.Tile) menu.reveal(OVERLAY)).hotkey());
+            assertNull(((TileGrid.Tile) menu.reveal(PC_KEYBOARD)).hotkey());
+            assertEquals("LB", ((TileGrid.Tile) menu.reveal(SHORTCUTS)).hotkey());
+            // The user's shortcuts with their keys, then Add, stay on Quick.
+            assertEquals(ControlCenterModel.QUICK, menu.module());
+            List<android.view.View> own = cards(menu, StreamMenuModel.Cell.Kind.SHORTCUT);
+            assertEquals(2, own.size());
+            assertEquals("Snip\nWin + Shift + S", text(own.get(0)));
+            assertEquals("Steam overlay\nShift + Tab", text(own.get(1)));
+            List<android.view.View> add = cards(menu, StreamMenuModel.Cell.Kind.ADD);
+            assertEquals(1, add.size());
+            assertEquals(activity.getString(R.string.keyboard_shortcuts_add), text(add.get(0)));
+            assertSame("Add closes the page's cards", add.get(0), menu.grid().getChildAt(menu.grid().getChildCount() - 1));
+            assertTrue(items(menu.entries()).containsAll(Arrays.asList(KEYBOARD, DISCONNECT)));
+            // Return to stream and the ways out stand under the page, outside the part that scrolls.
+            assertSame(menu.sheet().primary(), menu.row(CLOSE));
+            assertEquals(activity.getString(R.string.stream_tile_return), menu.row(CLOSE).getText().toString());
+            assertFalse("Return to stream does not scroll", inScroll(menu.row(CLOSE)));
             android.view.ViewGroup footer = (android.view.ViewGroup) menu.row(DISCONNECT).getParent();
+            assertSame(menu.sheet().exits(), footer);
             assertTrue(footer instanceof ActionSheet.FooterBar);
-            assertTrue("the grid scrolls", inScroll(grid));
             assertFalse("the ways out do not", inScroll(footer));
 
-            // RB flips the overlay in place, the release goes with it, and the menu stays.
+            // RB flips the overlay in place, on the page that has it, and the menu stays.
             press(menu, KeyEvent.KEYCODE_BUTTON_R1);
             assertEquals(Arrays.asList(OVERLAY), chosen);
             assertTrue(menu.row(OVERLAY).isChecked());
             assertTrue(menu.sheet().isShowing());
-            // A shortcut tile sends its keys.
-            grid.getChildAt(more + 1).performClick();
+            // A shortcut card sends its keys.
+            cards(menu, StreamMenuModel.Cell.Kind.SHORTCUT).get(0).performClick();
             assertArrayEquals(KeyboardShortcuts.parseChord("WIN+SHIFT+S"), saved.sent.get(0));
             // LB opens the shortcuts, where the buttons do nothing; B returns; Y runs the keyboard.
             press(menu, KeyEvent.KEYCODE_BUTTON_L1);
@@ -216,7 +226,7 @@ public class StreamMenuModelAndShortcutsTest {
             assertEquals(StreamMenu.Page.MAIN, menu.page());
             press(menu, KeyEvent.KEYCODE_BUTTON_Y);
             assertEquals(Arrays.asList(OVERLAY, KEYBOARD), chosen);
-            // The X closes without choosing anything.
+            // Return to stream closes without choosing anything.
             menu.row(CLOSE).performClick();
             assertFalse(menu.sheet().isShowing());
             assertEquals(Arrays.asList(OVERLAY, KEYBOARD), chosen);
@@ -244,9 +254,9 @@ public class StreamMenuModelAndShortcutsTest {
         for (String id : Arrays.asList("disconnect", "quit_game", "close_game")) assertTrue(id + " in footer", layout.footer.contains(id));
     }
 
-    /** Two ways out under the grid, Disconnect and Quit game; End session waits last on More, red, and asks first there. */
+    /** Two ways out under every page, Disconnect and Quit game, the one red control; End session is a row on Power, and asks first there. */
     @Test
-    public void theFooterHoldsDisconnectAndQuitGameAndEndSessionIsUnderMore() {
+    public void theFooterHoldsDisconnectAndQuitGameAndEndSessionIsOnPower() {
         try (var controller = Robolectric.buildActivity(Activity.class).setup()) {
             Activity activity = controller.get();
             activity.setTheme(R.style.StreamTheme);
@@ -260,15 +270,25 @@ public class StreamMenuModelAndShortcutsTest {
                 android.view.ViewGroup footer = (android.view.ViewGroup) menu.row(DISCONNECT).getParent();
                 assertTrue(footer instanceof ActionSheet.FooterBar);
                 assertSame(footer, menu.row(quit).getParent());
+                assertEquals("Disconnect, then Quit game", 2, footer.getChildCount());
                 assertNull("End session is not a third way out", menu.row(END_HOST_SESSION));
                 assertEquals(activity.getString(R.string.stream_tile_quit_game), menu.row(quit).getText().toString());
+                assertEquals("Quit game", menu.row(quit).getText().toString());
+                assertEquals(activity.getString(R.string.stream_tile_return), menu.sheet().primary().getText().toString());
 
-                menu.row(MORE).performClick();
-                assertEquals(StreamMenu.Page.MORE, menu.page());
-                List<StreamMenu.Item> more = items(menu.entries());
-                assertEquals("End session closes More", END_HOST_SESSION, more.get(more.size() - 1));
-                assertEquals(activity.getString(R.string.stream_end_session), menu.row(END_HOST_SESSION).getText().toString());
-                menu.row(END_HOST_SESSION).performClick();
+                com.google.android.material.button.MaterialButton end = menu.reveal(END_HOST_SESSION);
+                assertEquals(ControlCenterModel.POWER, menu.module());
+                assertEquals(StreamMenu.Page.MAIN, menu.page());
+                assertNotSame("a row of the page, not a way out", footer, end.getParent());
+                assertTrue("it scrolls with its page", inScroll(end));
+                assertEquals(activity.getString(R.string.stream_end_session), end.getText().toString());
+                assertTrue("Quit game is the one red control", menu.row(quit).getBackground() instanceof GlassControlDrawable
+                        && ((GlassControlDrawable) menu.row(quit).getBackground()).kind() == GlassControlDrawable.Kind.DANGER);
+                assertFalse("End session is a plain row", end.getBackground() instanceof GlassControlDrawable
+                        && ((GlassControlDrawable) end.getBackground()).kind() == GlassControlDrawable.Kind.DANGER);                // The same two ways out stand under Power too, and Quit game stays the one red control.
+                assertSame(footer, menu.row(quit).getParent());
+                assertEquals(2, footer.getChildCount());
+                end.performClick();
                 assertEquals(Arrays.asList(END_HOST_SESSION), chosen);
                 menu.sheet().dismiss();
             }
@@ -285,11 +305,10 @@ public class StreamMenuModelAndShortcutsTest {
             SavedShortcuts saved = new SavedShortcuts().add("Caps Lock", "CAPS_LOCK").add("Snip", "WIN+SHIFT+S");
             StreamMenu menu = new StreamMenu(activity, () -> state, item -> { }, null, saved);
             menu.show();
-            TileGrid grid = menu.grid();
-            int more = grid.indexOfChild(menu.row(MORE));
-            assertEquals("Caps Lock", text(grid.getChildAt(more + 1)));
-            assertEquals("Snip\nWin + Shift + S", text(grid.getChildAt(more + 2)));
-            menu.row(SHORTCUTS).performClick();
+            List<android.view.View> own = cards(menu, StreamMenuModel.Cell.Kind.SHORTCUT);
+            assertEquals("Caps Lock", text(own.get(0)));
+            assertEquals("Snip\nWin + Shift + S", text(own.get(1)));
+            menu.reveal(SHORTCUTS).performClick();
             TileGrid tiles = findGrid(menu.sheet().getWindow().getDecorView());
             List<String> texts = new ArrayList<>();
             for (int i = 0; i < tiles.getChildCount(); i++) texts.add(text(tiles.getChildAt(i)));
@@ -308,7 +327,7 @@ public class StreamMenuModelAndShortcutsTest {
             SavedShortcuts saved = new SavedShortcuts().add("Switch", "ALT+TAB");
             StreamMenu menu = new StreamMenu(activity, () -> state, item -> { }, null, saved);
             menu.show();
-            menu.row(SHORTCUTS).performClick();
+            menu.reveal(SHORTCUTS).performClick();
             // Alt + Tab is saved under the user's name, so its built-in steps aside. The user's own come first, so a
             // built-in added in a later version never pushes them along (nightjar#61: Game Bar and Record that did).
             TileGrid tiles = findGrid(menu.sheet().getWindow().getDecorView());
@@ -346,7 +365,7 @@ public class StreamMenuModelAndShortcutsTest {
     /**
      * Without libnightjar_core (missing, or from another build) the stream still runs on the C engine. The menu kept
      * only Return and the ways out, so Keyboard, Mouse, Overlay, Quality, the clipboard and the shortcuts were out of
-     * reach: every offered entry stays as a plain list, and More lists them all.
+     * reach: every offered entry stays as a plain list on the one page left.
      */
     @Test
     public void aModelThatCannotAnswerSaysWhyAndKeepsEveryEntryReachable() {
@@ -381,7 +400,7 @@ public class StreamMenuModelAndShortcutsTest {
             menu.row(DISCONNECT).performClick();
             assertEquals(Arrays.asList(CLIPBOARD_RECEIVE, DISCONNECT), chosen);
             // The shortcuts still open and send without the model.
-            menu.row(SHORTCUTS).performClick();
+            menu.reveal(SHORTCUTS).performClick();
             assertEquals(StreamMenu.Page.SHORTCUTS, menu.page());
             findGrid(menu.sheet().getWindow().getDecorView()).getChildAt(0).performClick();
             assertArrayEquals(KeyboardShortcuts.parseChord("ALT+TAB"), saved.sent.get(0));
@@ -421,7 +440,7 @@ public class StreamMenuModelAndShortcutsTest {
             SavedShortcuts saved = new SavedShortcuts();
             StreamMenu menu = new StreamMenu(activity, () -> state, item -> { }, null, saved);
             menu.show();
-            menu.row(SHORTCUTS).performClick();
+            menu.reveal(SHORTCUTS).performClick();
             TileGrid tiles = findGrid(menu.sheet().getWindow().getDecorView());
             tiles.getChildAt(tiles.getChildCount() - 1).performClick();
             TileGrid caps = findGrid(menu.sheet().getWindow().getDecorView());
@@ -448,7 +467,7 @@ public class StreamMenuModelAndShortcutsTest {
             SavedShortcuts saved = new SavedShortcuts().add("Old", "CTRL+F13");
             StreamMenu menu = new StreamMenu(activity, () -> state, item -> { }, null, saved);
             menu.show();
-            menu.row(SHORTCUTS).performClick();
+            menu.reveal(SHORTCUTS).performClick();
             buttonStartingWith(menu.sheet().getWindow().getDecorView(), "Old", true).performClick();
             assertEquals(StreamMenu.Page.EDITOR, menu.page());
             TileGrid caps = findGrid(menu.sheet().getWindow().getDecorView());

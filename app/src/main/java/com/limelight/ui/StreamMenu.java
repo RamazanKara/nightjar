@@ -23,12 +23,12 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
- * The stream menu, a panel over the stream: the game over the stream's mode in its header, a grid of tiles four to
- * a row that the shared model (StreamMenuModel, the same one desktop Nightjar draws from) lays out with the user's
- * shortcuts and Add at its end, then Return to stream and the ways out of the session, always in view under the
- * grid. The rarely used items sit on the More page; the
- * overlay, the host's page, the shortcuts and their editor open in the same sheet, and Back there returns to
- * the first page. Y, X, LB and RB run the tiles that show them. Items a host or this stream cannot use are left out.
+ * The stream menu, shown as the Control Center over the stream ({@link ControlCenterDock}): the game over the stream's
+ * mode in its header, a rail of modules, and the selected module's page of cards and rows as the shared model sorts
+ * them ({@link ControlCenterModel}, the same one desktop Nightjar draws from), the user's shortcuts and Add at the end
+ * of Quick. Return to stream and the ways out of the session stand under every page. The overlay, the host's page,
+ * the shortcuts and their editor open one level down, and Back there returns to the module. Y, X, LB and RB run the
+ * cards that show them, on whichever module they are. Items a host or this stream cannot use are left out.
  */
 public final class StreamMenu {
     public enum Item {
@@ -39,7 +39,7 @@ public final class StreamMenu {
         HOST_MENU, SERVER_COMMANDS, CLIPBOARD_SEND, CLIPBOARD_RECEIVE, IMAGE_CLIPBOARD_SEND, IMAGE_CLIPBOARD_RECEIVE,
         USB_DEVICES, GUESTS, FILES, HOST_WEB_UI, HOST_STATUS,
         RECONNECT, DISCONNECT, CONFIRM_DISCONNECT, QUIT_GAME, END_SESSION, END_HOST_SESSION, CLOSE_GAME,
-        NATIVE_PAGE, NATIVE_RESUME, SHORTCUTS, MORE, CLOSE,
+        NATIVE_PAGE, NATIVE_RESUME, SHORTCUTS, CLOSE,
         OVERLAY_OFF, OVERLAY_COMPACT, OVERLAY_STATISTICS, OVERLAY_DEBUG,
         OVERLAY_TOP_LEFT, OVERLAY_TOP_RIGHT, OVERLAY_BOTTOM_LEFT, OVERLAY_BOTTOM_RIGHT, OVERLAY_COPY, STREAM_HEALTH, LATENCY_TEST
     }
@@ -56,7 +56,17 @@ public final class StreamMenu {
         }
     }
 
-    public enum Page { MAIN, MORE, SHORTCUTS, EDITOR, OVERLAY, NATIVE }
+    /** {@code MAIN} is the selected module's own page; the others open one level down from it. */
+    public enum Page { MAIN, SHORTCUTS, EDITOR, OVERLAY, NATIVE }
+
+    /**
+     * What the Control Center keeps between two openings in one stream: the module it showed and the card or row the
+     * focus was on, so it opens where it was left. The stream holds one and hands it to each menu it opens.
+     */
+    public static final class Session {
+        String module;
+        Item focused;
+    }
 
     /** What this stream and its host offer right now; the stream activity fills it each time the menu opens. */
     public static final class Options {
@@ -127,6 +137,12 @@ public final class StreamMenu {
         public boolean hostAudioUnread;
         /** Host, codec, size, bitrate and link for the native page; null leaves the connection facts out. */
         public ConnectionInfo connection;
+        /** What the stream said when it started (the launch notice), in its own words; null or empty for nothing. */
+        public String launchNotice;
+        /** The PC's video encoder load in percent as the statistics show it ({@code "12.5"}); null while it reports none. */
+        public String encoderLoad;
+        /** The later PC features this PC advertises, by the model's gate names; a card of theirs shows only when named. */
+        public java.util.Set<String> gates = java.util.Collections.emptySet();
 
         public Options(NvApp.Role role, ComputerDetails host) {
             this.role = role;
@@ -225,52 +241,79 @@ public final class StreamMenu {
     private final Supplier<Options> options;
     private final Listener listener;
     private final Shortcuts shortcuts;
-    private final ActionSheet sheet;
+    private final Session session;
+    private final ControlCenterDock dock;
+    private final ControlCenterPage view;
+    private final StreamMenuModulePage modulePage;
     private final StreamMenuShortcutsPage shortcutsPage;
     private final Map<Item, MaterialButton> rows = new EnumMap<>(Item.class);
     private Page page = Page.MAIN;
+    private String module = ControlCenterModel.QUICK;
+    private List<String> modules = new ArrayList<>();
     private List<Entry> entries = new ArrayList<>();
     private final NativeMenuController radeon;
     private RadeonPanelView radeonView;
-    private TextView audioNote;
-    private StreamMenuModel.Layout layout;
+    private ControlCenterModel.Dock model;
     // What the page was built from, so a refresh can tell a changed state from items that came or went.
     private List<Item> offeredItems = new ArrayList<>();
-    private TileGrid grid;
-    // What each of the model's cells became: a tile or a status row. Hotkeys go by the model's order.
-    private android.view.View[] cells;
-    private StepSlider bitrateSlider;
-    // The rate the slider's row shows beside it.
-    private TextView bitrateShown;
     private TextView failure;
 
     public StreamMenu(Activity activity, Supplier<Options> options, Listener listener) {
-        this(activity, options, listener, null, null);
+        this(activity, options, listener, null, null, null);
     }
 
     public StreamMenu(Activity activity, Supplier<Options> options, Listener listener, NativeMenuController radeon) {
-        this(activity, options, listener, radeon, null);
+        this(activity, options, listener, radeon, null, null);
+    }
+
+    public StreamMenu(Activity activity, Supplier<Options> options, Listener listener, NativeMenuController radeon, Shortcuts shortcuts) {
+        this(activity, options, listener, radeon, shortcuts, null);
     }
 
     /**
      * {@code radeon} reads and writes the host's Radeon settings for the native page; null leaves the panel out.
-     * {@code shortcuts} puts the user's shortcuts in the grid; null leaves them and the Shortcuts tile out.
+     * {@code shortcuts} puts the user's shortcuts on Quick; null leaves them and the Shortcuts card out. {@code session}
+     * opens the Control Center on the module and card it was left on; null opens it on Quick.
      */
-    public StreamMenu(Activity activity, Supplier<Options> options, Listener listener, NativeMenuController radeon, Shortcuts shortcuts) {
+    public StreamMenu(Activity activity, Supplier<Options> options, Listener listener, NativeMenuController radeon,
+                      Shortcuts shortcuts, Session session) {
         this.activity = activity;
         this.options = options;
         this.listener = listener;
         this.radeon = radeon;
         this.shortcuts = shortcuts;
+        this.session = session;
         Options current = options.get();
-        // A panel over the stream, as wide as desktop Nightjar's menu, the stream visible beside it.
-        sheet = new ActionSheet(activity, activity.getString(title(current.role)), true);
-        sheet.setOnClosed(this::stopRadeon);
-        sheet.setKeyHandler(this::hotkey);
-        shortcutsPage = new StreamMenuShortcutsPage(activity, sheet, shortcuts, this::back,
+        dock = new ControlCenterDock(activity, activity.getString(title(current.role)));
+        view = dock.page();
+        dock.setOnClosing(this::remember);
+        dock.setOnClosed(this::stopRadeon);
+        dock.setKeyHandler(this::hotkey);
+        dock.setNavigation(this::select, this::step);
+        modulePage = new StreamMenuModulePage(activity, dock.getContext(), view, new StreamMenuModulePage.Host() {
+            @Override public void choose(Entry entry) {
+                StreamMenu.this.choose(entry);
+            }
+
+            @Override public void put(Entry entry, MaterialButton row) {
+                rows.put(entry.item, row);
+                entries.add(entry);
+            }
+
+            @Override public void send(KeyboardShortcuts.Shortcut shortcut) {
+                shortcuts.send(shortcut.keys());
+            }
+
+            @Override public void addShortcut() {
+                shortcutsPage.edit(null);
+            }
+        });
+        shortcutsPage = new StreamMenuShortcutsPage(activity, view, shortcuts, this::back,
                 () -> render(Page.SHORTCUTS, options.get(), null, false),
                 () -> render(Page.EDITOR, options.get(), null, false));
+        if (session != null && session.module != null) module = session.module;
         render(Page.MAIN, current, null, false);
+        if (session != null && session.focused != null) dock.setStartFocus(rows.get(session.focused));
     }
 
     // The panel polls the host only while its page is on screen.
@@ -282,8 +325,20 @@ public final class StreamMenu {
         if (radeon != null) radeon.stop();
     }
 
-    public ActionSheet sheet() {
-        return sheet;
+    // The module and the card the focus is on, for the next opening in this stream. It never opens on a way out.
+    private void remember() {
+        if (session == null) return;
+        session.module = module;
+        Item focused = page == Page.MAIN ? currentFocusedItem() : null;
+        session.focused = null;
+        for (Entry entry : entries) {
+            if (entry.item == focused && entry.section != Section.SESSION && !entry.destructive) session.focused = focused;
+        }
+    }
+
+    /** The Control Center's window. */
+    public ControlCenterDock sheet() {
+        return dock;
     }
 
     public Page page() {
@@ -294,19 +349,44 @@ public final class StreamMenu {
         return entries;
     }
 
-    /** The row or tile for an item on the current page, or null when the page leaves it out. */
+    /** The card or row for an item on the page that shows, or under it; null when it is elsewhere or left out. */
     public MaterialButton row(Item item) {
         return rows.get(item);
     }
 
-    /** The first page's grid as the shared model laid it out; null when the model failed or another page shows. */
-    public StreamMenuModel.Layout layout() {
-        return page == Page.MAIN ? layout : null;
+    /**
+     * The card or row for an item wherever the Control Center has it: the module that holds it shows, as after choosing
+     * it on the rail. Null for an item this stream leaves out, or one on a page a level down that is not open.
+     */
+    public MaterialButton reveal(Item item) {
+        if (rows.get(item) != null) return rows.get(item);
+        String holder = model == null ? null : model.moduleOf(StreamMenuCatalog.id(item));
+        if (holder == null || !modules.contains(holder)) return null;
+        if (page != Page.MAIN || !holder.equals(module)) {
+            module = holder;
+            render(Page.MAIN, options.get(), null, false);
+        }
+        return rows.get(item);
     }
 
-    /** The first page's tiles, in order; null on other pages. */
+    /** The Control Center as the shared model sorted it; null when the model failed. */
+    public ControlCenterModel.Dock dock() {
+        return model;
+    }
+
+    /** The module whose page shows, by the model's key. */
+    public String module() {
+        return module;
+    }
+
+    /** The rail: the modules that have something for this stream, in order. */
+    public List<String> modules() {
+        return new ArrayList<>(modules);
+    }
+
+    /** The cards of the module's page, in order; null on a page a level down. */
     public TileGrid grid() {
-        return grid;
+        return page == Page.MAIN ? modulePage.grid() : null;
     }
 
     /** The line saying why the menu could not be laid out, or null when it could. */
@@ -314,59 +394,106 @@ public final class StreamMenu {
         return failure;
     }
 
-    /** Back: from the editor to the shortcuts, from any other page to the first page; the first page closes. */
+    /** Back: from the editor to the shortcuts, from any other page a level down to its module; a module's page closes. */
     public void back() {
         switch (page) {
-            case MAIN: sheet.dismiss(); return;
+            case MAIN: dock.dismiss(); return;
             case EDITOR: render(Page.SHORTCUTS, options.get(), null, false); return;
             case NATIVE: render(Page.MAIN, options.get(), Item.NATIVE_PAGE, false); return;
             case OVERLAY: render(Page.MAIN, options.get(), Item.OVERLAY_PAGE, false); return;
-            case SHORTCUTS: render(Page.MAIN, options.get(), Item.SHORTCUTS, false); return;
-            default: render(Page.MAIN, options.get(), Item.MORE, false);
+            default: render(Page.MAIN, options.get(), Item.SHORTCUTS, false);
+        }
+    }
+
+    /** Shows a module's page, as its entry on the rail does. A module the rail does not show changes nothing. */
+    public void select(String target) {
+        if (!modules.contains(target) || (target.equals(module) && page == Page.MAIN)) return;
+        boolean onRail = dock.railFocused();
+        module = target;
+        render(Page.MAIN, options.get(), null, false);
+        // Stepping along the rail keeps the focus on the rail.
+        if (onRail) dock.focusRail();
+    }
+
+    /** A trigger, a rail arrow or a swipe: the next module (forward) or the one before, as the model steps; it stops at both ends. */
+    public void step(boolean forward) {
+        if (model == null) return;
+        try {
+            String next = model.step(module, forward);
+            // The model steps along its own pages: one this client shows nothing for is passed over.
+            for (int guard = ControlCenterModel.MODULES.size(); !modules.contains(next) && guard > 0; guard--) {
+                String further = model.step(next, forward);
+                if (further.equals(next)) return;
+                next = further;
+            }
+            if (!next.equals(module)) select(next);
+        } catch (StreamMenuModel.Refused e) {
+            LimeLog.warning("Stream menu: the step failed: " + e.getMessage());
         }
     }
 
     private void render(Page target, Options o, Item focus, boolean focusSlider) {
         page = target;
         stopRadeon();
-        sheet.clearActions();
+        view.clear();
         rows.clear();
+        entries = new ArrayList<>();
+        modulePage.clear();
         shortcutsPage.clearViews();
-        grid = null;
-        cells = null;
-        bitrateSlider = null;
-        bitrateShown = null;
-        layout = null;
         failure = null;
-        audioNote = null;
+        // A remote has no face buttons: the caps show only while a controller could press them.
+        boolean caps = capsShown();
+        dock.setCapsShown(caps);
+        List<Entry> offered = offered(o);
+        offeredItems = StreamMenuCatalog.items(offered);
+        List<KeyboardShortcuts.Shortcut> saved = shortcuts != null && o.canSendInput ? shortcuts.saved() : null;
+        Map<String, String> labels = null;
+        String refused = null;
+        try {
+            model = ControlCenterModel.dock(StreamMenuCatalog.offers(offered), saved == null ? null : saved.size(),
+                    buttonChoices(activity), o.gates);
+            labels = StreamMenuModel.labels();
+        } catch (StreamMenuModel.Refused e) {
+            LimeLog.warning("Stream menu: the model failed: " + e.getMessage());
+            model = null;
+            labels = null;
+            refused = String.valueOf(e.getMessage());
+        }
+        modules = new ArrayList<>();
+        if (model != null) {
+            for (ControlCenterModel.Page shown : model.pages) {
+                if (StreamMenuModulePage.shows(shown, offered, o)) modules.add(shown.module);
+            }
+        }
+        if (modules.isEmpty()) modules.add(ControlCenterModel.QUICK);
+        if (!modules.contains(module)) module = modules.get(0);
+        dock.setRail(modules, module);
         String[] header = target == Page.MAIN ? header(o) : null;
-        sheet.setHeading(target == Page.EDITOR
-                ? activity.getString(shortcutsPage.editorHeading())
+        dock.setHeading(target == Page.EDITOR ? activity.getString(shortcutsPage.editorHeading())
                 : header != null ? header[0] : activity.getString(StreamMenuCatalog.heading(target, o)));
-        sheet.setSubtitle(header == null ? null : header[1]);
-        // The game's cover heads the first page only; a page below says where it is, its back button in the cover's place.
-        sheet.setCover(target == Page.MAIN && o.role == NvApp.Role.STREAM ? o.cover : null);
-        sheet.setBackHandler(target == Page.MAIN ? null : this::back);
-        if (target == Page.MAIN) renderGrid(o);
-        else if (target == Page.SHORTCUTS) {
-            entries = new ArrayList<>();
-            failure = shortcutsPage.renderShortcuts();
-        } else if (target == Page.EDITOR) {
-            entries = new ArrayList<>();
-            failure = shortcutsPage.renderEditor();
-        } else if (target == Page.MORE) renderList(StreamMenuCatalog.moreEntries(offered(o)));
+        dock.setSubtitle(header == null ? null : header[1]);
+        // The game's cover heads a module's page only; a page below says where it is, its back button in the cover's place.
+        dock.setCover(target == Page.MAIN && o.role == NvApp.Role.STREAM ? o.cover : null);
+        dock.setBackHandler(target == Page.MAIN ? null : this::back);
+        ControlCenterModel.Page shown = model == null ? null : model.page(module);
+        if (target == Page.MAIN && shown != null) modulePage.render(shown, o, offered, labels, saved, caps);
+        else if (target == Page.MAIN) renderWithoutModel(offered, refused);
+        else if (target == Page.SHORTCUTS) failure = shortcutsPage.renderShortcuts();
+        else if (target == Page.EDITOR) failure = shortcutsPage.renderEditor();
         else renderList(target == Page.NATIVE ? nativePage(o) : overlayPage(o));
         if (target == Page.NATIVE) addNativeFacts(o);
-        sheet.focusFirstAction();
-        if (focusSlider && bitrateSlider != null && !bitrateSlider.isInTouchMode()) {
-            bitrateSlider.requestFocus();
+        addFooter(offered, model == null ? FALLBACK_FOOTER : model.footer, labels);
+        dock.focusFirstAction();
+        StepSlider slider = modulePage.bitrateSlider();
+        if (focusSlider && slider != null && !slider.isInTouchMode()) {
+            slider.requestFocus();
         } else {
             MaterialButton focused = focus == null ? null : rows.get(focus);
             if (focused != null && !focused.isInTouchMode()) focused.requestFocus();
         }
     }
 
-    // What the first page offers: the entries this stream can use, and the shortcuts where they can be sent.
+    // What the stream offers: the entries it can use, and the shortcuts where they can be sent.
     private List<Entry> offered(Options o) {
         List<Entry> list = StreamMenuCatalog.pageEntries(activity, Page.MAIN, o);
         if (shortcuts != null && o.canSendInput) {
@@ -375,127 +502,20 @@ public final class StreamMenu {
         return list;
     }
 
-    /**
-     * The first page: the grid the shared model lays out (the user's shortcuts and Add at its end), the bitrate and status
-     * rows, and the ways out of the session in the panel's footer; the header's X goes back to the stream. When the model
-     * cannot answer, the page says why and keeps the ways out.
-     */
-    private void renderGrid(Options o) {
-        if (o.role == NvApp.Role.STREAM && o.hostAudioUnread) {
-            audioNote = sheet.addNote(sheet.addGroup(), activity.getString(R.string.stream_audio_unread), false);
-        }
-        List<Entry> offered = offered(o);
-        offeredItems = StreamMenuCatalog.items(offered);
-        entries = new ArrayList<>();
-        List<KeyboardShortcuts.Shortcut> saved = shortcuts != null && o.canSendInput ? shortcuts.saved() : null;
-        Map<String, String> labels;
-        try {
-            layout = StreamMenuModel.layout(StreamMenuCatalog.offers(offered), saved == null ? null : saved.size(), buttonChoices(activity));
-            labels = StreamMenuModel.labels();
-        } catch (StreamMenuModel.Refused e) {
-            // Without the model the stream still runs: every entry stays
-            // reachable as a plain list, in this client's order and words, above the ways out.
-            LimeLog.warning("Stream menu: the model failed: " + e.getMessage());
-            layout = null;
-            failure = sheet.addNote(sheet.addGroup(), activity.getString(R.string.stream_menu_model_failed, e.getMessage()), true);
-            // The ways out stay the model's two, Disconnect and the game's end; Reconnect and End session join the list.
-            List<Entry> plain = new ArrayList<>();
-            for (Entry entry : offered) if (!FALLBACK_FOOTER.contains(StreamMenuCatalog.id(entry.item))) plain.add(entry);
-            addRows(plain);
-            entries.addAll(plain);
-            addFooter(offered, FALLBACK_FOOTER, null);
-            sheet.setFirstAction(plain.isEmpty() ? rows.get(Item.CLOSE) : rows.get(firstFocus(plain)));
-            return;
-        }
-        grid = sheet.addTileGrid();
-        // A remote has no face buttons: the caps show only while a controller could press them.
-        grid.setCapsShown(capsShown());
-        sheet.setCapsShown(capsShown());
-        cells = new android.view.View[layout.grid.size()];
-        List<StreamMenuModel.Cell> statusCells = new ArrayList<>();
-        for (int at = 0; at < layout.grid.size(); at++) {
-            StreamMenuModel.Cell cell = layout.grid.get(at);
-            if (cell.kind == StreamMenuModel.Cell.Kind.TILE && StreamMenuCatalog.isStatusRow(cell.id)) {
-                statusCells.add(cell);
-                continue;
-            }
-            MaterialButton tile;
-            switch (cell.kind) {
-                case SHORTCUT: {
-                    KeyboardShortcuts.Shortcut shortcut = saved.get(cell.shortcut);
-                    tile = grid.addTile(R.drawable.ic_keyboard, shortcut.name, StreamMenuShortcutsPage.keysUnder(shortcut), null, null);
-                    tile.setOnClickListener(view -> shortcuts.send(shortcut.keys()));
-                    break;
-                }
-                case ADD:
-                    tile = grid.addTile(R.drawable.ic_plus, StreamMenuCatalog.label(activity, labels, StreamMenuModel.ADD), null, null, null);
-                    tile.setOnClickListener(view -> shortcutsPage.edit(null));
-                    break;
-                default: {
-                    if (StreamMenuModel.MORE.equals(cell.id)) {
-                        tile = grid.addTile(R.drawable.ic_more_horiz, StreamMenuCatalog.label(activity, labels, StreamMenuModel.MORE), null, null, null);
-                        rows.put(Item.MORE, tile);
-                        tile.setOnClickListener(view -> render(Page.MORE, options.get(), null, false));
-                        break;
-                    }
-                    Entry entry = StreamMenuCatalog.find(offered, cell.id);
-                    tile = grid.addTile(entry.icon, StreamMenuCatalog.label(activity, labels, cell.id), null, cell.on,
-                            cell.hotkey == null ? null : cell.hotkey.toUpperCase(Locale.ROOT));
-                    rows.put(entry.item, tile);
-                    entries.add(entry);
-                    tile.setOnClickListener(view -> choose(entry));
-                }
-            }
-            cells[at] = tile;
-            if (grid.getChildCount() == 1) sheet.setFirstAction(tile);
-        }
-        addStatus(o, offered, statusCells, labels);
-        addFooter(offered, layout.footer, labels);
+    // Without the model the stream still runs: the page says why, and every entry stays reachable as a plain list, in
+    // this client's order and words, above the ways out. Those stay the model's two; Reconnect and End session join the list.
+    private void renderWithoutModel(List<Entry> offered, String why) {
+        failure = view.addNote(view.addGroup(), activity.getString(R.string.stream_menu_model_failed, why), true);
+        List<Entry> plain = new ArrayList<>();
+        for (Entry entry : offered) if (!FALLBACK_FOOTER.contains(StreamMenuCatalog.id(entry.item))) plain.add(entry);
+        addRows(plain);
+        entries.addAll(plain);
+        if (!plain.isEmpty()) view.setFirstAction(rows.get(firstFocus(plain)));
     }
 
-    /** The bitrate slider and the status rows between the tiles and the ways out: the same items, in the model's words. */
-    private void addStatus(Options o, List<Entry> offered, List<StreamMenuModel.Cell> statusCells, Map<String, String> labels) {
-        if (statusCells.isEmpty()) return;
-        boolean native_ = false;
-        boolean quality = false;
-        for (StreamMenuModel.Cell cell : statusCells) {
-            native_ |= cell.id.equals(StreamMenuCatalog.id(Item.NATIVE_PAGE));
-            quality |= cell.id.equals(StreamMenuCatalog.id(Item.BITRATE)) || cell.id.equals(StreamMenuCatalog.id(Item.RATE_CHANGE));
-        }
-        if (quality && o.bitrateKbps > 0 && o.bitrateChange != null) {
-            LinearLayout sliders = sheet.addRowGroup();
-            TextView[] shown = new TextView[1];
-            java.util.function.IntUnaryOperator change = o.bitrateChange;
-            bitrateSlider = BitrateSlider.inline(activity, o.bitrateKbps, text -> {
-                if (shown[0] != null) shown[0].setText(text);
-                // The bitrate row below shows the same rate: keep it in step with the slider.
-                if (rows.get(Item.BITRATE) instanceof MenuRow bitrateRow) bitrateRow.setValue(text);
-            }, change);
-            shown[0] = sheet.addSliderRow(sliders, activity.getString(R.string.stream_bitrate), BitrateSlider.text(activity, o.bitrateKbps), bitrateSlider);
-            bitrateShown = shown[0];
-            bitrateSlider.setEnabled(!o.bitrateWaiting);
-        }
-        LinearLayout group = sheet.addRowGroup();
-        String facts = o.connection == null ? null : o.connection.summary(activity);
-        for (StreamMenuModel.Cell cell : statusCells) {
-            Entry entry = StreamMenuCatalog.find(offered, cell.id);
-            String value = null;
-            if (entry.item == Item.NATIVE_PAGE || (entry.item == Item.OVERLAY_PAGE && !native_)) value = facts;
-            // The rate-change row opens the frame-rate dialog; a host without it only has the bitrate row (nightjar #134).
-            else if (entry.item == Item.RATE_CHANGE && o.streamFps > 0) value = o.streamFps + " FPS";
-            else if (entry.item == Item.BITRATE && o.bitrateKbps > 0) value = BitrateSlider.text(activity, o.bitrateKbps);
-            MenuRow row = sheet.addStatusRow(group, StreamMenuCatalog.label(activity, labels, cell.id), value,
-                    cell.hotkey == null ? null : cell.hotkey.toUpperCase(Locale.ROOT));
-            rows.put(entry.item, row);
-            entries.add(entry);
-            row.setOnClickListener(view -> choose(entry));
-            cells[layout.grid.indexOf(cell)] = row;
-        }
-    }
-
-    /** The view of the model's cell at this index on the first page. */
+    /** The view of the model's card at this index on the module's page. */
     android.view.View cell(int index) {
-        return cells[index];
+        return modulePage.cell(index);
     }
 
     /**
@@ -503,17 +523,12 @@ public final class StreamMenu {
      * and the slider is usable or disabled (while the PC has not said what it counts the bitrate as).
      */
     public void showBitrate(int kbps, boolean usable) {
-        if (bitrateSlider == null || kbps <= 0) return;
-        bitrateSlider.setEnabled(usable);
-        BitrateSlider.moveTo(bitrateSlider, kbps);
-        String text = BitrateSlider.text(activity, kbps);
-        if (bitrateShown != null) bitrateShown.setText(text);
-        if (rows.get(Item.BITRATE) instanceof MenuRow bitrateRow) bitrateRow.setValue(text);
+        modulePage.showBitrate(kbps, usable);
     }
 
-    /** The first page's bitrate slider; null when it has none. */
+    /** The bitrate slider of the page that shows; null when it has none. */
     StepSlider bitrateSlider() {
-        return bitrateSlider;
+        return modulePage.bitrateSlider();
     }
 
     /** The string for a label key of the shared model ({@code stream_menu::label}), or 0 for a key this client lacks. */
@@ -522,7 +537,7 @@ public final class StreamMenu {
     }
 
     /**
-     * The first page's title and the line under it, as desktop Nightjar's: the game over the stream's mode
+     * A module page's title and the line under it, as desktop Nightjar's: the game over the stream's mode
      * ({@code 1440p · 144 FPS · HEVC}), or over the PC while the mode is unknown; without a game, the menu's title
      * over the app and PC.
      */
@@ -531,32 +546,29 @@ public final class StreamMenu {
     }
 
     /**
-     * The round X back to the stream, then the ways out in the model's order and in its words ({@link #FALLBACK_FOOTER}, in
-     * this client's words, when it failed); the last that ends something is the one red control. A way out only Android offers, a remote
-     * monitor's, keeps its own words.
+     * Under every page: Return to stream, then the ways out in the model's order and in its words ({@link #FALLBACK_FOOTER},
+     * in this client's words, when it failed); the last that ends something is the one red control. A way out only
+     * Android offers, a remote monitor's, keeps its own words.
      */
     private void addFooter(List<Entry> offered, List<String> footer, Map<String, String> labels) {
-        // The ways out follow the grid: their caps show only while a controller could press them.
-        sheet.setCapsShown(capsShown());
         String back = labels != null ? StreamMenuCatalog.label(activity, labels, StreamMenuModel.CLOSE)
                 : activity.getString(R.string.stream_menu_return);
-        MaterialButton close = sheet.panelClose();
-        close.setContentDescription(back + ", B");
-        rows.put(Item.CLOSE, close);
-        if (grid == null) sheet.setFirstAction(close);
+        rows.put(Item.CLOSE, dock.setPrimary(back));
         Entry red = null;
         for (Entry entry : offered) {
-            if (entry.section == Section.SESSION && entry.destructive && (footer == null || footer.contains(StreamMenuCatalog.id(entry.item)))) red = entry;
+            if (entry.section == Section.SESSION && entry.destructive && footer.contains(StreamMenuCatalog.id(entry.item))) red = entry;
         }
         for (Entry entry : offered) {
-            if (entry.section != Section.SESSION || (footer != null && !footer.contains(StreamMenuCatalog.id(entry.item)))) continue;
+            if (entry.section != Section.SESSION || !footer.contains(StreamMenuCatalog.id(entry.item))) continue;
             String name = labels != null && labels.containsKey(StreamMenuCatalog.id(entry.item))
                     ? StreamMenuCatalog.label(activity, labels, StreamMenuCatalog.id(entry.item)) : activity.getString(entry.label);
             int icon = entry == red ? R.drawable.ic_glass_power : entry.item == Item.DISCONNECT ? R.drawable.ic_stream_leave : entry.icon;
-            MaterialButton button = sheet.addFooterAction(icon, name, entry == red, StreamMenuCatalog.footerHotkey(layout, entry.item));
-            rows.put(entry.item, button);
+            MaterialButton button = dock.addExit(icon, name, entry == red,
+                    StreamMenuCatalog.footerHotkey(model == null ? null : model.buttons, entry.item));
+            // A page a level down that lists the same way out keeps its own row under this name.
+            rows.putIfAbsent(entry.item, button);
             entries.add(entry);
-            button.setOnClickListener(view -> choose(entry));
+            button.setOnClickListener(pressed -> choose(entry));
         }
     }
 
@@ -571,8 +583,8 @@ public final class StreamMenu {
     }
 
     /**
-     * A saved choice as this version reads it: Close game and Quit game became one choice, Quit game; End session moved under
-     * More, where no button runs it, so a button that ran it is back on Default.
+     * A saved choice as this version reads it: Close game and Quit game became one choice, Quit game; a button that
+     * ran End session is back on Default.
      */
     static String buttonChoice(String saved) {
         return StreamMenuCatalog.buttonChoice(saved);
@@ -586,9 +598,12 @@ public final class StreamMenu {
         StreamMenuCatalog.upgradeButtonChoices(prefs);
     }
 
-    /** A controller button on the first page runs its tile, or a way out under the grid: Y, X, LB or RB. */
+    /**
+     * A controller button on a module's page runs its card, on whichever module the model has it, or a way out under
+     * the pages: Y, X, LB or RB.
+     */
     public boolean hotkey(int keyCode) {
-        if (page != Page.MAIN || layout == null || grid == null) return false;
+        if (page != Page.MAIN || model == null) return false;
         String key;
         switch (keyCode) {
             case android.view.KeyEvent.KEYCODE_BUTTON_Y: key = "y"; break;
@@ -597,12 +612,21 @@ public final class StreamMenu {
             case android.view.KeyEvent.KEYCODE_BUTTON_R1: key = "rb"; break;
             default: return false;
         }
-        int index = layout.hotkey(key);
-        if (index >= 0) {
-            cells[index].performClick();
-            return true;
+        try {
+            ControlCenterModel.Place place = model.hotkey(key);
+            if (place != null) {
+                // The card's module shows first: what a button ran is never out of sight.
+                select(place.module);
+                android.view.View card = place.module.equals(module) ? modulePage.cell(place.card) : null;
+                if (card == null) return false;
+                card.performClick();
+                return true;
+            }
+        } catch (StreamMenuModel.Refused e) {
+            LimeLog.warning("Stream menu: the button's card failed: " + e.getMessage());
+            return false;
         }
-        String id = layout.buttons.get(key);
+        String id = model.buttons.get(key);
         for (Entry entry : entries) {
             MaterialButton row = rows.get(entry.item);
             if (row != null && StreamMenuCatalog.id(entry.item).equals(id)) {
@@ -625,12 +649,11 @@ public final class StreamMenu {
         shortcutsPage.saveDraft();
     }
 
-    // A page of rows: switches side by side at the top, then the rest under their sections.
+    // A page of rows a level down: switches side by side at the top, then the rest under their sections.
     private void renderList(List<Entry> list) {
-        entries = list;
-        offeredItems = StreamMenuCatalog.items(list);
+        entries = new ArrayList<>(list);
         addRows(list);
-        sheet.setFirstAction(rows.get(firstFocus(list)));
+        view.setFirstAction(rows.get(firstFocus(list)));
     }
 
     private void addRows(List<Entry> list) {
@@ -639,17 +662,17 @@ public final class StreamMenu {
         for (Entry entry : list) {
             MaterialButton button;
             if (entry.section == Section.QUICK) {
-                if (quickRow == null) quickRow = sheet.addToggleRow();
-                button = sheet.addToggle(quickRow, entry.icon, activity.getString(entry.label), Boolean.TRUE.equals(entry.checked));
+                if (quickRow == null) quickRow = view.addToggleRow();
+                button = view.addToggle(quickRow, entry.icon, activity.getString(entry.label), Boolean.TRUE.equals(entry.checked));
                 if (entry.checked == null) button.setCheckable(false);
             } else {
                 if (entry.section != section) {
-                    if (entry.section.title != 0) sheet.addSection(entry.section.title);
-                    else if (section != null) sheet.addDivider();
+                    if (entry.section.title != 0) view.addSection(entry.section.title);
+                    else if (section != null) view.addDivider();
                 }
-                if (entry.destructive) button = sheet.addDestructiveAction(entry.icon, activity.getString(entry.label));
-                else if (entry.opensPage()) button = sheet.addPageAction(entry.icon, activity.getString(entry.label));
-                else button = sheet.addAction(entry.icon, activity.getString(entry.label));
+                if (entry.destructive) button = view.addDestructiveAction(entry.icon, activity.getString(entry.label));
+                else if (entry.opensPage()) button = view.addPageAction(entry.icon, activity.getString(entry.label));
+                else button = view.addAction(entry.icon, activity.getString(entry.label));
                 if (entry.checked != null) {
                     if (entry.icon == R.drawable.ic_check) StreamMenuCatalog.markChoice(button, entry.checked);
                     else StreamMenuCatalog.markToggleRow(button, entry.checked);
@@ -657,89 +680,90 @@ public final class StreamMenu {
             }
             section = entry.section;
             rows.put(entry.item, button);
-            button.setOnClickListener(view -> choose(entry));
+            button.setOnClickListener(pressed -> choose(entry));
         }
     }
 
     /**
      * Shows what changed while the menu is open, such as the host's answer about its audio or the stream's new size:
-     * the switches and the first page's header in place, or the page again when items came or went.
+     * the switches and the header in place, or the page again when items or its notices came or went.
      */
     public void refresh() {
-        if ((page != Page.MAIN && page != Page.MORE) || !sheet.isShowing()) return;
+        if (page != Page.MAIN || !dock.isShowing()) return;
         Options o = options.get();
-        List<Item> now = StreamMenuCatalog.items(page == Page.MAIN ? offered(o) : StreamMenuCatalog.moreEntries(offered(o)));
-        boolean noted = page == Page.MAIN && o.role == NvApp.Role.STREAM && o.hostAudioUnread;
-        if (now.equals(offeredItems) && noted == (audioNote != null)) {
-            if (bitrateSlider == null || (!bitrateSlider.isTouching() && !bitrateSlider.isPressed())) {
-                refreshToggles();
-            }
-            if (page == Page.MAIN) showHeader(o);
-        } else {
-            if (bitrateSlider != null && (bitrateSlider.isTouching() || bitrateSlider.isPressed())) {
-                return;
-            }
-            boolean focusSlider = bitrateSlider != null && bitrateSlider.hasFocus();
-            Item focusedItem = focusSlider ? null : currentFocusedItem();
-            render(page, o, focusedItem, focusSlider);
+        StepSlider slider = modulePage.bitrateSlider();
+        boolean sliding = slider != null && (slider.isTouching() || slider.isPressed());
+        if (StreamMenuCatalog.items(offered(o)).equals(offeredItems) && modulePage.notesMatch(module, o)) {
+            if (!sliding) refreshToggles(o);
+            showHeader(o);
+            modulePage.showEncoderLoad(o.encoderLoad);
+        } else if (!sliding) {
+            boolean focusSlider = slider != null && slider.hasFocus();
+            render(page, o, focusSlider ? null : currentFocusedItem(), focusSlider);
         }
     }
 
     private Item currentFocusedItem() {
         for (Map.Entry<Item, MaterialButton> entry : rows.entrySet()) {
-            MaterialButton view = entry.getValue();
-            if (view != null && view.hasFocus()) {
-                return entry.getKey();
-            }
+            MaterialButton row = entry.getValue();
+            if (row != null && row.hasFocus()) return entry.getKey();
         }
         return null;
     }
 
-    // The first page's title and mode line as render sets them; the title is set again only when it changed.
+    // The title and mode line as render sets them; the title is set again only when it changed.
     private void showHeader(Options o) {
         String[] header = header(o);
-        if (!android.text.TextUtils.equals(sheet.heading(), header[0])) sheet.setHeading(header[0]);
-        sheet.setSubtitle(header[1]);
+        if (!android.text.TextUtils.equals(dock.heading(), header[0])) dock.setHeading(header[0]);
+        dock.setSubtitle(header[1]);
     }
 
     /** The line saying the host's audio settings could not be read, or null when the page has none. */
     public TextView audioNote() {
-        return audioNote;
+        return modulePage.audioNote();
+    }
+
+    /** Quick's line with what the stream said when it started; null without one or on another page. */
+    public TextView launchNotice() {
+        return modulePage.launchNotice();
+    }
+
+    /** Picture's line with the PC's video encoder load; null while the PC reports none or on another page. */
+    public TextView encoderLoad() {
+        return modulePage.encoderLoad();
     }
 
     // The connection facts and the Radeon panel under the native page's actions.
     private void addNativeFacts(Options o) {
         if (o.connection != null) {
-            sheet.addSection(R.string.native_section_connection);
+            view.addSection(R.string.native_section_connection);
             for (ConnectionInfo.Line line : o.connection.lines(activity)) {
-                sheet.addInfo(activity.getString(line.label), line.value);
+                view.addInfo(activity.getString(line.label), line.value);
             }
         }
         if (radeon != null) {
-            radeonView = new RadeonPanelView(sheet, sheet.addGroup(), radeon::write);
+            // The panel builds its rows with a sheet's own calls: this sheet only makes them, into the page, and never shows.
+            radeonView = new RadeonPanelView(new ActionSheet(dock.getContext(), "", true), view.addGroup(), radeon::write);
             radeon.start(radeonView::show);
         }
     }
 
     private void choose(Entry entry) {
+        Haptics.feedback(dock.panel(), entry.checked != null && !entry.opensPage() ? Haptics.Event.TOGGLE : Haptics.Event.CONFIRM);
         if (entry.opensPage()) {
             render(entry.item == Item.NATIVE_PAGE ? Page.NATIVE : entry.item == Item.SHORTCUTS ? Page.SHORTCUTS : Page.OVERLAY,
                     options.get(), null, false);
             return;
         }
         listener.onStreamMenuItem(entry.item);
-        if (entry.keepsMenuOpen()) {
-            refreshToggles();
-        }
+        if (entry.keepsMenuOpen()) refreshToggles(options.get());
     }
 
     // A switch changes in place: show its new state without rebuilding the page or moving focus.
-    private void refreshToggles() {
-        Options o = options.get();
-        List<Entry> source = page == Page.MORE ? StreamMenuCatalog.moreEntries(offered(o)) : mainPage(o);
-        for (Entry entry : source) {
+    private void refreshToggles(Options o) {
+        for (Entry entry : mainPage(o)) {
             MaterialButton button = rows.get(entry.item);
-            if (entry.checked == null || button == null) continue;
+            if (entry.checked == null || button == null || modulePage.refresh(entry, button)) continue;
             boolean checked = Boolean.TRUE.equals(entry.checked);
             if (button.isCheckable()) {
                 button.setChecked(checked);
@@ -753,6 +777,6 @@ public final class StreamMenu {
     }
 
     public void show() {
-        sheet.show();
+        dock.show();
     }
 }

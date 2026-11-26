@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="control_center_quick">クイック</string>
+    <string name="control_center_picture">映像</string>
+    <string name="control_center_audio">音声</string>
+    <string name="control_center_clips">クリップ</string>
+    <string name="control_center_pc">PC</string>
+    <string name="control_center_controller">コントローラー</string>
+    <string name="control_center_guests">ゲスト</string>
+    <string name="control_center_power">電源</string>
+</resources>

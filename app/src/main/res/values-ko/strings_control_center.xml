@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="control_center_quick">빠른 메뉴</string>
+    <string name="control_center_picture">화면</string>
+    <string name="control_center_audio">오디오</string>
+    <string name="control_center_clips">클립</string>
+    <string name="control_center_pc">PC</string>
+    <string name="control_center_controller">컨트롤러</string>
+    <string name="control_center_guests">게스트</string>
+    <string name="control_center_power">전원</string>
+</resources>
