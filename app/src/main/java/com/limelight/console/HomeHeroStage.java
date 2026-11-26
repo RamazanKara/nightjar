@@ -31,7 +31,8 @@ import java.util.function.Supplier;
  * <p>On a TV the hero is the card that has focus, so the art changes with the backdrop, in the same step. On a phone and a
  * handheld the hero is the first item of the list and keeps its game while focus roams the shelves: the art is that game's,
  * moves with the item as the list scrolls and is gone with it. A phone held upright gives the art room over the words, which
- * stand at the foot of the window's top third as far as the carousel still fits above the tab bar. A game without art shows
+ * stand at the foot of the window's top third as far as the hero and the first shelf's upper half still fit above the tab bar
+ * (a usual phone has no such room: its cover takes it, see {@link HomeHero#coverWidth}). A game without art shows
  * its tile's gradient, as its backdrop does. The art is in the stage's light on every form (the view holds it there), so the
  * words need no scrim and this class does not have to know where they stand.
  */
@@ -40,6 +41,11 @@ final class HomeHeroStage {
     static final int GAME = R.id.hero_title;
     /** A phone held upright: the hero's words end this far down the window. */
     static final float WORDS_FOOT = 1f / 3f;
+    /**
+     * What a phone keeps under its hero for the first shelf, in dp: its heading and the upper half of its covers, less the
+     * strip the list's own padding already keeps free over the tab bar.
+     */
+    static final int SHELF_PEEK_DP = HomeHero.SHELF_HEADING_DP + HomeHero.SHELF_HALF_DP - 28;
 
     private final Activity activity;
     private final BackdropView backdrop;
@@ -93,13 +99,14 @@ final class HomeHeroStage {
 
     /**
      * The room a phone's hero leaves over its words: enough to end them at {@link #WORDS_FOOT} of the window, never so much
-     * that the rest of the hero no longer fits the list, and none where the words already reach that far.
+     * that the rest of the hero and what the first shelf shows under it no longer fit the list, and none where the words
+     * already reach that far.
      *
      * @param window   the window's height
      * @param restTop  where the hero's item starts in the window while the list rests
      * @param words    the words' own height
      * @param rest     the height of what follows the words in the hero: the carousel and Play
-     * @param listRoom the list's height between its paddings
+     * @param listRoom the list's height between its paddings, less what the first shelf keeps under the hero
      */
     static int room(int window, int restTop, int words, int rest, int listRoom) {
         int wanted = Math.round(window * WORDS_FOOT) - restTop - words;
@@ -133,8 +140,9 @@ final class HomeHeroStage {
         View words = item.findViewById(R.id.hero_words);
         if (form == GlassForm.PHONE && words != null) {
             int own = words.getHeight() - words.getPaddingTop();
+            int peek = Math.round(SHELF_PEEK_DP * activity.getResources().getDisplayMetrics().density);
             int room = room(stage.getHeight(), restTop, own, item.getHeight() - words.getHeight(),
-                    list.getHeight() - list.getPaddingTop() - list.getPaddingBottom());
+                    list.getHeight() - list.getPaddingTop() - list.getPaddingBottom() - peek);
             if (room != words.getPaddingTop() && words.getHeight() > 0) {
                 words.post(() -> words.setPadding(words.getPaddingLeft(), room, words.getPaddingRight(), words.getPaddingBottom()));
             }

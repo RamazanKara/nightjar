@@ -154,6 +154,36 @@ public class HomeHeroStageTest {
         return (HeroStageView) last;
     }
 
+    /** Where the tab bar starts in the window: nothing of the page may be needed under it. */
+    private static int dockTop(Home home, RecyclerView list) {
+        View bar = home.findViewById(R.id.shell_bar);
+        if (bar != null && bar.isShown() && bar.getHeight() > 0) return topOf(bar);
+        return topOf(list) + list.getHeight() - list.getPaddingBottom();
+    }
+
+    /** The hero, and under it the first shelf's heading and the upper half of its covers, all above the tab bar. */
+    private static void assertTheHeroAndHalfAShelfFit(Home home, RecyclerView list, boolean halfACover) {
+        View item = list.getLayoutManager().findViewByPosition(0);
+        View cards = item.findViewById(R.id.shelf_cards);
+        View play = item.findViewById(R.id.hero_play);
+        int dock = dockTop(home, list);
+        assertTrue("the name starts under the top row", topOf(item.findViewById(R.id.hero_title)) >= topOf(list) + list.getPaddingTop());
+        assertEquals("Play stands under the cover with the standard gap, not on it",
+                home.getResources().getDimensionPixelSize(R.dimen.space_l), topOf(play) - (topOf(cards) + cards.getHeight()));
+        assertTrue("Play is above the tab bar: " + (topOf(play) + play.getHeight()) + " of " + dock, topOf(play) + play.getHeight() <= dock);
+        View shelf = list.getLayoutManager().findViewByPosition(1);
+        assertNotNull("the first shelf is on screen", shelf);
+        View heading = shelf.findViewById(R.id.shelf_title);
+        View covers = shelf.findViewById(R.id.shelf_cards);
+        assertNotNull(heading);
+        assertNotNull(covers);
+        assertTrue("its heading is above the tab bar: " + (topOf(heading) + heading.getHeight()) + " of " + dock,
+                topOf(heading) + heading.getHeight() <= dock);
+        if (!halfACover) return;
+        assertTrue("and so is the upper half of its covers: " + (topOf(covers) + covers.getHeight() / 2) + " of " + dock,
+                topOf(covers) + covers.getHeight() / 2 <= dock);
+    }
+
     private static int topOf(View view) {
         int[] at = new int[2];
         view.getLocationInWindow(at);
@@ -205,8 +235,8 @@ public class HomeHeroStageTest {
             View words = item.findViewById(R.id.hero_words);
             int window = home.getWindow().getDecorView().getHeight();
             int foot = topOf(words) + words.getHeight();
-            assertTrue("the art has room over the words: " + words.getPaddingTop(), words.getPaddingTop() > 0);
             assertTrue("the words end by the window's third: " + foot + " of " + window, foot <= window / 3 + 2);
+            assertTheHeroAndHalfAShelfFit(home, list, true);
             View cards = item.findViewById(R.id.shelf_cards);
             assertTrue("the covers follow the words", topOf(cards) >= foot);
             View play = item.findViewById(R.id.hero_play);
@@ -256,6 +286,27 @@ public class HomeHeroStageTest {
     }
 
     @Test
+    @Config(qualifiers = "w360dp-h800dp-port-night-xhdpi")
+    public void onAUsualPhoneTheHeroAndTheFirstShelfsUpperHalfStandAboveTheTabBar() throws Exception {
+        ActivityController<Home> controller = Robolectric.buildActivity(Home.class).setup().visible();
+        try {
+            Home home = controller.get();
+            RecyclerView list = show(home);
+            assertTheHeroAndHalfAShelfFit(home, list, true);
+            View item = list.getLayoutManager().findViewByPosition(0);
+            ViewGroup cards = item.findViewById(R.id.shelf_cards);
+            ViewGroup shelf = list.getLayoutManager().findViewByPosition(1).findViewById(R.id.shelf_cards);
+            int heroCover = cards.getChildAt(0).getWidth();
+            int shelfCover = shelf.getChildAt(0).getWidth();
+            assertTrue("the hero's cover is the larger one: " + heroCover + " over " + shelfCover, heroCover > shelfCover);
+            stage(home).show(cover(), false);
+            capture(home, "home-phone-360x800-night");
+        } finally {
+            controller.pause().stop().destroy();
+        }
+    }
+
+    @Test
     @Config(qualifiers = "w360dp-h640dp-port-night-xhdpi")
     public void aSmallPhoneKeepsItsHeroInTheList() throws Exception {
         ActivityController<Home> controller = Robolectric.buildActivity(Home.class).setup().visible();
@@ -269,6 +320,8 @@ public class HomeHeroStageTest {
             assertTrue("the room over the words never pushes Play out: " + words.getPaddingTop(),
                     words.getPaddingTop() == 0 || item.getHeight() <= room);
             assertTrue(play.getHeight() > 0);
+            // Too low for the shelf's covers: the hero's cover stays as high as theirs, and the heading still shows.
+            assertTheHeroAndHalfAShelfFit(home, list, false);
             stage(home).show(cover(), false);
             capture(home, "home-small-phone-night");
         } finally {

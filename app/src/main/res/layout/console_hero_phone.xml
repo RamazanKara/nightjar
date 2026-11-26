@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The phone's hero: the game's name and when it was played, at the foot of its art on the stage, then a carousel of large
-     covers and the solid Play that overlaps the foot of the one in the middle. HomeHeroStage gives the words their top
-     padding: the room in which the art shows above them. -->
+<!-- The phone's hero: the game's name and when it was played, on its art on the stage, then a carousel of large covers and,
+     under the one in the middle with the standard gap, the solid Play. HomeHeroStage gives the words their top padding: the
+     room in which the art shows above them, where the window is high enough for it. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"
@@ -15,15 +15,13 @@
             android:maxLines="1" android:ellipsize="end" android:textAlignment="viewStart" android:visibility="gone"
             android:textAppearance="@style/TextAppearance.Nightjar.Body" android:textColor="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
-    <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:clipChildren="false" android:clipToPadding="false">
-        <TextView android:id="@+id/shelf_title" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-        <androidx.recyclerview.widget.RecyclerView android:id="@+id/shelf_cards"
-            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="33dp"
-            android:clipToPadding="false" android:clipChildren="false" android:overScrollMode="never"
-            android:focusable="false" android:descendantFocusability="afterDescendants" />
-        <com.limelight.ui.GlassButton android:id="@+id/hero_play" style="@style/Widget.Nightjar.Glass.Play"
-            android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="214dp"
-            android:layout_gravity="bottom|center_horizontal" android:layout_marginBottom="6dp" android:text="@string/library_play" />
-    </FrameLayout>
+    <TextView android:id="@+id/shelf_title" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
+    <androidx.recyclerview.widget.RecyclerView android:id="@+id/shelf_cards"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:clipToPadding="false" android:clipChildren="false" android:overScrollMode="never"
+        android:focusable="false" android:descendantFocusability="afterDescendants" />
+    <com.limelight.ui.GlassButton android:id="@+id/hero_play" style="@style/Widget.Nightjar.Glass.Play"
+        android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="214dp"
+        android:layout_gravity="center_horizontal" android:layout_marginTop="@dimen/space_l"
+        android:layout_marginBottom="@dimen/space_s" android:text="@string/library_play" />
 </LinearLayout>

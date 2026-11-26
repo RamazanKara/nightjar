@@ -22,8 +22,8 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * A hero's views for its game. On a phone its name and when it was played, then a carousel of covers with the one Play over
- * the middle cover's foot; on a handheld the cover, its chips, title and buttons, with the other games to continue in a panel
+ * A hero's views for its game. On a phone its name and when it was played, then a carousel of covers with the one Play
+ * under the middle cover; on a handheld the cover, its chips, title and buttons, with the other games to continue in a panel
  * beside them. The game hangs on the item as a tag, where {@link HomeHeroStage} finds whose art to show.
  */
 abstract class HomeHeroViews {
