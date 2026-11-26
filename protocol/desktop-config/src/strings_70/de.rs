@@ -22,4 +22,12 @@ pub const TABLE: &[(&str, &str)] = &[
     ("A program on this computer holds the device, so usbipd-win can’t take it. Close that program, then retry.", "Ein Programm auf diesem Computer belegt das Gerät, deshalb kann usbipd-win es nicht übernehmen. Schließe dieses Programm und versuche es dann erneut."),
     ("Another driver has this device ({}). Forward it with usbipd-win, which leaves that driver on it, or install WinUSB for it.", "Ein anderer Treiber hat dieses Gerät ({}). Leite es mit usbipd-win weiter, das diesen Treiber beibehält, oder installiere WinUSB dafür."),
     ("Frame Warp needs the current version of Nightjar and of the PC’s streaming app, so this stream runs without it.", "Frame Warp braucht die aktuelle Version von Nightjar und der Streaming-App des PCs, daher läuft dieser Stream ohne."),
+    ("usbipd-win ran without administrator rights, so Windows refused the change. Use an account with administrator rights, then try again.", "usbipd-win lief ohne Administratorrechte, deshalb hat Windows die Änderung abgelehnt. Verwende ein Konto mit Administratorrechten und versuche es dann erneut."),
+    ("Give USB devices back to Windows?", "USB-Geräte an Windows zurückgeben?"),
+    ("When Nightjar closed, it was still sharing USB devices through usbipd-win ({}). Windows asks for administrator rights to give them back to their own drivers. Not now leaves them shared; the stream menu’s USB devices section offers this again.", "Als Nightjar geschlossen wurde, gab es noch USB-Geräte über usbipd-win frei ({}). Windows fragt nach Administratorrechten, um sie an ihre eigenen Treiber zurückzugeben. „Nicht jetzt“ lässt sie freigegeben; der Bereich USB-Geräte im Streammenü bietet das erneut an."),
+    ("Give back", "Zurückgeben"),
+    ("USB devices given back to Windows: {}", "An Windows zurückgegebene USB-Geräte: {}"),
+    ("Still shared through usbipd-win since Nightjar closed: {}", "Seit Nightjar geschlossen wurde, noch über usbipd-win freigegeben: {}"),
+    ("Giving back…", "Wird zurückgegeben…"),
+    ("Give back to Windows", "An Windows zurückgeben"),
 ];

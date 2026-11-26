@@ -22,4 +22,12 @@ pub const TABLE: &[(&str, &str)] = &[
     ("A program on this computer holds the device, so usbipd-win can’t take it. Close that program, then retry.", "Программа на этом компьютере занимает устройство, поэтому usbipd-win не может его взять. Закройте эту программу и повторите попытку."),
     ("Another driver has this device ({}). Forward it with usbipd-win, which leaves that driver on it, or install WinUSB for it.", "Этим устройством управляет другой драйвер ({}). Перенаправьте его через usbipd-win, который оставляет этот драйвер, или установите для него WinUSB."),
     ("Frame Warp needs the current version of Nightjar and of the PC’s streaming app, so this stream runs without it.", "Для Frame Warp нужны актуальные версии Nightjar и приложения для трансляции на ПК, поэтому эта трансляция идёт без него."),
+    ("usbipd-win ran without administrator rights, so Windows refused the change. Use an account with administrator rights, then try again.", "usbipd-win запустился без прав администратора, поэтому Windows отклонила изменение. Используйте учётную запись с правами администратора и повторите попытку."),
+    ("Give USB devices back to Windows?", "Вернуть USB-устройства Windows?"),
+    ("When Nightjar closed, it was still sharing USB devices through usbipd-win ({}). Windows asks for administrator rights to give them back to their own drivers. Not now leaves them shared; the stream menu’s USB devices section offers this again.", "Когда Nightjar закрылся, он ещё предоставлял общий доступ к USB-устройствам через usbipd-win ({}). Чтобы вернуть их собственным драйверам, Windows запросит права администратора. «Не сейчас» оставляет общий доступ; раздел USB-устройства в меню трансляции предложит это снова."),
+    ("Give back", "Вернуть"),
+    ("USB devices given back to Windows: {}", "USB-устройств возвращено Windows: {}"),
+    ("Still shared through usbipd-win since Nightjar closed: {}", "Всё ещё в общем доступе через usbipd-win после закрытия Nightjar: {}"),
+    ("Giving back…", "Возвращаем…"),
+    ("Give back to Windows", "Вернуть Windows"),
 ];

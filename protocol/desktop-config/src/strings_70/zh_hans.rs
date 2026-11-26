@@ -22,4 +22,12 @@ pub const TABLE: &[(&str, &str)] = &[
     ("A program on this computer holds the device, so usbipd-win can’t take it. Close that program, then retry.", "这台计算机上的某个程序正在占用该设备，因此 usbipd-win 无法接管。请关闭该程序，然后重试。"),
     ("Another driver has this device ({}). Forward it with usbipd-win, which leaves that driver on it, or install WinUSB for it.", "该设备由另一个驱动程序（{}）控制。请通过 usbipd-win 转发它（保留该驱动程序），或为它安装 WinUSB。"),
     ("Frame Warp needs the current version of Nightjar and of the PC’s streaming app, so this stream runs without it.", "Frame Warp 需要最新版本的 Nightjar 和电脑的串流应用，因此此次串流不使用它。"),
+    ("usbipd-win ran without administrator rights, so Windows refused the change. Use an account with administrator rights, then try again.", "usbipd-win 在没有管理员权限的情况下运行，因此 Windows 拒绝了更改。请使用具有管理员权限的帐户，然后重试。"),
+    ("Give USB devices back to Windows?", "要把 USB 设备还给 Windows 吗？"),
+    ("When Nightjar closed, it was still sharing USB devices through usbipd-win ({}). Windows asks for administrator rights to give them back to their own drivers. Not now leaves them shared; the stream menu’s USB devices section offers this again.", "Nightjar 关闭时，仍在通过 usbipd-win 共享 USB 设备（{}）。要把它们还给各自的驱动程序，Windows 会请求管理员权限。选择“以后再说”会让它们保持共享；串流菜单的 USB 设备部分会再次提供此操作。"),
+    ("Give back", "归还"),
+    ("USB devices given back to Windows: {}", "已还给 Windows 的 USB 设备：{}"),
+    ("Still shared through usbipd-win since Nightjar closed: {}", "自 Nightjar 关闭后仍通过 usbipd-win 共享：{}"),
+    ("Giving back…", "正在归还…"),
+    ("Give back to Windows", "还给 Windows"),
 ];
