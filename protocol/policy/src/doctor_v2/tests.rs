@@ -1,3 +1,4 @@
+//! The doctor's verdicts on synthetic reports and host snapshots, and its upscaler rules.
 use super::*;
 use rubylight_native_api::doctor::{EligibleRemedy, HostStages, StageTimes};
 
