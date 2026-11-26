@@ -143,6 +143,11 @@ public class StreamMenuTvFocusTest {
             int card = res.getDimensionPixelSize(R.dimen.nj_size_control_center_card);
             assertTrue("a card keeps the design's height: " + tile.getHeight() / density + "dp",
                     tile.getHeight() >= card && tile.getHeight() <= card + 24 * density);
+            // Six modules on a dock 336 dp tall: the rail shows them all, each still a touch target, before it would scroll.
+            View lastModule = menu.sheet().railEntry(menu.modules().get(menu.modules().size() - 1));
+            assertTrue("the rail shows every module: " + lastModule.getBottom() / density + "dp",
+                    lastModule.getBottom() <= ((View) lastModule.getParent().getParent()).getHeight());
+            assertTrue("a module is a touch target", lastModule.getHeight() >= 48 * density);
             assertTrue("Return to stream is in sight", menu.sheet().primary().isShown()
                     && menu.sheet().primary().getHeight() >= 48 * density);
             assertEquals("Keyboard", ((android.widget.TextView) tile).getText().toString());

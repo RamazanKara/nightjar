@@ -363,6 +363,19 @@ final class ControlCenterCards {
         return entry;
     }
 
+    /**
+     * A rail entry at {@code height} on the dock's rail: {@code tight} where that is less than the design's, and the room
+     * over its icon goes too. Changes nothing, and asks for no layout, when it already is so.
+     */
+    static void fitRailEntry(MaterialButton entry, int height, boolean tight) {
+        int pad = entry.getResources().getDimensionPixelSize(R.dimen.control_center_rail_pad);
+        int top = tight ? pad : pad * 2;
+        if (entry.getMinimumHeight() == height && entry.getPaddingTop() == top) return;
+        entry.setMinHeight(height);
+        entry.setMinimumHeight(height);
+        entry.setPadding(pad, top, pad, pad);
+    }
+
     /** The cap of a trigger at an end of the rail: the triggers step through the modules. Never focused, never said. */
     static TextView triggerHint(Context context, String cap) {
         Resources res = context.getResources();

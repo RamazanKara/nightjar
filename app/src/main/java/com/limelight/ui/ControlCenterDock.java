@@ -183,10 +183,20 @@ public final class ControlCenterDock extends Dialog implements ControlCenterFram
         String[] caps = ControlCenterCards.triggerCaps(padVendor);
         hintBack = ControlCenterCards.triggerHint(context, caps[0]);
         hintForward = ControlCenterCards.triggerHint(context, caps[1]);
-        railScroll = sheet ? new android.widget.HorizontalScrollView(context) : new android.widget.ScrollView(context);
+        railScroll = sheet ? new android.widget.HorizontalScrollView(context) : new android.widget.ScrollView(context) {
+            @Override
+            protected void onMeasure(int widthSpec, int heightSpec) {
+                if (MeasureSpec.getMode(heightSpec) == MeasureSpec.EXACTLY) fitRail(MeasureSpec.getSize(heightSpec));
+                super.onMeasure(widthSpec, heightSpec);
+            }
+        };
         railScroll.setHorizontalScrollBarEnabled(false);
         railScroll.setVerticalScrollBarEnabled(false);
         railScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        // Where the rail has more modules than it shows, it fades out instead of ending in a cut name.
+        railScroll.setVerticalFadingEdgeEnabled(!sheet);
+        railScroll.setHorizontalFadingEdgeEnabled(sheet);
+        railScroll.setFadingEdgeLength(spacing * 3);
         railList = new LinearLayout(context);
         railList.setOrientation(sheet ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
         railScroll.addView(railList, new FrameLayout.LayoutParams(sheet ? FrameLayout.LayoutParams.WRAP_CONTENT
@@ -231,6 +241,16 @@ public final class ControlCenterDock extends Dialog implements ControlCenterFram
         }
         mark();
         if (had) focusRail();
+    }
+
+    // On a dock too short for the design's height, a handheld's, the modules give up their spare room before the rail has
+    // to scroll, never down to less than a touch target: {@code room} is what the rail has for them.
+    private void fitRail(int room) {
+        if (railEntries.isEmpty() || room <= 0) return;
+        Resources res = context.getResources();
+        int full = res.getDimensionPixelSize(R.dimen.control_center_rail_entry);
+        int each = Math.max(res.getDimensionPixelSize(R.dimen.nj_size_touch_min), Math.min(full, room / railEntries.size()));
+        for (MaterialButton entry : railEntries.values()) ControlCenterCards.fitRailEntry(entry, each, each < full);
     }
 
     // The selected module is lit and is the rail's one stop for the D-pad: arrows from the page always land on it.
