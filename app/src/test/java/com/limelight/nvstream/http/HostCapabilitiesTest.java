@@ -467,9 +467,15 @@ public class HostCapabilitiesTest {
             for (String value : (String[]) row[3]) {
                 assertNever(caps(host + "<" + field + ">" + value + "</" + field + ">"), feature);
             }
-            // Missing: never from Rubylight and Sunshine, unknown from an unrecognized host.
+            // Missing: never from Rubylight and Sunshine, unknown from an unrecognized host. A
+            // Sunshine-family host may still offer Dolby in its stream setup (x-ss-audio), which
+            // only the stream's handshake sees.
             assertNever(caps(host), feature);
-            assertNever(caps("<appversion>7.1.431.-1</appversion>"), feature);
+            if (feature == AUDIO_PASSTHROUGH) {
+                assertUnknown(caps("<appversion>7.1.431.-1</appversion>"), feature);
+            } else {
+                assertNever(caps("<appversion>7.1.431.-1</appversion>"), feature);
+            }
             assertUnknown(caps("<appversion>7.1.431.0</appversion>"), feature);
         }
         // Before the native API answered, its features are unknown, never supported.

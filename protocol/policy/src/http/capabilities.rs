@@ -403,7 +403,18 @@ impl Evidence {
             Feature::BandwidthProbe => self.serverinfo_version(self.bandwidth_probe_version),
             Feature::AudioPassthrough => {
                 use rubylight_protocol::audio_ext::{CODEC_AC3, CODEC_EAC3, CODEC_PCM};
-                self.serverinfo_bits(self.audio_codecs, CODEC_PCM | CODEC_AC3 | CODEC_EAC3)
+                // Without the field, a Sunshine-family host may still offer Dolby in its
+                // DESCRIBE (`a=x-ss-audio-codec-offer`), which only the stream's handshake sees.
+                if self.audio_codecs < 0
+                    && matches!(
+                        self.family(),
+                        Family::Sunshine | Family::Apollo | Family::Vibepollo
+                    )
+                {
+                    Unknown
+                } else {
+                    self.serverinfo_bits(self.audio_codecs, CODEC_PCM | CODEC_AC3 | CODEC_EAC3)
+                }
             }
             Feature::Surround714 => self.serverinfo_bits(
                 self.audio_layouts,

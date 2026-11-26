@@ -2797,7 +2797,7 @@ kind = "bool"
 xml_default = "false"
 scope = "global"
 desktop_key = "audio_passthrough"
-advice = "Enable for a receiver, soundbar or TV that decodes Dolby Digital or Dolby Digital Plus, or takes multichannel PCM as is. Asks a Rubylight PC for a format the audio output reports it plays, and keeps Opus otherwise. Dolby comes in 32 ms frames, so sound arrives later than Opus. Android 10 and later; hidden elsewhere."
+advice = "Enable for a receiver, soundbar or TV that decodes Dolby Digital or Dolby Digital Plus, or takes multichannel PCM as is. Asks the PC for a format the audio output reports it plays, and keeps Opus otherwise. Dolby comes in 32 ms frames, so sound arrives later than Opus. Android 10 and later; hidden elsewhere."
 
 [[android_setting]]
 key = "checkbox_enable_perf_overlay"
