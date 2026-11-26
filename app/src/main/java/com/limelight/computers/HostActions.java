@@ -242,27 +242,36 @@ public final class HostActions {
 
     public void wake(final ComputerDetails computer) {
         final Context app = activity.getApplicationContext();
-        HostWaker.Sender sender = host -> WakeOnLanSender.sendWolPacket(app, host);
-        Executor io = task -> new Thread(task, "Wake on LAN").start();
         WakeRelayKeys.Kept kept = computer.state == ComputerDetails.State.OFFLINE
                 ? new WakeRelayKeys(app).load(computer.uuid) : null;
-        if (kept != null && wakeFromAway(computer, kept, AwayWake.onPcNetwork(app, computer), sender, io,
-                AwayWakeFlow.JNI, task -> new Thread(task, "Wake relay").start())) {
-            return;
-        }
-        startWake(computer, sender, io, SystemClock::elapsedRealtime);
+        wake(computer, kept, kept != null && AwayWake.onPcNetwork(app, computer),
+                host -> WakeOnLanSender.sendWolPacket(app, host), task -> new Thread(task, "Wake on LAN").start(),
+                AwayWakeFlow.JNI, task -> new Thread(task, "Wake relay").start(), SystemClock::elapsedRealtime);
     }
 
     /**
-     * An offline PC that offers waking from away, seen from outside its network ({@link AwayWake#path}): the magic
-     * packets go out as always, and one of its wake relays is asked too, or the user learns there is none yet. False:
-     * today's wake.
+     * An offline PC that offers waking from away, seen from outside its network ({@link AwayWake#path}), gets the
+     * magic packets and one of its wake relays at once. Elsewhere today's wake runs; should its wait end with the PC
+     * still away, a relay kept for it is asked next (a network away may number itself like the home one), and away
+     * without a relay the failure says how to get one.
      */
     @VisibleForTesting
-    boolean wakeFromAway(ComputerDetails computer, WakeRelayKeys.Kept kept, boolean onPcNetwork, HostWaker.Sender sender,
-                         Executor io, AwayWakeFlow.Relay relay, Executor worker) {
+    void wake(ComputerDetails computer, WakeRelayKeys.Kept kept, boolean onPcNetwork, HostWaker.Sender sender,
+              Executor io, AwayWakeFlow.Relay relay, Executor worker, LongSupplier clock) {
         AwayWake.Path path = AwayWake.path(computer.state == ComputerDetails.State.OFFLINE, onPcNetwork, kept);
-        if (path == AwayWake.Path.LAN) return false;
+        Runnable askRelay = kept == null || !kept.hasRelay() ? null
+                : () -> wakeThroughRelay(computer, kept, sender, io, relay, worker, clock);
+        if (path == AwayWake.Path.RELAY) {
+            askRelay.run();
+            return;
+        }
+        String noRelay = path == AwayWake.Path.NO_RELAY ? AwayWake.noRelay(computer.displayName()).in(activity) : null;
+        startWake(computer, sender, io, clock, askRelay, noRelay);
+    }
+
+    /** The magic packets once more, and one of the PC's wake relays asked, with its progress and outcome. */
+    private void wakeThroughRelay(ComputerDetails computer, WakeRelayKeys.Kept kept, HostWaker.Sender sender,
+                                  Executor io, AwayWakeFlow.Relay relay, Executor worker, LongSupplier clock) {
         endWake();
         if (WakeTargets.hasMac(activity, computer)) {
             final ComputerDetails target = new ComputerDetails(computer);
@@ -274,32 +283,39 @@ public final class HostActions {
                 }
             });
         }
-        if (path == AwayWake.Path.NO_RELAY) {
-            showError(computer.displayName(), AwayWake.noRelay(computer.displayName()).in(activity), null);
-            return true;
-        }
-        awayWake = new AwayWakeFlow(this, callbacks, computer, kept, relay, worker, () -> {
-            // A PC that answers by now gets today's wake, which says so.
-            if (!wakeFromAway(computer, kept, onPcNetwork, sender, io, relay, worker)) {
-                startWake(computer, sender, io, SystemClock::elapsedRealtime);
-            }
-        });
+        // Try again asks a relay at once; a PC that answers by now gets today's wake, which says so.
+        awayWake = new AwayWakeFlow(this, callbacks, computer, kept, relay, worker,
+                () -> wake(computer, kept, false, sender, io, relay, worker, clock));
         awayWake.start();
-        return true;
     }
 
     @VisibleForTesting
     void startWake(final ComputerDetails computer, HostWaker.Sender sender, Executor io, LongSupplier clock) {
+        startWake(computer, sender, io, clock, null, null);
+    }
+
+    /**
+     * Today's wake: the magic packets until the PC answers or the wait ends. Should it end with the PC still away,
+     * {@code askRelay} runs next when there is one, else the failure ends with {@code noRelay} when there is one.
+     */
+    private void startWake(final ComputerDetails computer, HostWaker.Sender sender, Executor io, LongSupplier clock,
+                           Runnable askRelay, String noRelay) {
         if (computer.state == ComputerDetails.State.ONLINE) {
             Toast.makeText(activity, R.string.wol_pc_online, Toast.LENGTH_SHORT).show();
             return;
         }
         if (!WakeTargets.hasMac(activity, computer)) {
-            showError(R.string.pcview_menu_send_wol, activity.getString(R.string.wol_no_mac), null);
+            // A relay knows the PC's MACs.
+            if (askRelay != null) {
+                askRelay.run();
+                return;
+            }
+            showError(R.string.pcview_menu_send_wol, withHint(activity.getString(R.string.wol_no_mac), noRelay), null);
             return;
         }
         endWake();
         final String uuid = computer.uuid;
+        final Runnable retry = () -> startWake(computer, sender, io, clock, askRelay, noRelay);
         wakeComputer = computer;
         waker = new HostWaker(main, io, sender, () -> {
             ComputerManagerService.ComputerManagerBinder binder = callbacks.binder();
@@ -314,9 +330,14 @@ public final class HostActions {
             @Override public void onTimedOut() {
                 LimeLog.warning("Wake: " + uuid + " did not answer in time");
                 callbacks.onWakeEnded(computer);
-                String message = activity.getString(R.string.console_wake_timeout, computer.displayName());
+                if (askRelay != null) {
+                    askRelay.run();
+                    return;
+                }
+                String message = withHint(activity.getString(R.string.console_wake_timeout, computer.displayName()),
+                        noRelay);
                 if (callbacks.isForeground()) {
-                    showError(computer.displayName(), message, () -> startWake(computer, sender, io, clock));
+                    showError(computer.displayName(), message, retry);
                 } else if (!gone()) {
                     Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
                 }
@@ -324,13 +345,21 @@ public final class HostActions {
             @Override public void onSendFailed(IOException error) {
                 LimeLog.warning("Wake: no packet went out to " + uuid + ": " + error);
                 callbacks.onWakeEnded(computer);
-                showError(R.string.pcview_menu_send_wol, activity.getString(R.string.wol_fail),
-                        () -> startWake(computer, sender, io, clock));
+                if (askRelay != null) {
+                    askRelay.run();
+                    return;
+                }
+                showError(R.string.pcview_menu_send_wol, withHint(activity.getString(R.string.wol_fail), noRelay),
+                        retry);
             }
         });
         callbacks.onWakeSent(computer);
         waker.start();
         if (waker.isWaiting()) Toast.makeText(activity, R.string.wol_waking_msg, Toast.LENGTH_LONG).show();
+    }
+
+    private static String withHint(String message, String hint) {
+        return hint == null ? message : message + "\n\n" + hint;
     }
 
     public boolean isWaking() {

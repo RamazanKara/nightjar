@@ -24,11 +24,12 @@ pub struct SavedHost {
     /// The PC's unique id, as its saved record has it.
     pub host: String,
     pub name: String,
-    /// The PC's last assignment; `None` once it refused this relay.
+    /// The PC's last assignment; `None` once it refused this relay for good.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assignment: Option<RelayAssignment>,
-    /// Why the PC refused this relay, in the PC's words: it is not enrolled again without
-    /// `nightjar wake-relay --enroll`.
+    /// Why the PC refused this relay, in the PC's words. Without an assignment it is for good:
+    /// not enrolled again without `nightjar wake-relay --enroll`. With one it is for now: the
+    /// assignment is refreshed, and served again once the PC takes it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refused: Option<String>,
 }

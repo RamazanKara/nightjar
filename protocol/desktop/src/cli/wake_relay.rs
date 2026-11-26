@@ -201,7 +201,9 @@ fn note_line(name: &str, note: &Note) -> String {
         }
         Note::Back => format!("{name}: answers again"),
         Note::Unreachable(why) => format!("{name}: not reachable, enrollment kept ({why})"),
-        Note::NotOffered(why) => format!("{name}: no wake relay offered: {why}"),
+        Note::NotOffered(why) => {
+            format!("{name}: no wake relay offered now, not served until it is: {why}")
+        }
         Note::Refused(why) => format!(
             "{name}: refused this relay, which no longer serves it ({why}); `nightjar wake-relay --enroll` enrolls again"
         ),
@@ -363,7 +365,11 @@ pub fn run(relay: &WakeRelay, store: &Store) -> i32 {
                 devices_text(devices)
             )),
             (None, Some(why)) => say(&note_line(&host.name, &Note::Refused(why.clone()))),
-            (None, None) => {}
+            (None, None) => {
+                if let Some(why) = &host.off {
+                    say(&note_line(&host.name, &Note::NotOffered(why.clone())));
+                }
+            }
         }
     }
     if records.is_empty() {

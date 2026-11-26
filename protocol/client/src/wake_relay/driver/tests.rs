@@ -1,5 +1,6 @@
-//! The relay driver's rules without sockets: an unreachable PC keeps its enrollment, a refusing
-//! one loses it and stays refused across restarts, and secrets stay out of every note.
+//! The relay driver's rules without sockets: an unreachable PC keeps its enrollment, one that
+//! refuses the relay for now is not served until a refresh succeeds, one that refuses it for
+//! good loses it and stays refused across restarts, and secrets stay out of every note.
 use super::*;
 use crate::http::native_api::error::ApiError;
 use rubylight_traverse::wake_relay::{device_id, hex};
@@ -51,23 +52,33 @@ fn api(status: u16, code: ErrorCode) -> Error {
     }
 }
 
+/// Refusals for good: the relay removed on the PC, the pairing ended, Host control taken away.
 fn refusals() -> Vec<Error> {
     vec![
-        api(403, ErrorCode::Forbidden),
         api(404, ErrorCode::NotFound),
+        api(404, ErrorCode::Unknown),
         api(403, ErrorCode::HostControlRequired),
         api(403, ErrorCode::PermissionRequired),
         api(401, ErrorCode::NotPaired),
+        api(401, ErrorCode::Unknown),
         Error::Status {
             code: 401,
             message: "Unauthorized".into(),
         },
+        Error::NotFound("/api/native/v1/wake/relay/enroll".into()),
+        Error::NotPaired,
+    ]
+}
+
+/// Refusals for now (`forbidden`): the PC's setting off, or the relay not on its network.
+fn refusals_for_now() -> Vec<Error> {
+    vec![
+        api(403, ErrorCode::Forbidden),
+        api(403, ErrorCode::Unknown),
         Error::Status {
             code: 403,
             message: "Forbidden".into(),
         },
-        Error::NotFound("/api/native/v1/wake/relay/enroll".into()),
-        Error::NotPaired,
     ]
 }
 
@@ -136,14 +147,114 @@ fn a_refusing_pc_drops_its_enrollment_at_once_and_stays_refused() {
 }
 
 #[test]
-fn a_refusal_before_enrolling_is_saved_too() {
+fn a_refusal_for_good_before_enrolling_is_saved_too_and_one_for_now_is_not() {
     let mut driver = Driver::new(Saved::default(), false);
     driver.set_hosts(&paired());
-    let note = driver.on_result(PC, of_error(&api(403, ErrorCode::Forbidden)), T0);
+    let note = driver.on_result(PC, of_error(&api(404, ErrorCode::NotFound)), T0);
     assert!(matches!(note, Some(Note::Refused(_))));
     assert!(driver.take_changed());
     assert!(driver.saved().hosts[0].refused.is_some());
     assert!(driver.due(T0 + 10_000).is_empty());
+
+    for error in refusals_for_now() {
+        let mut driver = Driver::new(Saved::default(), false);
+        driver.set_hosts(&paired());
+        let note = driver.on_result(PC, of_error(&error), T0);
+        assert!(matches!(note, Some(Note::NotOffered(_))), "{error:?}");
+        assert!(!driver.take_changed());
+        assert!(driver.saved().hosts.is_empty());
+        assert_eq!(
+            driver.due(T0 + DEFAULT_REFRESH_SECONDS),
+            [(PC.to_owned(), Ask::Enroll)]
+        );
+    }
+}
+
+#[test]
+fn a_pc_that_refuses_the_relay_for_now_is_not_served_but_refreshed_until_it_takes_it_again() {
+    for error in refusals_for_now() {
+        let mut driver = enrolled();
+        let outcome = of_error(&error);
+        assert!(matches!(outcome, Outcome::NotOffered(_)), "{error:?}");
+        let note = driver.on_result(PC, outcome.clone(), T0 + 300);
+        assert!(matches!(note, Some(Note::NotOffered(_))), "{error:?}");
+        // Not served at once, while the assignment is kept and saved with the PC's words.
+        assert!(driver.enrollments().is_empty(), "{error:?}");
+        assert!(driver.take_changed());
+        let saved = driver.saved();
+        assert_eq!(saved.hosts[0].assignment, Some(assignment()));
+        assert!(saved.hosts[0].refused.is_some());
+        assert_eq!(driver.hosts()[0].devices, None);
+        assert!(driver.hosts()[0].refused.is_none());
+        assert!(driver.hosts()[0].off.is_some());
+        // Refreshed on the PC's interval, never enrolled again, and said once.
+        assert!(driver.due(T0 + 599).is_empty());
+        assert_eq!(driver.due(T0 + 600), [(PC.to_owned(), Ask::Refresh)]);
+        assert_eq!(driver.on_result(PC, outcome, T0 + 600), None);
+        assert!(!driver.take_changed());
+        assert!(driver.enrollments().is_empty());
+        assert_eq!(driver.due(T0 + 900), [(PC.to_owned(), Ask::Refresh)]);
+        // The PC takes it again: served again without `--enroll`.
+        assert_eq!(
+            driver.on_result(PC, assigned(assignment()), T0 + 900),
+            Some(Note::Enrolled { devices: 2 })
+        );
+        assert_eq!(driver.enrollments().len(), 1);
+        assert!(driver.take_changed());
+        assert_eq!(driver.saved().hosts[0].refused, None);
+        assert_eq!(driver.hosts()[0].devices, Some(2));
+        assert_eq!(driver.due(T0 + 1200), [(PC.to_owned(), Ask::Refresh)]);
+    }
+}
+
+#[test]
+fn a_relay_restarted_while_the_pc_refuses_it_for_now_serves_nothing_until_a_refresh_succeeds() {
+    let mut driver = enrolled();
+    driver.on_result(PC, of_error(&api(403, ErrorCode::Forbidden)), T0 + 300);
+    let saved = driver.saved();
+
+    let mut again = Driver::new(saved.clone(), false);
+    assert!(!again.take_changed());
+    assert!(again.enrollments().is_empty());
+    again.set_hosts(&paired());
+    assert!(again.enrollments().is_empty());
+    assert!(again.hosts()[0].off.is_some());
+    assert_eq!(again.due(T0 + 400), [(PC.to_owned(), Ask::Refresh)]);
+    // Asleep: still kept, still not served.
+    again.on_result(PC, of_error(&unreachable().remove(0)), T0 + 400);
+    assert!(again.enrollments().is_empty());
+    assert_eq!(again.saved(), saved);
+    // Still refused: nothing new to say or save.
+    assert_eq!(
+        again.on_result(PC, of_error(&api(403, ErrorCode::Forbidden)), T0 + 700),
+        None
+    );
+    assert!(!again.take_changed());
+    again.on_result(PC, assigned(assignment()), T0 + 1000);
+    assert_eq!(again.enrollments().len(), 1);
+    assert!(again.take_changed());
+
+    // `--enroll` enrolls, and serves only once that succeeds.
+    let mut explicit = Driver::new(saved.clone(), true);
+    explicit.set_hosts(&paired());
+    assert!(explicit.enrollments().is_empty());
+    assert_eq!(explicit.due(T0), [(PC.to_owned(), Ask::Enroll)]);
+    explicit.on_result(PC, assigned(assignment()), T0);
+    assert_eq!(explicit.enrollments().len(), 1);
+
+    // Refused for good later: dropped, as from a served enrollment.
+    let mut revoked = Driver::new(saved.clone(), false);
+    revoked.set_hosts(&paired());
+    revoked.on_result(PC, of_error(&api(404, ErrorCode::NotFound)), T0 + 400);
+    assert!(revoked.enrollments().is_empty());
+    assert_eq!(revoked.saved().hosts[0].assignment, None);
+    assert!(revoked.due(T0 + 10_000).is_empty());
+
+    // No longer paired here: forgotten, and nothing is kept.
+    let mut unpaired = Driver::new(saved, false);
+    let notes = unpaired.set_hosts(&[]);
+    assert_eq!(notes, [("Desktop".to_owned(), Note::Forgotten)]);
+    assert!(unpaired.saved().hosts.is_empty());
 }
 
 #[test]
@@ -318,11 +429,13 @@ fn a_relay_enrolls_only_where_the_pc_offers_it_with_host_control() {
         driver.due(T0 + DEFAULT_REFRESH_SECONDS),
         [(PC.to_owned(), Ask::Enroll)]
     );
-    // Not offered any more to an enrolled relay: revoked.
+    // Not offered any more to an enrolled relay: not served, its assignment kept.
     let mut driver = enrolled();
     driver.on_result(PC, off.unwrap_err(), T0 + 300);
     assert!(driver.enrollments().is_empty());
-    assert!(driver.saved().hosts[0].refused.is_some());
+    assert_eq!(driver.saved().hosts[0].assignment, Some(assignment()));
+    assert!(driver.hosts()[0].refused.is_none());
+    assert_eq!(driver.due(T0 + 600), [(PC.to_owned(), Ask::Refresh)]);
 }
 
 #[test]
@@ -365,7 +478,7 @@ fn a_pcs_words_come_on_one_short_line() {
         error: Box::new(ApiError::new(ErrorCode::Forbidden, long)),
     });
     let why = match outcome {
-        Outcome::Refused(why) => why,
+        Outcome::NotOffered(why) => why,
         other => panic!("{other:?}"),
     };
     assert!(!why.chars().any(char::is_control), "{why}");

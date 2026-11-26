@@ -6,10 +6,17 @@
 //! change.
 //!
 //! - A PC that cannot be reached keeps its enrollment: asleep is when the relay is needed.
-//! - A PC that refuses (401, 403, 404: `forbidden`, `not_found`, `host_control_required`,
-//!   `not_paired`) drops it at once, and the refusal is saved, so a relay started again does
-//!   not enroll itself with a PC that revoked it; only an explicit enroll does
-//!   ([`Driver::new`] with `enroll_again`, `nightjar wake-relay --enroll`).
+//! - A PC that does not take the relay for now (403 `forbidden`: Away wake relay or Play over
+//!   the internet off on it, or the relay not on its network) is no longer served at once, but
+//!   its assignment is kept, saved with the PC's words, and refreshed on its interval; the first
+//!   refresh that succeeds serves it again, without `--enroll`. A relay started again in between
+//!   does not serve it either.
+//! - A PC that refuses the relay for good (401 `not_paired`, 404 `not_found`: it removed the
+//!   relay, `host_control_required`, `permission_required`) drops the enrollment at once, and
+//!   the refusal is saved, so a relay started again does not enroll itself with a PC that
+//!   revoked it; only an explicit enroll does ([`Driver::new`] with `enroll_again`,
+//!   `nightjar wake-relay --enroll`).
+//! - Saved, a refusal without an assignment is for good, and one with an assignment for now.
 //! - A PC is asked again every `refresh_seconds` it gave (one minute to an hour), and one that
 //!   could not be reached or failed as often, never sooner.
 //! - Neither an assignment's secret nor a device id is in any `Debug` or note.
@@ -82,11 +89,14 @@ pub enum Outcome {
     Assigned(Box<RelayAssignment>),
     /// No answer: asleep, off, or not on this network. The enrollment stays.
     Unreachable(String),
-    /// Before enrolling: the PC does not offer a relay to this device (the setting is off, or
-    /// the device has no Host control). Asked again later; nothing is saved.
+    /// The PC does not take this relay for now: Away wake relay or Play over the internet is off
+    /// on it, or the relay is not on its network (403 `forbidden`), or, before enrolling, its
+    /// capabilities offer no relay to this device. Asked again later. Before enrolling nothing
+    /// is saved; an enrolled relay stops serving the PC but keeps and refreshes its assignment.
     NotOffered(String),
-    /// The PC refused this relay: revoked, the setting off, Host control taken away, or the
-    /// pairing ended. The enrollment goes, and the refusal is saved.
+    /// The PC refused this relay for good: it removed the relay (404 `not_found`), the pairing
+    /// ended (401 `not_paired`), or Host control was taken away (`host_control_required`,
+    /// `permission_required`). The enrollment goes, and the refusal is saved.
     Refused(String),
     /// Anything else (the PC busy, a reply that cannot be read). The enrollment stays.
     Failed(String),
@@ -123,17 +133,31 @@ fn plain(text: &str) -> String {
     out.trim().to_owned()
 }
 
-/// Whether a native API answer refuses this relay for good.
-fn refuses(status: u16, code: ErrorCode) -> bool {
-    matches!(status, 401 | 403 | 404)
-        || matches!(
-            code,
-            ErrorCode::Forbidden
-                | ErrorCode::NotFound
-                | ErrorCode::HostControlRequired
-                | ErrorCode::PermissionRequired
-                | ErrorCode::NotPaired
-        )
+/// How a native API answer refuses this relay.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Refusal {
+    /// Removed, not paired, or without Host control: only `--enroll` asks again.
+    ForGood,
+    /// `forbidden`: the PC's setting is off or the relay is not on its network, while the PC
+    /// still lists the relay.
+    ForNow,
+}
+
+/// Whether a native API answer refuses this relay, and for how long: by its code, and by its
+/// status when the code says nothing more.
+fn refusal(status: u16, code: ErrorCode) -> Option<Refusal> {
+    match code {
+        ErrorCode::NotFound
+        | ErrorCode::NotPaired
+        | ErrorCode::HostControlRequired
+        | ErrorCode::PermissionRequired => Some(Refusal::ForGood),
+        ErrorCode::Forbidden => Some(Refusal::ForNow),
+        _ => match status {
+            401 | 404 => Some(Refusal::ForGood),
+            403 => Some(Refusal::ForNow),
+            _ => None,
+        },
+    }
 }
 
 /// What a failed request means for the relay.
@@ -142,16 +166,20 @@ pub fn of_error(error: &Error) -> Outcome {
         Error::Io(_) | Error::Tls(_) | Error::CertificateMismatch | Error::Cancelled => {
             Outcome::Unreachable(plain(&error.to_string()))
         }
-        Error::Api { status, error } if refuses(*status, error.code) => {
-            Outcome::Refused(plain(&error.message))
-        }
+        Error::Api { status, error: api } => match refusal(*status, api.code) {
+            Some(Refusal::ForGood) => Outcome::Refused(plain(&api.message)),
+            Some(Refusal::ForNow) => Outcome::NotOffered(plain(&api.message)),
+            None => Outcome::Failed(plain(&error.to_string())),
+        },
         Error::Status { code: 401, .. } | Error::NotPaired => {
             Outcome::Refused("the PC no longer knows this device: it is not paired".into())
         }
-        Error::Status {
-            code: 403 | 404, ..
+        Error::Status { code: 403, .. } => {
+            Outcome::NotOffered("the PC does not take this wake relay now".into())
         }
-        | Error::NotFound(_) => Outcome::Refused("the PC has no wake relay for this device".into()),
+        Error::Status { code: 404, .. } | Error::NotFound(_) => {
+            Outcome::Refused("the PC has no wake relay for this device".into())
+        }
         other => Outcome::Failed(plain(&other.to_string())),
     }
 }
@@ -199,7 +227,7 @@ pub fn offered(result: Result<Capabilities, Error>) -> Result<(), Outcome> {
 /// A change worth a line, for one PC.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Note {
-    /// Enrolled; this many devices may wake the PC.
+    /// Enrolled, or served again after a refusal for now; this many devices may wake the PC.
     Enrolled {
         devices: usize,
     },
@@ -211,6 +239,7 @@ pub enum Note {
     /// It answers again after it could not be reached.
     Back,
     Unreachable(String),
+    /// The PC does not take the relay now; it is not served until the PC does.
     NotOffered(String),
     Refused(String),
     Failed(String),
@@ -223,9 +252,12 @@ pub enum Note {
 pub struct HostView {
     pub id: String,
     pub name: String,
-    /// The devices that may wake the PC, while it is enrolled.
+    /// The devices that may wake the PC, while it is enrolled and served.
     pub devices: Option<usize>,
+    /// Why the PC refused this relay for good.
     pub refused: Option<String>,
+    /// Why the PC does not take this relay for now: it is not served until a refresh succeeds.
+    pub off: Option<String>,
 }
 
 struct Host {
@@ -235,7 +267,11 @@ struct Host {
     listed: bool,
     assignment: Option<RelayAssignment>,
     enrollment: Option<Enrollment>,
+    /// Refused for good; never with an assignment.
     refused: Option<String>,
+    /// Refused for now (`forbidden`), in the PC's words; only with an assignment, which is kept
+    /// and refreshed but not served.
+    off: Option<String>,
     /// The next ask enrolls even with an assignment (`--enroll`).
     enroll: bool,
     next: u64,
@@ -281,8 +317,10 @@ pub struct Driver {
 }
 
 impl Driver {
-    /// Starts from the saved file. `enroll_again` (`--enroll`) forgets every refusal and
-    /// enrolls with every PC again. A saved assignment that is not usable is dropped.
+    /// Starts from the saved file. `enroll_again` (`--enroll`) forgets every refusal for good and
+    /// enrolls with every PC again. A saved assignment that is not usable is dropped, with a
+    /// refusal for now that came with it. One refused for now stays unserved until a refresh or
+    /// an enroll succeeds.
     pub fn new(saved: Saved, enroll_again: bool) -> Self {
         let mut changed = false;
         let mut hosts: Vec<Host> = Vec::new();
@@ -296,10 +334,13 @@ impl Driver {
                 .as_ref()
                 .and_then(|assignment| usable(&entry.host, assignment));
             changed |= entry.assignment.is_some() && enrollment.is_none();
-            changed |= enroll_again && entry.refused.is_some();
-            let refused = entry
-                .refused
-                .filter(|_| !enroll_again && enrollment.is_none());
+            // Saved with an assignment, a refusal is for now; without one, for good.
+            let (refused, off) = if entry.assignment.is_some() {
+                (None, entry.refused.filter(|_| enrollment.is_some()))
+            } else {
+                changed |= enroll_again && entry.refused.is_some();
+                (entry.refused.filter(|_| !enroll_again), None)
+            };
             if enrollment.is_none() && refused.is_none() {
                 continue;
             }
@@ -310,6 +351,7 @@ impl Driver {
                 id: entry.host,
                 name: entry.name,
                 refused,
+                off,
                 enroll: enroll_again,
                 next: 0,
                 reachable: None,
@@ -334,6 +376,7 @@ impl Driver {
             if now_listed.is_none() && host.assignment.is_some() {
                 host.assignment = None;
                 host.enrollment = None;
+                host.off = None;
                 self.changed = true;
                 notes.push((host.name.clone(), Note::Forgotten));
             }
@@ -355,6 +398,7 @@ impl Driver {
                 assignment: None,
                 enrollment: None,
                 refused: None,
+                off: None,
                 enroll: false,
                 next: 0,
                 reachable: None,
@@ -364,7 +408,8 @@ impl Driver {
         notes
     }
 
-    /// The PCs to ask now, and what. A PC that refused this relay is never asked.
+    /// The PCs to ask now, and what. A PC that refused this relay for good is never asked; one
+    /// that refused it for now is, on its interval.
     pub fn due(&self, now: u64) -> Vec<(String, Ask)> {
         self.hosts
             .iter()
@@ -397,9 +442,12 @@ impl Driver {
                 host.enroll = false;
                 host.reachable = Some(true);
                 host.shown = None;
+                // Taken again after a refusal for now: served again.
+                let resumed = host.off.take().is_some();
                 let devices = assignment.devices.len();
                 let note = match &host.assignment {
                     None => Some(Note::Enrolled { devices }),
+                    _ if resumed => Some(Note::Enrolled { devices }),
                     Some(old) if old.devices.len() != devices || old.epoch != assignment.epoch => {
                         Some(Note::Changed {
                             devices,
@@ -409,7 +457,7 @@ impl Driver {
                     _ if back => Some(Note::Back),
                     _ => None,
                 };
-                if host.assignment.as_ref() != Some(&assignment) {
+                if resumed || host.assignment.as_ref() != Some(&assignment) {
                     self.changed = true;
                 }
                 host.assignment = Some(assignment);
@@ -422,11 +470,19 @@ impl Driver {
                 host.shown = None;
                 (!back).then_some(Note::Unreachable(why))
             }
-            // A PC that no longer offers it to an enrolled relay has revoked it.
-            Outcome::Refused(why) | Outcome::NotOffered(why) if host.assignment.is_some() => {
-                Self::refuse(host, why, &mut self.changed)
-            }
             Outcome::Refused(why) => Self::refuse(host, why, &mut self.changed),
+            // An enrolled relay the PC does not take for now: not served, but kept and refreshed
+            // on the PC's interval, so it is served again once the PC takes it.
+            Outcome::NotOffered(why) if host.assignment.is_some() => {
+                host.next = now + host.interval();
+                host.reachable = Some(true);
+                if host.off.as_ref() == Some(&why) {
+                    return None;
+                }
+                host.off = Some(why.clone());
+                self.changed = true;
+                Some(Note::NotOffered(why))
+            }
             Outcome::NotOffered(why) => {
                 host.next = now + DEFAULT_REFRESH_SECONDS;
                 host.reachable = Some(true);
@@ -443,6 +499,7 @@ impl Driver {
     fn refuse(host: &mut Host, why: String, changed: &mut bool) -> Option<Note> {
         host.assignment = None;
         host.enrollment = None;
+        host.off = None;
         host.enroll = false;
         host.reachable = Some(true);
         host.refused = Some(why.clone());
@@ -450,16 +507,17 @@ impl Driver {
         Some(Note::Refused(why))
     }
 
-    /// What the relay serves now: one enrollment per PC listed and enrolled.
+    /// What the relay serves now: one enrollment per PC listed and enrolled that takes it.
     pub fn enrollments(&self) -> Vec<Enrollment> {
         self.hosts
             .iter()
-            .filter(|host| host.listed)
+            .filter(|host| host.listed && host.off.is_none())
             .filter_map(|host| host.enrollment.clone())
             .collect()
     }
 
-    /// What to save: every PC enrolled or refused.
+    /// What to save: every PC enrolled or refused. A refusal for now is saved with the
+    /// assignment it keeps, one for good without.
     pub fn saved(&self) -> Saved {
         Saved {
             hosts: self
@@ -470,7 +528,7 @@ impl Driver {
                     host: host.id.clone(),
                     name: host.name.clone(),
                     assignment: host.assignment.clone(),
-                    refused: host.refused.clone(),
+                    refused: host.refused.clone().or_else(|| host.off.clone()),
                 })
                 .collect(),
         }
@@ -488,8 +546,13 @@ impl Driver {
             .map(|host| HostView {
                 id: host.id.clone(),
                 name: host.name.clone(),
-                devices: host.assignment.as_ref().map(|a| a.devices.len()),
+                devices: host
+                    .assignment
+                    .as_ref()
+                    .filter(|_| host.off.is_none())
+                    .map(|a| a.devices.len()),
                 refused: host.refused.clone(),
+                off: host.off.clone(),
             })
             .collect()
     }

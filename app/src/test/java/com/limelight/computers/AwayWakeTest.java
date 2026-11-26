@@ -31,10 +31,12 @@ import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.shadows.ShadowToast;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /** Wake from away: when an offline PC's wake relay is asked, and what the user reads at each step and outcome. */
 @RunWith(RobolectricTestRunner.class)
@@ -42,6 +44,8 @@ import java.util.List;
 public class AwayWakeTest {
     private static final String BUNDLE = "{\"target_id\":\"PC\",\"epoch\":1,\"device\":\"ab\",\"relays\":["
             + "{\"id\":\"r1\",\"name\":\"NUC\",\"secret\":\"00\"},{\"id\":\"r2\",\"name\":\"Server\",\"secret\":\"11\"}]}";
+    // Today's wait for the PC (WakeLaunch).
+    private static final long TIMEOUT_MS = 90_000;
 
     private ActivityController<ToolbarIconTintTest.Screen> controller;
     private HostActions actions;
@@ -50,6 +54,8 @@ public class AwayWakeTest {
     private final List<Runnable> queued = new ArrayList<>();
     private final FakeRelay relay = new FakeRelay();
     private ComputerDetails pc;
+    private long now;
+    private IOException sendError;
 
     private static final class FakeRelay implements AwayWakeFlow.Relay {
         final List<Long> cancelled = new ArrayList<>();
@@ -101,9 +107,19 @@ public class AwayWakeTest {
         return controller.get().getString(id, args);
     }
 
-    private boolean wakeFromAway(WakeRelayKeys.Kept kept, boolean onPcNetwork) {
-        return actions.wakeFromAway(pc, kept, onPcNetwork, host -> sent.add(host.uuid), Runnable::run, relay,
-                queued::add);
+    private void wake(WakeRelayKeys.Kept kept, boolean onPcNetwork) {
+        actions.wake(pc, kept, onPcNetwork, host -> {
+            sent.add(host.uuid);
+            if (sendError != null) throw sendError;
+        }, Runnable::run, relay, queued::add, () -> now);
+    }
+
+    /** Lets time pass a second at a time, the LAN wait's tick. */
+    private void pass(long ms) {
+        for (long step = 0; step < ms; step += 1_000) {
+            now += 1_000;
+            Shadows.shadowOf(Looper.getMainLooper()).idleFor(1_000, TimeUnit.MILLISECONDS);
+        }
     }
 
     private static AlertDialog latestDialog() {
@@ -236,7 +252,7 @@ public class AwayWakeTest {
     @Test
     public void aRelayIsAskedWithTheKeptBundleAndItsOutcomeIsShown() {
         relay.outcome = "{\"outcome\":\"relay_offline\",\"relays\":[\"NUC\",\"Server\"]}";
-        assertTrue(wakeFromAway(WakeRelayKeys.Kept.parse(BUNDLE), false));
+        wake(WakeRelayKeys.Kept.parse(BUNDLE), false);
         assertEquals("the magic packets go out too", Collections.singletonList("pc"), sent);
         assertEquals(Collections.singletonList("sent pc"), events);
         assertTrue(actions.isWaking());
@@ -262,7 +278,7 @@ public class AwayWakeTest {
     public void anAwakePcIsToldInAToast() {
         relay.steps = Arrays.asList("{\"stage\":\"requested\",\"relay\":\"NUC\"}",
                 "{\"stage\":\"status\",\"relay\":\"NUC\",\"status\":\"packet_sent\"}");
-        wakeFromAway(WakeRelayKeys.Kept.parse(BUNDLE), false);
+        wake(WakeRelayKeys.Kept.parse(BUNDLE), false);
         AlertDialog progress = latestDialog();
         runWorker();
         assertFalse(progress.isShowing());
@@ -271,7 +287,7 @@ public class AwayWakeTest {
 
     @Test
     public void cancelEndsTheRequestAndItsOutcomeShowsNothing() {
-        wakeFromAway(WakeRelayKeys.Kept.parse(BUNDLE), false);
+        wake(WakeRelayKeys.Kept.parse(BUNDLE), false);
         AlertDialog progress = latestDialog();
         progress.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
         Shadows.shadowOf(Looper.getMainLooper()).idle();
@@ -286,20 +302,131 @@ public class AwayWakeTest {
     }
 
     @Test
-    public void withoutARelayTheUserLearnsHowToGetOne() {
-        assertTrue(wakeFromAway(WakeRelayKeys.Kept.parse(""), false));
-        assertEquals(string(R.string.wake_relay_none, "Office"), message(latestDialog()));
-        assertEquals("the magic packets still go out", Collections.singletonList("pc"), sent);
-        assertTrue(queued.isEmpty());
-        assertTrue(events.isEmpty());
+    public void onANetworkNumberedLikeHomeARelayIsAskedOnceTodaysWaitEndsWithThePcAway() {
+        // Away on a network that reuses the home numbering: a subnet holds the PC's address, so it looks like home.
+        boolean home = AwayWake.onPcNetwork(
+                Collections.singletonList(new AwayWake.Subnet(AwayWake.ipv4("192.168.1.37"), 24)),
+                Collections.singletonList("192.168.1.20"), Collections.emptyList());
+        assertTrue(home);
+        relay.outcome = "{\"outcome\":\"timed_out\"}";
+        wake(WakeRelayKeys.Kept.parse(BUNDLE), home);
+        assertEquals("today's wake first", Collections.singletonList("pc"), sent);
+        assertEquals(Collections.singletonList("sent pc"), events);
+        assertEquals(string(R.string.wol_waking_msg), ShadowToast.getTextOfLatestToast());
+        pass(TIMEOUT_MS - 1_000);
+        assertTrue("no relay while the wait lasts", queued.isEmpty());
+
+        pass(2_000);
+        assertEquals("the relay next", 1, queued.size());
+        assertEquals(Arrays.asList("sent pc", "ended pc", "sent pc"), events);
+        assertTrue(actions.isWaking());
+        AlertDialog progress = latestDialog();
+        assertEquals(string(R.string.wake_relay_contacting, "NUC"), message(progress));
+        assertNotNull("Cancel ends it", progress.getButton(AlertDialog.BUTTON_NEGATIVE));
+
+        runWorker();
+        assertEquals(BUNDLE, relay.bundle);
+        assertFalse(progress.isShowing());
+        assertEquals(Arrays.asList("sent pc", "ended pc", "sent pc", "ended pc"), events);
+        AlertDialog outcome = latestDialog();
+        assertEquals(string(R.string.wake_relay_timed_out, "Office"), message(outcome));
+
+        int before = sent.size();
+        outcome.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertEquals("Try again asks the relay at once", 1, queued.size());
+        assertEquals(before + 1, sent.size());
     }
 
     @Test
-    public void onThePcsNetworkOrWithoutTheFeatureTodaysWakeRuns() {
-        assertFalse(wakeFromAway(WakeRelayKeys.Kept.parse(BUNDLE), true));
-        assertFalse(wakeFromAway(null, false));
+    public void aPcThatAnswersDuringTodaysWaitLeavesTheRelayUnasked() {
+        wake(WakeRelayKeys.Kept.parse(BUNDLE), true);
+        pass(8_000);
         pc.state = ComputerDetails.State.ONLINE;
-        assertFalse(wakeFromAway(WakeRelayKeys.Kept.parse(BUNDLE), false));
+        pass(1_000);
+        assertEquals(string(R.string.wol_pc_online), ShadowToast.getTextOfLatestToast());
+        assertEquals(Arrays.asList("sent pc", "ended pc"), events);
+        pass(TIMEOUT_MS);
+        assertTrue(queued.isEmpty());
+        assertNull(relay.bundle);
+        assertFalse(actions.isWaking());
+        assertFalse(actions.isShowingError());
+    }
+
+    @Test
+    public void aWakeThatCannotSendOrHasNoMacAsksAKeptRelay() {
+        sendError = new IOException("no route");
+        wake(WakeRelayKeys.Kept.parse(BUNDLE), true);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(1, queued.size());
+        assertEquals(string(R.string.wake_relay_contacting, "NUC"), message(latestDialog()));
+
+        actions.destroy();
+        queued.clear();
+        sent.clear();
+        pc.macAddress = null;
+        wake(WakeRelayKeys.Kept.parse(BUNDLE), true);
+        assertEquals("the relay knows the PC's MACs", 1, queued.size());
+        assertTrue(sent.isEmpty());
+        // Without a relay, away: the hint follows.
+        actions.destroy();
+        wake(WakeRelayKeys.Kept.parse(""), false);
+        assertEquals(string(R.string.wol_no_mac) + "\n\n" + string(R.string.wake_relay_none, "Office"),
+                message(latestDialog()));
+    }
+
+    @Test
+    public void awayWithoutARelayTodaysWakeRunsAndOnlyItsFailureSaysHowToGetOne() {
+        wake(WakeRelayKeys.Kept.parse(""), false);
+        assertEquals(Collections.singletonList("pc"), sent);
+        assertEquals(Collections.singletonList("sent pc"), events);
+        assertTrue(actions.isWaking());
+        assertEquals(string(R.string.wol_waking_msg), ShadowToast.getTextOfLatestToast());
+        assertFalse("nothing said while the wait lasts", actions.isShowingError());
+
+        pass(TIMEOUT_MS + 1_000);
+        assertEquals(Arrays.asList("sent pc", "ended pc"), events);
+        assertEquals(string(R.string.console_wake_timeout, "Office") + "\n\n"
+                + string(R.string.wake_relay_none, "Office"), message(latestDialog()));
+        assertTrue(queued.isEmpty());
+
+        // A PC that answers says so, without the hint.
+        actions.destroy();
+        events.clear();
+        wake(WakeRelayKeys.Kept.parse(""), false);
+        pc.state = ComputerDetails.State.ONLINE;
+        pass(1_000);
+        assertEquals(string(R.string.wol_pc_online), ShadowToast.getTextOfLatestToast());
+        assertFalse(actions.isShowingError());
+
+        // A wake that cannot send says so, with the hint.
+        pc.state = ComputerDetails.State.OFFLINE;
+        sendError = new IOException("no route");
+        wake(WakeRelayKeys.Kept.parse(""), false);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(string(R.string.wol_fail) + "\n\n" + string(R.string.wake_relay_none, "Office"),
+                message(latestDialog()));
+    }
+
+    @Test
+    public void onThePcsNetworkWithoutARelayOrWithoutTheFeatureTodaysWakeRunsAsBefore() {
+        for (WakeRelayKeys.Kept kept : new WakeRelayKeys.Kept[] {WakeRelayKeys.Kept.parse(""), null}) {
+            sent.clear();
+            events.clear();
+            wake(kept, kept != null);
+            assertEquals(Collections.singletonList("pc"), sent);
+            assertEquals(string(R.string.wol_waking_msg), ShadowToast.getTextOfLatestToast());
+            pass(TIMEOUT_MS + 1_000);
+            assertEquals(Arrays.asList("sent pc", "ended pc"), events);
+            assertEquals("no hint", string(R.string.console_wake_timeout, "Office"), message(latestDialog()));
+        }
+        assertTrue(queued.isEmpty());
+
+        events.clear();
+        sent.clear();
+        pc.state = ComputerDetails.State.ONLINE;
+        wake(WakeRelayKeys.Kept.parse(BUNDLE), false);
+        assertEquals(string(R.string.wol_pc_online), ShadowToast.getTextOfLatestToast());
         assertTrue(sent.isEmpty());
         assertTrue(queued.isEmpty());
         assertTrue(events.isEmpty());
