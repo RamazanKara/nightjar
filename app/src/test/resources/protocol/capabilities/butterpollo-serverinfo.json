@@ -57,6 +57,7 @@
     "pc_shutdown": "unsupported:update_host",
     "host_update": "unsupported:update_host",
     "pairing_approve": "unsupported:update_host",
-    "quick_suspend": "unsupported"
+    "quick_suspend": "unsupported",
+    "stream_dvr": "unsupported"
   }
 }

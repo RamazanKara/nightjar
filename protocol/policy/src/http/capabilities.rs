@@ -481,6 +481,15 @@ impl Evidence {
                     version
                 }
             }
+            // Both: serverinfo says the host keeps clips, the native API that this device may.
+            Feature::StreamDvr => {
+                let serverinfo = self.serverinfo_version(self.stream_dvr_version);
+                if serverinfo.is_supported() {
+                    self.native_feature(self.stream_dvr_offered, None)
+                } else {
+                    serverinfo
+                }
+            }
         }
     }
 
@@ -577,6 +586,7 @@ impl HostCapabilities {
         // Pausing or resuming takes Launch or Host control.
         evidence.quick_suspend_offered = listed(rubylight_native_api::feature::QUICK_SUSPEND)
             && (permissions.launch || permissions.host_control);
+        evidence.stream_dvr_offered = listed(rubylight_native_api::feature::STREAM_DVR);
         Self::from_evidence(evidence)
     }
 

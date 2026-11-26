@@ -115,6 +115,10 @@ impl Evidence {
             Value::from(self.second_screen_version),
         );
         map.insert(
+            "streamDvrVersion".into(),
+            Value::from(self.stream_dvr_version),
+        );
+        map.insert(
             "nvidiaEnhancements".into(),
             Value::from(self.nvidia_enhancements),
         );
@@ -165,6 +169,10 @@ impl Evidence {
         map.insert(
             "quickSuspendOffered".into(),
             Value::from(self.quick_suspend_offered),
+        );
+        map.insert(
+            "streamDvrOffered".into(),
+            Value::from(self.stream_dvr_offered),
         );
         if let Some(version) = &self.rust_host_version {
             map.insert("rustHostVersion".into(), Value::from(version.as_str()));
@@ -283,6 +291,7 @@ impl Evidence {
             pipeline_rates_version: opt_i32("pipelineRatesVersion", -1)?,
             display_scale_version: opt_i32("displayScaleVersion", -1)?,
             second_screen_version: opt_i32("secondScreenVersion", -1)?,
+            stream_dvr_version: opt_i32("streamDvrVersion", -1)?,
             nvidia_enhancements,
             hdr_dynamic_control: obj
                 .get("hdrDynamicControl")
@@ -307,6 +316,7 @@ impl Evidence {
             continue_here_offered: opt_bool("continueHereOffered")?,
             quick_suspend_version: opt_i32("quickSuspendVersion", -1)?,
             quick_suspend_offered: opt_bool("quickSuspendOffered")?,
+            stream_dvr_offered: opt_bool("streamDvrOffered")?,
             max_video_packet,
         })
     }

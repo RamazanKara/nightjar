@@ -103,6 +103,7 @@ impl Evidence {
             display_scale_version: -1,
             second_screen_version: -1,
             quick_suspend_version: -1,
+            stream_dvr_version: -1,
             nvidia_enhancements: 0,
             internet_play_version: -1,
             ..Default::default()
@@ -162,6 +163,9 @@ impl Evidence {
                 "DisplayScaleVersion" => e.display_scale_version = unsigned(&text, 0xFFFF) as i32,
                 "SecondScreenVersion" => e.second_screen_version = unsigned(&text, 0xFFFF) as i32,
                 "QuickSuspendVersion" => e.quick_suspend_version = unsigned(&text, 0xFFFF) as i32,
+                rubylight_protocol::stream_dvr::SERVERINFO_FIELD => {
+                    e.stream_dvr_version = unsigned(&text, 0xFFFF) as i32
+                }
                 "NvidiaEnhancements" => {
                     e.nvidia_enhancements =
                         rubylight_protocol::nvidia_enhance::parse_offer(Some(&text))
