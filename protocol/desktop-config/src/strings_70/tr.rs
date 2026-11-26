@@ -13,4 +13,8 @@ pub const TABLE: &[(&str, &str)] = &[
     ("What you see", "Gördüğünüz görüntü"),
     ("What the game draws", "Oyunun çizdiği görüntü"),
     ("Stream pixels", "Yayın pikselleri"),
+    ("Quick", "Hızlı"),
+    ("Picture", "Görüntü"),
+    ("Clips", "Klipler"),
+    ("Power", "Güç"),
 ];

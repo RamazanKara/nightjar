@@ -13,4 +13,8 @@ pub const TABLE: &[(&str, &str)] = &[
     ("What you see", "Was du siehst"),
     ("What the game draws", "Was das Spiel zeichnet"),
     ("Stream pixels", "Pixel des Streams"),
+    ("Quick", "Schnell"),
+    ("Picture", "Bild"),
+    ("Clips", "Mitschnitte"),
+    ("Power", "Ein/Aus"),
 ];

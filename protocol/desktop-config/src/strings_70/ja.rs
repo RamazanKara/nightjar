@@ -13,4 +13,8 @@ pub const TABLE: &[(&str, &str)] = &[
     ("What you see", "見える映像"),
     ("What the game draws", "ゲームが描く映像"),
     ("Stream pixels", "ストリームのピクセル"),
+    ("Quick", "クイック"),
+    ("Picture", "映像"),
+    ("Clips", "クリップ"),
+    ("Power", "電源"),
 ];

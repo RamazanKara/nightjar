@@ -13,4 +13,8 @@ pub const TABLE: &[(&str, &str)] = &[
     ("What you see", "你看到的畫面"),
     ("What the game draws", "遊戲繪製的畫面"),
     ("Stream pixels", "串流像素"),
+    ("Quick", "快捷"),
+    ("Picture", "畫面"),
+    ("Clips", "剪輯"),
+    ("Power", "電源"),
 ];

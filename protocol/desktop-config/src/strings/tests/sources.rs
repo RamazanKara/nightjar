@@ -1,7 +1,7 @@
 //! Source inventories for the desktop localization table tests (`SOURCES` and `MARKED_ONLY`).
 
 /// The UI sources, up to their test modules.
-pub(super) const SOURCES: [(&str, &str); 77] = [
+pub(super) const SOURCES: [(&str, &str); 78] = [
     ("strings.rs", include_str!("../../strings.rs")),
     ("app_types.rs", include_str!("../../app_types.rs")),
     ("gamepad_types.rs", include_str!("../../gamepad_types.rs")),
@@ -79,6 +79,7 @@ pub(super) const SOURCES: [(&str, &str); 77] = [
     ("stream_menu.rs", include_str!("../../../../desktop-ui/src/stream_menu.rs")),
     ("ui/about.rs", include_str!("../../../../desktop-ui/src/ui/about.rs")),
     ("ui/latency_bench.rs", include_str!("../../../../desktop-ui/src/ui/latency_bench.rs")),
+    ("ui/control_center.rs", include_str!("../../../../desktop-ui/src/ui/control_center.rs")),
 ];
 
 /// Read for its marked texts and its toasts only: the stream code keeps its own overlay lines.

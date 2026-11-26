@@ -4,6 +4,8 @@ mod about;
 mod backdrop;
 mod cards;
 mod chrome;
+pub mod control_center;
+pub mod control_center_cards;
 #[allow(dead_code, reason = "generated: every token is listed, the pages use them as they are redesigned")]
 pub(crate) mod design_tokens;
 #[cfg(any(feature = "demo-library", test))]
