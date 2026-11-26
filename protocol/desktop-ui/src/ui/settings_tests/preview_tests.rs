@@ -47,10 +47,10 @@ fn video_drawn(f: &Frames) -> Rect {
     let mut found = None;
     for clipped in &f.shapes {
         each_shape(&clipped.shape, &mut |shape| {
-            if let egui::Shape::Rect(rect) = shape {
-                if rect.stroke.color == *MOON && rect.stroke.width == 2.0 && band.contains(&rect.rect.center().y) {
-                    found = Some(rect.rect);
-                }
+            if let egui::Shape::Rect(rect) = shape
+                && rect.stroke.color == *MOON && rect.stroke.width == 2.0 && band.contains(&rect.rect.center().y)
+            {
+                found = Some(rect.rect);
             }
         });
     }
@@ -226,7 +226,8 @@ fn scroll_row_to(f: &mut Frames, label: &str, from_top: f32) {
 fn settings_preview_screenshots() {
     let Some(dir) = std::env::var_os("NIGHTJAR_SHOTS").map(std::path::PathBuf::from) else { return };
     std::fs::create_dir_all(&dir).expect("the folder for the screenshots");
-    let values: [(&str, fn(&mut Settings)); 3] = [
+    type Set = fn(&mut Settings);
+    let values: [(&str, Set); 3] = [
         ("a", |s| {
             (s.hdr, s.video_scaling, s.upscaling, s.upscale_sharpness) = (false, VideoScaling::Fit, Upscaling::Fsr1, 40);
             set_frame_pacing_choice(s, FramePacingChoice::Balanced);
