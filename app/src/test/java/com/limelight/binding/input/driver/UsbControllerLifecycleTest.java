@@ -174,16 +174,19 @@ public class UsbControllerLifecycleTest {
             UsbPads.await(() -> listener.has("added"));
             assertEquals("Inactive auto pref must not prevent UsbDriverService claiming", 1, UsbPads.Connection.claims.get());
 
-            // When an active UsbForwarding session starts forwarding this device, UsbDriverService skips claiming it.
+            // Hold the active USB read while asserting forwarding ownership so UsbForwarding's
+            // worker waits in awaitDeviceRelease instead of racing USB_NO_STREAM onto main.
             forwarding = new com.limelight.binding.usb.UsbForwarding(app, config, null, ignored -> {});
             forwarding.setDeviceReleaser(UsbDriverService::releaseActiveDevice);
             UsbPads.Connection.releases.set(0);
             shadowOf((UsbManager) app.getSystemService(Context.USB_SERVICE)).addOrUpdateUsbDevice(pad, true);
+            UsbPads.holdReads();
             forwarding.choose(pad);
             shadowOf(Looper.getMainLooper()).idle();
             assertFalse(UsbDriverService.shouldClaimDevice(app, pad, config));
             assertTrue(forwarding.isForwarded(pad));
         } finally {
+            UsbPads.releaseReads();
             if (service != null) {
                 service.destroy();
                 service = null;

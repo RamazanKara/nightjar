@@ -568,8 +568,8 @@ struct OverlayPlanes {
     row_bytes: usize,
 }
 
-/// Copies changed dirty byte spans of `rows` x `row_bytes` from `src` (stride `src_pitch`) to
-/// `dst` (stride `dst_pitch`) and updates `cache` only when `!already_shown` or pixels differ.
+/// Copies `rows` x `row_bytes` from `src` (stride `src_pitch`) to `dst` (stride `dst_pitch`) and
+/// updates `cache` only when `!already_shown` or the pixels differ from `cache`.
 ///
 /// # Safety
 /// `planes.src` must be valid for `planes.rows` rows of `planes.row_bytes` at stride
@@ -582,31 +582,15 @@ unsafe fn sync_overlay_bytes(
 ) -> bool {
     let OverlayPlanes { src, src_pitch, dst, dst_pitch, rows, row_bytes } = planes;
     let total = rows * row_bytes;
-    if already_shown && cache.len() == total {
-        let mut any_changed = false;
-        for row in 0..rows {
-            // SAFETY: caller guarantees `src` and `dst` cover `row_bytes` at their respective pitches.
-            unsafe {
-                let line = std::slice::from_raw_parts(src.add(row * src_pitch), row_bytes);
-                let cached = &mut cache[row * row_bytes..(row + 1) * row_bytes];
-                if line == &*cached {
-                    continue;
-                }
-                let start = line.iter().zip(cached.iter()).position(|(a, b)| a != b).unwrap_or(0);
-                let end = row_bytes
-                    - line[start..]
-                        .iter()
-                        .rev()
-                        .zip(cached[start..].iter().rev())
-                        .position(|(a, b)| a != b)
-                        .unwrap_or(0);
-                let len = end - start;
-                cached[start..end].copy_from_slice(&line[start..end]);
-                std::ptr::copy_nonoverlapping(line[start..].as_ptr(), dst.add(row * dst_pitch + start), len);
-                any_changed = true;
-            }
-        }
-        return any_changed;
+    // SAFETY: caller guarantees `src` covers `rows` rows of `row_bytes` bytes at `src_pitch`.
+    let unchanged = already_shown
+        && cache.len() == total
+        && (0..rows).all(|row| {
+            let line = unsafe { std::slice::from_raw_parts(src.add(row * src_pitch), row_bytes) };
+            line == &cache[row * row_bytes..(row + 1) * row_bytes]
+        });
+    if unchanged {
+        return false;
     }
     cache.resize(total, 0);
     for row in 0..rows {
