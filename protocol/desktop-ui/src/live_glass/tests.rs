@@ -597,6 +597,29 @@ fn the_guard_is_armed_before_the_first_probed_frame_and_cleared_when_the_probe_e
     assert_eq!(failing.memory().stored().tier, None);
 }
 
+/// The guard covers the chain's first frame only: an app that crashes later, in a stream or before
+/// the probe's verdict, keeps its glass on the next start.
+#[test]
+fn the_guard_clears_after_the_first_clean_frame_and_when_a_stream_starts() {
+    let mut glass = Glass::new(None).remembering(Memory::in_memory(Stored::default()));
+    let mut stage = stage();
+    glass.settle(&mut stage);
+    let fingerprint = fingerprint_of(&stage);
+    assert!(glass.memory().stored().guard.tripped(&fingerprint));
+    glass.paint(&mut stage, &chrome_frame(Color32::RED), false);
+    assert!(!glass.memory().stored().guard.in_flight, "one clean frame clears it");
+    assert_eq!(glass.memory().stored().tier, None, "the probe has no verdict yet");
+    assert_eq!(glass.pass_tier(), Tier::Lens);
+
+    // A stream that starts before the chain ever ran draws no chain either.
+    let mut streaming = Glass::new(None).remembering(Memory::in_memory(Stored::default()));
+    let mut stage = self::stage();
+    streaming.settle(&mut stage);
+    assert!(streaming.memory().stored().guard.in_flight);
+    let _ = streaming.set_over_video(true);
+    assert!(!streaming.memory().stored().guard.in_flight);
+}
+
 #[test]
 fn a_fast_screen_is_judged_against_a_120_hz_frame() {
     let mut glass = Glass::live();

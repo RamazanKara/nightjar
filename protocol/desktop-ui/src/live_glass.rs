@@ -351,6 +351,10 @@ impl Glass {
     #[must_use]
     pub fn set_over_video(&mut self, over_video: bool) -> bool {
         self.over_video = over_video;
+        if over_video {
+            // No chain runs over a stream, so whatever ends the app from here is not the glass.
+            self.disarm();
+        }
         if over_video && self.held {
             self.held = false;
             self.print = None;
@@ -407,6 +411,14 @@ impl Glass {
             stored.guard = Guard::clear(&fingerprint);
         }
         self.memory.save(stored);
+    }
+
+    /// Clears a guard still armed and keeps what is stored, so a crash later in the session (a
+    /// stream's, an abort) is not taken for the glass's.
+    fn disarm(&mut self) {
+        if let Some(fingerprint) = self.armed.take() {
+            self.memory.save(Stored { guard: Guard::clear(&fingerprint), ..self.memory.stored().clone() });
+        }
     }
 
     fn step_down(&mut self, why: &str) {
@@ -470,6 +482,8 @@ impl Glass {
             Err(why) => self.step_down(&why),
             Ok(ms) => {
                 self.print = Some(print);
+                // The chain ran a frame cleanly: the guard has done its work (design spec 4.3, step 2).
+                self.disarm();
                 if let Some(ms) = ms.filter(|_| timed) {
                     self.measure(ms);
                 }
