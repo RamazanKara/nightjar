@@ -25,7 +25,7 @@ public class StatusDisc extends AppCompatTextView {
     public StatusDisc(Context context, AttributeSet attrs) {
         super(context, attrs);
         android.content.res.Resources res = context.getResources();
-        disc.setColor(0xB80E1017);
+        disc.setColor(0xB80E1016);
         boolean highContrast = AppTheme.isHighContrast(context);
         live = ResourcesCompat.getColor(res, highContrast ? R.color.nj_hc_color_ok : R.color.nj_color_ok, null);
         idle = ResourcesCompat.getColor(res, R.color.nj_color_label_secondary, null);

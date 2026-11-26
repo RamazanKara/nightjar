@@ -9,15 +9,15 @@ import gen_design_tokens as gen  # noqa: E402
 
 class ColourTest(unittest.TestCase):
     def test_android_writes_alpha_first(self):
-        self.assertEqual(gen.android_color("#14161F66"), "#6614161F")
+        self.assertEqual(gen.android_color("#101218B8"), "#B8101218")
 
     def test_opaque_colours_stay_six_digits_on_android(self):
-        self.assertEqual(gen.android_color("#F2A93B"), "#F2A93B")
+        self.assertEqual(gen.android_color("#F5B041"), "#F5B041")
         self.assertEqual(gen.android_color("#0A0A0CFF"), "#0A0A0C")
 
     def test_egui_colours_are_premultiplied(self):
         self.assertEqual(gen.premultiplied("#FFFFFF80"), (128, 128, 128, 128))
-        self.assertEqual(gen.premultiplied("#F2A93B"), (242, 169, 59, 255))
+        self.assertEqual(gen.premultiplied("#F5B041"), (245, 176, 65, 255))
         self.assertEqual(gen.premultiplied("#00000000"), (0, 0, 0, 0))
 
     def test_a_bad_colour_is_refused(self):
@@ -35,7 +35,14 @@ class KindTest(unittest.TestCase):
         self.assertEqual(gen.kind("type.body.weight", 400), "int")
         self.assertEqual(gen.kind("motion.fade.ms", 120), "int")
         self.assertEqual(gen.kind("motion.press.stiffness", 1500), "float")
-        self.assertEqual(gen.kind("color.moon", "#F2A93B"), "color")
+        self.assertEqual(gen.kind("color.moon", "#F5B041"), "color")
+        self.assertEqual(gen.kind("layout.touchMin", 48), "dp")
+        self.assertEqual(gen.kind("layout.tvScaleFactor", 1.5), "float")
+        self.assertEqual(gen.kind("tier.probe.settleMs", 2000), "int")
+        self.assertEqual(gen.kind("tier.probe.minBudgetHz", 120), "int")
+        self.assertEqual(gen.kind("tier.probe.lateFraction", 0.25), "float")
+        self.assertEqual(gen.kind("pad.studio.grid", 8), "dp")
+        self.assertEqual(gen.kind("surface.controlCenter.blur", 44), "dp")
         self.assertEqual(gen.kind("reduced.spring", "none"), "string")
 
     def test_names(self):

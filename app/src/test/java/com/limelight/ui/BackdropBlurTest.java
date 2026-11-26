@@ -19,11 +19,11 @@ import org.robolectric.annotation.GraphicsMode;
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = 30, application = Application.class)
 public class BackdropBlurTest {
-    private static final int CANVAS = 0xFF0B0D12;
+    private static final int CANVAS = 0xFF050608;
     /** The design's label and secondary label. */
-    private static final int[] TEXT = {0xFFF5F6FB, 0xFFCDD0DC};
+    private static final int[] TEXT = {0xFFF5F7FA, 0xFFC7CDD9};
     /** Day's label and secondary label. */
-    private static final int[] DAY_TEXT = {0xFF1A1C22, 0xFF3D404D};
+    private static final int[] DAY_TEXT = {0xFF111318, 0xFF3A404D};
 
     private static Bitmap solid(int color) {
         Bitmap bitmap = Bitmap.createBitmap(300, 450, Bitmap.Config.ARGB_8888);
@@ -63,7 +63,7 @@ public class BackdropBlurTest {
 
     @Test
     public void dayLiftsBlackToASoftGreyAndDarkTextStaysReadable() {
-        Bitmap made = BackdropBlur.make(solid(0xFF000000), 0xFFF6F7FB, true, true);
+        Bitmap made = BackdropBlur.make(solid(0xFF000000), 0xFFF5F7FA, true, true);
         assertEquals(BackdropBlur.HEIGHT, made.getWidth());
         assertEquals(BackdropBlur.WIDTH, made.getHeight());
         int pixel = made.getPixel(20, 40);

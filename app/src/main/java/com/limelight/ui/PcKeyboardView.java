@@ -52,7 +52,7 @@ public final class PcKeyboardView extends View {
         keyModifier = color(context, R.color.nj_color_surface);
         keyPressed = color(context, R.color.nj_color_surface_bright);
         armed = androidx.core.graphics.ColorUtils.compositeColors(
-                com.google.android.material.color.MaterialColors.getColor(glass, R.attr.glassSelectedFill, 0x47F2A93B), key);
+                com.google.android.material.color.MaterialColors.getColor(glass, R.attr.glassSelectedFill, 0x47F5B041), key);
         labelArmed = com.google.android.material.color.MaterialColors.getColor(glass, R.attr.glassOnSelected, 0xFFFFD79A);
         locked = color(context, highContrast ? R.color.nj_hc_color_moon : R.color.nj_color_moon);
         labelLocked = color(context, highContrast ? R.color.nj_hc_color_on_moon : R.color.nj_color_on_moon);

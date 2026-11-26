@@ -67,9 +67,9 @@ public class PcScreen extends FrameLayout {
         setWillNotDraw(false);
         setClipChildren(false);
         setClipToPadding(false);
-        offlineFace = day ? 0x1A1A1C22 : 0x38787C8C;
+        offlineFace = day ? 0x1A0F172A : 0x38787C8C;
         onlineRim = highContrast ? ResourcesCompat.getColor(res, R.color.nj_hc_color_rim, null) : 0x33FFFFFF;
-        offlineRim = highContrast ? onlineRim : day ? 0x261A1C22 : 0x1FFFFFFF;
+        offlineRim = highContrast ? onlineRim : day ? 0x260F172A : 0x1FFFFFFF;
         disc.setColor(NoArtTile.discColor(context));
         rim.setStyle(Paint.Style.STROKE);
         rim.setStrokeWidth(highContrast ? res.getDimension(R.dimen.nj_glass_chrome_solid_rim_width) : Math.max(1f, density * .75f));

@@ -59,7 +59,7 @@ public class BackdropView extends FrameLayout {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Executor executor = WORKER;
 
-    private int canvas = 0xFF0B0D12;
+    private int canvas = 0xFF050608;
     private String wantedKey;
     private Bitmap wantedCover;
     private boolean wantedNoArt;
