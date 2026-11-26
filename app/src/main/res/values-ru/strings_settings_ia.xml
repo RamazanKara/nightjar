@@ -28,4 +28,5 @@
     <string name="resolution_screen_portrait">Размер экрана, портретный (%1$s)</string>
     <string name="resolution_screen_cutout_portrait">Размер экрана, портретный, без выреза камеры (%1$s)</string>
     <string name="fps_screen">Частота обновления экрана (%1$d FPS)</string>
+    <string name="resolution_screen_percent">%1$s от размера экрана (%2$s)</string>
 </resources>

@@ -106,6 +106,12 @@ final class StreamSettingsDisplayOptions {
             }
         }
 
+        // #137: this screen's size at 85, 75, 67 and 50 %, where its own size is listed too (not on a TV below 4K).
+        String panel = PreferenceConfiguration.nativeResolution(activity);
+        if (!television || (panel != null && PreferenceConfiguration.getWidthFromResolutionString(panel) > 3840)) {
+            ResolutionSteps.addTo(activity, (ListPreference) fragment.findPreference(PreferenceConfiguration.RESOLUTION_PREF_STRING), panel);
+        }
+
         // The decoders' width ranges can only raise the slot. Reading them builds a
         // MediaCodecList, a blocking call to the media service that hit an ANR on a
         // MediaTek Android 15 device (V+ c519d37): probe off the main thread and drop

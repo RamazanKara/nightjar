@@ -28,4 +28,5 @@
     <string name="resolution_screen_portrait">屏幕尺寸，竖屏（%1$s）</string>
     <string name="resolution_screen_cutout_portrait">屏幕尺寸，竖屏，避开摄像头挖孔（%1$s）</string>
     <string name="fps_screen">屏幕刷新率（%1$d FPS）</string>
+    <string name="resolution_screen_percent">屏幕尺寸的 %1$s（%2$s）</string>
 </resources>

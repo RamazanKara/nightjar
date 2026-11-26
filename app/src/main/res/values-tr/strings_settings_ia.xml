@@ -28,4 +28,5 @@
     <string name="resolution_screen_portrait">Ekran boyutu, dikey (%1$s)</string>
     <string name="resolution_screen_cutout_portrait">Ekran boyutu, dikey, kamera kesiği hariç (%1$s)</string>
     <string name="fps_screen">Ekran yenileme hızı (%1$d FPS)</string>
+    <string name="resolution_screen_percent">Ekran boyutunun %1$s kadarı (%2$s)</string>
 </resources>

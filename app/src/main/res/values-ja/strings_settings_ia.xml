@@ -28,4 +28,5 @@
     <string name="resolution_screen_portrait">画面サイズ、縦向き（%1$s）</string>
     <string name="resolution_screen_cutout_portrait">画面サイズ、縦向き、カメラの切り欠きを避ける（%1$s）</string>
     <string name="fps_screen">画面のリフレッシュレート（%1$d FPS）</string>
+    <string name="resolution_screen_percent">画面サイズの%1$s（%2$s）</string>
 </resources>

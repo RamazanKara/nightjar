@@ -28,4 +28,5 @@
     <string name="resolution_screen_portrait">螢幕大小，直向 (%1$s)</string>
     <string name="resolution_screen_cutout_portrait">螢幕大小，直向，避開相機挖孔 (%1$s)</string>
     <string name="fps_screen">螢幕更新率 (%1$d FPS)</string>
+    <string name="resolution_screen_percent">螢幕大小的 %1$s (%2$s)</string>
 </resources>
