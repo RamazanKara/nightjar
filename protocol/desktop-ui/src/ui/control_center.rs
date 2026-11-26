@@ -320,7 +320,9 @@ fn rail(ui: &mut Ui, state: &mut State, dock: &Dock, frame: &Frame<'_>, g: &Geom
             centred(ui, after, last);
         }
     } else if vertical && frame.input == InputSource::Keyboard && !frame.sub_page {
-        ui.painter().text(pos2(g.rail.center().x, g.rail.bottom() - MARGIN), Align2::CENTER_BOTTOM, "Ctrl+Tab", regular(10.0), quiet);
+        // The chord in the language in use ("Strg+Tab").
+        let keys = crate::shortcuts::Chord::ctrl(crate::shortcuts::Key::Tab).text();
+        ui.painter().text(pos2(g.rail.center().x, g.rail.bottom() - MARGIN), Align2::CENTER_BOTTOM, keys, regular(10.0), quiet);
     }
     for (index, page) in dock.pages.iter().enumerate() {
         let step = index as f32;
