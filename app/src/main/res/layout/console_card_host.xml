@@ -7,14 +7,15 @@
     android:foreground="@drawable/grid_focus_ring" android:descendantFocusability="blocksDescendants">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical"
         android:orientation="horizontal">
-        <FrameLayout android:id="@+id/console_thumb_frame" android:layout_width="72dp" android:layout_height="96dp"
+        <!-- The card's outline rounds this block's outer corners; RoundFrame does the same in a picture drawn without the GPU. -->
+        <com.limelight.ui.RoundFrame android:id="@+id/console_thumb_frame" android:layout_width="72dp" android:layout_height="96dp"
             android:background="?attr/colorSurfaceContainerHigh">
             <!-- The PC's monitor is drawn centre-inside: kept off the card's border by the inset. -->
             <ImageView android:id="@+id/console_thumb" android:layout_width="match_parent" android:layout_height="match_parent"
                 android:padding="@dimen/space_s"
                 android:scaleType="centerCrop" android:importantForAccessibility="no" />
             <com.limelight.ui.NoArtTile android:id="@+id/console_thumb_text" android:layout_width="match_parent" android:layout_height="match_parent" android:importantForAccessibility="no" />
-        </FrameLayout>
+        </com.limelight.ui.RoundFrame>
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
             android:orientation="vertical" android:padding="@dimen/space_m">
             <TextView android:id="@+id/console_title" android:layout_width="match_parent" android:layout_height="wrap_content"

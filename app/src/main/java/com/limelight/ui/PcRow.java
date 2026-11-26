@@ -83,6 +83,8 @@ public class PcRow extends FrameLayout {
             }
         });
         cover.setClipToOutline(true);
+        // A picture drawn without the GPU knows no outline: the frame rounds itself there.
+        if (cover instanceof RoundFrame) ((RoundFrame) cover).setRadius(radius);
     }
 
     /**

@@ -7,13 +7,13 @@
     <LinearLayout android:id="@+id/grid_row" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:gravity="center_vertical" android:minHeight="84dp" android:orientation="horizontal" android:clipChildren="false" android:clipToPadding="false"
         android:paddingStart="14dp" android:paddingEnd="8dp" android:paddingTop="11dp" android:paddingBottom="11dp">
-        <FrameLayout android:id="@+id/grid_cover_frame" android:layout_width="92dp" android:layout_height="138dp"
+        <com.limelight.ui.RoundFrame android:id="@+id/grid_cover_frame" android:layout_width="92dp" android:layout_height="138dp"
             android:layout_marginEnd="14dp" android:foreground="@drawable/pc_cover_rim" android:visibility="gone" android:importantForAccessibility="noHideDescendants">
             <com.limelight.ui.NoArtTile android:id="@+id/grid_cover_text" android:layout_width="match_parent" android:layout_height="match_parent"
                 android:importantForAccessibility="no" />
             <ImageView android:id="@+id/grid_cover" android:layout_width="match_parent" android:layout_height="match_parent"
                 android:scaleType="centerCrop" android:importantForAccessibility="no" />
-        </FrameLayout>
+        </com.limelight.ui.RoundFrame>
         <com.limelight.ui.PcScreen android:id="@+id/grid_screen" android:layout_width="76dp" android:layout_height="wrap_content"
             android:layout_marginEnd="14dp" android:importantForAccessibility="noHideDescendants">
             <ImageView android:id="@+id/grid_backdrop" android:layout_width="match_parent" android:layout_height="match_parent"

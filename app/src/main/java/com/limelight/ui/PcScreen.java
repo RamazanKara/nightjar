@@ -5,6 +5,7 @@ import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Outline;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.View;
@@ -40,6 +41,9 @@ public class PcScreen extends FrameLayout {
     private final Paint neck = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint base = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
+    private final Path softClip = new Path();
+    private final RectF softRect = new RectF();
+    private View backdrop;
     private final float density;
     private final int ink;
     private final int onlineRim;
@@ -85,12 +89,27 @@ public class PcScreen extends FrameLayout {
         super.onFinishInflate();
         View cover = findViewById(R.id.grid_backdrop);
         if (cover == null) return;
+        backdrop = cover;
         cover.setOutlineProvider(new ViewOutlineProvider() {
             @Override public void getOutline(View view, Outline outline) {
                 outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), radius);
             }
         });
         cover.setClipToOutline(true);
+    }
+
+    /** The screen clips the cover to its outline; a canvas without a GPU knows none and gets the same round rectangle. */
+    @Override
+    protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+        if (child != backdrop || canvas.isHardwareAccelerated()) return super.drawChild(canvas, child, drawingTime);
+        int saved = canvas.save();
+        softClip.rewind();
+        softRect.set(child.getLeft(), child.getTop(), child.getRight(), child.getBottom());
+        softClip.addRoundRect(softRect, radius, radius, Path.Direction.CW);
+        canvas.clipPath(softClip);
+        boolean more = super.drawChild(canvas, child, drawingTime);
+        canvas.restoreToCount(saved);
+        return more;
     }
 
     /** Whether the PC is away: a dark face and a fainter rim. */
