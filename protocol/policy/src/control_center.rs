@@ -112,24 +112,42 @@ pub struct Gates {
 pub struct Extra {
     pub id: &'static str,
     pub module: Module,
-    gate: fn(&Gates) -> bool,
+    gate: Gate,
+}
+
+/// The PC feature a gated card waits for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Gate {
+    StreamDvr,
+    HdrSdrToneMap,
+    FrameWarp,
+    PartyAudio,
+    InputDeck,
+    QuickSuspend,
 }
 
 impl Extra {
     pub fn allowed(&self, gates: &Gates) -> bool {
-        (self.gate)(gates)
+        match self.gate {
+            Gate::StreamDvr => gates.stream_dvr,
+            Gate::HdrSdrToneMap => gates.hdr_sdr_tone_map,
+            Gate::FrameWarp => gates.frame_warp,
+            Gate::PartyAudio => gates.party_audio,
+            Gate::InputDeck => gates.input_deck,
+            Gate::QuickSuspend => gates.quick_suspend,
+        }
     }
 }
 
 /// Every gated card, in the order its module shows them, after the module's tiles.
 pub const EXTRAS: &[Extra] = &[
-    Extra { id: "tone_map", module: Module::Picture, gate: |g| g.hdr_sdr_tone_map },
-    Extra { id: "frame_warp", module: Module::Picture, gate: |g| g.frame_warp },
-    Extra { id: "party_mix", module: Module::Audio, gate: |g| g.party_audio },
-    Extra { id: "save_clip", module: Module::Clips, gate: |g| g.stream_dvr },
-    Extra { id: "record", module: Module::Clips, gate: |g| g.stream_dvr },
-    Extra { id: "input_deck", module: Module::Controller, gate: |g| g.input_deck },
-    Extra { id: "quick_suspend", module: Module::Power, gate: |g| g.quick_suspend },
+    Extra { id: "tone_map", module: Module::Picture, gate: Gate::HdrSdrToneMap },
+    Extra { id: "frame_warp", module: Module::Picture, gate: Gate::FrameWarp },
+    Extra { id: "party_mix", module: Module::Audio, gate: Gate::PartyAudio },
+    Extra { id: "save_clip", module: Module::Clips, gate: Gate::StreamDvr },
+    Extra { id: "record", module: Module::Clips, gate: Gate::StreamDvr },
+    Extra { id: "input_deck", module: Module::Controller, gate: Gate::InputDeck },
+    Extra { id: "quick_suspend", module: Module::Power, gate: Gate::QuickSuspend },
 ];
 
 pub fn extra(id: &str) -> Option<&'static Extra> {
