@@ -11,6 +11,7 @@ pub(crate) mod design_tokens;
 #[cfg(any(feature = "demo-library", test))]
 pub mod demo;
 mod dialogs;
+pub mod doctor_card;
 pub mod files;
 pub mod glass;
 mod glass_lens;

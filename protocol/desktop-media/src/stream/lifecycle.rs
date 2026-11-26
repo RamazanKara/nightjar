@@ -246,6 +246,7 @@ impl Streaming {
             host_abr_start: None,
             host_abr_stop: None,
             doctor,
+            doctor_v2: doctor_v2::DoctorV2::default(),
             rate_change,
             dvr,
             quality_mode,

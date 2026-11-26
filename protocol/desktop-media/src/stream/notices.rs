@@ -171,6 +171,7 @@ impl Streaming {
                     if self.automatic_bitrate() { self.doctor.trial.clear(); }
                     self.show_toast(toast);
                 }
+                Notice::Doctor(answer) => self.doctor_answer(answer),
                 Notice::HardwareMetrics { generation, result } => {
                     let answer = hardware_answer(&result);
                     match &result {

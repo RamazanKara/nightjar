@@ -242,8 +242,11 @@ fn the_stream_menu_keeps_every_action() {
         "s.set_bitrate()",
         "s.set_bitrate_kept(",
         "s.change_rates()",
-        "s.health_trial(",
-        "s.copy_health()",
+        // The doctor's trial and its undo (the classic `health_trial` on a host without Stream
+        // Doctor 2.0) and Copy report, from the Stream Doctor card.
+        "s.doctor_pick(Pick::Apply(",
+        "s.doctor_pick(Pick::UndoBitrate)",
+        "s.copy_report(",
         "s.set_quality(",
         "s.set_mode(",
         "pads.set_audio(",

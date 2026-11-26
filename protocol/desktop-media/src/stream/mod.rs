@@ -22,6 +22,7 @@ mod system_keys;
 mod bitrate;
 pub mod host_abr;
 pub mod doctor;
+pub mod doctor_v2;
 mod gateway;
 pub mod overlay;
 pub(crate) mod recovery;
@@ -410,6 +411,7 @@ pub struct Streaming {
     host_abr_stop: Option<host_abr::AbrStop>,
     /// The stream doctor: its report in the stream menu and after the stream, and the bitrate trial.
     doctor: doctor::Doctor,
+    doctor_v2: doctor_v2::DoctorV2,
     /// Rate changes over 0x553C, on a stream that takes them.
     pub rate_change: Option<rate_change::RateChange>,
     /// Instant replay over 0x554A, on a stream that offers it.

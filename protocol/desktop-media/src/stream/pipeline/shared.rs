@@ -84,6 +84,8 @@ pub enum Notice {
     HostAbrAction(Option<nightjar_core::http::foundation::AbrAction>),
     /// A step of the stream doctor's bitrate trial came back.
     HealthTrial(super::super::doctor::TrialOutcome),
+    /// The Stream Doctor's read of the host's doctor, or the host's answer to a remedy.
+    Doctor(super::super::doctor_v2::Answer),
     /// The network watcher saw this device change networks; true when it came back after the
     /// route toward the PC was gone (`NetworkLost`).
     NetworkChanged(nightjar_core::session::NetworkHint, bool),

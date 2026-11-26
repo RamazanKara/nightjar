@@ -23,14 +23,17 @@ impl Streaming {
         }
     }
 
-    pub fn set_mode(&mut self, request: Reconfigure) {
-        if self.request_mode(request) {
-            self.quality_ceiling = request;
-            self.settings.width = u32::from(request.width);
-            self.settings.height = u32::from(request.height);
-            self.settings.fps = request.fps_millihz.div_ceil(1000);
-            self.plan.settings = self.settings.clone();
+    /// Asks the PC for `request`; false when it could not be sent (a toast says why).
+    pub fn set_mode(&mut self, request: Reconfigure) -> bool {
+        if !self.request_mode(request) {
+            return false;
         }
+        self.quality_ceiling = request;
+        self.settings.width = u32::from(request.width);
+        self.settings.height = u32::from(request.height);
+        self.settings.fps = request.fps_millihz.div_ceil(1000);
+        self.plan.settings = self.settings.clone();
+        true
     }
 
     pub(super) fn request_mode(&mut self, request: Reconfigure) -> bool {
@@ -386,7 +389,7 @@ impl Streaming {
 
     /// The trial the doctor offers with this report: none while automatic bitrate or quality owns
     /// the bitrate, the host cannot change it mid-stream or another bitrate request runs.
-    fn trial_offer(&self, report: &nightjar_policy::health::Report) -> TrialOffer {
+    pub(super) fn trial_offer(&self, report: &nightjar_policy::health::Report) -> TrialOffer {
         let automatic = self.automatic_bitrate();
         self.doctor.trial.offer(report.can_suggest_bitrate(), self.facts.bitrate_kbps.max(0) as u32, self.facts.runtime_bitrate, automatic, self.bitrate_busy)
     }
@@ -432,7 +435,13 @@ impl Streaming {
 
     /// Copies the doctor's report to this device's clipboard.
     pub fn copy_health(&mut self) {
-        let text = std::ffi::CString::new(self.health().0);
+        let text = self.health().0;
+        self.copy_report(&text);
+    }
+
+    /// Copies a report (the Stream Doctor card's, `doctor_card::report`) to this device's clipboard.
+    pub fn copy_report(&mut self, text: &str) {
+        let text = std::ffi::CString::new(text);
         if text.as_ref().is_ok_and(|text| unsafe { SDL_SetClipboardText(text.as_ptr()) }) {
             self.show_toast(tr(MSG_REPORT_COPIED));
         } else {

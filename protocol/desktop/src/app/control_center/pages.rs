@@ -200,6 +200,7 @@ impl Host<'_> {
         use glyphs::Icon;
         use nightjar_core::http::AppRole;
         use nightjar_desktop_ui::stream_overlay_widgets::bitrate_slider;
+        let window = self.window;
         let s = &mut *self.s;
         let controls = s.menu_controls();
         let adaptive = s.facts.runtime_bitrate && s.facts.role == AppRole::Stream && !s.client_hint_active();
@@ -254,16 +255,7 @@ impl Host<'_> {
                 }
                 if let Some(keep) = keep_to { s.set_bitrate_kept(keep); }
                 if report {
-                    menu_style::fold(ui, "stream-health", Icon::Pulse, tr("Why did my stream stutter?"), |ui| {
-                        let (text, offer) = s.health();
-                        menu_style::text_block(ui, &text);
-                        ui.add_space(theme::space::S);
-                        ui.horizontal_wrapped(|ui| {
-                            if let Some(label) = stream::doctor::offer_label(offer)
-                                && ui.add_enabled_ui(!s.bitrate_busy, |ui| menu_style::button(ui, label)).inner.clicked() { s.health_trial(offer); }
-                            if menu_style::button(ui, tr("Copy report")).clicked() { s.copy_health(); }
-                        });
-                    });
+                    menu_style::fold(ui, "stream-health", Icon::Pulse, tr("Why did my stream stutter?"), |ui| doctor(ui, s, window));
                 }
                 if controls.size_editor {
                     menu_style::fold(ui, "stream-size", Icon::Screen, tr("Stream size"), |ui| {
@@ -427,6 +419,36 @@ impl Host<'_> {
             },
             other => eprintln!("nightjar: the Control Center has no row for {other}"),
         }
+    }
+}
+
+/// The Stream Doctor card inside its fold: the stream's look for this frame, which reads the PC's
+/// doctor while the fold is open (and only then), and what the player picked on it.
+fn doctor(ui: &mut egui::Ui, s: &mut Streaming, window: *mut SDL_Window) {
+    // Not `Action`: `every_bound_key_has_a_handler` looks for shortcut actions by that name.
+    use nightjar_desktop_ui::ui::doctor_card::{self, Action as Asked};
+    use stream::doctor_v2::Pick;
+    let (mut width, mut height) = (0, 0);
+    // SAFETY: the stream's own window, alive while its Control Center draws.
+    unsafe { SDL_GetWindowSizeInPixels(window, &mut width, &mut height) };
+    let look = s.doctor_look((width.max(0) as u32, height.max(0) as u32));
+    let view = doctor_card::View {
+        diagnosis: &look.diagnosis,
+        host: look.host.as_ref(),
+        owner: look.owner,
+        upscaler: look.upscaler,
+        busy: look.busy,
+        undo_bitrate: look.undo_bitrate,
+        undo_resolution: look.undo_resolution,
+        replaced: look.replaced,
+        technical: &look.technical,
+    };
+    match doctor_card::show(ui, &view) {
+        Some(Asked::Apply(remedy)) => s.doctor_pick(Pick::Apply(remedy)),
+        Some(Asked::UndoBitrate) => s.doctor_pick(Pick::UndoBitrate),
+        Some(Asked::UndoResolution) => s.doctor_pick(Pick::UndoResolution),
+        Some(Asked::Copy) => s.copy_report(&doctor_card::report(&view)),
+        None => {}
     }
 }
 
