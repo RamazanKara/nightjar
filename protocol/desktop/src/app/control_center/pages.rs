@@ -386,6 +386,11 @@ impl Host<'_> {
             }
             "usb_devices" => {
                 if let Some(panel) = s.usb.as_mut() {
+                    // Devices usbipd-win still lends since Nightjar closed show without opening the fold.
+                    let (left, giving_back) = panel.usbipd_left();
+                    if nightjar_desktop_ui::stream_overlay_widgets::usb_leftover_notice(ui, left, giving_back) {
+                        panel.give_back_usbipd();
+                    }
                     menu_style::fold(ui, "usb", Icon::Usb, tr("USB devices"), |ui| show_usb_section(ui, panel));
                 } else if let Some(why) = s.usb_refused {
                     // Why there are no devices shows without opening anything.
@@ -439,7 +444,6 @@ fn show_usb_section(ui: &mut egui::Ui, panel: &mut usb::Panel) {
     if let Some(failed) = panel.take_opening_failed() {
         panel.error = Some(failed);
     }
-    let (usbipd_left, usbipd_giving_back) = panel.usbipd_left();
     let local = panel.local().to_vec();
     let attachments = panel.attachments();
     let devices = local
@@ -477,8 +481,9 @@ fn show_usb_section(ui: &mut egui::Ui, panel: &mut usb::Panel) {
         devices,
         failed_attachments,
         error: panel.error.clone(),
-        usbipd_left,
-        usbipd_giving_back,
+        // Above the fold, where it shows without opening it.
+        usbipd_left: 0,
+        usbipd_giving_back: false,
     };
     for action in usb_show(ui, &view) {
         match action {

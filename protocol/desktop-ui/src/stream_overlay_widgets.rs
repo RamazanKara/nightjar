@@ -345,6 +345,20 @@ pub fn usb_show_refusal(ui: &mut egui::Ui, why: &str) {
     crate::menu_style::problem(ui, tr(why));
 }
 
+/// Devices usbipd-win still lends to the PC since Nightjar closed: a notice on the page and the
+/// row that gives them back. Nothing while there are none. Answers whether that row was chosen.
+pub fn usb_leftover_notice(ui: &mut egui::Ui, left: usize, giving_back: bool) -> bool {
+    if left == 0 {
+        return false;
+    }
+    crate::ui::control_center_cards::notice_row(ui, &trf("Still shared through usbipd-win since Nightjar closed: {}", &[&left]));
+    if giving_back {
+        crate::menu_style::note(ui, tr("Giving back…"));
+        return false;
+    }
+    crate::menu_style::action(ui, crate::glyphs::Icon::Usb, tr("Give back to Windows"), None).clicked()
+}
+
 /// The stream controls' USB section rendered from a pure `UsbPanelView`.
 pub fn usb_show(ui: &mut egui::Ui, view: &UsbPanelView) -> Vec<UsbUiAction> {
     let mut actions = Vec::new();
@@ -401,15 +415,8 @@ pub fn usb_show(ui: &mut egui::Ui, view: &UsbPanelView) -> Vec<UsbUiAction> {
             ui.colored_label(crate::theme::ERROR, blocked);
         }
     }
-    if view.usbipd_left > 0 {
-        ui.horizontal(|ui| {
-            ui.label(trf("Still shared through usbipd-win since Nightjar closed: {}", &[&view.usbipd_left]));
-            if view.usbipd_giving_back {
-                ui.weak(tr("Giving back…"));
-            } else if ui.button(tr("Give back to Windows")).clicked() {
-                actions.push(UsbUiAction::GiveBackUsbipd);
-            }
-        });
+    if usb_leftover_notice(ui, view.usbipd_left, view.usbipd_giving_back) {
+        actions.push(UsbUiAction::GiveBackUsbipd);
     }
     for failed in &view.failed_attachments {
         ui.colored_label(crate::theme::ERROR, format!("{}: {}", failed.name, failed.phase_label));
