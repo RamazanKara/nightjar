@@ -58,8 +58,8 @@ public class PcRow extends FrameLayout {
         groupRadius = res.getDimension(R.dimen.nj_radius_panel);
         rowRadius = 14 * density;
         gap = res.getDimensionPixelSize(R.dimen.pc_group_gap);
-        fill.setColor(NightSkyView.groupFill(context));
-        line.setColor(NightSkyView.separator(context));
+        fill.setColor(StageView.groupFill(context));
+        line.setColor(StageView.separator(context));
         line.setStrokeWidth(Math.max(1f, density * .5f));
         rim.setStyle(Paint.Style.STROKE);
         rim.setStrokeWidth(res.getDimension(R.dimen.nj_glass_chrome_solid_rim_width));

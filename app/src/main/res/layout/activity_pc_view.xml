@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- PCs: the night sky, the list over it, and the glass chrome on top. The first child of a GlassHost is what the glass floats
+<!-- PCs: the stage, the list over it, and the glass chrome on top. The first child of a GlassHost is what the glass floats
      over. PcView places the tabs for the form factor and the list under the chrome (PageChrome). -->
 <com.limelight.ui.GlassHost xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/glass_host" android:layout_width="match_parent" android:layout_height="match_parent">
     <FrameLayout android:id="@+id/pc_content" android:layout_width="match_parent" android:layout_height="match_parent"
         android:clipChildren="false" android:clipToPadding="false">
-        <com.limelight.ui.NightSkyView android:id="@+id/pc_sky" android:layout_width="match_parent" android:layout_height="match_parent"
+        <com.limelight.ui.StageView android:id="@+id/pc_stage" android:layout_width="match_parent" android:layout_height="match_parent"
             android:importantForAccessibility="no" />
         <com.limelight.ui.ContentFrame android:id="@+id/pc_list_frame" android:layout_width="match_parent" android:layout_height="match_parent"
             android:maxWidth="@dimen/pcs_max_width" android:clipChildren="false" android:clipToPadding="false">
@@ -38,14 +38,12 @@
                         android:layout_marginStart="@dimen/space_xxl"
                         android:text="@string/discovery_connect_help" />
                 </LinearLayout>
-                <!-- First run: the moon, one word, one moon action. -->
+                <!-- First run: one word in the middle of the stage, and the way to add a PC by hand. -->
                 <ScrollView android:id="@+id/no_pc_found_layout" android:layout_width="match_parent"
                     android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:clipChildren="false"
                     android:paddingStart="@dimen/screen_gutter" android:paddingEnd="@dimen/screen_gutter" android:scrollbars="none">
                     <LinearLayout android:id="@+id/first_run" android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="vertical" android:gravity="center" android:clipChildren="false" android:clipToPadding="false">
-                        <com.limelight.ui.OrbitView android:id="@+id/first_run_orbit" android:layout_width="300dp" android:layout_height="300dp"
-                            app:orbitMoon="true" android:importantForAccessibility="no" />
                         <TextView android:id="@+id/discovery_message" android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:gravity="center" android:text="@string/searching_pc" android:accessibilityLiveRegion="polite"
                             android:textAppearance="@style/TextAppearance.Nightjar.Glass.Size17" android:textColor="?attr/colorOnSurface" />

@@ -187,11 +187,11 @@ public class AllGamesScreenTest {
     }
 
     @Test
-    public void onATelevisionThePageStandsOnTheSkyAndTheGridFadesUnderTheHeading() {
+    public void onATelevisionThePageStandsOnTheStageAndTheGridFadesUnderTheHeading() {
         tower(DOOM, HADES, PORTAL);
         Grid grid = open(null);
-        assertEquals("the night sky of the other pages, not a flat canvas", View.VISIBLE,
-                grid.findViewById(R.id.all_games_sky).getVisibility());
+        assertEquals("the stage of the other pages, not a flat canvas", View.VISIBLE,
+                grid.findViewById(R.id.all_games_stage).getVisibility());
         View rows = list(grid);
         assertTrue("rows fade out at the grid's edge instead of a hard crop", rows.isVerticalFadingEdgeEnabled());
         // Over the glow's room above the first row too, so no row stands unfaded under the focused title.
@@ -202,19 +202,19 @@ public class AllGamesScreenTest {
         // On the real TV the bottom fade ended at the bottom padding's edge, a hard line with bright rows below it.
         assertTrue("rows fade at the top only", rows instanceof TopFadeRecyclerView);
         assertEquals(0f, ReflectionHelpers.<Float>callInstanceMethod(rows, "getBottomFadingEdgeStrength"), 0f);
-        // And the sky stopped at the TV margin, a lighter frame inset from the screen's edge.
+        // And the stage stopped at the TV margin, a lighter frame inset from the screen's edge.
         HomeShellTest.focusAfter(grid, list(grid).getFocusedChild(), View.FOCUS_RIGHT);
-        View sky = grid.findViewById(R.id.all_games_sky);
+        View stage = grid.findViewById(R.id.all_games_stage);
         View content = grid.findViewById(android.R.id.content);
         assertTrue("the TV margin is there", content.getPaddingLeft() > 0);
-        int[] skyAt = new int[2];
+        int[] stageAt = new int[2];
         int[] contentAt = new int[2];
-        sky.getLocationInWindow(skyAt);
+        stage.getLocationInWindow(stageAt);
         content.getLocationInWindow(contentAt);
-        assertEquals("the sky runs edge to edge", contentAt[0], skyAt[0]);
-        assertEquals(contentAt[1], skyAt[1]);
-        assertEquals(content.getWidth(), sky.getWidth());
-        assertEquals(content.getHeight(), sky.getHeight());
+        assertEquals("the stage runs edge to edge", contentAt[0], stageAt[0]);
+        assertEquals(contentAt[1], stageAt[1]);
+        assertEquals(content.getWidth(), stage.getWidth());
+        assertEquals(content.getHeight(), stage.getHeight());
     }
 
     /**

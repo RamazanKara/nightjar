@@ -11,8 +11,8 @@ import android.view.ViewGroup;
 
 import com.limelight.R;
 import com.limelight.ui.GlassPanelDrawable;
-import com.limelight.ui.NightSkyView;
 import com.limelight.ui.PinSlots;
+import com.limelight.ui.StageView;
 
 import org.junit.After;
 import org.junit.Test;
@@ -21,7 +21,7 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 
-/** The PIN stood bare on a grey page with a row-by-row pad: it is a glass panel under the sky, a grid of keys with one focus ring. */
+/** The PIN stood bare on a grey page with a row-by-row pad: it is a glass panel on the stage, a grid of keys with one focus ring. */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 34, application = android.app.Application.class, qualifiers = "w400dp-h800dp-port",
         shadows = com.limelight.PcViewLifecycleTest.NoNativeMoonBridge.class, instrumentedPackages = "com.limelight.nvstream.jni")
@@ -42,19 +42,18 @@ public class PinPadTest {
     }
 
     @Test
-    public void thePanelIsGlassUnderTheSky() {
+    public void thePanelIsGlassOnTheStage() {
         PinLockActivity screen = set();
         assertTrue(screen.findViewById(R.id.pin_panel).getBackground() instanceof GlassPanelDrawable);
-        NightSkyView sky = screen.findViewById(R.id.pin_sky);
-        assertNotNull(sky);
-        assertTrue("the moon stands above a phone's sheet", sky.isMoonShown());
+        StageView stage = screen.findViewById(R.id.pin_stage);
+        assertNotNull(stage);
     }
 
     @Test
     @Config(qualifiers = "w800dp-h400dp-land")
-    public void elsewhereItIsAPanelInTheMiddleWithNoMoonBehindIt() {
+    public void elsewhereItIsAPanelInTheMiddleOfTheSameStage() {
         PinLockActivity screen = set();
-        assertFalse(((NightSkyView) screen.findViewById(R.id.pin_sky)).isMoonShown());
+        assertNotNull(screen.<StageView>findViewById(R.id.pin_stage));
     }
 
     @Test

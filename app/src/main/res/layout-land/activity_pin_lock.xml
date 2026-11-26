@@ -5,7 +5,7 @@
     android:id="@+id/pin_root"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="match_parent">
-    <com.limelight.ui.NightSkyView android:id="@+id/pin_sky"
+    <com.limelight.ui.StageView android:id="@+id/pin_stage"
         android:layout_width="match_parent" android:layout_height="match_parent" />
     <FrameLayout android:id="@+id/pin_panel"
         android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center">

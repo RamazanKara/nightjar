@@ -31,7 +31,7 @@ import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.ui.AppTheme;
 import com.limelight.ui.GlassButton;
 import com.limelight.ui.GlassForm;
-import com.limelight.ui.NightSkyView;
+import com.limelight.ui.StageView;
 import com.limelight.ui.PcRow;
 import com.limelight.ui.PcScreen;
 import com.limelight.ui.TouchTargets;
@@ -266,8 +266,8 @@ public class PcGridAdapter extends GenericGridAdapter<PcView.ComputerObject> {
         boolean card = !(parentView instanceof PcRow);
         boolean running = state == RowState.RUNNING;
 
-        // The glyph on the screen: a crescent while away, a lock until paired, a spinner while looking.
-        int glyph = away ? R.drawable.ic_glass_moon : state == RowState.NOT_PAIRED ? R.drawable.ic_glass_lock : 0;
+        // The glyph on the screen: the standby mark while away, a lock until paired, a spinner while looking.
+        int glyph = away ? R.drawable.ic_glass_power : state == RowState.NOT_PAIRED ? R.drawable.ic_glass_lock : 0;
         imgView.setImageResource(glyph);
         imgView.setImageTintList(ColorStateList.valueOf(away
                 ? MaterialColors.getColor(imgView, com.google.android.material.R.attr.colorOnSurfaceVariant) : Color.WHITE));
@@ -287,7 +287,7 @@ public class PcGridAdapter extends GenericGridAdapter<PcView.ComputerObject> {
         if (card) {
             size(parentView.findViewById(R.id.grid_card), R.dimen.tile_height);
             MaterialCardView cardView = parentView.findViewById(R.id.grid_card);
-            cardView.setCardBackgroundColor(NightSkyView.groupFill(context));
+            cardView.setCardBackgroundColor(StageView.groupFill(context));
             if (AppTheme.isHighContrast(context)) {
                 cardView.setStrokeColor(ContextCompat.getColor(context, R.color.nj_hc_color_rim));
                 cardView.setStrokeWidth(context.getResources().getDimensionPixelSize(R.dimen.nj_glass_chrome_solid_rim_width));
@@ -370,7 +370,7 @@ public class PcGridAdapter extends GenericGridAdapter<PcView.ComputerObject> {
         name.setTextSize(TypedValue.COMPLEX_UNIT_SP, running ? 19 : 17);
     }
 
-    /** One action on a PC, and its look: the moon for Resume, the control for the rest, Pair in the moon's ink. A TV's keys say it instead. */
+    /** One action on a PC, and its look: the amber fill for Resume, the control for the rest, Pair in amber ink. A TV's keys say it instead. */
     private void bindActions(View parent, PcView.ComputerObject obj) {
         boolean television = GlassForm.of(context) == GlassForm.TELEVISION;
         RowState state = obj.rowState();
@@ -389,7 +389,7 @@ public class PcGridAdapter extends GenericGridAdapter<PcView.ComputerObject> {
             });
         } else if (word != 0) {
             action.setText(word);
-            action.setTextColor(state == RowState.NOT_PAIRED ? NightSkyView.moonInk(context)
+            action.setTextColor(state == RowState.NOT_PAIRED ? StageView.accentInk(context)
                     : MaterialColors.getColor(action, com.google.android.material.R.attr.colorOnSurface));
             action.setIconResource(state == RowState.OFFLINE ? R.drawable.ic_glass_power : 0);
             action.setOnClickListener(v -> {

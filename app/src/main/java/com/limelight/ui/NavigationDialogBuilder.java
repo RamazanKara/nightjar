@@ -37,7 +37,7 @@ public final class NavigationDialogBuilder extends MaterialAlertDialogBuilder {
     }
 
     /**
-     * For a dialog that is a task of its own (a pairing PIN): it stands on the sky instead of over the page, so its panel never
+     * For a dialog that is a task of its own (a pairing PIN): it stands on the stage instead of over the page, so its panel never
      * covers the page's heading or a card's edge. Over a stream it stays as any dialog there.
      */
     public NavigationDialogBuilder ownSurface() {
@@ -57,16 +57,16 @@ public final class NavigationDialogBuilder extends MaterialAlertDialogBuilder {
         // The platform's selector is a grey block, which is no focus language of ours.
         ListView list = dialog.getListView();
         if (list != null) list.setSelector(R.drawable.dialog_row_focus);
-        boolean onSky = ownSurface && !overStream;
+        boolean onStage = ownSurface && !overStream;
         if (dialog.getWindow() != null) {
-            // Over a stream the game stays in view around the glass, as around the stream menu; on its own surface the sky
+            // Over a stream the game stays in view around the glass, as around the stream menu; on its own surface the stage
             // is all there is behind it, as around the PIN lock.
-            if (overStream || onSky) dialog.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            if (overStream || onStage) dialog.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
             else dialog.getWindow().setDimAmount(GlassPanelDrawable.dialogBackdropDim(getContext()));
         }
-        // On a page, the page blurs behind the dialog where this device affords it; never over a stream, and not under a sky
+        // On a page, the page blurs behind the dialog where this device affords it; never over a stream, and not under a stage
         // that hides it.
-        if (onSky) DialogSky.under(dialog);
+        if (onStage) DialogStage.under(dialog);
         else PageBlur.behind(dialog);
         // Builds the views now: the buttons exist, and their bar can be laid out for capsules.
         dialog.create();
