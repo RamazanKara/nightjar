@@ -412,6 +412,7 @@ pub fn show(ctx: &Context, state: &mut State, dock: &Dock, frame: &Frame<'_>, pa
     }
     let module = state.module;
     let mut shown = Shown::default();
+    let mut footer_area = Rect::NOTHING;
     egui::Area::new(Id::unique("control-center")).order(Order::Middle).fixed_pos(screen.min).constrain(false).fade_in(false).show(ctx, |ui| {
         ui.set_clip_rect(screen);
         let beside = if g.placement == Placement::Dock { screen.with_max_x(g.panel.left()) } else { screen.with_max_y(g.panel.top()) };
@@ -437,6 +438,7 @@ pub fn show(ctx: &Context, state: &mut State, dock: &Dock, frame: &Frame<'_>, pa
                 });
             });
         }
+        footer_area = footer_rect;
         let used = ui.scope_builder(UiBuilder::new().max_rect(footer_rect), footer).response.rect.height();
         if (used - footer_height).abs() > 0.5 {
             ctx.data_mut(|d| d.insert_temp(footer_id, used));
@@ -444,8 +446,11 @@ pub fn show(ctx: &Context, state: &mut State, dock: &Dock, frame: &Frame<'_>, pa
         }
         rail(ui, state, dock, frame, &g);
     });
+    // A card or the rail gets the focus back on the next opening, never a way out: A right after
+    // opening never leaves the stream, so the first card takes it instead.
     if !frame.sub_page && let Some(id) = ctx.memory(|m| m.focused()) {
-        state.focus = Some(id);
+        let leaving = ctx.read_response(id).is_some_and(|r| footer_area.intersects(r.rect));
+        state.focus = (!leaving).then_some(id);
     }
     shown
 }

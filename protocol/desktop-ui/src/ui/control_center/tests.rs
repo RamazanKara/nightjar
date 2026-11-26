@@ -342,6 +342,28 @@ fn the_focus_returns_to_where_it_was_when_it_opens_again() {
 }
 
 #[test]
+fn a_way_out_that_had_the_focus_does_not_get_it_back_when_it_opens_again() {
+    let ctx = context();
+    let mut demo = Demo::new();
+    demo.settle(&ctx);
+    // Tab down to the footer: Return to stream, Disconnect and Quit game stand under the page.
+    let bottom = |ctx: &Context| focused(ctx).and_then(|id| ctx.read_response(id)).map_or(0.0, |r| r.rect.top());
+    for _ in 0..40 {
+        if bottom(&ctx) > 800.0 - 140.0 {
+            break;
+        }
+        demo.frame(&ctx, key(Key::Tab, Modifiers::NONE));
+    }
+    assert!(bottom(&ctx) > 800.0 - 140.0, "the focus reached the footer");
+    demo.state.closed();
+    for _ in 0..2 {
+        ctx.run_ui(egui::RawInput::default(), |_| {}).textures_delta.clear();
+    }
+    demo.settle(&ctx);
+    assert_eq!(focused(&ctx), Some(stream_menu::card_id("controller_mouse")), "A right after opening never leaves the stream");
+}
+
+#[test]
 fn a_click_on_the_video_returns_to_the_stream_and_one_on_the_dock_does_not() {
     let ctx = context();
     let mut demo = Demo::new();
