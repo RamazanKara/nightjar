@@ -167,6 +167,9 @@ fn the_scan_and_its_words_fit_every_window() {
         assert!((words.center().x - size.x / 2.0).abs() < 1.0, "{size:?}: {words:?}");
         assert!(words.bottom() <= add.top() && add.bottom() <= link.top() && link.bottom() <= size.y, "{size:?}: {words:?} {add:?} {link:?}");
         assert!(focused(&f).contains(add.center()), "{size:?}: Add PC has the focus");
+        // The link's words keep 12 points clear of that focus ring, at its widest (high contrast's).
+        let ring = focused(&f).bottom() + design_tokens::HC_FOCUS_GAP + design_tokens::HC_FOCUS_RING_WIDTH;
+        assert!(link.top() - ring >= 12.0, "{size:?}: {link:?} under a ring that ends at {ring}");
     }
 }
 

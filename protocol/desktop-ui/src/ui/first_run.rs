@@ -38,8 +38,9 @@ const RISE_TUNE: spring::Tune = spring::Tune {
 const CARDS_TO_LINE: f32 = 24.0;
 const LINE_TO_ADD: f32 = 20.0;
 const STEPPED_DOWN_H: f32 = 48.0;
-/// How to connect under Add PC.
-const LINK_GAP: f32 = 8.0;
+/// How to connect under Add PC: its words, which stand in the middle of the link's own height,
+/// keep 12 points clear of Add PC's focus ring (its gap and its width, 7 points in high contrast).
+const LINK_GAP: f32 = 16.0;
 const LINK_H: f32 = 32.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -355,7 +356,7 @@ mod tests {
 
     #[test]
     fn the_pulse_stands_in_the_middle_over_its_words_in_every_window() {
-        let under = 150.0;
+        let under = 158.0;
         for (w, h) in [(1280.0, 800.0), (720.0, 480.0), (2560.0, 1080.0), (853.0, 320.0)] {
             let screen = window(w, h);
             let (center, radius) = pulse_place(screen, under);
