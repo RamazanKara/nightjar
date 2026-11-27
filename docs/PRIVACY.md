@@ -48,7 +48,7 @@ Stream content, input and clipboard transfers are between your device and the
 PC you connect to. When you turn on **Send microphone to the PC**, Nightjar asks
 for microphone access and, during a stream, sends your microphone, encrypted, to
 that PC only. It is not recorded or stored on your device, and it stops when you
-mute it in the stream menu or the stream ends. Pairing exchanges identity
+mute it in the Control Center or the stream ends. Pairing exchanges identity
 information with that PC. Host discovery also uses your local network.
 
 **Guests.** On a PC that offers guests, the device playing reads every few

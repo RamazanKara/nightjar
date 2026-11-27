@@ -30,7 +30,7 @@ The library shows cover art, lists the running game first and otherwise follows 
 
 ## During a stream
 
-Open the stream menu with:
+Open the Control Center with:
 
 | Client | Touch or keyboard | Controller |
 | --- | --- | --- |
@@ -38,13 +38,13 @@ Open the stream menu with:
 | Windows and Linux | **Ctrl+Alt+Shift+Tab** | **Start+Back**, or hold **Guide** for a second |
 | macOS | **Control+Option+Shift+Tab** | **Start+Back**, or hold **Guide** for a second |
 
-The menu is a grid of tiles (Keyboard, PC keyboard, Mouse, Overlay, Shortcuts, Microphone and more), with the rarer entries under **More**; [the stream menu](controls.md#the-stream-menu) describes every item. Which tiles appear depends on the host and the device's permissions.
+It has a rail of modules (Quick, Picture, Audio, Clips, PC, Controller, Guests and Power), each a page of cards: the keyboards, the mouse, the overlay and your shortcuts on Quick, the bitrate and the picture on Picture, the microphone on Audio, and so on. A controller's triggers step through the modules. [The Control Center](controls.md#the-control-center) describes every item. Which modules and cards appear depends on the host and the device's permissions.
 
 - **Disconnect** ends this device's connection and leaves the game running on the PC. Select the same game to resume.
-- **Reconnect stream** under **More** (desktop: **Reconnect**) restarts the connection to the running game.
-- **Quit game**, beside Disconnect under the tiles, asks the host to end the game. It needs the corresponding permission and a confirmation.
+- **Reconnect stream** on the Power page (desktop: **Reconnect**) restarts the connection to the running game.
+- **Quit game**, beside Disconnect under every page, asks the host to end the game. It needs the corresponding permission and a confirmation.
 
-Hosts such as Apollo, Vibepollo and Rubylight also accept clipboard text and commands configured on the host, both from the stream menu. A PC whose host supports sharing adds clipboard sync, images, files, shared folders and USB devices; see [sharing](sharing.md).
+Hosts such as Apollo, Vibepollo and Rubylight also accept clipboard text and commands configured on the host, both from the Control Center. A PC whose host supports sharing adds clipboard sync, images, files, shared folders and USB devices; see [sharing](sharing.md).
 
 ## Next
 

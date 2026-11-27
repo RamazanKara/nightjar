@@ -6,15 +6,15 @@ Nightjar implements the DualSense waveform extension that [Vibepollo](https://gi
 
 ## Setup
 
-1. Enable **Settings → Controls → USB DualSense driver** and **USB DualSense audio and haptics** on Android. Both are off by default. Nightjar for Windows and Linux has one switch, **Settings → Controls → USB DualSense audio and haptics** (off by default); the Android permission steps below do not apply there.
+1. Enable **Settings → Controller → USB DualSense driver** and **USB DualSense audio and haptics** on Android. Both are off by default. Nightjar for Windows and Linux has one switch, **Settings → Controller → USB DualSense audio and haptics** (off by default); the Android permission steps below do not apply there.
 2. Connect the controller by USB, grant Android's USB access request and start a new stream. Reconnect the controller and stream after changing the option.
 3. Enable DualSense haptics on the host. On a Windows Rubylight host, select the bundled **USB audio and haptics support** installer component and set **Controller type** (**Sound & controls → Controllers** in its console) to **Automatic** or **DualSense with waveform haptics (USB/IP)**. See [host setup](https://github.com/RamazanKara/Rubylight/blob/main/docs/dualsense-haptics.md). For waveform-only support with Vibepollo, follow [its host instructions](https://github.com/Nonary/Vibepollo/blob/8b3ea1c4a41c383752475ffa551168a16b024d48/docs/windows-dualsense-haptics.md).
 4. Enable native DualSense support in a compatible game. Steam Input translation can prevent the game from seeing the native controller and its audio endpoint.
-5. For controller microphone input, enable microphone streaming and grant Android's recording permission. Select the virtual DualSense microphone in the host game or voice application. The controller mute button and the stream menu share one mute setting; host mute commands and Android's global microphone mute also stop USB capture.
+5. For controller microphone input, enable microphone streaming and grant Android's recording permission. Select the virtual DualSense microphone in the host game or voice application. The controller mute button and the Control Center's **Microphone** share one mute setting; host mute commands and Android's global microphone mute also stop USB capture.
 
 Plugging a headset into the controller sends normal stream sound to it, mixed with any controller-specific audio. Android's media volume controls normal stream sound. Surround streams are mixed to stereo for the headset. Unplugging the headset returns normal sound to Android's usual output. With multiple controllers, the lowest numbered connected headset receives normal stream sound.
 
-Preparing a controller before launch does not change the microphone source. The ordinary Android microphone continues until the host accepts controller capture and the USB microphone opens. If that capture fails or the last controller disconnects, the ordinary microphone can resume only while recording remains authorized and unmuted. Host mute, the stream mute setting, Android's microphone mute and revoked input access prevent this fallback from starting capture. Disconnecting a host-muted controller keeps the fallback muted until you unmute it in the stream menu.
+Preparing a controller before launch does not change the microphone source. The ordinary Android microphone continues until the host accepts controller capture and the USB microphone opens. If that capture fails or the last controller disconnects, the ordinary microphone can resume only while recording remains authorized and unmuted. Host mute, the stream mute setting, Android's microphone mute and revoked input access prevent this fallback from starting capture. Disconnecting a host-muted controller keeps the fallback muted until you unmute it in the Control Center.
 
 For gyro aiming and radial menus, enable controller motion in Nightjar and configure the game's Steam Input layout on the host. Steam provides [gyro behavior](https://partner.steamgames.com/doc/features/steam_controller/input_source_modes) and [radial menus](https://partner.steamgames.com/doc/features/steam_controller/radial_menus) using the motion and touchpad input Nightjar forwards. Native DualSense effects and Steam Input translation may require different per-game settings.
 
@@ -34,7 +34,7 @@ After reproducing the problem, use **Settings → App → Report a problem** wit
 
 The report includes USB HID readiness, the waveform initialization stage, queued controller capabilities and the first received waveform/adaptive-trigger packet in the report. These distinguish USB setup failures from feedback that never arrives from the host. A successful queue result confirms local submission, not that the game produced effects.
 
-A pending USB controller's input waits for its type and capabilities to be queued; rejected startup announcements are retried. Opening the stream menu or unplugging that controller does not bypass this ordering. Buttons already held by an existing controller or on-screen controls can still release while the new controller's announcement is pending.
+A pending USB controller's input waits for its type and capabilities to be queued; rejected startup announcements are retried. Opening the Control Center or unplugging that controller does not bypass this ordering. Buttons already held by an existing controller or on-screen controls can still release while the new controller's announcement is pending.
 
 ## Limitations
 

@@ -18,7 +18,7 @@ Nightjar's menus and its on-screen PC keyboard work with a controller alone. Thi
 
 Other buttons (Select, Guide, stick clicks, digital trigger keys, C and Z) do nothing in the keyboard and send nothing to the PC. **Nintendo button layout** and the controller's button mapping apply here as they do in games. The button that closes the keyboard does not reach the PC, including its repeats and release.
 
-To open the PC keyboard with only a controller, open the stream menu (**Start+Back+LB+RB**, or hold **Guide** for a second) and select the **PC keyboard** tile. (**Ctrl+Alt+Shift+K** needs a physical keyboard, and the finger-tap gestures need a touch screen.)
+To open the PC keyboard with only a controller, open the Control Center (**Start+Back+LB+RB**, or hold **Guide** for a second) and select **PC keyboard** on its Quick page. (**Ctrl+Alt+Shift+K** needs a physical keyboard, and the finger-tap gestures need a touch screen.)
 
 Only one controller steers the keyboard at a time: a push on another controller takes over, and a second controller resting at center does not cancel a direction held on the first. Unplugging a controller, closing the keyboard or losing input stops any held direction.
 

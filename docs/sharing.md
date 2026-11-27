@@ -2,7 +2,7 @@
 
 [Nightjar docs](index.md) › [Everyday use](index.md#everyday-use) · [All defaults](settings.md) · [Host feature support](PARITY-MATRIX.md)
 
-A PC whose host supports sharing ([Rubylight](https://github.com/RamazanKara/Rubylight) 3.0) can exchange more than the stream with this device: its clipboard, a file-transfer folder, the folders it shares, and USB devices plugged into this device. Each feature needs the host to offer it and to allow it for this device on the **Devices** page of its web UI. When a permission or setting is missing, Nightjar names what to change on the PC. Hosts without these features keep the classic clipboard transfer in the stream menu where they offer it.
+A PC whose host supports sharing ([Rubylight](https://github.com/RamazanKara/Rubylight) 3.0) can exchange more than the stream with this device: its clipboard, a file-transfer folder, the folders it shares, and USB devices plugged into this device. Each feature needs the host to offer it and to allow it for this device on the **Devices** page of its web UI. When a permission or setting is missing, Nightjar names what to change on the PC. Hosts without these features keep the classic clipboard transfer in the Control Center where they offer it.
 
 Everything on this page applies to Android and to Nightjar for Windows and Linux; differences are noted.
 
@@ -10,22 +10,24 @@ Everything on this page applies to Android and to Nightjar for Windows and Linux
 
 ### Clipboard sync
 
-**Settings → Controls → Clipboard sync** (off by default) shares copied text both ways while you stream, without opening the stream menu: text copied on this device goes on the PC's clipboard, and text copied on the PC comes here.
+**Settings → Controls → Clipboard sync** (off by default) shares copied text both ways while you stream, without opening the Control Center: text copied on this device goes on the PC's clipboard, and text copied on the PC comes here.
 
 - The PC must offer clipboard sync and let this device read and write its clipboard. If it doesn't, the stream says so once.
 - Android lets an app read the clipboard only while it is in front, so a copy made in another app goes to the PC once you are back in the stream.
-- It carries text. A copy too large for the sync, or an image copied on the PC, names the stream menu entry that carries it.
+- It carries text. A copy too large for the sync, or an image copied on the PC, names the Control Center entry that carries it.
 
-### Text and images from the stream menu
+<a id="text-and-images-from-the-stream-menu"></a>
 
-The stream menu moves the clipboard by hand, when the PC allows it: text with the **Send clipboard** and **Get clipboard** tiles, images under **More**.
+### Text and images from the Control Center
+
+The Control Center's Quick page moves the clipboard by hand, when the PC allows it: text with the **Send clipboard** and **Get clipboard** cards, images with the rows under them.
 
 | Entry | What it does |
 | --- | --- |
 | Send clipboard | Puts the text on this device's clipboard on the PC's. |
 | Get clipboard | Copies the PC's text here. |
-| Send clipboard image to host | Sends a copied image to the PC (desktop: **Send image to PC**). |
-| Copy host clipboard image | Copies the image on the PC's clipboard here (desktop: **Copy PC image here**). |
+| Send clipboard image to PC | Sends a copied image to the PC (desktop: **Send image to PC**). |
+| Copy PC clipboard image | Copies the image on the PC's clipboard here (desktop: **Copy PC image here**). |
 
 Images travel as PNG and use the same clipboard permissions as text. An image too large for this device or for the PC says which side refused it, and an image that can't be read is refused with a message rather than sent.
 
@@ -33,7 +35,7 @@ Images travel as PNG and use the same clipboard permissions as text. An image to
 
 **Files** sends files to the PC and downloads files from its file-transfer folder.
 
-- **Android:** open it from a PC's options (long-press the PC, or its three dots), from Home, or from the stream menu's **More**. From the stream menu it opens its own screen; the game keeps running on the PC. You can also share files to **Send to PC** from another app.
+- **Android:** open it from a PC's options (long-press the PC, or its three dots), from Home, or from the Control Center's PC page. From the Control Center it opens its own screen; the game keeps running on the PC. You can also share files to **Send to PC** from another app.
 - **Windows and Linux:** **Files** is on the PC's options. Downloads land in your Downloads folder.
 
 The page shows the PC's folder with its free space and a list of transfers. Each transfer shows its progress and can be cancelled or retried; cancelling ends it at once, even when the PC has stopped answering. **Clear finished** removes completed transfers from the list.
@@ -58,12 +60,12 @@ A PC that shares no folders, or a host without shared folders, says so and point
 
 USB forwarding hands a USB device plugged into this device, such as a drawing tablet or a security key, to the PC until you detach or unplug it or the stream ends.
 
-- **Android:** turn on **Settings → Controls → Forward USB devices** (off by default, in its **USB** group). During a stream, the menu's **More** then shows **USB devices**.
-- **Windows, macOS and Linux:** turn on **Settings → Controls → Forward USB devices** (off by default); **USB devices** is then in the stream menu when the PC offers it. Isochronous endpoints (such as webcams, USB audio devices and composite controllers/adapters with an audio interface) are supported across all three platforms: on Windows through Windows's built-in WinUSB driver (no extra driver install beyond WinUSB), on macOS through `libusb`, and on Linux through your distribution's `usbip` tools with an automatic `libusb` fallback when `usbip-host` is unavailable (see [Steam Deck](steam-deck.md#what-the-flatpak-cant-do)). On Windows, the list names the driver of any device that uses another driver instead of offering it: with [usbipd-win](https://github.com/dorssel/usbipd-win) installed, **Forward with usbipd-win** forwards it while Windows keeps its own driver (Windows asks for administrator rights to share it, and again to stop; Nightjar only ever unshares what it shared itself; after a crash the launcher asks once whether to give leftover shares back, and **USB devices** offers it after that); otherwise install WinUSB for that device (for example with Zadig). On Linux, a device you have no permission to open goes through Linux's own USB/IP tools after a password prompt, instead of needing a udev rule first.
+- **Android:** turn on **Settings → Controller → Forward USB devices** (off by default, in its **USB** group). During a stream, the Control Center's Controller page then shows **USB devices**.
+- **Windows, macOS and Linux:** turn on **Settings → Controller → Forward USB devices** (off by default, in its **USB** group); **USB devices** is then on the Control Center's Controller page when the PC offers it. Isochronous endpoints (such as webcams, USB audio devices and composite controllers/adapters with an audio interface) are supported across all three platforms: on Windows through Windows's built-in WinUSB driver (no extra driver install beyond WinUSB), on macOS through `libusb`, and on Linux through your distribution's `usbip` tools with an automatic `libusb` fallback when `usbip-host` is unavailable (see [Steam Deck](steam-deck.md#what-the-flatpak-cant-do)). On Windows, the list names the driver of any device that uses another driver instead of offering it: with [usbipd-win](https://github.com/dorssel/usbipd-win) installed, **Forward with usbipd-win** forwards it while Windows keeps its own driver (Windows asks for administrator rights to share it, and again to stop; Nightjar only ever unshares what it shared itself; after a crash the launcher asks once whether to give leftover shares back, and **USB devices** offers it after that); otherwise install WinUSB for that device (for example with Zadig). On Linux, a device you have no permission to open goes through Linux's own USB/IP tools after a password prompt, instead of needing a udev rule first.
 - **Automatic:** tick **Automatic** for a device in **USB devices** (Android) or in the stream controls' USB list (Windows and Linux), and Nightjar attaches it by itself: as soon as the PC is known to take USB devices, and whenever it is plugged in during a stream, recognised by its vendor and product on any port. Untick it to attach that device by hand again.
 - **Always allow (Android):** while USB forwarding is on, Android's USB permission request offers **Always allow**; with it ticked, Android keeps the answer after Nightjar restarts and stops asking for that device.
 
-The entry appears only when the PC offers USB forwarding (on a Rubylight PC, **Sound & controls → USB devices → USB forwarding** in its console) and allows it for this device; otherwise the stream menu says why. Hubs are not listed; on Android, forwarding a controller that Nightjar's built-in USB driver is using releases it automatically for the stream, and on Windows, macOS and Linux a forwarded controller stops being one of the stream's gamepads until it is detached. A device that can't be attached names the reason: no permission, USB forwarding off on the PC, the PC's limit of attached devices, its USB driver, a timeout or a device that stopped answering.
+The entry appears only when the PC offers USB forwarding (on a Rubylight PC, **Sound & controls → USB devices → USB forwarding** in its console) and allows it for this device; otherwise the Control Center says why. The PC's side is in Rubylight's [USB forwarding](https://github.com/RamazanKara/Rubylight/blob/main/docs/usb-forwarding.md) guide. Hubs are not listed; on Android, forwarding a controller that Nightjar's built-in USB driver is using releases it automatically for the stream, and on Windows, macOS and Linux a forwarded controller stops being one of the stream's gamepads until it is detached. A device that can't be attached names the reason: no permission, USB forwarding off on the PC, the PC's limit of attached devices, its USB driver, a timeout or a device that stopped answering.
 
 ## Privacy
 

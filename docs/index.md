@@ -29,7 +29,7 @@ New to Nightjar? Read the [quick start](quick-start.md): install a host, add the
 | I want to | Read |
 | --- | --- |
 | Find my way around Home, a game's page and the PC's options | [Home and the session menu](console.md) |
-| Use the menu during a stream, or leave a game | [The stream menu](controls.md#the-stream-menu) · [Leaving a game](controls.md#leaving-a-game) |
+| Use the Control Center during a stream, or leave a game | [The Control Center](controls.md#the-control-center) · [Leaving a game](controls.md#leaving-a-game) |
 | Wake or put the PC to sleep | [Wake a sleeping PC](pairing.md#wake-a-sleeping-pc) · [The PC's power](console.md#the-pcs-power-and-host-updates) |
 | Start games from Beacon, ES-DE, Daijisho, Pegasus or the TV's home screen | [Launcher integrations](FRONTENDS.md) |
 | Share the clipboard, files, folders or USB devices with the PC | [Clipboard, files, folders and USB devices](sharing.md) |

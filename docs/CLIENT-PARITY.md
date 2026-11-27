@@ -137,7 +137,7 @@ Android needs no scan-line check: SurfaceFlinger never flips mid-scan.
 | Echo cancellation | Yes | Yes | Yes | **Automatic**, **On** or **Off**. Automatic turns it off with headphones. Linux needs the PipeWire or PulseAudio echo-cancel module. |
 | Microphone gain | Yes | Yes | Yes | |
 | Noise suppression, automatic gain, microphone button | Yes | No | No | |
-| The PC's night mode and headphone surround | Yes | Yes | Yes | In the stream menu, on hosts that offer them. |
+| The PC's night mode and headphone surround | Yes | Yes | Yes | On the Control Center's Audio page, on hosts that offer them. |
 
 ## Controls
 
@@ -145,7 +145,7 @@ Android needs no scan-line check: SurfaceFlinger never flips mid-scan.
 | --- | --- | --- | --- | --- |
 | Controllers and per-model mapping | Yes | Yes | Yes | The desktop drives rumble, motion, touchpads, LEDs, battery and DualSense features through SDL's gamepad API. |
 | Controller test, stick and trigger dead zones, Back button: Back, Stream menu, Guide | Yes | Yes | Yes | The desktop's **Controller buttons** page can also set dead zones per controller. |
-| Steam Deck Game Mode (gamescope) | N/A | N/A | Yes | Under gamescope the Flatpak opens fullscreen without a border; the pointer hides while the controller is used, and Start+Back opens the stream menu since Steam keeps the Guide button. [Steam Deck](steam-deck.md) |
+| Steam Deck Game Mode (gamescope) | N/A | N/A | Yes | Under gamescope the Flatpak opens fullscreen without a border; the pointer hides while the controller is used, and Start+Back opens the Control Center since Steam keeps the Guide button. [Steam Deck](steam-deck.md) |
 | Extra buttons: touchpad click, Share / Capture, paddles | Yes | Yes | Yes | The desktop maps every SDL button. |
 | DualSense, Xbox and Switch Pro USB drivers | Yes | N/A | N/A | SDL handles these controllers on the desktop. |
 | DualSense speaker and haptics over Bluetooth | No | Yes | Yes | The desktop sends Sony's Bluetooth audio reports through its own HID handle. Android without root lets no app send those reports to a Bluetooth controller, so there they need USB. [DualSense audio and haptics](dualsense-haptics.md#bluetooth-on-windows-and-linux) |
@@ -168,7 +168,7 @@ Each sharing feature appears only when the host reports it and allows it for thi
 
 | Feature | Android | Windows | Linux | Notes |
 | --- | --- | --- | --- | --- |
-| Clipboard text from the menu, host commands | Yes | Yes | Yes | |
+| Clipboard text from the Control Center, host commands | Yes | Yes | Yes | |
 | Clipboard sync | Yes | Yes | Yes | |
 | Clipboard images | Yes | Yes | Yes | |
 | Files | Yes | Yes | Yes | |
@@ -212,5 +212,5 @@ Our test devices are a Retroid Pocket 6 (Snapdragon, Android 13), a Galaxy Z Fol
 | Keyboard layout reported to the PC | Windows, 2026-10-28 | The PC logged the reported layout. |
 | Clipboard sync and images | Retroid, 2026-10-28 | Text both ways, including accents and emoji; a PNG with alpha both ways. |
 | Shared folders | Retroid, 2026-10-28 | Browse, byte-exact download, upload, and cancelling a large upload; 36 of 36 host-side checks. |
-| USB forwarding | Retroid and Windows laptop, 2026-10-28 | The stream menu row appears only when the PC allows USB for this device. On Windows a mouse attached, enumerated on the PC and detached. |
+| USB forwarding | Retroid and Windows laptop, 2026-10-28 | The Control Center row appears only when the PC allows USB for this device. On Windows a mouse attached, enumerated on the PC and detached. |
 | Performance overlay | Retroid, 2026-10-28 | Debug shows frame pacing, vsyncs per frame and the timeline. |

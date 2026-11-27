@@ -2,7 +2,7 @@
 
 [Nightjar docs](index.md) › [Troubleshooting](index.md#troubleshooting)
 
-Find the symptom, make one change and try again. For performance problems, first open the stream menu's **Diagnostics** tile, choose **Debug** and use **Copy stats**, so you can compare the numbers before and after the change. The first three tables describe the Android app; [Nightjar for Windows and Linux](#nightjar-for-windows-and-linux) has its own table.
+Find the symptom, make one change and try again. For performance problems, first open **Diagnostics** on the Control Center's Picture page, choose **Debug** and use **Copy stats**, so you can compare the numbers before and after the change. The first three tables describe the Android app; [Nightjar for Windows and Linux](#nightjar-for-windows-and-linux) has its own table.
 
 ## Add and pair a host
 
@@ -16,8 +16,8 @@ Start on the same local network, with the PC awake and its host running, and fol
 | Pairing is gone after a restore | Backups and device transfers exclude the client identity. | Pair the restored installation again and revoke the old device on the host. |
 | Paired, but no games appear | Listing apps is not permitted, the device is disabled, or the host's library is empty. | On hosts with per-device permissions, enable the device and **List applications** in the host's web UI. Check the host's app list. |
 | Video works, controls do not | An input permission is missing, or the device has a view-only role. | Grant the controller, mouse, keyboard, touch or pen permission you need. Start a normal game rather than Remote Monitor. |
-| A Fire TV remote cannot control the PC | The remote's D-pad and Select send keyboard input during a stream. | Grant keyboard input to this device on the host. Back and Menu open Nightjar's stream menu; use a controller for games that accept only controllers. See [TV remotes](controls.md#tv-and-fire-tv-remotes). |
-| A handheld's Back button works in the app but not during a stream | The handheld sends Back from a controller input device. | Set **Settings → Controls → Back button** to **Stream menu**, then reconnect. See [handheld Back](controls.md#physical-back-on-a-handheld). |
+| A Fire TV remote cannot control the PC | The remote's D-pad and Select send keyboard input during a stream. | Grant keyboard input to this device on the host. Back and Menu open Nightjar's Control Center; use a controller for games that accept only controllers. See [TV remotes](controls.md#tv-and-fire-tv-remotes). |
+| A handheld's Back button works in the app but not during a stream | The handheld sends Back from a controller input device. | Set **Settings → Controller → Back button** to **Stream menu**, then reconnect. See [handheld Back](controls.md#physical-back-on-a-handheld). |
 | Clipboard or commands are missing | The host does not support them, or the device lacks the permission. | Use a host that supports them, such as Apollo, Vibepollo or Rubylight, and grant **Send clipboard**, **Read clipboard** or **Server commands**. Commands must be configured on the host. |
 
 Nightjar uses the ports the host advertises, including custom port offsets; check the host's configuration rather than a generic port list. Local streaming works regardless of the result of the Internet connectivity check.
@@ -93,7 +93,7 @@ On Windows and Linux, **Connection test** (**Test speed**) under **Settings → 
 
 1. Reproduce the problem and note the app version, the device and its Android version, the host's version and the time.
 2. Open **Settings → App → Report a problem**, select **Share** and choose an app in Android's share sheet. On a TV, or anywhere the share sheet has no app for files, select **Send to PC** instead: the report goes into the file transfer folder of the PC you pick (the host needs file transfer on and Upload files for this device).
-3. Where relevant, add **stream menu → Diagnostics → Copy stats** and **Settings → Advanced → Export latency CSV**. Copy stats includes every Debug value.
+3. Where relevant, add **Control Center → Picture → Diagnostics → Copy stats** and **Settings → Advanced → Export latency CSV**. Copy stats includes every Debug value.
 4. For pairing and host problems, long-press the PC, open **PC settings… → View details → Copy debug info**, and add the host's log.
 5. Describe what you did, what you expected and what happened in a [Nightjar issue](https://github.com/RamazanKara/nightjar/issues).
 

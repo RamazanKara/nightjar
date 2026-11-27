@@ -49,10 +49,11 @@ Nightjar opens fullscreen without a window border. The controller drives everyth
 | Launcher | D-pad or left stick | Moves the focus; the first press focuses the page's first item |
 | Launcher | A / B | Selects / goes back or closes |
 | Launcher | L1 / R1 | Switches tabs |
-| Stream | **Start+Back** | Opens the stream menu |
-| Stream menu | B | Returns to the stream |
+| Stream | **Start+Back** | Opens the Control Center |
+| Control Center | LT / RT | Steps through its modules |
+| Control Center | B | Returns to the stream |
 
-Steam keeps the Steam button in Game Mode, so the Hold Guide shortcut does not reach Nightjar there; Start+Back opens the stream menu instead, and the first seconds of each stream say so. The trackpads move the pointer, and the pointer hides again as soon as the controller is used. The Quick Access menu (…) still opens Steam's own overlay.
+Steam keeps the Steam button in Game Mode, so the Hold Guide shortcut does not reach Nightjar there; Start+Back opens the Control Center instead, and the first seconds of each stream say so. The trackpads move the pointer, and the pointer hides again as soon as the controller is used. The Quick Access menu (…) still opens Steam's own overlay.
 
 ## HDR
 

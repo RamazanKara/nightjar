@@ -52,7 +52,7 @@ The microphone's mute state carries over automatic recovery, screen-lock resume,
 | Preserve detail | Lowers frame rate before resolution. |
 | Extend battery life | Reduces work even on a healthy connection, toward at most 60 fps and a 1080-pixel short edge, within the minimums. Further pressure lowers it more. |
 
-During a stream, **stream menu → More → Automatic stream quality** overrides the mode for that PC; **Use app settings** removes the override. The minimums come from the app settings and apply from the next stream.
+During a stream, **Automatic stream quality** on the Control Center's Picture page overrides the mode for that PC; **Use app settings** removes the override. The minimums come from the app settings and apply from the next stream.
 
 ### Requirements
 
