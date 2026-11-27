@@ -64,4 +64,5 @@
     <string name="pad_dpad_right">Direcional para a direita</string>
     <string name="pad_edit_mirror">Espelhar esquerda e direita</string>
     <string name="pad_edit_this_controller">Só com %1$s</string>
+    <string name="pad_edit_touch_area">Área de toque</string>
 </resources>

@@ -257,6 +257,16 @@ public final class ModernController {
             boolean visible = shown && editor == null && shows(layout, control);
             if (!visible) view.release();
             view.setVisibility(visible ? View.VISIBLE : View.GONE);
+            float reach = layout.spec(control).reach;
+            View area = view.reachLayer();
+            boolean reaching = visible && reach > PadLayout.MIN_REACH;
+            // A touch area past the box (#172) joins the frame only once the layout grows one, under the controls'
+            // glows and so under every control; at the default the frame holds what it always held.
+            int under = frame.indexOfChild(view.haloLayer());
+            if (reaching && area.getParent() == null && under >= 0) {
+                frame.addView(area, under, new FrameLayout.LayoutParams(0, 0, Gravity.TOP | Gravity.START));
+            }
+            area.setVisibility(reaching ? View.VISIBLE : View.GONE);
             if (width == 0 || height == 0) continue;
             layout.bounds(control, width, height, density, box);
             FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) view.getLayoutParams();
@@ -267,6 +277,15 @@ public final class ModernController {
             view.setLayoutParams(params);
             // Its glow's view: the box grown by the glow's reach on every side.
             around(view.haloLayer(), params, view.haloReach());
+            // Its touch area: the box grown to the reach, centred on it.
+            if (area.getVisibility() == View.VISIBLE) {
+                FrameLayout.LayoutParams grown = (FrameLayout.LayoutParams) area.getLayoutParams();
+                grown.width = Math.round(params.width * reach);
+                grown.height = Math.round(params.height * reach);
+                grown.leftMargin = params.leftMargin - (grown.width - params.width) / 2;
+                grown.topMargin = params.topMargin - (grown.height - params.height) / 2;
+                area.setLayoutParams(grown);
+            }
             View knob = view.knobLayer();
             if (knob != null) {
                 // The control's box grown by the knob's overhang on every side; the control keeps the box.
@@ -346,6 +365,7 @@ public final class ModernController {
         for (PadControlView view : views.values()) {
             frame.removeView(view);
             frame.removeView(view.haloLayer());
+            frame.removeView(view.reachLayer());
             if (view.knobLayer() != null) frame.removeView(view.knobLayer());
         }
         views.clear();

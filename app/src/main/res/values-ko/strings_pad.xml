@@ -64,4 +64,5 @@
     <string name="pad_dpad_right">방향키 오른쪽</string>
     <string name="pad_edit_mirror">좌우 대칭 이동</string>
     <string name="pad_edit_this_controller">%1$s 사용 시에만</string>
+    <string name="pad_edit_touch_area">터치 영역</string>
 </resources>

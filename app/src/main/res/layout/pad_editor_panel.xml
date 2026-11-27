@@ -248,6 +248,52 @@
                     android:textColor="@color/night_on_surface" />
             </LinearLayout>
 
+            <!-- How far around its box a control takes touches (#172): 100 % is the box, as before. -->
+            <LinearLayout
+                android:id="@+id/pad_studio_reach_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/pad_edit_touch_area"
+                    android:textAppearance="@style/TextAppearance.Nightjar.Label"
+                    android:textColor="@color/night_on_surface_variant" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/pad_editor_reach"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:contentDescription="@string/pad_edit_touch_area"
+                    android:stepSize="25"
+                    android:valueFrom="100"
+                    android:valueTo="300"
+                    app:labelBehavior="gone"
+                    app:thumbColor="@color/night_on_surface"
+                    app:thumbElevation="0dp"
+                    app:thumbTrackGapSize="0dp"
+                    app:tickVisible="false"
+                    app:trackColorActive="@color/night_primary"
+                    app:trackColorInactive="@color/nj_pad_studio_inspector_rim"
+                    app:trackHeight="@dimen/nj_size_slider_track"
+                    app:trackStopIndicatorSize="0dp" />
+
+                <TextView
+                    android:id="@+id/pad_studio_reach_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="56dp"
+                    android:maxLines="1"
+                    android:gravity="end"
+                    android:importantForAccessibility="no"
+                    android:textAppearance="@style/TextAppearance.Nightjar.Label"
+                    android:textColor="@color/night_on_surface" />
+            </LinearLayout>
+
             <!-- The picked control: Split or Join, Hide, and for the pointer touchpad its two modes. -->
             <LinearLayout
                 android:id="@+id/pad_editor_control"

@@ -70,4 +70,5 @@
     <string-array name="pad_glyph_names"><item>@string/pad_glyph_xbox</item><item>@string/pad_glyph_playstation</item><item>@string/pad_glyph_nintendo</item></string-array>
     <string name="pad_edit_mirror">Mirror left and right</string>
     <string name="pad_edit_this_controller">Only with %1$s</string>
+    <string name="pad_edit_touch_area">Touch area</string>
 </resources>

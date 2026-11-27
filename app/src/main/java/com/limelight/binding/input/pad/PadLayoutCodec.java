@@ -53,10 +53,13 @@ final class PadLayoutCodec {
                     .append(String.format(Locale.ROOT, "%.3f", spec.scale())).append(',')
                     .append(spec.opacity).append(',')
                     .append(spec.hidden ? '1' : '0');
-            if (spec.widthScale != spec.heightScale) {
+            // The touch area is the ninth field, so the width and height go before it even when they are equal.
+            boolean reach = spec.reach != PadLayout.MIN_REACH;
+            if (spec.widthScale != spec.heightScale || reach) {
                 out.append(',').append(String.format(Locale.ROOT, "%.3f", spec.widthScale))
                         .append(',').append(String.format(Locale.ROOT, "%.3f", spec.heightScale));
             }
+            if (reach) out.append(',').append(String.format(Locale.ROOT, "%.2f", spec.reach));
         }
         return out.toString();
     }
@@ -122,6 +125,8 @@ final class PadLayoutCodec {
                         spec.heightScale = h;
                     }
                 }
+                // The touch area (#172), after them; a build before it ignores the field and keeps the box.
+                if (fields.length >= 9) spec.reach = PadLayout.clampReach(Float.parseFloat(fields[8]));
                 layout.spec(control).copyFrom(spec);
             } catch (NumberFormatException ignored) {
                 // Skip this entry and keep the rest.

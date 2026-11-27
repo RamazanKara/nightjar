@@ -64,4 +64,5 @@
     <string name="pad_dpad_right">Steuerkreuz rechts</string>
     <string name="pad_edit_mirror">Links und rechts spiegeln</string>
     <string name="pad_edit_this_controller">Nur mit %1$s</string>
+    <string name="pad_edit_touch_area">Berührungsfläche</string>
 </resources>

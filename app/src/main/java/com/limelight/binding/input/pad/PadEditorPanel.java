@@ -55,6 +55,11 @@ final class PadEditorPanel {
     private final PadStudioInspector inspector;
     private final View panel, tray, sizeRow, opacityRow, controlSection, pointerMode, mouseCard, cameraCard, thisGame;
     private final MaterialSwitch thisController;
+    /** The Touch area row (#172): its slider in percent of the box, and the value at its end. */
+    private final View reachRow;
+    private final Slider reach;
+    private final TextView reachText;
+    private boolean settingReach;
     private final LinearLayout layoutSection, options, addSection;
     private final TextView selection, sizeText, opacityText, hint;
     private final MaterialButton hide, split, join;
@@ -136,6 +141,9 @@ final class PadEditorPanel {
         gameSwitch.setOnCheckedChangeListener((button, checked) -> editor.setPerGame(checked));
         thisController = panel.findViewById(R.id.pad_editor_this_controller);
         opacityText = panel.findViewById(R.id.pad_studio_opacity_value);
+        reachRow = panel.findViewById(R.id.pad_studio_reach_row);
+        reach = panel.findViewById(R.id.pad_editor_reach);
+        reachText = panel.findViewById(R.id.pad_studio_reach_value);
         // The app's 7.0 slider: a round thumb on the thin track, and a ring around it while a controller or a
         // keyboard has it, as wide as a finger's touch. Its value stands at the row's end, so none floats over it;
         // TalkBack reads the same text.
@@ -148,6 +156,16 @@ final class PadEditorPanel {
         opacity.addOnChangeListener((slider, value, fromUser) -> {
             opacityText.setText(percent(Math.round(value)));
             if (fromUser && !settingOpacity) editor.setOpacity(Math.round(value));
+        });
+        // The Touch area slider looks and reads as the opacity one.
+        reach.setThumbRadius(thumb / 2);
+        reach.setHaloRadius(Math.round(PadLayout.MIN_TOUCH_DP / 2 * density));
+        reach.setHaloTintList(ColorStateList.valueOf(ColorUtils.setAlphaComponent(
+                ContextCompat.getColor(context, R.color.night_primary), 0x55)));
+        reach.setLabelFormatter(value -> percent(Math.round(value)));
+        reach.addOnChangeListener((slider, value, fromUser) -> {
+            reachText.setText(percent(Math.round(value)));
+            if (fromUser && !settingReach) editor.setReach(Math.round(value));
         });
     }
 
@@ -368,6 +386,10 @@ final class PadEditorPanel {
         opacity.setValue(Math.max(PadLayout.MIN_OPACITY, Math.min(PadLayout.MAX_OPACITY, Math.round(spec.opacity / 5f) * 5)));
         settingOpacity = false;
         opacityText.setText(percent(Math.round(opacity.getValue())));
+        settingReach = true;
+        reach.setValue(Math.max(100, Math.min(300, Math.round(spec.reach * 4) * 25)));
+        settingReach = false;
+        reachText.setText(percent(Math.round(reach.getValue())));
         // The tray shows the picked control, or with none one of the layout's trays: the Add tiles, or every
         // control's size and opacity with the glyphs and the game. With neither the dock is its bar alone.
         boolean picked = selected != null;
@@ -378,6 +400,7 @@ final class PadEditorPanel {
         tray.setVisibility(picked || adding || more ? View.VISIBLE : View.GONE);
         sizeRow.setVisibility(picked || more ? View.VISIBLE : View.GONE);
         opacityRow.setVisibility(picked || more ? View.VISIBLE : View.GONE);
+        reachRow.setVisibility(picked || more ? View.VISIBLE : View.GONE);
         controlSection.setVisibility(picked ? View.VISIBLE : View.GONE);
         layoutSection.setVisibility(adding || more ? View.VISIBLE : View.GONE);
         addSection.setVisibility(adding ? View.VISIBLE : View.GONE);

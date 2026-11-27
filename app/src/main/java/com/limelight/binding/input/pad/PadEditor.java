@@ -357,6 +357,19 @@ final class PadEditor extends FrameLayout {
         surface.invalidate();
     }
 
+    /**
+     * The Touch area slider (#172), in percent of the box: the picked control's, or every control's. A drag through
+     * many values is one Undo step.
+     */
+    void setReach(int percent) {
+        checkpoint(selected != null ? selected : draft);
+        for (PadLayout.Control control : PadLayout.Control.values()) {
+            if (!editable(control) || (selected != null && control != selected)) continue;
+            draft.setReach(control, percent / 100f);
+        }
+        surface.invalidate();
+    }
+
     /** Hides the picked control, which leaves the surface for the Add tiles but stays picked, so Show undoes it. */
     void toggleHidden() {
         if (selected == null) return;

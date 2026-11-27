@@ -64,4 +64,5 @@
     <string name="pad_dpad_right">Croix directionnelle droite</string>
     <string name="pad_edit_mirror">Symétrie gauche/droite</string>
     <string name="pad_edit_this_controller">Uniquement avec %1$s</string>
+    <string name="pad_edit_touch_area">Zone tactile</string>
 </resources>

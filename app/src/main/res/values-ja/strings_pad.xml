@@ -64,4 +64,5 @@
     <string name="pad_dpad_right">十字キー 右</string>
     <string name="pad_edit_mirror">左右をミラーリング</string>
     <string name="pad_edit_this_controller">%1$s のときだけ</string>
+    <string name="pad_edit_touch_area">タッチ範囲</string>
 </resources>

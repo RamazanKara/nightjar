@@ -124,6 +124,11 @@ public final class PadLayout {
     public static final float MIN_SCALE = .5f, MAX_SCALE = 100f;
     public static final int MIN_OPACITY = 0, MAX_OPACITY = 100;
     /**
+     * A control's touch area as a multiple of its drawn box (Nightjar #172): 1 is the box itself, as before; past it
+     * a finger that lands around the control still works it ({@link PadControlView.ReachLayer}).
+     */
+    public static final float MIN_REACH = 1f, MAX_REACH = 3f;
+    /**
      * The longest side of the default unit: a tablet's controls stop growing past a large phone's. It sets the
      * default sizes only; a control resized in the editor can still fill the whole surface.
      */
@@ -146,6 +151,8 @@ public final class PadLayout {
         public float cx = Float.NaN, cy = Float.NaN, widthScale = 1, heightScale = 1;
         public int opacity = MAX_OPACITY;
         public boolean hidden;
+        /** The touch area as a multiple of the box, {@link #MIN_REACH} to {@link #MAX_REACH}; saved as the ninth field. */
+        public float reach = MIN_REACH;
         /** The control's own default for {@link #hidden}; a spec that matches it is not saved. */
         final boolean defaultHidden;
 
@@ -169,11 +176,12 @@ public final class PadLayout {
 
         void copyFrom(Spec other) {
             cx = other.cx; cy = other.cy; widthScale = other.widthScale; heightScale = other.heightScale;
-            opacity = other.opacity; hidden = other.hidden;
+            opacity = other.opacity; hidden = other.hidden; reach = other.reach;
         }
 
         boolean isDefault() {
-            return !placed() && widthScale == 1 && heightScale == 1 && opacity == MAX_OPACITY && hidden == defaultHidden;
+            return !placed() && widthScale == 1 && heightScale == 1 && opacity == MAX_OPACITY && hidden == defaultHidden
+                    && reach == MIN_REACH;
         }
     }
 
@@ -394,6 +402,15 @@ public final class PadLayout {
     static float[][] memberBoxes(Control cluster, float left, float top, float width, float height, float surfaceWidth,
                                  float surfaceHeight, float density) {
         return PadLayoutClusters.memberBoxes(cluster, left, top, width, height, surfaceWidth, surfaceHeight, density);
+    }
+
+    /** Sets a control's touch area, kept between {@link #MIN_REACH} and {@link #MAX_REACH}. */
+    public void setReach(Control control, float reach) {
+        spec(control).reach = clampReach(reach);
+    }
+
+    static float clampReach(float reach) {
+        return Float.isNaN(reach) ? MIN_REACH : clamp(reach, MIN_REACH, MAX_REACH);
     }
 
     public void setOpacity(Control control, int opacity) {

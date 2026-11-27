@@ -64,4 +64,5 @@
     <string name="pad_dpad_right">Yön tuşu sağ</string>
     <string name="pad_edit_mirror">Solu ve sağı yansıt</string>
     <string name="pad_edit_this_controller">Yalnızca %1$s ile</string>
+    <string name="pad_edit_touch_area">Dokunma alanı</string>
 </resources>

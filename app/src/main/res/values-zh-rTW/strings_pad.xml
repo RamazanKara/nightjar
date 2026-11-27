@@ -64,4 +64,5 @@
     <string name="pad_dpad_right">方向鍵右</string>
     <string name="pad_edit_mirror">左右鏡像</string>
     <string name="pad_edit_this_controller">僅限 %1$s</string>
+    <string name="pad_edit_touch_area">觸控範圍</string>
 </resources>
