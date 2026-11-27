@@ -105,6 +105,7 @@ fn dock_now(s: &Streaming, overlay: &StreamOverlay, pads: &Gamepads, saved: usiz
 /// A page of the Control Center that no module draws (Session and graphics, Shortcuts & help):
 /// it stands in the dock's frame with the rail at rest, as a page a card opened does, and brings
 /// its own ways back, so no footer is pinned under it.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn show_page(ctx: &egui::Context, s: &Streaming, overlay: &mut StreamOverlay, pads: &Gamepads, saved: usize, title: &str, line: &str, page: impl FnOnce(&mut egui::Ui)) {
     let dock = dock_now(s, overlay, pads, saved);
     let frame = center::Frame { title, line, surface: surface(ctx), input: overlay.input, sub_page: true };
