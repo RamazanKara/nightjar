@@ -24,6 +24,9 @@ pub(crate) struct StreamOverlay {
     pub(crate) menu_hotkeys: Vec<nightjar_policy::stream_menu::Hotkey>,
     /// The game's cover from the launcher's PC, while the launch curtain is down.
     pub(crate) curtain_art: Option<nightjar_desktop_ui::hosts::Art>,
+    /// Whether the previous overlay pass had the Control Center open, so closing it flushes
+    /// egui's platform cursor reset once instead of leaving `PointingHand` stuck.
+    pub(crate) menu_was_visible: bool,
 }
 
 impl StreamOverlay {
@@ -98,6 +101,9 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     }
     let curtain = s.curtain_view();
     if !s.overlay_visible && toast.is_none() && !input_only && !s.menu_visible && curtain.is_none() && !mic_only {
+        if std::mem::take(&mut overlay.menu_was_visible) {
+            gui.platform(window, &egui::PlatformOutput::default());
+        }
         s.kms_overlay_hidden();
         return false;
     }
@@ -117,6 +123,9 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     .then(|| compact_with_device_info(s));
     let digest = overlay_digest(s, mode, live, &title, toast.as_deref(), gui.surface(window, renderer), compact_device_line.as_ref());
     if !gui::overlay_must_run(gui.overlay_shown(), digest, live, gui.input_pending(), gui.animating()) {
+        if std::mem::take(&mut overlay.menu_was_visible) {
+            gui.platform(window, &egui::PlatformOutput::default());
+        }
         if !s.kms_overlay_keeps_frame() {
             s.kms_clear_overlay_canvas();
             gui.overlay_repaint(renderer);
@@ -128,9 +137,20 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
         let ctx = ui.ctx().clone();
         // The curtain in the root layer, opaque over the picture; the menu and the toasts draw over it.
         if let Some(view) = &curtain {
-            let scene = ui::launch_curtain::Scene { game: &s.facts.app_name, pc: &s.facts.host_name, host_id: s.host_id, app_id: s.app().id, art: overlay.curtain_art.as_ref(), view };
+            let go_hint = overlay.input.go(pads.swap_face_buttons);
+            let cancel_hint = overlay.input.back(pads.swap_face_buttons);
+            let scene = ui::launch_curtain::Scene {
+                game: &s.facts.app_name,
+                pc: &s.facts.host_name,
+                host_id: s.host_id,
+                app_id: s.app().id,
+                art: overlay.curtain_art.as_ref(),
+                view,
+                go_hint: &go_hint,
+                cancel_hint: &cancel_hint,
+            };
             match ui::launch_curtain::show(ui, &scene) {
-                Some(ui::launch_curtain::Pressed::ShowScreen) => s.curtain_show_screen(),
+                Some(ui::launch_curtain::Pressed::ShowScreen) => s.curtain_show_screen(pads),
                 Some(ui::launch_curtain::Pressed::Cancel) => s.curtain_cancel(),
                 None => {}
             }
@@ -224,9 +244,10 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
             ui::stream_hud::toast(&ctx, text);
         }
     });
-    if s.menu_visible {
+    if s.menu_visible || overlay.menu_was_visible {
         gui.platform(window, &output.platform_output);
     }
+    overlay.menu_was_visible = s.menu_visible;
     s.kms_clear_overlay_canvas();
     gui.overlay_paint(renderer, output, digest);
     s.kms_overlay_drawn(gui.overlay_bounds());

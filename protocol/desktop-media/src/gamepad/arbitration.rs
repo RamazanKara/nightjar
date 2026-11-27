@@ -82,8 +82,7 @@ impl Gamepads {
         for id in plan.pause {
             let Some((_, identity)) = open.iter().find(|(p, _)| *p == id).cloned() else { continue };
             eprintln!("nightjar: controller {}: forwarded over USB to the PC; paused here", id.0);
-            if let Some(queue) = queue.as_deref_mut() { self.release_mouse(id, queue); }
-            let slot = self.removed(id);
+            let slot = self.removed_with(id, queue.as_deref_mut());
             if let (Some(slot), Some(queue)) = (slot, queue.as_deref_mut()) { self.send_removed(slot, queue); }
             self.paused.push((id, identity));
         }

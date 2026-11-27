@@ -99,7 +99,7 @@ public final class DesktopGestures {
         if (observedParent != null) observedParent.addOnLayoutChangeListener(parentLayoutListener);
     }
 
-    private void syncBounds() {
+    public void syncBounds() {
         int vw = view.getWidth(), vh = view.getHeight();
         if (vw <= 0 || vh <= 0) return;
         ViewParent rawParent = view.getParent();
@@ -109,8 +109,8 @@ public final class DesktopGestures {
             int ch = parent.getHeight() - parent.getPaddingTop() - parent.getPaddingBottom();
             if (cw > 0 && ch > 0) {
                 viewport.setBounds(vw, vh, cw, ch,
-                        view.getLeft() - parent.getPaddingLeft(),
-                        view.getTop() - parent.getPaddingTop());
+                        view.getLeft() + view.pictureOffsetX() - parent.getPaddingLeft(),
+                        view.getTop() + Math.round(view.pictureOffsetY() + view.keyboardPan()) - parent.getPaddingTop());
                 apply();
                 return;
             }

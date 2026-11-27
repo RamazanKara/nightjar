@@ -47,6 +47,7 @@ public class StreamMenuSuspendSectionTest {
         boolean offered = true;
         final List<String> said = new ArrayList<>();
         int refreshed;
+        int suspended;
 
         @Override public boolean offered() { return offered; }
 
@@ -65,6 +66,8 @@ public class StreamMenuSuspendSectionTest {
         @Override public void say(CharSequence text) { said.add(text.toString()); }
 
         @Override public void refreshMenu() { refreshed++; }
+
+        @Override public void onSuspended() { suspended++; }
     }
 
     private static List<StreamMenu.Item> tiles(StreamMenuSuspendSection section, NvApp.Role role) {
@@ -92,6 +95,7 @@ public class StreamMenuSuspendSectionTest {
 
         transport.reply("pc", "quick_suspend.suspend", REFUSED);
         section.choose(StreamMenu.Item.SUSPEND_GAME);
+        assertEquals(0, host.suspended);
         assertEquals(Arrays.asList(context.getString(R.string.quick_suspend_refused_anti_cheat)), host.said);
         assertEquals("a refusal leaves the game as it was", Arrays.asList(StreamMenu.Item.SUSPEND_GAME),
                 tiles(section, NvApp.Role.STREAM));
@@ -99,6 +103,7 @@ public class StreamMenuSuspendSectionTest {
         transport.reply("pc", "quick_suspend.suspend", SUSPENDED);
         section.choose(StreamMenu.Item.SUSPEND_GAME);
         assertTrue(section.paused());
+        assertEquals(1, host.suspended);
         assertEquals(context.getString(R.string.quick_suspend_paused), host.said.get(1));
         assertEquals(Arrays.asList(StreamMenu.Item.RESUME_GAME), tiles(section, NvApp.Role.STREAM));
 

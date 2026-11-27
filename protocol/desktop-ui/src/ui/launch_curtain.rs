@@ -38,6 +38,9 @@ pub struct Scene<'a> {
     /// The cover, when the launcher has it; the game's tile otherwise.
     pub art: Option<&'a Art>,
     pub view: &'a View,
+    /// Active input-device hints for Show PC screen and Cancel (`InputSource::go` / `back`).
+    pub go_hint: &'a [crate::glyphs::Piece],
+    pub cancel_hint: &'a [crate::glyphs::Piece],
 }
 
 impl Scene<'_> {
@@ -162,12 +165,20 @@ fn words(ui: &mut Ui, screen: Rect, cover: Rect, scene: &Scene<'_>) -> Option<Pr
     let mut pressed = None;
     ui.scope_builder(UiBuilder::new().max_rect(row).layout(Layout::top_down(Align::Center)), |ui| {
         ui.spacing_mut().item_spacing.y = space::M;
-        if scene.view.dismissible
-            && button_at_least(ui, Some(Id::unique("curtain-show-screen")), None, curtain_words(SHOW_SCREEN), None, Tone::Primary, Size::CONTROL, SHOW_LEAST).clicked()
-        {
-            pressed = Some(Pressed::ShowScreen);
+        if scene.view.dismissible {
+            let show_btn = button_at_least(ui, Some(Id::unique("curtain-show-screen")), None, curtain_words(SHOW_SCREEN), None, Tone::Primary, Size::CONTROL, SHOW_LEAST);
+            if !scene.go_hint.is_empty() {
+                crate::glyphs::paint(ui, pos2(show_btn.rect.right() + space::S, show_btn.rect.center().y), scene.go_hint);
+            }
+            if show_btn.clicked() {
+                pressed = Some(Pressed::ShowScreen);
+            }
         }
-        if button_at_least(ui, Some(Id::unique("curtain-cancel")), None, tr("Cancel"), None, Tone::Quiet, Size::CONTROL, CANCEL_LEAST).clicked() {
+        let cancel_btn = button_at_least(ui, Some(Id::unique("curtain-cancel")), None, tr("Cancel"), None, Tone::Quiet, Size::CONTROL, CANCEL_LEAST);
+        if !scene.cancel_hint.is_empty() {
+            crate::glyphs::paint(ui, pos2(cancel_btn.rect.right() + space::S, cancel_btn.rect.center().y), scene.cancel_hint);
+        }
+        if cancel_btn.clicked() {
             pressed = Some(Pressed::Cancel);
         }
     });
@@ -191,12 +202,30 @@ mod tests {
     /// The curtain over a white frame for a few frames at 1280×800, as the stream's overlay draws
     /// it; `click` names a button to press and release on the way.
     fn draw(view: &View, click: Option<&str>) -> Drawn {
+        draw_with_hints(view, click, &[], &[])
+    }
+
+    fn draw_with_hints(
+        view: &View,
+        click: Option<&str>,
+        go_hint: &[crate::glyphs::Piece],
+        cancel_hint: &[crate::glyphs::Piece],
+    ) -> Drawn {
         theme::own_look(Look::Night);
         let ctx = egui::Context::default();
         theme::apply(&ctx);
         theme::set_over_video(&ctx, true);
         let screen = Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0));
-        let scene = Scene { game: "Open World", pc: "Living Room PC", host_id: 7, app_id: 3, art: None, view };
+        let scene = Scene {
+            game: "Open World",
+            pc: "Living Room PC",
+            host_id: 7,
+            app_id: 3,
+            art: None,
+            view,
+            go_hint,
+            cancel_hint,
+        };
         let (mut target, mut pressed) = (None, None);
         let (mut shapes, mut textures) = (Vec::new(), egui::TexturesDelta::default());
         for frame in 0..6 {
@@ -286,6 +315,17 @@ mod tests {
         assert!(german.contains("Epic Games") && german != "Epic Games wants you to sign in", "{german}");
         let windows = Attention { words: UAC, launcher: None, title: String::new() };
         assert_eq!(with_lang(Lang::En, || attention_line(&windows)), UAC.en);
+    }
+
+    #[test]
+    fn button_hints_follow_active_input_source() {
+        use crate::glyphs::Piece;
+        let view = View { stage: Some(OPENING), attention: None, dismissible: true };
+        let go = [Piece::Face("A")];
+        let back = [Piece::Face("B")];
+        let drawn = draw_with_hints(&view, None, &go, &back);
+        assert!(has(&drawn, "Show PC screen") && has(&drawn, "Cancel"));
+        assert!(has(&drawn, "A") && has(&drawn, "B"), "{:?}", drawn.texts);
     }
 
     /// The curtain's stage and its card over a white frame, for the eye:

@@ -41,6 +41,9 @@ public final class StreamMenuSuspendSection {
 
         /** An open stream menu shows the new state. */
         void refreshMenu();
+
+        /** The game entered the suspended state: stop any active controller vibration. */
+        default void onSuspended() {}
     }
 
     private final Context context;
@@ -91,7 +94,9 @@ public final class StreamMenuSuspendSection {
             }
             NativeQuickSuspend read = answer;
             host.ui(() -> {
+                boolean wasPaused = paused();
                 if (read != null && !read.refused()) state = read;
+                if (paused() && !wasPaused) host.onSuspended();
                 host.refreshMenu();
             });
         });
@@ -135,6 +140,7 @@ public final class StreamMenuSuspendSection {
         boolean wasPaused = paused();
         state = answer;
         if (paused() && !wasPaused) {
+            host.onSuspended();
             host.say(context.getString(R.string.quick_suspend_paused));
         } else if (wasPaused && NativeQuickSuspend.READY.equals(answer.state)) {
             host.say(context.getString(R.string.quick_suspend_resumed));

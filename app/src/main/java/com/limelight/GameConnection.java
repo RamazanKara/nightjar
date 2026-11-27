@@ -412,7 +412,10 @@ final class GameConnection {
             }
             dropConnectingCover();
             // Stays over the stream while the game starts on the PC, when the launch has a curtain.
-            if (game.spinner != null) launchCurtain.hold(game.spinner);
+            if (game.spinner != null) {
+                game.spinner.setOnMenuListener(game::showStreamMenuFromController);
+                launchCurtain.hold(game.spinner);
+            }
             game.connected = true;
             game.videoOutput.updateCompositorHeartbeat();
             startHostLossWatch();

@@ -57,8 +57,13 @@ public final class ConnectingScreen {
     private final View cancel;
     private final View stage;
     private final View panel;
+    private Runnable onMenu;
     private boolean failed;
     private volatile boolean dismissed;
+
+    public void setOnMenuListener(Runnable onMenu) {
+        this.onMenu = onMenu;
+    }
 
     private ConnectingScreen(Activity activity, String title, String pc, Runnable onCancel) {
         this.activity = activity;
@@ -109,11 +114,43 @@ public final class ConnectingScreen {
         dialog.setOnCancelListener(ignored -> onCancel.run());
         cancel.setOnClickListener(v -> dialog.cancel());
         DpadEchoFilter echoes = new DpadEchoFilter();
+        boolean[] touchShowArmed = {false};
         dialog.setOnKeyListener((target, key, event) -> {
             if (echoes.drop(event)) return true;
-            if (!event.hasNoModifiers() || (key != KeyEvent.KEYCODE_BUTTON_B && key != KeyEvent.KEYCODE_ESCAPE)) return false;
-            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) dialog.onBackPressed();
-            return true;
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                InputSource source = InputSource.of(event);
+                if (source != null) InputSource.remember(source);
+            }
+            if (!event.hasNoModifiers()) return false;
+            if (key == KeyEvent.KEYCODE_BUTTON_B || key == KeyEvent.KEYCODE_ESCAPE) {
+                touchShowArmed[0] = false;
+                if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) dialog.onBackPressed();
+                return true;
+            }
+            if (onMenu != null && (key == KeyEvent.KEYCODE_BUTTON_MODE || key == KeyEvent.KEYCODE_MENU)) {
+                touchShowArmed[0] = false;
+                if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) onMenu.run();
+                return true;
+            }
+            if (!failed && (key == KeyEvent.KEYCODE_BUTTON_A || key == KeyEvent.KEYCODE_DPAD_CENTER
+                    || key == KeyEvent.KEYCODE_ENTER || key == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+                View show = dialog.findViewById(R.id.conn_show_screen);
+                if (event.getAction() == KeyEvent.ACTION_DOWN && dialog.getCurrentFocus() == null
+                        && show != null && show.getVisibility() == View.VISIBLE && show.isEnabled()) {
+                    touchShowArmed[0] = true;
+                    show.requestFocus();
+                    return true;
+                }
+                if (touchShowArmed[0] && event.getAction() == KeyEvent.ACTION_UP) {
+                    touchShowArmed[0] = false;
+                    if (!event.isCanceled() && show != null
+                            && show.getVisibility() == View.VISIBLE && show.isEnabled()) {
+                        show.performClick();
+                    }
+                    return true;
+                }
+            }
+            return false;
         });
         host.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             if (r - l == or - ol && b - t == ob - ot) return;

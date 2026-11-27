@@ -81,7 +81,9 @@ final class PadReachLayer extends View {
             return;
         }
         float onX = onBox(target.getWidth(), localX), onY = onBox(target.getHeight(), localY);
-        if (target.control.shape == PadLayout.Shape.STICK) shifts.put(pointer, new float[] {onX - localX, onY - localY});
+        if (target.control.shape == PadLayout.Shape.STICK || target.control.shape == PadLayout.Shape.PAD) {
+            shifts.put(pointer, new float[] {onX - localX, onY - localY});
+        }
         target.down(pointer, onX, onY, event.getEventTime());
     }
 
@@ -125,7 +127,7 @@ final class PadReachLayer extends View {
             int pointer = targets.keyAt(i);
             PadControlView target = targets.valueAt(i);
             PadLayout.Shape shape = target.control.shape;
-            if (shape == PadLayout.Shape.PAD || shape == PadLayout.Shape.TOUCHPAD) target.release();
+            if (shape == PadLayout.Shape.STICK || shape == PadLayout.Shape.PAD || shape == PadLayout.Shape.TOUCHPAD) target.release();
             else target.up(pointer, time);
         }
         targets.clear();

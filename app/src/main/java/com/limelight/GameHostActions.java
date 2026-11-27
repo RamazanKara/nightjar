@@ -91,6 +91,10 @@ final class GameHostActions {
         @Override public void refreshMenu() {
             menu.refreshStreamMenu();
         }
+
+        @Override public void onSuspended() {
+            if (game.controllerHandler != null) game.controllerHandler.stopAllRumble();
+        }
     }
 
     void resetHostAudio() {

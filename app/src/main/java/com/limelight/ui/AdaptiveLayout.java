@@ -177,8 +177,13 @@ public final class AdaptiveLayout {
                     windowInsets.getInsets(WindowInsetsCompat.Type.systemBars()), materialTop);
         }
         int margin = television && !streaming ? Math.round(24 * density) : 0;
-        // A focused card scales up and draws its outline past its frame: let it use the margin, not be cut by it.
-        if (margin > 0 && root instanceof android.view.ViewGroup) ((android.view.ViewGroup) root).setClipToPadding(false);
+        // A focused card scales up and draws its outline past its frame, and a shifted/zoomed stream picture or
+        // local cursor can enter the Safe fit / cutout margin: let them draw there instead of clipping at padding.
+        if ((margin > 0 || streaming) && root instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) root;
+            group.setClipToPadding(false);
+            if (streaming) group.setClipChildren(false);
+        }
         int width = root.getWidth();
         int height = root.getHeight();
         // A screen with glass runs edge to edge: its host lays the chrome and lists out in the safe area.

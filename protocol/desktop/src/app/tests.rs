@@ -96,21 +96,13 @@ fn ceil_ms_and_stream_sleep_never_truncate_sub_ms_pad_wait_to_zero() {
 
 #[test]
 fn gamepad_activity_ignores_stick_jitter_and_passive_sensors() {
-    assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_BUTTON_DOWN, None, None));
-    assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION, None, None));
-    assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_ADDED, None, None));
-    assert!(!is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_AXIS_MOTION, Some(0), None));
-    assert!(!is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_AXIS_MOTION, Some(1024), None));
-    assert!(!is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_AXIS_MOTION, Some(-1024), None));
-    assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_AXIS_MOTION, Some(1025), None));
-    assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_AXIS_MOTION, Some(-12000), None));
-    assert!(!is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, None), "accel ignored");
-    assert!(!is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, Some(0.012)), "resting gyro ignored");
-    assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, Some(0.035)), "2 deg/s aiming counts");
+    assert!(!stream::direct_motion::is_gyro_peak_active(None), "accel ignored");
+    assert!(!stream::direct_motion::is_gyro_peak_active(Some(0.012)), "resting gyro ignored");
+    assert!(stream::direct_motion::is_gyro_peak_active(Some(0.035)), "2 deg/s aiming counts");
     let tilted = Some(2.0_f32.to_radians() / 3.0_f32.sqrt());
-    assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, tilted), "2 deg/s over three axes");
-    assert!(!is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, Some(f32::NAN)));
-    assert!(is_gamepad_activity_parts(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, None, Some(0.5)), "active gyro wakes");
+    assert!(stream::direct_motion::is_gyro_peak_active(tilted), "2 deg/s over three axes");
+    assert!(!stream::direct_motion::is_gyro_peak_active(Some(f32::NAN)));
+    assert!(stream::direct_motion::is_gyro_peak_active(Some(0.5)), "active gyro wakes");
 
     // SAFETY: zero-initialized SDL_Event is valid plain data.
     let make_event = |kind: SDL_EventType| -> SDL_Event {
@@ -118,6 +110,17 @@ fn gamepad_activity_ignores_stick_jitter_and_passive_sensors() {
         ev.r#type = kind.0;
         ev
     };
+    let mut activity = stream::direct_motion::PadActivity::default();
+    assert!(activity.is_active(&make_event(SDL_EVENT_GAMEPAD_BUTTON_DOWN)));
+    assert!(activity.is_active(&make_event(SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION)));
+    assert!(!activity.is_active(&make_event(SDL_EVENT_GAMEPAD_ADDED)), "hotplug alone stays at idle cadence");
+    let mut threshold_axis = make_event(SDL_EVENT_GAMEPAD_AXIS_MOTION);
+    threshold_axis.gaxis.which = SDL_JoystickID(3);
+    threshold_axis.gaxis.axis = 1;
+    threshold_axis.gaxis.value = 1023;
+    assert!(!activity.is_active(&threshold_axis));
+    threshold_axis.gaxis.value = 1024;
+    assert!(activity.is_active(&threshold_axis));
     for idle_kind in [
         SDL_EVENT_GAMEPAD_SENSOR_UPDATE,
         SDL_EVENT_SENSOR_UPDATE,
@@ -149,13 +152,36 @@ fn gamepad_activity_ignores_stick_jitter_and_passive_sensors() {
     }
 
     let mut jitter = make_event(SDL_EVENT_GAMEPAD_AXIS_MOTION);
+    jitter.gaxis.axis = SDL_GAMEPAD_AXIS_LEFTX.0 as u8;
     jitter.gaxis.value = 300;
     assert!(!launcher_event_wakes_frame(&jitter, false, [false; 4]));
-    jitter.gaxis.value = 4000;
+    jitter.gaxis.value = 16000;
     assert!(!launcher_event_wakes_frame(&jitter, false, [false; 4]));
     assert!(launcher_event_wakes_frame(&jitter, false, [true, false, false, false]));
-    jitter.gaxis.value = 4001;
+    jitter.gaxis.value = 16001;
     assert!(launcher_event_wakes_frame(&jitter, false, [false; 4]));
+    jitter.gaxis.axis = SDL_GAMEPAD_AXIS_RIGHTX.0 as u8;
+    assert!(!launcher_event_wakes_frame(&jitter, false, [false; 4]), "right stick does not navigate launcher");
+
+    // Stream wait ignores joystick update-complete, passive sensor noise, and resting stick drift.
+    assert!(!stream_event_wakes_wait(SDL_EVENT_JOYSTICK_UPDATE_COMPLETE, false, true));
+    assert!(!stream_event_wakes_wait(SDL_EVENT_GAMEPAD_UPDATE_COMPLETE, false, true));
+    assert!(!stream_event_wakes_wait(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, false, true));
+    assert!(!stream_event_wakes_wait(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, true, false));
+    assert!(stream_event_wakes_wait(SDL_EVENT_GAMEPAD_SENSOR_UPDATE, true, true));
+    assert!(!stream_event_wakes_wait(SDL_EVENT_GAMEPAD_AXIS_MOTION, false, true));
+    assert!(stream_event_wakes_wait(SDL_EVENT_GAMEPAD_AXIS_MOTION, true, true));
+    assert!(stream_event_wakes_wait(SDL_EVENT_MOUSE_MOTION, false, false));
+
+    // PadActivity uses per-axis delta so a resting tilted stick with 1-LSB ADC jitter goes idle.
+    let mut activity = stream::direct_motion::PadActivity::default();
+    let mut axis = make_event(SDL_EVENT_GAMEPAD_AXIS_MOTION);
+    axis.gaxis.which = SDL_JoystickID(7);
+    axis.gaxis.axis = 0;
+    axis.gaxis.value = 2500;
+    assert!(activity.is_active(&axis), "initial deflection past threshold counts");
+    axis.gaxis.value = 2505;
+    assert!(!activity.is_active(&axis), "resting stick ADC jitter does not pin 1000 Hz polling");
 }
 
 #[test]

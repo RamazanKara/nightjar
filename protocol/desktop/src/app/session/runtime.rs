@@ -95,6 +95,20 @@ impl App {
         key_action: Option<Action>,
         repeat: bool,
     ) -> bool {
+        let pad_allowed = self.stream_controllers_allowed();
+        if !pad_allowed
+            && matches!(
+                kind,
+                SDL_EVENT_GAMEPAD_BUTTON_DOWN
+                    | SDL_EVENT_GAMEPAD_BUTTON_UP
+                    | SDL_EVENT_GAMEPAD_AXIS_MOTION
+                    | SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN
+                    | SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION
+                    | SDL_EVENT_GAMEPAD_TOUCHPAD_UP
+            )
+        {
+            return true;
+        }
         let Some((streaming, _)) = self.streaming.as_mut() else { return false };
             // What is in the hand names the Control Center's hints.
             if let Some(source) = input_source::of(event, |id| self.pads.real_pad_type(id))
@@ -169,9 +183,38 @@ impl App {
                     return true;
                 }
             }
-            if matches!(kind, SDL_EVENT_GAMEPAD_BUTTON_DOWN | SDL_EVENT_GAMEPAD_AXIS_MOTION) {
-                streaming.needs_redraw = true;
+            if matches!(
+                kind,
+                SDL_EVENT_GAMEPAD_BUTTON_DOWN
+                    | SDL_EVENT_GAMEPAD_BUTTON_UP
+                    | SDL_EVENT_GAMEPAD_AXIS_MOTION
+            ) {
+                let before = self.stick_held;
                 self.navigate(event);
+                if (kind != SDL_EVENT_GAMEPAD_AXIS_MOTION || self.stick_held != before)
+                    && let Some((s, _)) = self.streaming.as_mut()
+                {
+                    s.needs_redraw = true;
+                }
+                return true;
+            }
+            if matches!(
+                kind,
+                SDL_EVENT_GAMEPAD_SENSOR_UPDATE
+                    | SDL_EVENT_SENSOR_UPDATE
+                    | SDL_EVENT_GAMEPAD_UPDATE_COMPLETE
+                    | SDL_EVENT_GAMEPAD_REMAPPED
+                    | SDL_EVENT_GAMEPAD_STEAM_HANDLE_UPDATED
+                    | SDL_EVENT_JOYSTICK_AXIS_MOTION
+                    | SDL_EVENT_JOYSTICK_BALL_MOTION
+                    | SDL_EVENT_JOYSTICK_HAT_MOTION
+                    | SDL_EVENT_JOYSTICK_BUTTON_DOWN
+                    | SDL_EVENT_JOYSTICK_BUTTON_UP
+                    | SDL_EVENT_JOYSTICK_ADDED
+                    | SDL_EVENT_JOYSTICK_REMOVED
+                    | SDL_EVENT_JOYSTICK_BATTERY_UPDATED
+                    | SDL_EVENT_JOYSTICK_UPDATE_COMPLETE
+            ) {
                 return true;
             }
             if !matches!(kind, SDL_EVENT_QUIT | SDL_EVENT_WINDOW_CLOSE_REQUESTED

@@ -154,9 +154,9 @@ public class ControllerInputReleaseTest {
 
     @Test
     public void invalidOrDestroyedUsbHandlesZeroOutputsAndPickMenuMouseBoundsAreChecked() {
-        int[] steerOut = new int[11];
+        int[] steerOut = new int[14];
         steerOut[0] = 1;
-        assertEquals(0, com.limelight.nvstream.jni.NightjarInputJni.usbSteerMenuStep(0L, 1, ControllerPacket.A_FLAG, steerOut));
+        assertEquals(0, com.limelight.nvstream.jni.NightjarInputJni.usbSteerMenuStep(0L, 1, ControllerPacket.A_FLAG, 0f, 0f, steerOut));
         assertEquals(0, steerOut[0]);
 
         int[] captureOut = {1, 2, 3, 4};
@@ -166,7 +166,7 @@ public class ControllerInputReleaseTest {
         long handle = com.limelight.nvstream.jni.NightjarInputJni.usbInputStateCreate();
         com.limelight.nvstream.jni.NightjarInputJni.usbInputStateDestroy(handle);
         steerOut[0] = 1;
-        assertEquals(0, com.limelight.nvstream.jni.NightjarInputJni.usbSteerMenuStep(handle, 1, ControllerPacket.A_FLAG, steerOut));
+        assertEquals(0, com.limelight.nvstream.jni.NightjarInputJni.usbSteerMenuStep(handle, 1, ControllerPacket.A_FLAG, 0f, 0f, steerOut));
         assertEquals(0, steerOut[0]);
         captureOut = new int[] {1, 2, 3, 4};
         com.limelight.nvstream.jni.NightjarInputJni.usbCapturePadStep(handle, 1, ControllerPacket.A_FLAG, 0.9f, 0f, 1, captureOut);

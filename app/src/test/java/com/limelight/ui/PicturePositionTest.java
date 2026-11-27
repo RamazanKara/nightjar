@@ -121,4 +121,30 @@ public class PicturePositionTest {
         assertEquals(0, PicturePosition.streamRotation(0, true,
                 StreamOrientation.requested(StreamOrientation.AUTO, false, true, false, true, false, 1920, 1080)));
     }
+
+    @Test
+    public void desktopGesturesViewportFollowsPictureOffsetAndKeyboardPan() {
+        Application app = RuntimeEnvironment.getApplication();
+        FrameLayout parent = new FrameLayout(app);
+        StreamView video = new StreamView(app);
+        video.setVideoScaling(VideoScaling.FIT, VideoScaling.CENTER, 1920, 1080);
+        parent.addView(video, new FrameLayout.LayoutParams(-1, -1, android.view.Gravity.CENTER));
+        DesktopGestures gestures = new DesktopGestures(app, video, () -> {}, () -> {});
+        layOut(parent);
+        gestures.viewport().pan(10_000f, 10_000f);
+        float maxRightUnshifted = gestures.viewport().x();
+        float maxDownUnpanned = gestures.viewport().y();
+
+        // Shift picture right by +120 px (240 -> 360) and pan up by -100 px for the soft keyboard.
+        gestures.reset();
+        video.setPictureOffset(50, 0);
+        layOut(parent);
+        video.setKeyboardPan(-100f);
+        gestures.syncBounds();
+        gestures.viewport().pan(10_000f, 10_000f);
+        assertEquals("Right pan clamp shrinks by the +120 px picture shift",
+                maxRightUnshifted - 120f, gestures.viewport().x(), 1e-2f);
+        assertEquals("Downward pan clamp grows by the 100 px upward keyboard pan",
+                maxDownUnpanned + 100f, gestures.viewport().y(), 1e-2f);
+    }
 }

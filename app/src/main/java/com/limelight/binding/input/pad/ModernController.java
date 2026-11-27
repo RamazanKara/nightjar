@@ -65,6 +65,7 @@ public final class ModernController {
     private String controllerModel;
     /** The controller the open editor's Only with switch saves for, or null when none is connected. */
     private String editTarget;
+    private String editTargetName;
 
     /** Where the Steam Controller trackpads' touches go: touchpad 0 of the on-screen controls' pad. */
     public interface TouchSink {
@@ -450,8 +451,9 @@ public final class ModernController {
         // Only with names the controller whose layout shows, else the controller that connected last.
         editTarget = controllerModel != null ? controllerModel
                 : controllers.isEmpty() ? null : controllers.get(controllers.size() - 1)[0];
+        editTargetName = editTarget == null ? null : controllerName(editTarget);
         editor = new PadEditor(context, this, painter, layout.copy(), perGame, gameKey != null,
-                editTarget == null ? null : controllerName(editTarget), controllerModel != null);
+                editTargetName, controllerModel != null);
         place();
         frame.addView(editor, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
@@ -504,13 +506,21 @@ public final class ModernController {
         SharedPreferences.Editor edit = store.edit();
         String text = draft.serialize();
         if (forController != null) {
-            PadControllerLayouts.save(edit, landscape, forController, controllerName(forController), text);
+            String name = editTargetName != null && Objects.equals(forController, editTarget)
+                    ? editTargetName : controllerName(forController);
+            PadControllerLayouts.save(edit, landscape, forController, name, text);
             edit.apply();
-            perGame = false;
-            controllerModel = forController;
+            editTargetName = null;
+            if (!Objects.equals(forController, chooseController())) {
+                load();
+            } else {
+                perGame = false;
+                controllerModel = forController;
+            }
             applyAppearance();
             return;
         }
+        editTargetName = null;
         if (controllerModel != null) {
             PadControllerLayouts.remove(edit, controllerModel);
             controllerModel = null;

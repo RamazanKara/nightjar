@@ -390,9 +390,9 @@ pub(crate) fn init_sdl() -> Result<(), String> {
     sdl::set_hint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, c"0");
     sdl::set_hint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, c"480");
     sdl::set_hint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, c"1");
-    // Keep Bluetooth PlayStation/Switch controllers in enhanced HID report mode (e.g. DS4 0x11)
-    // immediately on open so gyro/accel work when connected mid-stream (Nightjar #177).
-    sdl::set_hint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS, c"1");
+    // Advertise controller sensor/rumble capabilities without switching Bluetooth pads into
+    // high-rate enhanced HID reports until motion or effects actually need them (Nightjar #179).
+    sdl::set_hint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS, c"auto");
     sdl::set_hint(SDL_HINT_AUTO_UPDATE_JOYSTICKS, c"0"); // Adaptive polling via PadPoll.
     sdl::set_hint(SDL_HINT_MOUSE_RELATIVE_MODE_CENTER, c"1");
     // The second screen's window opens beside the first stream without taking its keyboard and mouse.

@@ -229,7 +229,8 @@ public final class NightjarInputJni {
     public static native void usbInputStateDestroy(long handle);
 
     public static native int usbSteerMenuStep(
-            long handle, int controllerId, int buttons, int[] outKeys);
+            long handle, int controllerId, int buttons,
+            float leftTrigger, float rightTrigger, int[] outKeys);
 
     public static native void usbCapturePadStep(
             long handle, int controllerId, int buttons,

@@ -510,6 +510,43 @@ fn back_as_guide_holds_for_the_menu_and_keeps_the_quit_combo() {
         assert_eq!(pads.pads[0].buttons, 0);
         press(&mut pads, &mut queue, back, false);
 
+        // Under the Launch Curtain, Start+Back opens Control Center and Hold-Guide works without
+        // sending controller state to the host.
+        pads.configure(&Settings { controller_mouse: false, ..Default::default() });
+        let queued_before = queue.len();
+        let curtain_press = |pads: &mut Gamepads, button: i32, down: bool| {
+            let event = SDL_Event { gbutton: SDL_GamepadButtonEvent { r#type: if down { SDL_EVENT_GAMEPAD_BUTTON_DOWN } else { SDL_EVENT_GAMEPAD_BUTTON_UP },
+                which: id, button: button as u8, down, ..Default::default() } };
+            pads.handle_curtain(&event)
+        };
+        assert_eq!(curtain_press(&mut pads, SDL_GAMEPAD_BUTTON_START.0, true), None);
+        assert_eq!(curtain_press(&mut pads, back, true), Some(Action::Menu));
+        curtain_press(&mut pads, back, false);
+        curtain_press(&mut pads, SDL_GAMEPAD_BUTTON_START.0, false);
+        assert_eq!(curtain_press(&mut pads, SDL_GAMEPAD_BUTTON_GUIDE.0, true), None);
+        assert!(pads.guide_tick_mode(Instant::now() + Duration::from_millis(1100), true, &mut queue));
+        assert_eq!(curtain_press(&mut pads, SDL_GAMEPAD_BUTTON_GUIDE.0, false), None);
+        assert_eq!(queue.len(), queued_before, "curtain chord handling sends nothing to the host");
+
+        // If the Launch Curtain lifts mid-Guide hold, releasing Guide afterwards must not send a
+        // Guide tap to the PC.
+        assert_eq!(curtain_press(&mut pads, SDL_GAMEPAD_BUTTON_GUIDE.0, true), None);
+        pads.clear_curtain_state();
+        assert_eq!(press(&mut pads, &mut queue, SDL_GAMEPAD_BUTTON_GUIDE.0, false), None);
+        assert_eq!(queue.len(), queued_before, "Guide held across curtain lift sends no tap");
+
+        // Releasing or disconnecting a pad with an active touchpad finger cancels the contact on
+        // the host (including in OnePlayer mode where slot 0 stays active).
+        pads.pads[0].touchpad_contacts.push((0, 2));
+        pads.release(&mut queue);
+        assert!(pads.pads[0].touchpad_contacts.is_empty());
+        let after_release = queue.len();
+        assert!(after_release > queued_before, "touchpad cancel queued on release");
+        pads.one_player = true;
+        pads.pads[0].touchpad_contacts.push((0, 3));
+        assert_eq!(pads.removed_with(id, Some(&mut queue)), Some(0));
+        assert!(queue.len() > after_release, "touchpad cancel queued on disconnect in OnePlayer mode");
+
         pads.close_all();
         SDL_DetachVirtualJoystick(id);
         SDL_QuitSubSystem(SDL_INIT_GAMEPAD);

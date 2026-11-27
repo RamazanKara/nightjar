@@ -69,8 +69,6 @@ pub(super) fn pad_press(button: u8, swapped: bool) -> Option<Press> {
     }
 }
 
-/// The toast a lift leaves: none when the game is in front or the player chose it; after a
-/// failure the PC's own words follow on a line of their own.
 /// A controller's press, motion, touch or sensor reading, which the curtain keeps from the PC.
 pub(super) fn pad_input(kind: SDL_EventType) -> bool {
     matches!(
@@ -85,6 +83,8 @@ pub(super) fn pad_input(kind: SDL_EventType) -> bool {
     )
 }
 
+/// The toast a lift leaves: none when the game is in front or the player chose it; after a
+/// failure the PC's own words follow on a line of their own.
 pub(super) fn lift_toast(lift: &Lift) -> Option<String> {
     let line = tr(lift.notice()?.en);
     Some(match lift.reason().filter(|_| matches!(lift, Lift::Failed(_))) {
@@ -121,7 +121,7 @@ impl Streaming {
     /// Once a pass: the first shown picture starts the quiet watch, the watch lifts the curtain
     /// when the host went quiet, and a lift (however it came) shows its toast and gives the
     /// stream the pointer, as its start would have.
-    pub fn follow_curtain(&mut self, window: *mut SDL_Window) {
+    pub fn follow_curtain(&mut self, window: *mut SDL_Window, pads: &mut crate::gamepad::Gamepads) {
         let Some(c) = self.curtain.as_mut() else { return };
         let now = Instant::now();
         if self.first_frame {
@@ -130,6 +130,7 @@ impl Streaming {
         c.curtain.tick(now);
         let Some(lift) = c.curtain.lifted().cloned() else { return };
         self.curtain = None;
+        pads.clear_curtain_state();
         eprintln!("nightjar: launch curtain: lifted, {lift:?}");
         if let Some(toast) = lift_toast(&lift) {
             self.add_toast(toast);
@@ -155,12 +156,13 @@ impl Streaming {
 
     /// Show PC screen: the curtain lifts at once. A PC that takes it hears so on a worker, which
     /// never holds the stream up; a failure there changes nothing here.
-    pub fn curtain_show_screen(&mut self) {
+    pub fn curtain_show_screen(&mut self, pads: &mut crate::gamepad::Gamepads) {
         let Some(c) = self.curtain.as_mut() else { return };
         let tell = c.native && c.curtain.host_dismissible();
         if c.curtain.dismiss().is_none() {
             return;
         }
+        pads.clear_curtain_state();
         self.needs_redraw = true;
         let Some(client) = lock(&self.shared.host_client).clone().filter(|_| tell) else { return };
         let spawned = std::thread::Builder::new().name("nightjar curtain".into()).spawn(move || {
@@ -183,12 +185,12 @@ impl Streaming {
     /// A key or button of the curtain's (`key_press`, `pad_press`) while it is down; true when it
     /// acted, so it goes no further. Show PC screen waits for the picture, as its button does; an
     /// open stream menu keeps its keys.
-    pub(super) fn curtain_press(&mut self, press: Option<Press>) -> bool {
+    pub(super) fn curtain_press(&mut self, press: Option<Press>, pads: &mut crate::gamepad::Gamepads) -> bool {
         let (Some(press), Some(view), false) = (press, self.curtain_view(), self.menu_visible) else { return false };
         match press {
-            Press::ShowScreen if view.dismissible => self.curtain_show_screen(),
-            // Before the first picture there is no PC screen to show; the press goes nowhere.
-            Press::ShowScreen => {}
+            Press::ShowScreen if view.dismissible => self.curtain_show_screen(pads),
+            // Before the first picture there is no PC screen to show; let controller chords proceed.
+            Press::ShowScreen => return false,
             Press::Cancel => self.curtain_cancel(),
         }
         true

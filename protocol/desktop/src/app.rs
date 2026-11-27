@@ -315,56 +315,35 @@ pub(crate) fn remove_host(
     save_hosts(store, hosts)
 }
 
-/// Minimum analog stick/trigger magnitude treated as real controller activity for streaming
-/// `PadPoll` active-hold (~3%, matching `direct_motion.rs`, Nightjar #179).
-pub(crate) const GAMEPAD_ACTIVITY_AXIS_THRESHOLD: u16 = 1024;
+/// Minimum analog stick magnitude on `LEFTX`/`LEFTY` that breaks an idle launcher out of
+/// `wait_launcher_events` when no navigation stick is held (navigation engages above 24000 and
+/// releases below 12000; 16000 filters stick drift and trigger rest noise, #179).
+pub(crate) const LAUNCHER_AXIS_WAKE_THRESHOLD: u16 = 16000;
 
-/// Minimum analog stick/trigger magnitude that breaks an idle launcher out of
-/// `wait_launcher_events` when no navigation stick is held (~12%, filters stick drift, #179).
-pub(crate) const LAUNCHER_AXIS_WAKE_THRESHOLD: u16 = 4000;
-
-/// Pure classification for [`is_gamepad_activity`], testable without constructing raw SDL unions.
-pub(crate) fn is_gamepad_activity_parts(
+/// Whether `event` is a real stream-waking event rather than background joystick poll completion,
+/// raw duplicate joystick traffic, passive sensor noise, or sub-delta stick drift (`pad_active`:
+/// whether `PadActivity` classified a gamepad axis/sensor event as active, #179).
+pub(crate) fn stream_event_wakes_wait(
     kind: SDL_EventType,
-    axis_value: Option<i16>,
-    gyro_peak: Option<f32>,
+    pad_event_active: bool,
+    motion_forwarded: bool,
 ) -> bool {
     match kind {
-        SDL_EVENT_GAMEPAD_BUTTON_DOWN
-        | SDL_EVENT_GAMEPAD_BUTTON_UP
-        | SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN
-        | SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION
-        | SDL_EVENT_GAMEPAD_TOUCHPAD_UP
-        | SDL_EVENT_GAMEPAD_ADDED => true,
-        SDL_EVENT_GAMEPAD_AXIS_MOTION => {
-            axis_value.is_some_and(|v| v.unsigned_abs() > GAMEPAD_ACTIVITY_AXIS_THRESHOLD)
-        }
-        SDL_EVENT_GAMEPAD_SENSOR_UPDATE => stream::direct_motion::is_gyro_peak_active(gyro_peak),
-        _ => false,
-    }
-}
-
-/// Whether `event` is intentional controller input (or hotplug) that should switch streaming
-/// polling into its fast active cadence.
-pub(crate) fn is_gamepad_activity(event: &SDL_Event) -> bool {
-    // SAFETY: union members read according to SDL event type.
-    unsafe {
-        let kind = SDL_EventType(event.r#type);
-        let axis_value = if kind == SDL_EVENT_GAMEPAD_AXIS_MOTION {
-            Some(event.gaxis.value)
-        } else {
-            None
-        };
-        let gyro_peak = (kind == SDL_EVENT_GAMEPAD_SENSOR_UPDATE
-            && SDL_SensorType(event.gsensor.sensor) == SDL_SENSOR_GYRO)
-            .then(|| {
-                if event.gsensor.data.iter().all(|v| v.is_finite()) {
-                    event.gsensor.data.into_iter().map(f32::abs).fold(0.0_f32, f32::max)
-                } else {
-                    f32::NAN
-                }
-            });
-        is_gamepad_activity_parts(kind, axis_value, gyro_peak)
+        SDL_EVENT_GAMEPAD_UPDATE_COMPLETE
+        | SDL_EVENT_GAMEPAD_REMAPPED
+        | SDL_EVENT_GAMEPAD_STEAM_HANDLE_UPDATED
+        | SDL_EVENT_JOYSTICK_AXIS_MOTION
+        | SDL_EVENT_JOYSTICK_BALL_MOTION
+        | SDL_EVENT_JOYSTICK_HAT_MOTION
+        | SDL_EVENT_JOYSTICK_BUTTON_DOWN
+        | SDL_EVENT_JOYSTICK_BUTTON_UP
+        | SDL_EVENT_JOYSTICK_ADDED
+        | SDL_EVENT_JOYSTICK_REMOVED
+        | SDL_EVENT_JOYSTICK_UPDATE_COMPLETE
+        | SDL_EVENT_SENSOR_UPDATE => false,
+        SDL_EVENT_GAMEPAD_SENSOR_UPDATE => motion_forwarded && pad_event_active,
+        SDL_EVENT_GAMEPAD_AXIS_MOTION => pad_event_active,
+        _ => true,
     }
 }
 
@@ -398,8 +377,13 @@ pub(crate) fn launcher_event_wakes_frame(
             | SDL_EVENT_JOYSTICK_BATTERY_UPDATED
             | SDL_EVENT_JOYSTICK_UPDATE_COMPLETE => false,
             SDL_EVENT_GAMEPAD_AXIS_MOTION => {
-                stick_held.iter().any(|&held| held)
-                    || event.gaxis.value.unsigned_abs() > LAUNCHER_AXIS_WAKE_THRESHOLD
+                let nav_axis = matches!(
+                    SDL_GamepadAxis(i32::from(event.gaxis.axis)),
+                    SDL_GAMEPAD_AXIS_LEFTX | SDL_GAMEPAD_AXIS_LEFTY
+                );
+                nav_axis
+                    && (stick_held.iter().any(|&held| held)
+                        || event.gaxis.value.unsigned_abs() > LAUNCHER_AXIS_WAKE_THRESHOLD)
             }
             _ => true,
         }
@@ -522,7 +506,78 @@ pub(crate) fn stream_sleep(duration: Duration, precise: bool, pad_wait: Option<D
     }
 }
 
+pub(super) fn controllers_allowed_for(
+    s: &Streaming,
+    window: *mut SDL_Window,
+    background_controllers: bool,
+) -> bool {
+    // SAFETY: the window lives as long as the app.
+    let focused = unsafe { SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS != 0 };
+    s.sends_controllers() && !s.mic_only() && (focused || background_controllers)
+}
+
 impl App {
+    /// Updates `pad_activity` and bumps `pad_poll` when `event` is real controller input or hotplug;
+    /// returns whether `event` was active controller motion/buttons.
+    pub(super) fn note_gamepad_activity(&mut self, event: &SDL_Event) -> bool {
+        // SAFETY: union members read by SDL event type.
+        let kind = SDL_EventType(unsafe { event.r#type });
+        if kind == SDL_EVENT_GAMEPAD_REMOVED {
+            self.pad_activity.remove_pad(unsafe { event.gdevice.which.0 });
+            return false;
+        }
+        let active = kind == SDL_EVENT_GAMEPAD_ADDED || self.pad_activity.is_active(event);
+        if active {
+            self.pad_poll.note_activity(Instant::now());
+        }
+        active
+    }
+
+    pub(super) fn stream_controllers_allowed(&self) -> bool {
+        let Some((s, _)) = self.streaming.as_ref() else {
+            return false;
+        };
+        controllers_allowed_for(s, self.window, self.launcher.settings.background_controllers)
+    }
+
+    fn poll_stream_event(&mut self, event: &SDL_Event) -> bool {
+        let kind = SDL_EventType(unsafe { event.r#type });
+        let pad_allowed = self.stream_controllers_allowed();
+        let pad_event_active = pad_allowed
+            && matches!(
+                kind,
+                SDL_EVENT_GAMEPAD_AXIS_MOTION | SDL_EVENT_GAMEPAD_SENSOR_UPDATE
+            )
+            && self.pad_activity.is_active(event);
+        if pad_event_active {
+            self.pad_poll.note_activity(Instant::now());
+        }
+        let motion_forwarded = pad_allowed && self.pads.motion;
+        self.dispatch_stream_event(event);
+        let woke = if !pad_allowed
+            && matches!(
+                kind,
+                SDL_EVENT_GAMEPAD_BUTTON_DOWN
+                    | SDL_EVENT_GAMEPAD_BUTTON_UP
+                    | SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN
+                    | SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION
+                    | SDL_EVENT_GAMEPAD_TOUCHPAD_UP
+                    | SDL_EVENT_GAMEPAD_AXIS_MOTION
+                    | SDL_EVENT_GAMEPAD_SENSOR_UPDATE
+            ) {
+            false
+        } else {
+            stream_event_wakes_wait(kind, pad_event_active, motion_forwarded)
+        };
+        woke
+            || !self.running
+            || self.screenshot_requested
+            || self
+                .streaming
+                .as_ref()
+                .is_none_or(|(s, _)| s.exit.is_some() || s.needs_redraw || s.guide_menu_pending())
+    }
+
     fn poll_launcher_event(&mut self, event: &SDL_Event) -> bool {
         let controller_test =
             self.launcher.screen == Screen::Controllers && self.launcher.controller_test;
@@ -596,17 +651,21 @@ impl App {
     ) {
         let now = Instant::now();
         self.pad_poll.sync_direct(direct_pad_us, now);
-        let pads_open = !self.pads.pads.is_empty();
-        if self.pad_poll.next_in(now, pads_open, true, pad_active, true).is_zero() {
-            // SAFETY: SDL joystick update on the main thread.
-            unsafe { SDL_UpdateJoysticks() };
-            self.pad_poll.polled(now);
-        }
-        let pad_wait = (pads_open && pad_active)
-            .then(|| self.pad_poll.next_in(now, pads_open, true, pad_active, true));
         // SAFETY: event calls on the main thread.
         unsafe {
             let mut event: SDL_Event = std::mem::zeroed();
+            let pads_open = !self.pads.pads.is_empty();
+            if self.pad_poll.next_in(now, pads_open, true, pad_active, true).is_zero() {
+                SDL_UpdateJoysticks();
+                self.pad_poll.polled(now);
+            }
+            let mut woke = false;
+            while SDL_PollEvent(&mut event) {
+                woke |= self.poll_stream_event(&event);
+            }
+            if woke {
+                return;
+            }
             match wait {
                 stream::Wait::Now => {}
                 stream::Wait::For(duration) | stream::Wait::Precise(duration) => {
@@ -618,14 +677,48 @@ impl App {
                         Some(wait) if menu_visible => duration.min(wait),
                         _ => duration,
                     };
-                    match stream_sleep(duration, precise, pad_wait) {
-                        StreamSleep::EventTimeoutMs(ms) => {
-                            if SDL_WaitEventTimeout(&mut event, ms) {
-                                self.dispatch_stream_event(&event);
+                    let deadline = Instant::now() + duration;
+                    loop {
+                        let now = Instant::now();
+                        let remaining = deadline.saturating_duration_since(now);
+                        if remaining.is_zero() {
+                            break;
+                        }
+                        let pads_open = !self.pads.pads.is_empty();
+                        if self.pad_poll.next_in(now, pads_open, true, pad_active, true).is_zero() {
+                            SDL_UpdateJoysticks();
+                            self.pad_poll.polled(now);
+                            while SDL_PollEvent(&mut event) {
+                                woke |= self.poll_stream_event(&event);
+                            }
+                            if woke {
+                                return;
+                            }
+                            continue;
+                        }
+                        let pad_wait = (pads_open && pad_active)
+                            .then(|| self.pad_poll.next_in(now, pads_open, true, pad_active, true));
+                        match stream_sleep(remaining, precise, pad_wait) {
+                            StreamSleep::EventTimeoutMs(ms) => {
+                                if SDL_WaitEventTimeout(&mut event, ms) {
+                                    woke |= self.poll_stream_event(&event);
+                                    while SDL_PollEvent(&mut event) {
+                                        woke |= self.poll_stream_event(&event);
+                                    }
+                                    if woke {
+                                        return;
+                                    }
+                                }
+                            }
+                            StreamSleep::DelayNs(ns) => {
+                                SDL_DelayNS(ns);
+                                break;
+                            }
+                            StreamSleep::DelayPreciseNs(ns) => {
+                                SDL_DelayPrecise(ns);
+                                break;
                             }
                         }
-                        StreamSleep::DelayNs(ns) => SDL_DelayNS(ns),
-                        StreamSleep::DelayPreciseNs(ns) => SDL_DelayPrecise(ns),
                     }
                 }
             }
@@ -635,7 +728,7 @@ impl App {
                 self.pad_poll.polled(after);
             }
             while SDL_PollEvent(&mut event) {
-                self.dispatch_stream_event(&event);
+                let _ = self.poll_stream_event(&event);
             }
         }
     }

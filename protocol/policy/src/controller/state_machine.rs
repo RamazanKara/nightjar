@@ -583,6 +583,9 @@ pub struct UsbMenuCaptureState {
     pub menu_buttons: u32,
     pub held_from_menu: u32,
     pub last_buttons: u32,
+    pub trigger_held: [Option<bool>; 2],
+    pub guide_down: bool,
+    pub combo_armed: bool,
 }
 
 /// Result of one [`UsbInputStates::capture_pad`] call.
@@ -601,27 +604,81 @@ pub struct UsbInputStates {
 }
 
 impl UsbInputStates {
-    pub fn steer_menu(&mut self, id: i32, buttons: u32) -> (bool, [i32; 10], usize) {
+    pub fn steer_menu(&mut self, id: i32, buttons: u32) -> (bool, [i32; 13], usize) {
+        self.steer_menu_with_triggers(id, buttons, 0.0, 0.0)
+    }
+
+    pub fn steer_menu_with_triggers(
+        &mut self,
+        id: i32,
+        buttons: u32,
+        left_trigger: f32,
+        right_trigger: f32,
+    ) -> (bool, [i32; 13], usize) {
         let entry = self.pads.entry(id).or_default();
         entry.capture_stick = None;
         let mut clear_combos = false;
         if !entry.steering_menu {
             entry.steering_menu = true;
-            entry.menu_buttons = entry.last_buttons;
+            // A Guide hold that opened the menu is still down on the first report: ignore its release.
+            entry.menu_buttons = entry.last_buttons | (buttons & button::SPECIAL);
+            entry.trigger_held = [None; 2];
+            entry.guide_down = false;
+            entry.combo_armed = false;
             clear_combos = true;
         }
         let pressed = buttons & !entry.menu_buttons;
+        let released = entry.menu_buttons & !buttons;
         entry.menu_buttons = buttons;
 
-        let mut keys = [0i32; 10];
+        let mut keys = [0i32; 13];
         let mut count = 0usize;
+        if (pressed & button::SPECIAL) != 0 && (buttons & !button::SPECIAL) == 0 {
+            entry.guide_down = true;
+        }
+        let mut close_menu = false;
+        if entry.guide_down && (released & button::SPECIAL) != 0 {
+            entry.guide_down = false;
+            close_menu = true;
+        } else if (buttons & !button::SPECIAL) != 0 {
+            entry.guide_down = false;
+        }
+        let chording = (buttons & (button::PLAY | button::BACK)) != 0;
+        if (buttons & MENU_COMBO_MASK) == MENU_COMBO_MASK {
+            entry.combo_armed = true;
+        } else if entry.combo_armed && (buttons & MENU_COMBO_MASK) == 0 {
+            entry.combo_armed = false;
+            close_menu = true;
+        }
         if pressed != 0 {
             for &(flag, key_code) in &STEER_MENU_MAP {
+                if (flag == button::LB || flag == button::RB) && (chording || entry.combo_armed) {
+                    continue;
+                }
                 if (pressed & flag) != 0 {
                     keys[count] = key_code;
                     count += 1;
                 }
             }
+        }
+        for (side, value, code) in [
+            (0usize, left_trigger, keycode::BUTTON_L2),
+            (1usize, right_trigger, keycode::BUTTON_R2),
+        ] {
+            match entry.trigger_held[side] {
+                None => entry.trigger_held[side] = Some(value >= 0.5),
+                Some(false) if value >= 0.5 => {
+                    entry.trigger_held[side] = Some(true);
+                    keys[count] = code;
+                    count += 1;
+                }
+                Some(true) if value <= 0.25 => entry.trigger_held[side] = Some(false),
+                _ => {}
+            }
+        }
+        if close_menu {
+            keys[count] = keycode::BUTTON_MODE;
+            count += 1;
         }
         (clear_combos, keys, count)
     }

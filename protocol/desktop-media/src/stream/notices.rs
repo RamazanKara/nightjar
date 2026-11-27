@@ -205,7 +205,8 @@ impl Streaming {
             // Only while a Guide press is pending: otherwise no input lock or control-thread wake per loop.
             if pads.guide_waiting() {
                 let now = Instant::now();
-                self.session.input(|q| self.guide_menu |= pads.guide_tick(now, q));
+                let suppress_host = self.curtain_down();
+                self.session.input(|q| self.guide_menu |= pads.guide_tick_mode(now, suppress_host, q));
             }
             self.guide_waiting = pads.guide_waiting();
         } else {
@@ -286,7 +287,13 @@ impl Streaming {
             }
             ControlEvent::PipelineRates(report) => self.pipeline_rates = Some(report),
             ControlEvent::RateChange(result) => self.rate_change_result(&result),
-            ControlEvent::QuickSuspend(report) => self.quick_suspend_state(report),
+            ControlEvent::QuickSuspend(report) => {
+                let was_paused = self.quick_suspend.paused();
+                self.quick_suspend_state(report);
+                if !was_paused && self.quick_suspend.paused() {
+                    pads.stop_rumble();
+                }
+            }
             ControlEvent::StreamDvrState(state) => self.dvr_state(state),
             ControlEvent::StreamDvrClip(clip) => self.dvr_clip(&clip),
             ControlEvent::LaunchCurtain(state) => self.curtain_heard(state),

@@ -277,6 +277,16 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
     public void releaseInput() { gamepad.releaseInput(true); }
 
+    /** Clears active and focus-cached rumble across all slots (e.g. when Quick Suspend pauses the game). */
+    public void stopAllRumble() {
+        backgroundThreadHandler.post(() -> {
+            for (short slot = 0; slot < 16; slot++) {
+                rumble.handleRumble(slot, (short) 0, (short) 0);
+                rumble.handleRumbleTriggers(slot, (short) 0, (short) 0);
+            }
+        });
+    }
+
     public void disableSensors() {
         sensorsOffForFocus = false;
         motion.stopSensors(true);
@@ -605,7 +615,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         boolean arrivalPending, menuComboPending, guideDown;
         long arrivalRetryAt;
         int clickpadSwallowed, lastRawButtons;
-        final int[] usbAxesOut = new int[6], clickpadOut = new int[2], guideHoldOut = new int[5], captureOut = new int[4], steerKeysOut = new int[11];
+        final int[] usbAxesOut = new int[6], clickpadOut = new int[2], guideHoldOut = new int[5], captureOut = new int[4], steerKeysOut = new int[14];
         float lastRawLeftStickX, lastRawLeftStickY, lastRawRightStickX, lastRawRightStickY, lastRawLeftTrigger, lastRawRightTrigger;
         SensorManager deviceSensors;
         ControllerMotionBridge.MotionListener gyroListener, accelListener;

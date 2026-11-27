@@ -373,6 +373,9 @@ public class StreamView extends FrameLayout {
         requestLayout();
     }
 
+    /** The picture position's horizontal move in pixels. */
+    public int pictureOffsetX() { return offsetX; }
+
     /** The picture position's vertical move in pixels, which the keyboard pan starts from. */
     public int pictureOffsetY() { return offsetY; }
 

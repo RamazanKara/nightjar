@@ -140,6 +140,6 @@ final class PadTrackpadHandler {
     }
 
     private static float fraction(float position, int size) {
-        return size > 0 ? position / size : 0f;
+        return size > 0 ? Math.max(0f, Math.min(1f, position / size)) : 0f;
     }
 }

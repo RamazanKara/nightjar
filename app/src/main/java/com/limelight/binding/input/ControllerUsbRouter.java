@@ -295,7 +295,7 @@ final class ControllerUsbRouter {
         }
         // Perform network sends and UI/handler callbacks outside synchronized(context).
         if (steerMenuNow) {
-            steerMenu(controllerId, context, capturedButtons);
+            steerMenu(controllerId, context, capturedButtons, leftTrigger, rightTrigger);
             return;
         }
         if (captureNow != null) {
@@ -343,14 +343,16 @@ final class ControllerUsbRouter {
         }
     }
 
-    // While the stream menu or one of its dialogs has focus, a newly pressed D-pad direction, A or B
-    // of a USB-driver pad moves, chooses or goes back there.
-    private void steerMenu(int controllerId, ControllerHandler.UsbDeviceContext context, int buttons) {
+    // While the stream menu or one of its dialogs has focus, a newly pressed D-pad direction, A, B,
+    // trigger pull or menu-close gesture of a USB-driver pad steers it.
+    private void steerMenu(int controllerId, ControllerHandler.UsbDeviceContext context, int buttons,
+                           float leftTrigger, float rightTrigger) {
         int count;
         int[] keys;
         synchronized (context) {
             count = NightjarInputJni.usbSteerMenuStep(
-                    handler.usbInputStateHandle, controllerId, buttons, context.steerKeysOut);
+                    handler.usbInputStateHandle, controllerId, buttons, leftTrigger, rightTrigger,
+                    context.steerKeysOut);
             if (context.steerKeysOut[0] != 0) {
                 context.menuComboPending = false;
                 context.quitComboPending = false;

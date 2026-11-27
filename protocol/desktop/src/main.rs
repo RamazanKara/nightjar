@@ -85,6 +85,7 @@ struct App {
     latency_bench: latency_bench::Bench,
     pads: Gamepads,
     pad_poll: PadPoll,
+    pad_activity: stream::direct_motion::PadActivity,
     /// The starts connecting and those just cancelled or timed out, whose workers may still run.
     attempts: stream::Attempts,
     /// A start's decoder checks, on a worker thread (`LaunchProbe`); the start waits for them.
@@ -599,6 +600,7 @@ fn run(launch: Option<cli::Launch>, started: open_play::Started, link: Option<St
         latency_bench: Default::default(),
         pads,
         pad_poll: PadPoll::default(),
+        pad_activity: Default::default(),
         attempts: stream::Attempts::default(),
         probe: None,
         packed_probed: None,

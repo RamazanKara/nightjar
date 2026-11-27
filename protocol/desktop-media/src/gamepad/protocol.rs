@@ -95,6 +95,17 @@ impl Gamepads {
         }
     }
 
+    /// Stops local rumble and trigger rumble across every open pad (e.g. when Quick Suspend pauses).
+    pub fn stop_rumble(&self) {
+        for pad in &self.pads {
+            // SAFETY: open gamepads.
+            unsafe {
+                SDL_RumbleGamepad(pad.handle, 0, 0, 0);
+                SDL_RumbleGamepadTriggers(pad.handle, 0, 0, 0);
+            }
+        }
+    }
+
     pub fn set_led(&self, index: u16, r: u8, g: u8, b: u8) {
         for pad in self.sent_as(index) {
             // SAFETY: an open gamepad.

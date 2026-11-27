@@ -53,6 +53,9 @@ pub struct Pad {
     /// The physical button (as `1 << SDL_GamepadButton`) `guide` follows: Guide, or Back with
     /// "Back button as Guide".
     pub(super) guide_bit: u32,
+    /// Active physical controller touchpad contacts `(touchpad, finger)` sent to the host,
+    /// cancelled on menu open, release or controller disconnect.
+    pub(super) touchpad_contacts: Vec<(u8, u32)>,
 }
 
 /// A Guide press while holding it opens the stream menu. The press is kept from the PC until it is
@@ -151,5 +154,21 @@ impl Pad {
 
     pub(super) fn report(&self) -> Report {
         Report { buttons: self.buttons, lt: self.lt, rt: self.rt, ls: self.ls, rs: self.rs }
+    }
+
+    pub(super) fn cancel_touchpad_contacts(&mut self, queue: &mut nightjar_core::input::InputQueue) {
+        for (touchpad, finger) in self.touchpad_contacts.drain(..) {
+            if !self.refused && !self.mapping.drops_motion_and_touchpad() {
+                let _ = queue.send_controller_touch(
+                    self.sent_as,
+                    nightjar_core::input::packets::touch_event::CANCEL,
+                    touchpad,
+                    finger,
+                    0.0,
+                    0.0,
+                    0.0,
+                );
+            }
+        }
     }
 }

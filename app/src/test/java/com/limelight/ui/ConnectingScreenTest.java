@@ -260,4 +260,41 @@ public class ConnectingScreenTest {
         assertEquals(1, back.get());
         controller.pause().stop().destroy();
     }
+
+    private static void setTouchMode(boolean inTouchMode) throws Exception {
+        java.lang.reflect.Method method = org.robolectric.shadows.ShadowWindowManagerGlobal.class.getDeclaredMethod("setInTouchMode", boolean.class);
+        method.setAccessible(true);
+        method.invoke(null, inTouchMode);
+    }
+
+    @Test
+    public void firstButtonAPressInTouchModeActivatesShowPcScreenAndGuideOpensMenu() throws Exception {
+        setTouchMode(true);
+        try {
+            InputSource.remember(InputSource.NONE);
+            ActivityController<Stream> controller = Robolectric.buildActivity(Stream.class).setup();
+            AtomicInteger cancelled = new AtomicInteger();
+            AtomicInteger shown = new AtomicInteger();
+            AtomicInteger menu = new AtomicInteger();
+            ConnectingScreen screen = ConnectingScreen.show(controller.get(), "Racing Game", "PC", "Starting", null, cancelled::incrementAndGet);
+            screen.showCurtain("Starting", null, null, shown::incrementAndGet);
+            screen.setOnMenuListener(menu::incrementAndGet);
+            android.app.Dialog dialog = screen.dialog();
+            ShadowLooper.idleMainLooper();
+            assertNull("touch launch leaves focus unset until controller presses A", dialog.getCurrentFocus());
+
+            dialog.dispatchKeyEvent(new android.view.KeyEvent(0, 0, android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_A, 0, 0, 1, 0, 0, android.view.InputDevice.SOURCE_GAMEPAD));
+            dialog.dispatchKeyEvent(new android.view.KeyEvent(0, 10, android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_BUTTON_A, 0, 0, 1, 0, 0, android.view.InputDevice.SOURCE_GAMEPAD));
+            ShadowLooper.idleMainLooper();
+            assertEquals("first A press in touch mode activates Show PC screen", 1, shown.get());
+
+            dialog.dispatchKeyEvent(new android.view.KeyEvent(0, 20, android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_MODE, 0, 0, 1, 0, 0, android.view.InputDevice.SOURCE_GAMEPAD));
+            dialog.dispatchKeyEvent(new android.view.KeyEvent(0, 30, android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_BUTTON_MODE, 0, 0, 1, 0, 0, android.view.InputDevice.SOURCE_GAMEPAD));
+            ShadowLooper.idleMainLooper();
+            assertEquals("Guide opens Control Center over Launch Curtain", 1, menu.get());
+            controller.pause().stop().destroy();
+        } finally {
+            setTouchMode(false);
+        }
+    }
 }

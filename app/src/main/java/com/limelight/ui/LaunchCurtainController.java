@@ -97,7 +97,10 @@ public final class LaunchCurtainController {
         ConnectingScreen held = screen;
         screen = null;
         engine.end();
-        if (held != null) release.accept(held);
+        if (held != null) {
+            held.setOnMenuListener(null);
+            release.accept(held);
+        }
     }
 
     private void refresh() {
@@ -138,6 +141,7 @@ public final class LaunchCurtainController {
         handler.removeCallbacks(watchdog);
         ConnectingScreen held = screen;
         screen = null;
+        held.setOnMenuListener(null);
         release.accept(held);
         CharSequence words = state == null ? null : noticeText(state);
         if (words != null) notice.accept(words);

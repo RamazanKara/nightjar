@@ -356,9 +356,18 @@ final class GameMenuActions {
      */
     void steerStreamMenu(int keyCode) {
         android.app.Dialog dialog = game.streamMenu;
+        if (dialog == null && game.spinner != null) dialog = game.spinner.dialog();
         if (dialog == null || !dialog.isShowing() || dialog.getWindow() == null) return;
         if (keyCode == KeyEvent.KEYCODE_BUTTON_B) {
             dialog.onBackPressed();
+            return;
+        }
+        if (keyCode == KeyEvent.KEYCODE_BUTTON_L2 || keyCode == KeyEvent.KEYCODE_BUTTON_R2
+                || keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
+            long now = SystemClock.uptimeMillis();
+            KeyEvent down = new KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0);
+            dialog.dispatchKeyEvent(down);
+            dialog.dispatchKeyEvent(KeyEvent.changeAction(down, KeyEvent.ACTION_UP));
             return;
         }
         // Y, X, LB and RB run the tiles that show them, wherever the focus is.
@@ -370,6 +379,17 @@ final class GameMenuActions {
         View decor = dialog.getWindow().getDecorView();
         View focused = decor.findFocus();
         if (focused == null) {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                    && game.spinner != null && dialog == game.spinner.dialog()) {
+                View show = dialog.findViewById(R.id.conn_show_screen);
+                if (show != null && show.getVisibility() == View.VISIBLE && show.isEnabled()) {
+                    long now = SystemClock.uptimeMillis();
+                    KeyEvent down = new KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0);
+                    dialog.dispatchKeyEvent(down);
+                    dialog.dispatchKeyEvent(KeyEvent.changeAction(down, KeyEvent.ACTION_UP));
+                    return;
+                }
+            }
             // After touch nothing has focus: the first press shows it, as a D-pad would, and chooses nothing.
             decor.requestFocusFromTouch();
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) decor.restoreDefaultFocus();

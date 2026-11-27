@@ -260,7 +260,7 @@ impl Streaming {
                     if !self.facts.touch || !self.captured || !self.focused { return; }
                     let mut area = (0, 0);
                     SDL_GetCurrentRenderOutputSize(renderer, &mut area.0, &mut area.1);
-                    let picture = if self.facts.role == AppRole::InputOnly { area } else { self.texture.size() };
+                    let picture = self.picture_size(area);
                     let density = SDL_GetWindowPixelDensity(window).max(0.01);
                     let rect = viewport(picture, area, self.settings.video_scaling, self.settings.align_video_top);
                     self.session.input(|q| self.touch.handle(event, rect, area, density, q));
@@ -280,8 +280,11 @@ impl Streaming {
                     }
                 }
                 SDL_EVENT_GAMEPAD_REMOVED => {
-                    self.session.input(|q| pads.release_mouse(event.gdevice.which, q));
-                    if let Some(index) = pads.removed(event.gdevice.which)
+                    let mut removed = None;
+                    self.session.input(|q| {
+                        removed = pads.removed_with(event.gdevice.which, Some(q));
+                    });
+                    if let Some(index) = removed
                         && self.sends_controllers() {
                             // A controller the host had refused may have taken the freed slot:
                             // its neutral state and arrival follow the removed one's.
@@ -303,16 +306,35 @@ impl Streaming {
                         self.session.input(|q| pads.announce_new(q));
                     }
                 }
-                // The launch curtain's A and B, while it is down; the input filter leaves them here.
-                SDL_EVENT_GAMEPAD_BUTTON_DOWN if self.curtain_press(launch_curtain::pad_press(event.gbutton.button, pads.swap_face_buttons)) => {}
-                // Nothing else a controller does reaches the PC under the curtain: the player can't see it.
-                _ if launch_curtain::pad_input(kind) && self.curtain_down() && !self.menu_visible => {}
                 _ => {
                     // A controller event the input filter applied while the loop waited in the
                     // present: only its action is left.
                     let acted = direct_motion::acted(event);
                     let focused = SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS != 0;
-                    if acted.is_none() && (self.facts.role == AppRole::RemoteMonitor || !self.settings.controllers || (!focused && !self.settings.background_controllers)) {
+                    let allowed = self.facts.role != AppRole::RemoteMonitor
+                        && self.settings.controllers
+                        && (focused || self.settings.background_controllers);
+                    if acted.is_none() && !allowed {
+                        return;
+                    }
+                    if launch_curtain::pad_input(kind) && self.curtain_down() && !self.menu_visible {
+                        if kind == SDL_EVENT_GAMEPAD_BUTTON_DOWN
+                            && pads.curtain_button_clean(event.gbutton.which)
+                            && self.curtain_press(
+                                launch_curtain::pad_press(
+                                    event.gbutton.button,
+                                    pads.swap_face_buttons,
+                                ),
+                                pads,
+                            )
+                        {
+                            return;
+                        }
+                        match pads.handle_curtain(event) {
+                            Some(Action::Quit) => self.exit = Some(Exit::User),
+                            Some(Action::Menu) => self.toggle_menu(window, pads),
+                            _ => {}
+                        }
                         return;
                     }
                     let mut action = acted;
@@ -330,6 +352,18 @@ impl Streaming {
         }
     }
 
+    fn picture_size(&self, area: (i32, i32)) -> (i32, i32) {
+        if self.facts.role == AppRole::InputOnly {
+            return area;
+        }
+        let tex = self.texture.size();
+        if tex.0 > 0 && tex.1 > 0 {
+            tex
+        } else {
+            (self.facts.width.max(0), self.facts.height.max(0))
+        }
+    }
+
     fn absolute_position(&self, x: f32, y: f32, window: *mut SDL_Window, renderer: *mut SDL_Renderer) {
         // SAFETY: live window and renderer.
         let (density, (w, h)) = unsafe {
@@ -337,7 +371,7 @@ impl Streaming {
             SDL_GetCurrentRenderOutputSize(renderer, &mut size.0, &mut size.1);
             (SDL_GetWindowPixelDensity(window).max(0.01), size)
         };
-        let picture = if self.facts.role == AppRole::InputOnly { (w, h) } else { self.texture.size() };
+        let picture = self.picture_size((w, h));
         let rect = viewport(picture, (w, h), self.settings.video_scaling, self.settings.align_video_top);
         let (px, py) = (x * density - rect.x, y * density - rect.y);
         let (rw, rh) = (rect.w.max(1.0), rect.h.max(1.0));
@@ -454,7 +488,7 @@ impl Streaming {
                 _ => {}
             }
             // Enter and Escape on the launch curtain, while it is down.
-            if self.curtain_press(launch_curtain::key_press(k.scancode)) {
+            if self.curtain_press(launch_curtain::key_press(k.scancode), pads) {
                 return;
             }
         }

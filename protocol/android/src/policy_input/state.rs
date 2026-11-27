@@ -46,11 +46,13 @@ fn usb_steer_menu_step(
     handle: jlong,
     controller_id: jint,
     buttons: jint,
-    out_keys: &mut [i32; 11],
+    left_trigger: jfloat,
+    right_trigger: jfloat,
+    out_keys: &mut [i32; 14],
 ) -> (jint, usize) {
-    let Some((clear_combos, keys, count)) =
-        USB_STATE_SLAB.with(handle, |s| s.steer_menu(controller_id, buttons as u32))
-    else {
+    let Some((clear_combos, keys, count)) = USB_STATE_SLAB.with(handle, |s| {
+        s.steer_menu_with_triggers(controller_id, buttons as u32, left_trigger, right_trigger)
+    }) else {
         out_keys[0] = 0;
         return (0, 1);
     };
@@ -66,10 +68,19 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarInputJni_usbSteer
     handle: jlong,
     controller_id: jint,
     buttons: jint,
+    left_trigger: jfloat,
+    right_trigger: jfloat,
     out_keys: JIntArray,
 ) -> jint {
-    let mut buf = [0i32; 11];
-    let (ret, len) = usb_steer_menu_step(handle, controller_id, buttons, &mut buf);
+    let mut buf = [0i32; 14];
+    let (ret, len) = usb_steer_menu_step(
+        handle,
+        controller_id,
+        buttons,
+        left_trigger,
+        right_trigger,
+        &mut buf,
+    );
     write_ints(&mut env, &out_keys, &buf[..len]);
     ret
 }
@@ -489,17 +500,23 @@ mod tests {
 
     #[test]
     fn invalid_and_destroyed_usb_state_handles_zero_outputs() {
-        let mut steer_out = [99i32; 11];
-        assert_eq!(usb_steer_menu_step(0, 1, 0x10, &mut steer_out), (0, 1));
+        let mut steer_out = [99i32; 14];
+        assert_eq!(
+            usb_steer_menu_step(0, 1, 0x10, 0.0, 0.0, &mut steer_out),
+            (0, 1)
+        );
         assert_eq!(steer_out[0], 0);
         assert_eq!(usb_capture_pad_step(0, 1, 0x10, 0.9, 0.0, 1), [0, 0, 0, 0]);
 
         let handle = USB_STATE_SLAB.insert(UsbInputStates::default());
-        let mut active_steer = [0i32; 11];
-        assert_eq!(usb_steer_menu_step(handle, 3, 0, &mut active_steer), (0, 1));
+        let mut active_steer = [0i32; 14];
+        assert_eq!(
+            usb_steer_menu_step(handle, 3, 0, 0.0, 0.0, &mut active_steer),
+            (0, 1)
+        );
         assert_eq!(active_steer[0], 1);
         assert_eq!(
-            usb_steer_menu_step(handle, 3, 0x1000, &mut active_steer),
+            usb_steer_menu_step(handle, 3, 0x1000, 0.0, 0.0, &mut active_steer),
             (1, 2)
         );
         assert_ne!(
@@ -508,9 +525,9 @@ mod tests {
         );
         assert!(USB_STATE_SLAB.remove(handle));
 
-        let mut destroyed_steer = [77i32; 11];
+        let mut destroyed_steer = [77i32; 14];
         assert_eq!(
-            usb_steer_menu_step(handle, 3, 0x1000, &mut destroyed_steer),
+            usb_steer_menu_step(handle, 3, 0x1000, 0.0, 0.0, &mut destroyed_steer),
             (0, 1)
         );
         assert_eq!(destroyed_steer[0], 0);

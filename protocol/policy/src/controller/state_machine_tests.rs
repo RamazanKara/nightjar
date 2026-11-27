@@ -247,3 +247,39 @@ fn usb_steer_capture_and_held_from_menu_lifecycle() {
     assert_eq!(menu_buttons, button::A);
     assert!(had_stick);
 }
+
+#[test]
+fn usb_steer_menu_steps_triggers_and_closes_on_guide_or_menu_combo() {
+    let mut states = UsbInputStates::default();
+
+    // Opening the menu via Guide hold leaves SPECIAL still down on the first report: releasing it
+    // does not immediately close the menu, and an already-held LT does not step.
+    let (clear, _, count) = states.steer_menu_with_triggers(2, button::SPECIAL, 0.8, 0.0);
+    assert!(clear);
+    assert_eq!(count, 0);
+    let (_, _, count) = states.steer_menu_with_triggers(2, 0, 0.1, 0.0);
+    assert_eq!(count, 0);
+
+    // Pulling LT and RT steps once each and requires releasing below 0.25 before stepping again.
+    let (_, keys, count) = states.steer_menu_with_triggers(2, 0, 0.6, 0.7);
+    assert_eq!(&keys[..count], &[keycode::BUTTON_L2, keycode::BUTTON_R2]);
+    let (_, _, count) = states.steer_menu_with_triggers(2, 0, 0.4, 0.6);
+    assert_eq!(count, 0, "hysteresis holds until <= 0.25");
+    let _ = states.steer_menu_with_triggers(2, 0, 0.1, 0.1);
+    let (_, keys, count) = states.steer_menu_with_triggers(2, 0, 0.6, 0.0);
+    assert_eq!(&keys[..count], &[keycode::BUTTON_L2]);
+
+    // A fresh Guide press-and-release inside the menu emits BUTTON_MODE to close it.
+    let (_, _, count) = states.steer_menu_with_triggers(2, button::SPECIAL, 0.0, 0.0);
+    assert_eq!(count, 0);
+    let (_, keys, count) = states.steer_menu_with_triggers(2, 0, 0.0, 0.0);
+    assert_eq!(&keys[..count], &[keycode::BUTTON_MODE]);
+
+    // Pressing MENU_COMBO_MASK suppresses LB/RB tile hotkeys and closes once released.
+    let (_, _, count) = states.steer_menu_with_triggers(2, button::PLAY | button::LB, 0.0, 0.0);
+    assert_eq!(count, 0, "LB in a Start chord does not fire a tile hotkey");
+    let (_, _, count) = states.steer_menu_with_triggers(2, MENU_COMBO_MASK, 0.0, 0.0);
+    assert_eq!(count, 0);
+    let (_, keys, count) = states.steer_menu_with_triggers(2, 0, 0.0, 0.0);
+    assert_eq!(&keys[..count], &[keycode::BUTTON_MODE]);
+}

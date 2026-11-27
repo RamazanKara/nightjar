@@ -180,4 +180,34 @@ public class PadReachTest extends ModernControllerHarness {
         controller.hide();
         assertEquals(View.GONE, area.getVisibility());
     }
+
+    @Test public void aSwipeInATrackpadsAreaMovesWithoutClickingAndCancelledStickSkipsDoubleTap() {
+        prefs.oscSteamControls = true;
+        ModernController controller = withLayout(draft -> {
+            draft.setReach(PadLayout.Control.LEFT_PAD, 2f);
+            draft.setReach(PadLayout.Control.LEFT_STICK, 2f);
+        });
+        List<float[]> touches = new ArrayList<>();
+        controller.setTouchSink((type, pointer, x, y, pressure) -> touches.add(new float[] {type, x, y, pressure}));
+        PadControlView pad = controller.view(PadLayout.Control.LEFT_PAD);
+        View padArea = pad.reachLayer();
+        long t = SystemClock.uptimeMillis();
+        // Swipe outward inside the left reach margin: real finger travel suppresses tap-to-click.
+        padArea.dispatchTouchEvent(touch(t, t, MotionEvent.ACTION_DOWN, 40f, padArea.getHeight() / 2f));
+        padArea.dispatchTouchEvent(touch(t, t + 30, MotionEvent.ACTION_MOVE, 2f, padArea.getHeight() / 2f));
+        padArea.dispatchTouchEvent(touch(t, t + 60, MotionEvent.ACTION_UP, 2f, padArea.getHeight() / 2f));
+        assertEquals("Outward swipe in reach area does not click the Steam trackpad",
+                0, last()[0] & SteamControls.LEFT_PAD_CLICK_FLAG);
+
+        // Cancelled stick touch in reach area must not arm double-tap L3 for the next touch.
+        PadControlView stick = controller.view(PadLayout.Control.LEFT_STICK);
+        View stickArea = stick.reachLayer();
+        long t2 = t + 500;
+        stickArea.dispatchTouchEvent(touch(t2, t2, MotionEvent.ACTION_DOWN, 2f, stickArea.getHeight() / 2f));
+        stickArea.dispatchTouchEvent(touch(t2, t2 + 20, MotionEvent.ACTION_CANCEL, 2f, stickArea.getHeight() / 2f));
+        stickArea.dispatchTouchEvent(touch(t2 + 60, t2 + 60, MotionEvent.ACTION_DOWN, 2f, stickArea.getHeight() / 2f));
+        assertEquals("Cancelled reach touch does not arm double-tap L3",
+                0, last()[0] & ControllerPacket.LS_CLK_FLAG);
+        stickArea.dispatchTouchEvent(touch(t2 + 60, t2 + 90, MotionEvent.ACTION_UP, 2f, stickArea.getHeight() / 2f));
+    }
 }

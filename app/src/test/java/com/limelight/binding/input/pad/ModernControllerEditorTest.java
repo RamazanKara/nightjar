@@ -570,6 +570,30 @@ public class ModernControllerEditorTest extends ModernControllerHarness {
         controller.finishEditing(false);
     }
 
+    @Test public void disconnectingControllerWhileEditingKeepsHumanNameAndRestoresActiveLayout() {
+        ModernController controller = controller(GAME);
+        java.util.List<String[]> connected = java.util.Collections.singletonList(
+                new String[] {"usb:054c:0ce6", "DualSense Wireless Controller"});
+        controller.setControllers(connected);
+        controller.startEditing();
+        settle();
+        PadEditor editor = (PadEditor) frame.getChildAt(frame.getChildCount() - 1);
+        editor.setForController(true);
+        editor.draft().setScale(PadLayout.Control.FACE, 1.3f);
+
+        // Controller disconnects before the user taps Done.
+        controller.setControllers(java.util.Collections.emptyList());
+        controller.finishEditing(true);
+
+        android.content.SharedPreferences prefsStore =
+                frame.getContext().getSharedPreferences(ModernController.PREFS, android.content.Context.MODE_PRIVATE);
+        java.util.List<String[]> saved = PadControllerLayouts.saved(prefsStore);
+        assertEquals(1, saved.size());
+        assertEquals("DualSense Wireless Controller", saved.get(0)[1]);
+        assertEquals("Disconnected controller layout does not stay active",
+                1.0f, controller.layout().spec(PadLayout.Control.FACE).scale(), 1e-3f);
+    }
+
     private static void assertWhole(PadEditor editor, String state) {
         View panel = editor.panel();
         assertTrue(state + ": the panel lies on the surface", panel.getX() >= 0 && panel.getY() >= 0

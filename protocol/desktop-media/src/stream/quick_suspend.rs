@@ -49,7 +49,7 @@ impl QuickSuspend {
         self.paused().then(|| say(policy::PAUSED))
     }
 
-    fn paused(&self) -> bool {
+    pub(super) fn paused(&self) -> bool {
         self.state
             .is_some_and(|state| policy::paused(state_name(state)))
     }

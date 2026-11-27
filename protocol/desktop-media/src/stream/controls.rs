@@ -402,6 +402,10 @@ impl Streaming {
     /// Opens the stream menu when a held Guide asked for it on the last tick, and returns a new
     /// join-request guest name if one arrived (`None` otherwise) so the UI shell can switch to the
     /// Guests page or show a toast.
+    pub fn guide_menu_pending(&self) -> bool {
+        self.guide_menu
+    }
+
     pub fn open_guide_menu(&mut self, window: *mut SDL_Window, pads: &mut Gamepads) -> Option<String> {
         if std::mem::take(&mut self.guide_menu) && !self.menu_visible {
             self.toggle_menu(window, pads);

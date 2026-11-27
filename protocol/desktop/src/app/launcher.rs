@@ -93,9 +93,7 @@ impl App {
         }
         // SAFETY: reading the event type.
         let kind = SDL_EventType(unsafe { event.r#type });
-        if is_gamepad_activity(event) {
-            self.pad_poll.note_activity(Instant::now());
-        }
+        self.note_gamepad_activity(event);
         self.note_render_device(kind);
         if kind == SDL_EVENT_SYSTEM_THEME_CHANGED {
             // The System theme follows at once: the next frame has the other look.

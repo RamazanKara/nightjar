@@ -213,6 +213,7 @@ final class GameHostTextInput {
         if (pan == game.streamView.keyboardPan()) return;
         LimeLog.info(pan == 0 ? "Stream moves back down" : "Stream moves " + Math.round(-pan) + " px up for the soft keyboard");
         game.streamView.setKeyboardPan(pan);
+        if (game.desktopGestures != null) game.desktopGestures.syncBounds();
     }
 
     /**

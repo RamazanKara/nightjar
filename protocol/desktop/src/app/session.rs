@@ -421,7 +421,7 @@ impl App {
         }
         streaming.follow_text_field(window);
         streaming.follow_fullscreen(window);
-        streaming.follow_curtain(window);
+        streaming.follow_curtain(window, &mut self.pads);
         #[cfg(windows)]
         streaming.follow_tab_chord(window);
         streaming.pump();
@@ -429,7 +429,11 @@ impl App {
         if streaming.export_statistics {
             streaming.save_statistics(&self.store.dir().join("statistics"));
         }
-        let pad_active = streaming.sends_controllers() || streaming.menu_visible;
+        let pad_active = super::controllers_allowed_for(
+            streaming,
+            self.window,
+            self.launcher.settings.background_controllers,
+        );
         let direct_pad_us = streaming.direct_motion.last_pad_activity_us();
         // The launch curtain's ring turns as the menu animates.
         let menu_visible = streaming.menu_visible || streaming.curtain_down();
@@ -554,8 +558,8 @@ impl App {
         self.track_visibility(event);
         // SAFETY: reading the event type.
         let kind = SDL_EventType(unsafe { event.r#type });
-        if is_gamepad_activity(event) {
-            self.pad_poll.note_activity(Instant::now());
+        if kind == SDL_EVENT_GAMEPAD_REMOVED || self.stream_controllers_allowed() {
+            self.note_gamepad_activity(event);
         }
         // A stream keeps the night look; the launcher it returns to has the system's theme.
         if kind == SDL_EVENT_SYSTEM_THEME_CHANGED {
@@ -601,6 +605,7 @@ impl App {
         if streaming.menu_visible && self.dispatch_stream_menu(event, kind, key_action, repeat) {
             return;
         }
+        let pad_allowed = self.stream_controllers_allowed();
         let Some((streaming, _)) = self.streaming.as_mut() else { return };
         // Microphone only's window has its own buttons; its chords still reach the stream. The
         // launch curtain's buttons take the pointer while it is down.
@@ -614,9 +619,10 @@ impl App {
             streaming.needs_redraw = true;
         }
         streaming.handle(event, self.window, self.renderer, &mut self.pads);
-        // What opened the Control Center names its hints from its first frame on.
-        if streaming.menu_visible
+        // What opened the Control Center (or acts on the Launch Curtain) names its hints from its first frame on.
+        if (streaming.menu_visible || streaming.curtain_down())
             && let Some(source) = input_source::of(event, |id| self.pads.real_pad_type(id))
+            && (pad_allowed || !matches!(source, input_source::InputSource::Pad(_)))
         {
             self.overlay.input = source;
         }
