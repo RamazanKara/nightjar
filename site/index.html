@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#f8f9fd" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#14161f" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f7fa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#090a0d" media="(prefers-color-scheme: dark)">
   <title>Your PC. In your hands. · Nightjar</title>
-  <meta name="description" content="Stream your PC to Android, Windows, Linux and macOS from any Moonlight-compatible host. Nightjar brings low latency, a clear picture and complete control to your screen.">
+  <meta name="description" content="Stream your PC to Android, Android TV, Windows, Linux and macOS from any Moonlight-compatible host. Nightjar brings low latency, a clear picture and complete control to every screen.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Nightjar">
   <meta property="og:title" content="Your PC. In your hands. · Nightjar">
-  <meta property="og:description" content="Stream your PC to Android, Windows, Linux and macOS from any Moonlight-compatible host. Nightjar brings low latency, a clear picture and complete control to your screen.">
+  <meta property="og:description" content="Stream your PC to Android, Android TV, Windows, Linux and macOS from any Moonlight-compatible host. Nightjar brings low latency, a clear picture and complete control to every screen.">
   <meta property="og:image" content="assets/og.png">
-  <meta property="og:image:alt" content="Nightjar — Stream your PC to Android.">
+  <meta property="og:image:alt" content="Nightjar — Stream your PC to Android, Android TV, Windows, Linux and macOS.">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:locale" content="en_US">
@@ -22,6 +22,7 @@
   <link rel="alternate" hreflang="de" href="de/index.html">
   <link rel="alternate" hreflang="x-default" href="index.html">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon.png">
+  <link rel="stylesheet" href="assets/design-tokens.css">
   <link rel="stylesheet" href="assets/site.css">
   <script src="assets/site.js" defer></script>
 </head>
@@ -43,24 +44,24 @@
   <main id="main" tabindex="-1">
     <section class="hero wrap">
       <div class="hero-copy">
+        <span class="eyebrow-pill">Android · TV · Windows · Linux · macOS</span>
         <h1>Your PC.<br><span>In your hands.</span></h1>
-        <p class="mission">Stream your PC to Android, Windows, Linux and macOS.</p>
+        <p class="mission">Stream your PC to Android, Android TV, Windows, Linux and macOS.</p>
         <p class="hero-description">Your games, your desktop, your controls. Powered by a shared Rust streaming engine built for immediate response, steady frame pacing and sharp HDR across any Moonlight-compatible host.</p>
         <div class="actions"><a class="button" href="https://github.com/RamazanKara/nightjar/releases/latest"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Download Nightjar</a><a class="text-link" href="#setup">See the setup<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a></div>
-        <p class="fine-print">Android 7.1+ · Windows · Linux &amp; Steam Deck · macOS · Free and open source</p>
+        <p class="fine-print">Android 7.1+ · Android TV &amp; Fire TV · Windows · Linux &amp; Steam Deck · macOS · Free and open source</p>
       </div>
       <figure class="hero-media">
-        <div class="orbit" aria-hidden="true"></div>
-        <div class="phone"><img src="assets/shot-library.webp" alt="The Nightjar game library on Android: ten game covers for Living-room PC, with the running game first and marked Running." width="720" height="1600" fetchpriority="high" decoding="async"></div>
-        <figcaption>Your games. Your screen.</figcaption>
+        <div class="phone"><img src="assets/shot-library.webp" alt="Nightjar Home on Android showing the cover-lit hero stage and game shelves from a paired PC." width="720" height="1600" fetchpriority="high" decoding="async"></div>
+        <figcaption>Your games. Every screen.</figcaption>
       </figure>
     </section>
     <section class="how-band" aria-labelledby="how-title">
       <div class="wrap"><h2 class="small-heading" id="how-title">How it works</h2>
         <ol class="how-steps">
           <li><span class="step-index" aria-hidden="true">01</span><div><h3>Your PC renders.</h3><p>Your PC’s streaming host runs your games and apps.</p></div></li>
-          <li><span class="step-index" aria-hidden="true">02</span><div><h3>Nightjar streams.</h3><p>Video and audio travel to your phone, TV or computer.</p></div></li>
-          <li><span class="step-index" aria-hidden="true">03</span><div><h3>You take control.</h3><p>Your input goes straight back to your PC.</p></div></li>
+          <li><span class="step-index" aria-hidden="true">02</span><div><h3>Nightjar streams.</h3><p>Video and audio travel to your handheld, phone, TV or computer.</p></div></li>
+          <li><span class="step-index" aria-hidden="true">03</span><div><h3>You take control.</h3><p>Your input goes straight back to your PC with minimal delay.</p></div></li>
         </ol>
       </div>
     </section>
@@ -70,22 +71,22 @@
         <article class="feature"><span class="feature-number" aria-hidden="true">01</span><h3>Shared Rust streaming engine</h3><p>One Rust core powers Android, Windows, Linux and macOS—with per-chip low-latency decoder tuning, decoder receive priority, non-blocking input hand-off and phase-lock timing.</p><p class="feature-detail">Low-latency core</p></article>
         <article class="feature"><span class="feature-number" aria-hidden="true">02</span><h3>Real VRR, Fractional V-Sync &amp; Beam Racing</h3><p>On VRR and Android adaptive screens, frames present on the game’s own rhythm. Fixed high-refresh panels hold an even cadence, while wired desktop PyroWave draws rows before the frame finishes.</p><p class="feature-detail">Real VRR · Phase lock · Beam racing</p></article>
         <article class="feature"><span class="feature-number" aria-hidden="true">03</span><h3>Frame Warp</h3><p>With a Rubylight PC, mouse and right-stick camera turns reflect on your very next display refresh while keeping the game’s HUD locked firmly in place.</p><p class="feature-detail">Instant camera response</p></article>
-        <article class="feature"><span class="feature-number" aria-hidden="true">04</span><h3>True HDR &amp; full-colour 4:4:4</h3><p>AV1, HEVC and H.264 hardware decoding plus GPU-accelerated PyroWave (including Apple Silicon macOS), with HDR10, HDR10+, HLG, Dolby Vision and sharp 4:4:4 colour for crisp text.</p><p class="feature-detail">HDR10+ · Dolby Vision · PyroWave 4:4:4</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">04</span><h3>True HDR &amp; full-colour 4:4:4</h3><p>AV1, HEVC and H.264 hardware decoding plus GPU-accelerated PyroWave (including Apple Silicon macOS), with HDR10, HDR10+, HLG, Dolby Vision, clean HDR-to-SDR tone-mapping and sharp 4:4:4 text.</p><p class="feature-detail">HDR10+ · Dolby Vision · PyroWave 4:4:4</p></article>
         <article class="feature"><span class="feature-number" aria-hidden="true">05</span><h3>Upscaling on every platform</h3><p>Sharp spatial scaling built right in: AMD FSR 1 and Snapdragon GSR on Android, Apple MetalFX on macOS and GPU video upscaling on Windows.</p><p class="feature-detail">FSR · Snapdragon GSR · MetalFX</p></article>
-        <article class="feature"><span class="feature-number" aria-hidden="true">06</span><h3>One console-grade library</h3><p>Every paired PC’s games on one Home with dynamic cover-lit colours, store shelves, sorting by play time or installed state, Auto UI scaling on desktop/TV and Wake-on-LAN.</p><p class="feature-detail">Home · Sort &amp; group · Auto scaling</p></article>
-        <article class="feature"><span class="feature-number" aria-hidden="true">07</span><h3>Tune &amp; share mid-stream</h3><p>Adjust bitrate, frame rate and Radeon/NVIDIA driver profiles from the Control Center, move live sessions with Continue here, run Dual screen and share clipboard, files and USB devices.</p><p class="feature-detail">Clipboard · Files · USB · Driver controls</p></article>
-        <article class="feature"><span class="feature-number" aria-hidden="true">08</span><h3>Play together, anywhere</h3><p>Join friends as a guest or take a split-screen co-op seat, stream away from home via Tailscale or direct P2P internet play without port forwarding, and roam across networks seamlessly.</p><p class="feature-detail">Guests · Co-op · Direct P2P · Roaming</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">06</span><h3>Cover-lit console Home</h3><p>Every paired PC’s games on one Home across Night, Day, OLED Black and High-Contrast themes—with store shelves, Quick Suspend &amp; resume, Auto UI scaling on desktop/TV and Wake-on-LAN.</p><p class="feature-detail">Home · Quick Suspend · 4 themes</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">07</span><h3>Control Center &amp; instant clips</h3><p>Open the 8-module Control Center mid-stream to adjust bitrate, Radeon/NVIDIA profiles, party audio or window mode, save instant replay clips, move sessions with Continue here and share files or USB.</p><p class="feature-detail">Control Center · Clips · USB · Coherence</p></article>
+        <article class="feature"><span class="feature-number" aria-hidden="true">08</span><h3>Play together, anywhere</h3><p>Join friends as a guest or take a split-screen co-op seat with per-player microphones, wake your PC away from home, stream over Tailscale or direct P2P without port forwarding, and roam seamlessly.</p><p class="feature-detail">Guests · Party audio · Direct P2P · Wake relay</p></article>
       </div>
       <div class="showcase">
-        <figure class="showcase-wide"><div class="frame"><img src="assets/shot-stream.webp" alt="A Nightjar stream on a phone held sideways: a space-flight game with the compact overlay showing FPS, round-trip time and packet loss." width="1600" height="900" loading="lazy" decoding="async"></div><figcaption>Live FPS, round-trip time, frame loss and stutter breakdown in the overlay.</figcaption></figure>
-        <figure class="showcase-tall"><div class="phone"><img src="assets/shot-upscaling.webp" alt="The Nightjar Display &amp; image settings with the client-side upscaling choices: Off, Bilinear, FSR 1.0 and SGSR 1 (Snapdragon Game Super Resolution)." width="720" height="1600" loading="lazy" decoding="async"></div><figcaption>Choose FSR or Snapdragon GSR under Display &amp; image.</figcaption></figure>
+        <figure class="showcase-wide"><div class="frame"><img src="assets/shot-stream.webp" alt="A Nightjar stream in landscape with the compact performance HUD showing FPS, round-trip time and frame timing." width="1600" height="900" loading="lazy" decoding="async"></div><figcaption>Live FPS, round-trip time, frame loss and stutter breakdown in the overlay.</figcaption></figure>
+        <figure class="showcase-tall"><div class="phone"><img src="assets/shot-upscaling.webp" alt="Nightjar settings showing client-side upscaling and picture options." width="720" height="1600" loading="lazy" decoding="async"></div><figcaption>Tune upscaling, HDR and frame pacing per device.</figcaption></figure>
       </div>
     </section>
     <section class="control-band" aria-labelledby="controls-title">
       <div class="control-layout wrap">
-        <figure class="control-media"><div class="phone"><img src="assets/shot-presets.webp" alt="Nightjar settings with Recommended presets above the Video, Display &amp; image, Controls, Audio, Streaming, App and Advanced sections." width="720" height="1600" loading="lazy" decoding="async"></div><figcaption>Presets for the way you play.</figcaption></figure>
+        <figure class="control-media"><div class="phone"><img src="assets/shot-presets.webp" alt="Nightjar settings showing visual preview cards and Recommended presets." width="720" height="1600" loading="lazy" decoding="async"></div><figcaption>Visual previews and presets for the way you play.</figcaption></figure>
         <div class="control-copy"><h2 id="controls-title">Your play.<br>Your way.</h2><p class="section-description">Pick up your controller. Reach for the touchscreen. Or keep your mouse and keyboard.</p>
-          <div class="control-list"><article><h3>Controllers, including DualSense</h3><p>Connect USB and Bluetooth controllers. Remap buttons to fit the way you play.</p></article><article><h3>Touch, trackpad, mouse, keyboard</h3><p>Use direct touch, a natural trackpad or a cursor drawn on your phone. Build on-screen controls with sticks and triggers, in the Classic or Modern style.</p></article><article><h3>Performance, in plain sight</h3><p>See FPS, latency stages and frame loss in the performance overlay. Open stream health diagnostics and share a redacted report anytime.</p></article><article><h3>Discover. Wake. Play.</h3><p>Local discovery finds your host. Wake-on-LAN brings your PC online for your next stream.</p></article></div>
+          <div class="control-list"><article><h3>Controller Studio &amp; DualSense</h3><p>Connect USB and Bluetooth controllers with DualSense haptics and gyro. Remap buttons, tune stick curves and switch Xbox, PlayStation or Nintendo face layouts visually.</p></article><article><h3>Touch Studio, trackpad &amp; keyboard</h3><p>Use direct touch, a natural trackpad or a desktop cursor. Arrange separable touch controls on an 8 dp snap grid with custom opacity, or open the full PC keyboard.</p></article><article><h3>Diagnostics, in plain sight</h3><p>See FPS, latency stages and frame loss in the performance capsule. Open Stream Doctor for plain-English bottleneck checks and share a redacted report anytime.</p></article><article><h3>Discover. Wake. Play.</h3><p>Local discovery finds your host automatically. Wake-on-LAN and away wake relays bring your PC online whenever you’re ready to play.</p></article></div>
         </div>
       </div>
     </section>
@@ -101,27 +102,27 @@
     </section>
     <section class="setup-band" id="setup" aria-labelledby="setup-title">
       <div class="wrap section">
-        <div class="section-intro"><h2 id="setup-title">Four steps to your first stream.</h2><p>One PC. One Android device or another PC. Any Moonlight-compatible host.</p></div>
+        <div class="section-intro"><h2 id="setup-title">Four steps to your first stream.</h2><p>One PC. Any Android device, TV or computer. Any Moonlight-compatible host.</p></div>
         <div class="setup-layout">
         <div class="setup-copy">
         <ol class="setup-steps">
-          <li><span class="step-index" aria-hidden="true">01</span><h3>Install the app</h3><p>Get the APK from the <a href="https://github.com/RamazanKara/nightjar/releases/latest">latest release</a>, open it on Android and allow installation. On Windows or Linux, unpack the desktop archive and run <code>nightjar</code>.</p></li>
+          <li><span class="step-index" aria-hidden="true">01</span><h3>Install Nightjar</h3><p>Download Nightjar from the <a href="https://github.com/RamazanKara/nightjar/releases/latest">latest release</a>: install the APK on Android or Android TV, run the <code>setup.exe</code> installer on Windows, install the <code>.deb</code>, <code>.rpm</code>, AppImage or Flatpak on Linux, or move <code>Nightjar.app</code> to Applications on macOS.</p></li>
           <li><span class="step-index" aria-hidden="true">02</span><h3>Start your host</h3><p>Start your PC’s streaming host, for example <a href="https://github.com/ClassicOldSong/Apollo">Apollo</a>, <a href="https://github.com/RamazanKara/Rubylight">Rubylight</a>, <a href="https://github.com/LizardByte/Sunshine">Sunshine</a> or <a href="https://github.com/Nonary/Vibepollo">Vibepollo</a>. Connect your PC and your device to the same network.</p></li>
-          <li><span class="step-index" aria-hidden="true">03</span><h3>Pair your device</h3><p>Select your PC in the app, or use “Add PC”. Enter the displayed PIN in your host’s settings or web UI, or scan a Rubylight PC’s QR code. If your host has per-device permissions, grant app-list, stream, launch and input permissions.</p></li>
-          <li><span class="step-index" aria-hidden="true">04</span><h3>Start your stream</h3><p>Choose a game or your desktop. Set your picture and controls, then start your stream.</p></li>
+          <li><span class="step-index" aria-hidden="true">03</span><h3>Pair your device</h3><p>Select your PC in Nightjar, or choose “Add PC”. Scan the QR code shown in Rubylight’s console, or enter the 4-digit PIN in your host’s web UI. If your host has per-device permissions, grant app-list, stream, launch and input access.</p></li>
+          <li><span class="step-index" aria-hidden="true">04</span><h3>Start your stream</h3><p>Choose a game or your desktop. Pick a preset or tune your picture and controls, then play.</p></li>
         </ol>
         <a class="text-link" href="docs.html">Get setup help<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
         </div>
-        <figure class="setup-media"><div class="phone"><img src="assets/shot-pcs.webp" alt="The Nightjar PCs list with Living-room PC playing Racing Game, Studio PC not paired and Laptop offline, and an Add PC button." width="720" height="1600" loading="lazy" decoding="async"></div><figcaption>Pick your PC. Start your stream.</figcaption></figure>
+        <figure class="setup-media"><div class="phone"><img src="assets/shot-pcs.webp" alt="The Nightjar PCs view showing paired, unpaired and offline hosts with Add PC." width="720" height="1600" loading="lazy" decoding="async"></div><figcaption>Pick your PC. Start your stream.</figcaption></figure>
         </div>
       </div>
     </section>
-    <section class="closing wrap"><h2>Your PC is ready.<br>Your move.</h2><div><p>Get Nightjar and start your stream.</p><a class="button" href="https://github.com/RamazanKara/nightjar/releases/latest"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Download Nightjar</a><a class="closing-detail" href="download.html">Download and checksums</a></div></section>
+    <section class="closing wrap"><h2>Your PC is ready.<br>Your move.</h2><div><p>Get Nightjar and start your stream.</p><a class="button" href="https://github.com/RamazanKara/nightjar/releases/latest"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Download Nightjar</a><br><a class="closing-detail" href="download.html">All downloads &amp; SHA-256 checksums</a></div></section>
   </main>
   <footer class="site-footer wrap">
     <div><a class="brand" href="index.html">NIGHTJAR</a><p>Your PC. Your stream.</p></div>
     <nav aria-label="Footer navigation"><a href="docs.html">Documentation</a><a href="devices.html">Device results</a><a href="privacy.html">Privacy</a><a href="https://github.com/RamazanKara/nightjar">Source code</a><a href="https://ramazankara.github.io/Rubylight/">Rubylight host</a></nav>
-    <p class="footer-note">For Android, Windows, Linux and macOS. Free and open source.</p>
+    <p class="footer-note">For Android, Android TV, Windows, Linux and macOS. Free and open source.</p>
   </footer>
 </body>
 </html>

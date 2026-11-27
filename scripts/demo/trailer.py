@@ -26,23 +26,31 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FPS = 60
 
-NIGHT = (20, 22, 31)
-NIGHT_DEEP = (13, 14, 20)
-MOON = (242, 169, 59)
-CREAM = (244, 239, 230)
-MUTED = (185, 179, 194)
-DIM = (128, 124, 140)
-RING = (42, 45, 58)
-SURFACE = (28, 31, 42)
-BEZEL = (9, 10, 14)
-# The app's ambient light, as the focused game's cover tints the glass (Racing Game's magenta, the night's violet).
-WASH_MAGENTA = (150, 52, 118)
-WASH_VIOLET = (72, 52, 150)
+NIGHT = (17, 19, 25)
+NIGHT_DEEP = (9, 10, 13)
+MOON = (245, 176, 65)
+CREAM = (245, 247, 250)
+MUTED = (199, 205, 217)
+DIM = (142, 150, 168)
+RING = (35, 40, 54)
+SURFACE = (24, 27, 36)
+BEZEL = (9, 10, 13)
+# 7.0 Obsidian Cinema studio lighting: warm amber and cool architectural cobalt washes (no stars or orbit rings).
+WASH_MAGENTA = (245, 176, 65)
+WASH_VIOLET = (46, 98, 196)
 
 FONT_REG = os.path.join(REPO, "protocol", "desktop", "assets", "Figtree-400.ttf")
 FONT_BOLD = os.path.join(REPO, "protocol", "desktop", "assets", "Figtree-600.ttf")
+README_SHOTS = os.path.join(REPO, "docs", "assets", "readme")
 SHOTS = os.path.join(REPO, "docs", "assets", "shots")
 DEMO = os.path.join(REPO, "docs", "screenshots", "demo")
+
+
+def readme_or_shot(readme_name, legacy_name=None):
+    cand = os.path.join(README_SHOTS, readme_name)
+    if os.path.exists(cand):
+        return cand
+    return os.path.join(SHOTS, legacy_name or readme_name)
 
 # The moon-and-nightjar mark (app/src/main/res/drawable/ic_nightjar_foreground.xml), 108-unit viewport.
 BIRD = ("M 51.75,41.24 C 53.31,40.96 54.50,41.92 54.89,43.31 C 55.16,44.00 55.33,44.55 55.55,44.95 "
@@ -797,9 +805,9 @@ class Platforms(Scene):
         self.win = Device("window", 880 if not V else 760, 550 if not V else 475)
         self.tv = Device("tv", 640 if not V else 560, 360 if not V else 315)
         self.hh = Device("handheld", 520 if not V else 470, 234 if not V else 212)
-        self.desk = Still(os.path.join(SHOTS, "desktop-home.png"))
-        self.tvs = Still(os.path.join(SHOTS, "tv-home.png"))
-        self.hhs = Still(os.path.join(SHOTS, "handheld-home.png"))
+        self.desk = Still(readme_or_shot("desktop-home.webp", "desktop-home.png"))
+        self.tvs = Still(readme_or_shot("tv-home.webp", "tv-home.png"))
+        self.hhs = Still(readme_or_shot("handheld-home.webp", "handheld-home.png"))
 
     def render(self, cv, lt):
         c = self.c
@@ -818,19 +826,19 @@ class Platforms(Scene):
             dev.draw(cv, src.frame(0, dev.sw, dev.sh), x + (1 - ease_out((lt - t_in - 0.1) / 0.7)) * ddx,
                      y + dy * 2, a)
         title = "On every screen you own."
-        plat = "Android · Android TV · Fire TV · Windows · Linux"
+        plat = "Android · Android TV · Fire TV · Windows · Linux · macOS"
         if not c.V:
             t = text_img(title, 84, CREAM)
             a, dy = envelope(lt, self.dur, 0.25)
             blit(cv, t, W / 2 - t.size[0] / 2, 80 + dy, a)
-            p = text_img(plat, 42, MOON)
+            p = text_img(plat, 40, MOON)
             a, dy = envelope(lt, self.dur, 0.45)
             blit(cv, p, W / 2 - p.size[0] / 2, 200 + dy, a)
         else:
             t = block_img("On every screen\nyou own.", 88, CREAM, W - 2 * c.margin, bold=True, leading=1.08)
             a, dy = envelope(lt, self.dur, 0.25)
             blit(cv, t, c.margin, 330 + dy, a)
-            p = block_img("Android · Android TV · Fire TV\nWindows · Linux", 46, MOON, W - 2 * c.margin, bold=True)
+            p = block_img("Android · Android TV · Fire TV\nWindows · Linux · macOS", 46, MOON, W - 2 * c.margin, bold=True)
             a, dy = envelope(lt, self.dur, 0.45)
             blit(cv, p, c.margin, 330 + t.size[1] + 30 + dy, a)
 
@@ -925,51 +933,25 @@ def _wash(R, color, strength):
 
 
 class Background:
-    """The moonlit glass sky: night, a magenta and violet wash that drifts with the scenes, stars, faint rings."""
+    """7.0 Obsidian Cinema studio backdrop: deep #090A0D canvas with soft directional amber & cobalt light pools."""
 
     def __init__(self, W, H, noise=True):
         self.W, self.H = W, H
         yy = np.linspace(0, 1, H, dtype=np.float32)[:, None]
         xx = np.linspace(0, 1, W, dtype=np.float32)[None, :]
-        v = np.clip(1 - (((xx - 0.5) * 1.2) ** 2 + ((yy - 0.45) * 1.3) ** 2), 0, 1)
+        v = np.clip(1 - (((xx - 0.52) * 1.15) ** 2 + ((yy - 0.42) * 1.25) ** 2), 0, 1)
         base = np.zeros((H, W, 3), np.float32)
         for k in range(3):
-            base[..., k] = NIGHT_DEEP[k] + (NIGHT[k] - NIGHT_DEEP[k]) * (0.35 + 0.65 * v)
-        # Stars: small, sparse, a few brighter ones, denser towards the top like the app's sky.
-        rng = np.random.default_rng(11)
-        count = int(W * H / 5200)
-        sx = rng.uniform(0, W, count)
-        sy = H * rng.power(0.75, count)
-        sy = H - sy  # more near the top
-        bright = rng.uniform(0.18, 0.55, count) ** 1.6
-        bright[rng.uniform(0, 1, count) < 0.06] = 0.85
-        for x, y, b in zip(sx.astype(int), sy.astype(int), bright):
-            if 0 <= x < W and 0 <= y < H:
-                base[y, x] += (np.array(CREAM, np.float32) - base[y, x]) * b
-                if b > 0.6:
-                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                        if 0 <= x + dx < W and 0 <= y + dy < H:
-                            base[y + dy, x + dx] += (np.array(CREAM, np.float32) - base[y + dy, x + dx]) * b * 0.35
-        # A little noise keeps the gradient from banding after H.264 (stills skip it: PNG keeps the gradient).
+            base[..., k] = NIGHT_DEEP[k] + (NIGHT[k] - NIGHT_DEEP[k]) * (0.25 + 0.75 * v)
         if noise:
-            base += rng.normal(0, 0.6, base.shape).astype(np.float32)
+            rng = np.random.default_rng(11)
+            base += rng.normal(0, 0.55, base.shape).astype(np.float32)
         self.base = Image.fromarray(np.clip(base, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
-        R = int(max(W, H) * 0.95)
-        ss = 2
-        big = Image.new("RGBA", (R * 2 * ss, R * 2 * ss), (0, 0, 0, 0))
-        d = ImageDraw.Draw(big)
-        for i, f in enumerate((1.0, 0.8, 0.6, 0.4)):
-            r = R * f * ss
-            d.ellipse((R * ss - r, R * ss - r, R * ss + r, R * ss + r), outline=RING + (int(110 - i * 15),),
-                      width=2 * ss)
-        self.rings = big.resize((R * 2, R * 2), Image.LANCZOS)
-        self.R = R
-        self.GR = int(max(W, H) * 0.62)
-        self.wash_a = _wash(self.GR, WASH_MAGENTA, 0.42)
-        self.wash_b = _wash(self.GR, WASH_VIOLET, 0.50)
+        self.GR = int(max(W, H) * 0.64)
+        self.wash_a = _wash(self.GR, WASH_MAGENTA, 0.16)
+        self.wash_b = _wash(self.GR, WASH_VIOLET, 0.22)
 
     def _layer(self, canvas, layer, R, cx, cy, alpha):
-        # Whole pixels, and only the visible part: the layers are far larger than the frame.
         x, y = round(cx * self.W - R), round(cy * self.H - R)
         x0, y0 = max(0, -x), max(0, -y)
         x1, y1 = min(2 * R, self.W - x), min(2 * R, self.H - y)
@@ -980,10 +962,8 @@ class Background:
     def render(self, center, alpha=1.0):
         cv = self.base.copy()
         cx, cy = center
-        # The wash sits opposite the rings' centre so the light falls behind the copy and the devices alike.
-        self._layer(cv, self.wash_b, self.GR, 1.0 - cx * 0.8, 0.15 + cy * 0.25, alpha)
-        self._layer(cv, self.wash_a, self.GR, 0.2 + cx * 0.65, 0.95 - cy * 0.2, alpha)
-        self._layer(cv, self.rings, self.R, cx, cy, alpha)
+        self._layer(cv, self.wash_b, self.GR, 1.0 - cx * 0.75, 0.18 + cy * 0.24, alpha)
+        self._layer(cv, self.wash_a, self.GR, 0.24 + cx * 0.62, 0.88 - cy * 0.22, alpha)
         return cv
 
 
@@ -994,22 +974,21 @@ def build(cut, ctx, clips):
         return media(clips, name, start, dur, still)
 
     def tv_src(skip=0.0):
-        # Home: Down to Recently played, Right three times (the glass takes each cover's light), OK on Brightwater;
-        # its page once loaded (the placeholder while it loads is cut). The emulator streams at about 20 fps, so the
-        # stream itself is left to the handheld.
-        return Sequence([(C("tv-home.mp4", 0.2 + skip, 5.22 - skip, os.path.join(SHOTS, "tv-home.png")), 5.22 - skip),
-                         (C("tv-home.mp4", 6.95, 2.0, os.path.join(SHOTS, "tv-game-page.png")), 2.0)])
+        return Sequence([
+            (C("tv-home.mp4", 0.2 + skip, 5.22 - skip, readme_or_shot("tv-home.webp", "tv-home.png")), 5.22 - skip),
+            (C("tv-home.mp4", 6.95, 2.0, readme_or_shot("tv-game.webp", "tv-game-page.png")), 2.0),
+        ])
 
-    hh = C("hh-flow.mp4", 1.5, 9.0, os.path.join(DEMO, "landscape-compact.png"))
+    hh = C("hh-flow.mp4", 1.5, 9.0, readme_or_shot("stream-stats.webp", os.path.join(DEMO, "landscape-compact.png")))
     beats = [
-        (0.0, C("hh-menu.mp4", 2.6, 2.5, os.path.join(DEMO, "landscape-stream-menu.png")),
+        (0.0, C("hh-menu.mp4", 2.6, 2.5, readme_or_shot("control-center.webp", os.path.join(DEMO, "landscape-stream-menu.png"))),
          "Bitrate, quality and the overlay, mid-stream.", None, "handheld"),
-        (2.5, C("hh-radeon.mp4", 3.0, 2.9, os.path.join(SHOTS, "stream-menu-radeon.png")),
-         "Your PC's Radeon settings, from the couch.", "With a Rubylight 3.0 PC.", "handheld"),
-        (5.4, C("hh-keyboard.mp4", 1.3, 2.3, os.path.join(SHOTS, "stream-keyboard.png")),
+        (2.5, C("hh-radeon.mp4", 3.0, 2.9, readme_or_shot("control-center.webp", "stream-menu-radeon.png")),
+         "Your PC's Radeon & NVIDIA settings, from the couch.", "With a Rubylight PC.", "handheld"),
+        (5.4, C("hh-keyboard.mp4", 1.3, 2.3, readme_or_shot("stream-keyboard.webp", "stream-keyboard.png")),
          "A full PC keyboard, even with a controller.", None, "handheld"),
-        (7.7, C("pip.mp4", 2.5, 2.4, os.path.join(DEMO, "pip.png")),
-         "Keep watching in picture-in-picture.", None, "phone"),
+        (7.7, C("pip.mp4", 2.5, 2.4, readme_or_shot("stream-controls.webp", os.path.join(DEMO, "pip.png"))),
+         "Custom on-screen controls and picture-in-picture.", None, "handheld"),
     ]
     if cut == "teaser":
         # A 14.8 s loop: no intro, and the outro fades so the loop point is the empty night.

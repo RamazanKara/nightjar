@@ -14,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/RamazanKara/nightjar/releases/latest"><img src="https://img.shields.io/github/v/release/RamazanKara/nightjar?label=release&color=e8a33d" alt="Latest release"></a>
-  <a href="https://github.com/RamazanKara/nightjar/releases"><img src="https://img.shields.io/github/downloads/RamazanKara/nightjar/total?color=e8a33d" alt="Total downloads"></a>
-  <a href="LICENSE.txt"><img src="https://img.shields.io/github/license/RamazanKara/nightjar?color=e8a33d" alt="License: GPL-3.0"></a>
+  <a href="https://github.com/RamazanKara/nightjar/releases/latest"><img src="https://img.shields.io/github/v/release/RamazanKara/nightjar?label=release&color=f5b041" alt="Latest release"></a>
+  <a href="https://github.com/RamazanKara/nightjar/releases"><img src="https://img.shields.io/github/downloads/RamazanKara/nightjar/total?color=f5b041" alt="Total downloads"></a>
+  <a href="LICENSE.txt"><img src="https://img.shields.io/github/license/RamazanKara/nightjar?color=f5b041" alt="License: GPL-3.0"></a>
 </p>
 
 <p align="center">
@@ -78,11 +78,11 @@ Every screen works with a controller or a TV remote as well as touch, mouse and 
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="docs/assets/readme/handheld-home.webp" alt="Home on a handheld: Racing Game running, with Resume, Favourite and Quit game, a Continue playing list and the Recently played row, under a glass top bar with the controller's buttons for Resume and Options (demo library)"><br><sub><b>Made for handhelds.</b> Every action has its button on screen.</sub></td>
+<td width="50%" valign="top"><img src="docs/assets/readme/handheld-home.webp" alt="Home on a handheld: Racing Game running with Resume and Favourite, a Continue playing list and the Recently played row under a glass top bar with controller button hints (demo library)"><br><sub><b>Made for handhelds.</b> Every action has its button on screen.</sub></td>
 <td width="50%" valign="top"><img src="docs/assets/readme/desktop-home.webp" alt="Nightjar on the desktop: Home with Racing Game in progress, Resume and Quit game, and a row of cover art per store, under a top bar with Home, PCs, Settings and Help (demo library)"><br><sub><b>On the desktop too.</b> Windows, Linux and macOS, with a row per store on Home. <a href="protocol/desktop/README.md#using-nightjar">More of the desktop app</a></sub></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img src="docs/assets/readme/handheld-light.webp" alt="The same Home in the light theme: Racing Game with Resume, Favourite and Quit game on a pale background (demo library)"><br><sub><b>Light, dark or OLED black.</b> Or whatever the system uses.</sub></td>
+<td width="50%" valign="top"><img src="docs/assets/readme/handheld-light.webp" alt="The same Home in the Alabaster light theme: Racing Game with Resume and Favourite on a bright cover-lit backdrop (demo library)"><br><sub><b>Light, dark or OLED black.</b> Or whatever the system uses.</sub></td>
 <td width="50%" valign="top"><img src="docs/assets/readme/desktop-all-games.webp" alt="All games on the desktop: a grid of covers with filters for Installed, Games and each store (demo library)"><br><sub><b>Every store in one place.</b> Steam, Epic Games, GOG, EA app, Ubisoft Connect, Battle.net and Xbox, filtered with one press.</sub></td>
 </tr>
 </table>
@@ -100,7 +100,12 @@ Settings open on **Recommended**: **Stream smoothness**, **Picture quality**, th
 
 Phones, TVs and computers share one settings layout, and **Interface layout** (Automatic, TV or Handheld) in every Android build gives a handheld the TV screens or a TV the touch ones. Desktop users can scroll the launcher directly by dragging a touchscreen and match the launcher window to **Window** mode (`Fullscreen`, `Borderless` or `Windowed`). Settings can differ per PC and per game, with profiles that switch by network (mobile data, home Wi-Fi or other Wi-Fi) or follow the screen you play on. Nightjar comes in 15 languages, with high contrast, reduced motion and screen reader support.
 
-<p align="center"><img src="docs/assets/readme/desktop-settings.webp" width="820" alt="Settings on the desktop, on the Recommended page: Stream smoothness, Picture quality and HDR on Auto, the screen's resolution, a Console mode switch and Back to recommended, beside Controls, Audio, App and More settings (demo data)"></p>
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/assets/readme/desktop-settings.webp" alt="Settings on the desktop, on the Recommended page: visual preview cards for HDR, pacing and upscaling above Stream smoothness, Picture quality, HDR and Console mode (demo data)"><br><sub><b>Visual settings previews.</b> See what HDR, frame pacing and upscaling choices do right on Recommended.</sub></td>
+<td width="50%" valign="top"><img src="docs/assets/readme/desktop-controls.webp" alt="Controls settings on the desktop: the visual Controller Studio hardware diagram and stick deadzone response curve above button layout, rumble, gyro and touchpad options (demo data)"><br><sub><b>Controller Studio.</b> Visual hardware diagram and live stick deadzone curve for Xbox, PlayStation, Nintendo and Steam Deck pads.</sub></td>
+</tr>
+</table>
 
 ### Smooth, and it stays in the game
 

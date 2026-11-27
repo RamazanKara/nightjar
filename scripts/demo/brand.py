@@ -16,7 +16,9 @@ import os
 
 from PIL import Image
 
-from trailer import (CREAM, MOON, MUTED, REPO, SHOTS, Background, Device, blit, fit_cover, glow, mark, text_img)
+from trailer import (
+    CREAM, MOON, MUTED, REPO, Background, Device, blit, fit_cover, glow, mark, readme_or_shot, text_img,
+)
 
 TAGLINE = "Your PC games. Every screen."
 SUBLINE = "Low-latency game streaming from your PC"
@@ -29,8 +31,8 @@ TARGETS = {
 }
 
 
-def shot(name):
-    return Image.open(os.path.join(SHOTS, name)).convert("RGB")
+def shot(readme_name, legacy_name):
+    return Image.open(readme_or_shot(readme_name, legacy_name)).convert("RGB")
 
 
 def sky(W, H, rings):
@@ -38,12 +40,12 @@ def sky(W, H, rings):
 
 
 def devices(cv, x, y, tv_w, hh_w, hh_dx, hh_dy):
-    """The TV with Home, and the handheld in front of its lower right corner, like the trailer's every-screen card."""
+    """The TV with Home, and the handheld in front of its lower right corner."""
     tv = Device("tv", tv_w, round(tv_w * 9 / 16))
     hh = Device("handheld", hh_w, round(hh_w * 9 / 16))
-    blit(cv, glow(tv.w * 2, tv.h * 2, 0.16), x + tv.w / 2 - tv.w, y + tv.h / 2 - tv.h)
-    tv.draw(cv, fit_cover(shot("tv-home.png"), tv.sw, tv.sh), x, y)
-    hh.draw(cv, fit_cover(shot("handheld-home.png"), hh.sw, hh.sh), x + hh_dx, y + hh_dy)
+    blit(cv, glow(tv.w * 2, tv.h * 2, 0.14), x + tv.w / 2 - tv.w, y + tv.h / 2 - tv.h)
+    tv.draw(cv, fit_cover(shot("tv-home.webp", "tv-home.png"), tv.sw, tv.sh), x, y)
+    hh.draw(cv, fit_cover(shot("handheld-home.webp", "handheld-home.png"), hh.sw, hh.sh), x + hh_dx, y + hh_dy)
 
 
 def lockup(cv, x, y, ms, word_size, gap):
@@ -77,7 +79,7 @@ def og():
     blit(cv, l2, 68, 222 + 84)
     sub = text_img(SUBLINE, 24, MUTED, bold=False)
     blit(cv, sub, 72, 222 + 84 + 112)
-    small = text_img("Android · Android TV · Fire TV · Windows · Linux", 21, MUTED, bold=False)
+    small = text_img("Android · Android TV · Fire TV · Windows · Linux · macOS", 20, MUTED, bold=False)
     blit(cv, small, 72, 540)
     return cv
 
