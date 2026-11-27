@@ -1,7 +1,7 @@
 //! Source inventories for the desktop localization table tests (`SOURCES` and `MARKED_ONLY`).
 
 /// The UI sources, up to their test modules.
-pub(super) const SOURCES: [(&str, &str); 90] = [
+pub(super) const SOURCES: [(&str, &str); 91] = [
     ("strings.rs", include_str!("../../strings.rs")),
     ("app_types.rs", include_str!("../../app_types.rs")),
     ("gamepad_types.rs", include_str!("../../gamepad_types.rs")),
@@ -30,6 +30,7 @@ pub(super) const SOURCES: [(&str, &str); 90] = [
     ("ui/settings.rs", include_str!("../../../../desktop-ui/src/ui/settings.rs")),
     ("ui/settings/advanced_sections.rs", include_str!("../../../../desktop-ui/src/ui/settings/advanced_sections.rs")),
     ("ui/settings/choices.rs", include_str!("../../../../desktop-ui/src/ui/settings/choices.rs")),
+    ("ui/settings/controller_section.rs", include_str!("../../../../desktop-ui/src/ui/settings/controller_section.rs")),
     ("ui/settings/controls_sections.rs", include_str!("../../../../desktop-ui/src/ui/settings/controls_sections.rs")),
     ("ui/settings/rows.rs", include_str!("../../../../desktop-ui/src/ui/settings/rows.rs")),
     ("ui/settings/video_sections.rs", include_str!("../../../../desktop-ui/src/ui/settings/video_sections.rs")),

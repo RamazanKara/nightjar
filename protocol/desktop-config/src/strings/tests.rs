@@ -450,7 +450,7 @@ fn no_shown_text_says_experimental_in_any_language() {
     }
     let shown = |file: &str, text: &str| marked().iter().any(|m| m.file == file && m.text == text);
     for (file, text) in [("app/control_center/pages.rs", "Send image to PC"), ("app/control_center/pages.rs", "Copy PC image here"), ("ui/pages.rs", "Shared folders"),
-        ("ui/settings/video_sections.rs", "Sharper colored text"), ("ui/pages.rs", "Co-op"), ("ui/settings/controls_sections.rs", "Keep streaming when the network changes"), ("ui/settings/controls_sections.rs", "Forward USB devices")]
+        ("ui/settings/video_sections.rs", "Sharper colored text"), ("ui/pages.rs", "Co-op"), ("ui/settings/controls_sections.rs", "Keep streaming when the network changes"), ("ui/settings/controller_section.rs", "Forward USB devices")]
     {
         assert!(shown(file, text), "{file} shows {text:?}");
     }
