@@ -54,11 +54,16 @@ pub fn next_owner() -> Option<u64> {
         (((u64::from(std::process::id()) << 32) ^ nanos) >> 2) | 1
     };
     let _ = NEXT.compare_exchange(0, seed(), Ordering::AcqRel, Ordering::Acquire);
-    NEXT.fetch_update(Ordering::AcqRel, Ordering::Acquire, |owner| {
-        owner.checked_add(1)
-    })
-    .ok()
-    .filter(|owner| *owner != 0)
+    // A compare-exchange loop: fetch_update is deprecated on new toolchains, and its
+    // replacement try_update is newer than the MSRV.
+    let mut owner = NEXT.load(Ordering::Acquire);
+    loop {
+        let next = owner.checked_add(1)?;
+        match NEXT.compare_exchange_weak(owner, next, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => return Some(owner).filter(|owner| *owner != 0),
+            Err(current) => owner = current,
+        }
+    }
 }
 
 /// Each slot's bound owner, 0 for none: the input queue writes it when it sends a binding and
