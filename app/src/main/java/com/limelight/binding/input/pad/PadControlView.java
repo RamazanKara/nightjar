@@ -53,7 +53,7 @@ final class PadControlView extends View {
     private final KnobLayer knobLayer;
     /** This control's glow past its edge, drawn in a larger view of its own under the controls. */
     private final HaloLayer haloLayer;
-    private final ReachLayer reachLayer;
+    private final PadReachLayer reachLayer;
     private final PadPressAnimator animator;
     private final PadStickHandler stickHandler;
     private final PadTrackpadHandler trackpadHandler;
@@ -76,7 +76,7 @@ final class PadControlView extends View {
         Arrays.fill(pointerIds, -1);
         knobLayer = control.shape == PadLayout.Shape.STICK ? new KnobLayer(context, this) : null;
         haloLayer = new HaloLayer(context, this);
-        reachLayer = new ReachLayer(context, this);
+        reachLayer = new PadReachLayer(context, this);
         animator = new PadPressAnimator(this, painter, state);
         stickHandler = control.shape == PadLayout.Shape.STICK ? new PadStickHandler(this, keys) : null;
         trackpadHandler = control.shape == PadLayout.Shape.PAD ? new PadTrackpadHandler(this) : null;
@@ -161,85 +161,14 @@ final class PadControlView extends View {
         }
     }
 
-    /**
-     * The control's touch area past its drawn box (Nightjar #172): the box grown to the layout's reach, under every
-     * control and drawing nothing. A finger that lands in it works the control as one on the box's nearest edge would:
-     * a button presses, a trackpad touches at its edge, and a stick starts there and follows the finger from it. The
-     * pointer touchpad moves by how far the finger goes, wherever it is. Gone at the default reach, where only the box
-     * takes touches, as before.
-     */
-    @SuppressLint("ViewConstructor")
-    static final class ReachLayer extends View {
-        private final PadControlView owner;
-        /** How far a stick's finger was moved onto the box when it landed; its moves keep the same offset. */
-        private float shiftX, shiftY;
-
-        ReachLayer(Context context, PadControlView owner) {
-            super(context);
-            this.owner = owner;
-            setFocusable(false);
-            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-        }
-
-        @SuppressLint("ClickableViewAccessibility") // Works its control, which is no click target either.
-        @Override
-        public boolean onTouchEvent(MotionEvent event) {
-            float dx = getLeft() - owner.getLeft(), dy = getTop() - owner.getTop();
-            PadLayout.Shape shape = owner.control.shape;
-            if (shape == PadLayout.Shape.TOUCHPAD) {
-                MotionEvent moved = MotionEvent.obtain(event);
-                moved.offsetLocation(dx, dy);
-                owner.onTouchEvent(moved);
-                moved.recycle();
-                return true;
-            }
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                case MotionEvent.ACTION_POINTER_DOWN: {
-                    int index = event.getActionIndex();
-                    float x = event.getX(index) + dx, y = event.getY(index) + dy;
-                    float onX = onBoxX(x), onY = onBoxY(y);
-                    if (shape == PadLayout.Shape.STICK) {
-                        shiftX = onX - x;
-                        shiftY = onY - y;
-                    }
-                    owner.down(event.getPointerId(index), onX, onY, event.getEventTime());
-                    break;
-                }
-                case MotionEvent.ACTION_MOVE: {
-                    long timeNs = eventTimeNs(event, -1);
-                    for (int i = 0; i < event.getPointerCount(); i++) {
-                        float x = event.getX(i) + dx, y = event.getY(i) + dy;
-                        if (shape == PadLayout.Shape.STICK) owner.move(event.getPointerId(i), x + shiftX, y + shiftY, timeNs);
-                        else owner.move(event.getPointerId(i), onBoxX(x), onBoxY(y), timeNs);
-                    }
-                    break;
-                }
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_POINTER_UP:
-                    owner.up(event.getPointerId(event.getActionIndex()), event.getEventTime());
-                    break;
-                case MotionEvent.ACTION_CANCEL:
-                    owner.release();
-                    break;
-                default:
-                    break;
-            }
-            return true;
-        }
-
-        private float onBoxX(float x) {
-            return Math.max(0, Math.min(owner.getWidth() - 1, x));
-        }
-
-        private float onBoxY(float y) {
-            return Math.max(0, Math.min(owner.getHeight() - 1, y));
-        }
-    }
-
-    /** This control's touch area past its box, to add under every control ({@link ReachLayer}). */
+    /** This control's touch area past its box, to add under every control ({@link PadReachLayer}). */
     View reachLayer() {
         return reachLayer;
+    }
+
+    /** Where a finger in this control's touch area goes when areas overlap. */
+    void setAreas(PadReachLayer.Areas areas) {
+        reachLayer.setAreas(areas);
     }
 
     /** This control's glow in its own view, to add under the controls ({@link HaloLayer}). */
@@ -599,7 +528,7 @@ final class PadControlView extends View {
      * An event sample's own time in nanoseconds: {@code history} names a historical sample, -1 the event itself.
      * Android 14 reports nanoseconds; before it, whole milliseconds are all the event carries, so they are widened.
      */
-    private static long eventTimeNs(MotionEvent event, int history) {
+    static long eventTimeNs(MotionEvent event, int history) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             return history < 0 ? event.getEventTimeNanos() : event.getHistoricalEventTimeNanos(history);
         }

@@ -68,8 +68,9 @@ final class PadLayoutCodec {
      * Reads {@link #serialize} output; "v2", the prefix a short-lived build wrote, loads too. The glyphs, the
      * pointer touchpad and its mode are optional: a layout saved before them loads as an Xbox layout with a mouse
      * touchpad. Unknown controls, unknown settings and broken entries are skipped and the rest kept, so a layout from
-     * a newer version still loads what this one knows; an entry's fields past the eighth are ignored, as an older
-     * build ignores the seventh and eighth. Null or another version gives the default layout.
+     * a newer version still loads what this one knows; an entry's ninth field is its touch area (an unreadable one
+     * keeps the box) and fields past it are ignored, as an older build ignores the ninth. Null or another version
+     * gives the default layout.
      */
     static PadLayout parse(String text) {
         PadLayout layout = new PadLayout();
@@ -126,7 +127,7 @@ final class PadLayoutCodec {
                     }
                 }
                 // The touch area (#172), after them; a build before it ignores the field and keeps the box.
-                if (fields.length >= 9) spec.reach = PadLayout.clampReach(Float.parseFloat(fields[8]));
+                if (fields.length >= 9) spec.reach = parseReach(fields[8]);
                 layout.spec(control).copyFrom(spec);
             } catch (NumberFormatException ignored) {
                 // Skip this entry and keep the rest.
@@ -142,6 +143,14 @@ final class PadLayoutCodec {
     }
 
     /** A saved width or height scale, clamped; NaN when the field is not a number. */
+    private static float parseReach(String field) {
+        try {
+            return PadLayout.clampReach(Float.parseFloat(field));
+        } catch (NumberFormatException e) {
+            return PadLayout.MIN_REACH;
+        }
+    }
+
     private static float parseScale(String field) {
         try {
             float scale = Float.parseFloat(field);

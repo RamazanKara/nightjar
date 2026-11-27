@@ -56,6 +56,8 @@ final class PadEditor extends FrameLayout {
     private final String controllerName;
     private boolean forController;
     private PadLayout.Control selected;
+    /** A Touch area drag's Undo step, per control (or the whole layout), apart from an opacity drag's. */
+    private final java.util.Map<Object, Object> reachRuns = new java.util.HashMap<>();
     private final PadEditorSurface surface;
     private final PadEditorPanel panel;
     private final float density;
@@ -367,7 +369,8 @@ final class PadEditor extends FrameLayout {
      * many values is one Undo step.
      */
     void setReach(int percent) {
-        checkpoint(selected != null ? selected : draft);
+        // Its own run, so an opacity drag just before it undoes on its own.
+        checkpoint(reachRuns.computeIfAbsent(selected != null ? selected : draft, run -> new Object()));
         for (PadLayout.Control control : PadLayout.Control.values()) {
             if (!editable(control) || (selected != null && control != selected)) continue;
             draft.setReach(control, percent / 100f);

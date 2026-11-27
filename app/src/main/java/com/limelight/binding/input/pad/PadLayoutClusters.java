@@ -31,6 +31,7 @@ final class PadLayoutClusters {
                 for (PadLayout.Control member : members) {
                     layout.spec(member).hidden = false;
                     layout.spec(member).opacity = layout.spec(cluster).opacity;
+                    layout.spec(member).reach = layout.spec(cluster).reach;
                 }
                 layout.spec(cluster).hidden = true;
                 return;
@@ -43,6 +44,7 @@ final class PadLayoutClusters {
             PadLayout.Control control = members[order[i]];
             layout.setBounds(control, boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3], width, height, density);
             layout.spec(control).opacity = layout.spec(cluster).opacity;
+            layout.spec(control).reach = layout.spec(cluster).reach;
             layout.spec(control).hidden = false;
         }
         layout.spec(cluster).hidden = true;

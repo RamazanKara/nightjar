@@ -125,7 +125,7 @@ public final class PadLayout {
     public static final int MIN_OPACITY = 0, MAX_OPACITY = 100;
     /**
      * A control's touch area as a multiple of its drawn box (Nightjar #172): 1 is the box itself, as before; past it
-     * a finger that lands around the control still works it ({@link PadControlView.ReachLayer}).
+     * a finger that lands around the control still works it ({@link PadReachLayer}).
      */
     public static final float MIN_REACH = 1f, MAX_REACH = 3f;
     /**

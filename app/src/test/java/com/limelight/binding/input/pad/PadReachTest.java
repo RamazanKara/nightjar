@@ -6,6 +6,7 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import com.limelight.binding.input.SteamControls;
+import com.limelight.nvstream.input.ControllerPacket;
 import com.limelight.nvstream.jni.MoonBridge;
 
 import org.junit.Test;
@@ -97,6 +98,75 @@ public class PadReachTest extends ModernControllerHarness {
         assertEquals(MoonBridge.LI_TOUCH_EVENT_MOVE, (int) click[0]);
         assertEquals(SteamControls.PAD_CLICK_PRESSURE, click[3], 1e-3);
         assertEquals(SteamControls.LEFT_PAD_CLICK_FLAG, last()[0] & SteamControls.LEFT_PAD_CLICK_FLAG);
+    }
+
+    private ModernController withLayout(java.util.function.Consumer<PadLayout> change) {
+        ModernController first = controller(GAME);
+        PadLayout draft = first.layout().copy();
+        change.accept(draft);
+        first.save(draft, false);
+        first.destroy();
+        return controller(GAME);
+    }
+
+    private void touchFrame(long down, long at, int action, float x, float y) {
+        frame.dispatchTouchEvent(touch(down, at, action, x, y));
+    }
+
+    /** Where two areas overlap, the finger works the control whose box is nearer, whichever area lies on top. */
+    @Test public void overlappingAreasGoToTheNearerControl() {
+        float density = frame.getResources().getDisplayMetrics().density;
+        ModernController controller = withLayout(draft -> {
+            draft.setBounds(PadLayout.Control.LB, 740, 150, 120, 100, frame.getWidth(), frame.getHeight(), density);
+            draft.setBounds(PadLayout.Control.LT, 740, 330, 120, 100, frame.getWidth(), frame.getHeight(), density);
+            draft.setReach(PadLayout.Control.LB, 3f);
+            draft.setReach(PadLayout.Control.LT, 3f);
+        });
+        PadControlView lb = controller.view(PadLayout.Control.LB), lt = controller.view(PadLayout.Control.LT);
+        int gap = lt.getTop() - lb.getBottom();
+        assertTrue("a gap between the boxes: " + gap, gap >= 10);
+        assertTrue("within both areas", lb.getHeight() > gap && lt.getHeight() > gap);
+        // The middle of the screen, where no other control's box lies.
+        float x = (lb.getLeft() + lb.getRight()) / 2f;
+        long t = SystemClock.uptimeMillis();
+        touchFrame(t, t, MotionEvent.ACTION_DOWN, x, lt.getTop() - 3);
+        assertEquals("LT, the nearer, pulls", 255, last()[5]);
+        assertEquals("LB stays up", 0, last()[0] & PadInput.buttonFlag(PadLayout.Control.LB));
+        touchFrame(t, t + 40, MotionEvent.ACTION_UP, x, lt.getTop() - 3);
+        touchFrame(t + 80, t + 80, MotionEvent.ACTION_DOWN, x, lb.getBottom() + 3);
+        assertEquals("LB, the nearer, presses", PadInput.buttonFlag(PadLayout.Control.LB),
+                last()[0] & PadInput.buttonFlag(PadLayout.Control.LB));
+        assertEquals("LT stays released", 0, last()[5]);
+        touchFrame(t + 80, t + 120, MotionEvent.ACTION_UP, x, lb.getBottom() + 3);
+        assertEquals(0, last()[0]);
+    }
+
+    /** A split D-pad's finger that lands in an arm's area presses that arm and slides on to the next as on a box. */
+    @Test public void aSplitDpadsAreaPressesAnArmAndSlidesToTheNext() {
+        float density = frame.getResources().getDisplayMetrics().density;
+        ModernController controller = withLayout(draft -> {
+            draft.split(PadLayout.Control.DPAD, frame.getWidth(), frame.getHeight(), density);
+            for (PadLayout.Control arm : PadLayout.members(PadLayout.Control.DPAD)) draft.setReach(arm, 2f);
+        });
+        PadControlView up = controller.view(PadLayout.Control.DPAD_UP), right = controller.view(PadLayout.Control.DPAD_RIGHT);
+        float x = (up.getLeft() + up.getRight()) / 2f, y = up.getTop() - 3;
+        long t = SystemClock.uptimeMillis();
+        touchFrame(t, t, MotionEvent.ACTION_DOWN, x, y);
+        assertEquals("up, from above its box", ControllerPacket.UP_FLAG, last()[0]);
+        touchFrame(t, t + 30, MotionEvent.ACTION_MOVE, right.getRight() - 4, (right.getTop() + right.getBottom()) / 2f);
+        assertEquals("slid onto right", ControllerPacket.RIGHT_FLAG, last()[0]);
+        touchFrame(t, t + 60, MotionEvent.ACTION_UP, right.getRight() - 4, (right.getTop() + right.getBottom()) / 2f);
+        assertEquals(0, last()[0]);
+    }
+
+    /** An unreadable touch area keeps the box and the rest of the entry, as a broken scale does. */
+    @Test public void anUnreadableAreaKeepsTheEntry() {
+        PadLayout layout = new PadLayout();
+        layout.setReach(PadLayout.Control.LB, 2f);
+        layout.setOpacity(PadLayout.Control.LB, 40);
+        PadLayout back = PadLayout.parse(layout.serialize().replaceAll("(LB(,[^|,]*){7}),[^|,]*", "$1,x"));
+        assertEquals(PadLayout.MIN_REACH, back.spec(PadLayout.Control.LB).reach, 0);
+        assertEquals(40, back.spec(PadLayout.Control.LB).opacity);
     }
 
     @Test public void theEditorAndHidingTakeTheAreaAway() {

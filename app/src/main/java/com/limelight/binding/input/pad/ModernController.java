@@ -219,6 +219,7 @@ public final class ModernController {
             view.setStickTouch(prefs.oscSteamControls);
             view.setTouchSink(this::touch);
             view.setPointerSink(pointerSink);
+            view.setAreas(this::nearestArea);
             if (control == PadLayout.Control.POINTER_PAD) {
                 view.configurePointer(layout.pointerMode() == PadLayout.PointerMode.CAMERA, curve, prefs.trackpadSpeed);
             }
@@ -293,6 +294,35 @@ public final class ModernController {
             }
             view.setRestingAlpha(prefs.oscOpacity / 100f * layout.spec(control).opacity / 100f);
         }
+    }
+
+    /**
+     * The control a finger at the frame's point ({@code x}, {@code y}) works when it lands in {@code owner}'s touch
+     * area (#172): the shown control with the nearest box among those whose area holds the point, {@code owner} on a
+     * tie, so overlapping areas split between their controls instead of the topmost taking all.
+     */
+    private PadControlView nearestArea(PadControlView owner, float x, float y) {
+        PadControlView best = owner;
+        float bestDistance = distance(owner, x, y);
+        for (PadControlView view : views.values()) {
+            View area = view.reachLayer();
+            if (view == owner || view.getVisibility() != View.VISIBLE || area.getVisibility() != View.VISIBLE
+                    || area.getParent() == null || x < area.getLeft() || x >= area.getRight() || y < area.getTop()
+                    || y >= area.getBottom()) continue;
+            float distance = distance(view, x, y);
+            if (distance < bestDistance) {
+                best = view;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
+    /** The squared distance from the frame's point to a view's box, 0 inside it. */
+    private static float distance(View box, float x, float y) {
+        float dx = Math.max(0, Math.max(box.getLeft() - x, x - box.getRight()));
+        float dy = Math.max(0, Math.max(box.getTop() - y, y - box.getBottom()));
+        return dx * dx + dy * dy;
     }
 
     /** Lays {@code layer} out as the box of {@code control} grown by {@code reach} pixels on every side. */
