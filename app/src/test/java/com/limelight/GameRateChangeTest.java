@@ -56,6 +56,7 @@ public class GameRateChangeTest {
         final List<String> order = new ArrayList<>();
         // Queries the sender cannot send yet, as a control stream that cannot carry them.
         int unsentQueries;
+        float frameLossPercent;
         Game game;
         PreferenceConfiguration prefs;
 
@@ -158,6 +159,7 @@ public class GameRateChangeTest {
             MediaCodecDecoderRenderer renderer = new MediaCodecDecoderRenderer(game, prefs, null, 0,
                     false, false, "", null) {
                 @Override public boolean hasRecentVideoFrames(long nowMs) { return true; }
+                @Override public float getNetworkFrameLossPercent() { return frameLossPercent; }
             };
             ReflectionHelpers.setField(game, "decoderRenderer", renderer);
         }
@@ -167,10 +169,10 @@ public class GameRateChangeTest {
             for (int i = 0; i < seconds; i++) ShadowLooper.idleMainLooper(1, TimeUnit.SECONDS);
         }
 
-        // The start delay, then clean samples until automatic bitrate asks for more.
+        // The start delay, then a loss sample so automatic bitrate cuts below the ceiling.
         void runUntilAutomaticAsks() {
-            runFor((int) (ClientHintBitrateController.START_DELAY_MS / 1000) +
-                    ClientHintBitrateController.STABLE_SAMPLES + 2);
+            frameLossPercent = 6f;
+            runFor((int) (ClientHintBitrateController.START_DELAY_MS / 1000) + 2);
         }
 
         // The legacy bitrate goes out on its own thread; its answer comes back to the UI thread.
@@ -485,10 +487,12 @@ public class GameRateChangeTest {
         h.startStream(h.recording());
         assertTrue((boolean) ReflectionHelpers.callInstanceMethod(h.game.adaptation, "isRateChangeBitrateOn"));
         assertNull("not the host's automatic bitrate as well", ReflectionHelpers.getField(h.game, "adaptiveBitrate"));
+        Harness.runFor(10);
+        assertTrue("clean samples never over-probe above the chosen ceiling", h.sent.isEmpty());
         h.runUntilAutomaticAsks();
-        assertFalse("clean samples ask for more", h.sent.isEmpty());
+        assertFalse("frame loss cuts below the ceiling", h.sent.isEmpty());
         int[] request = h.sent.get(0);
-        assertTrue(request[1] > 50_000);
+        assertEquals(35_000, request[1]);
         assertEquals("only the bitrate", 0, request[2]);
 
         // The host refuses it: automatic bitrate stops for this stream and says why.

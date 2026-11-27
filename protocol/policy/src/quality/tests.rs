@@ -207,25 +207,25 @@ fn automatic_quality_leaves_pc_link_controller_in_charge_when_0x5538_is_offered(
 #[test]
 fn host_link_room_waits_for_pc_bitrate_cuts_before_stepping_down_quality() {
     assert!(host_steers_link_bitrate(
-        true, true, false, false, false, false
-    ));
-    assert!(!host_steers_link_bitrate(
-        false, true, false, false, false, false
-    ));
-    assert!(!host_steers_link_bitrate(
         true, false, false, false, false, false
     ));
     assert!(!host_steers_link_bitrate(
-        true, true, true, false, false, false
+        false, false, false, false, false, false
     ));
     assert!(!host_steers_link_bitrate(
-        true, true, false, true, false, false
+        true, true, false, false, false, false
     ));
     assert!(!host_steers_link_bitrate(
-        true, true, false, false, true, false
+        true, false, true, false, false, false
     ));
     assert!(!host_steers_link_bitrate(
-        true, true, false, false, false, true
+        true, false, false, true, false, false
+    ));
+    assert!(!host_steers_link_bitrate(
+        true, false, false, false, true, false
+    ));
+    assert!(!host_steers_link_bitrate(
+        true, false, false, false, false, true
     ));
 
     // Full (including before any LinkNotice arrives) always has room.
@@ -273,4 +273,23 @@ fn host_link_room_waits_for_pc_bitrate_cuts_before_stepping_down_quality() {
         assert_eq!(quality.sample(&lossy(s), cut_room), None);
     }
     assert!(quality.sample(&lossy(42), cut_room).is_some());
+
+    // Lossless standing queue / `poor_connection` (`loss == 0%`, where loss-only controllers
+    // never cut `bitrate_has_room`) waits 8 s for any delay-aware controller, then counts 8 s
+    // of network pressure and steps down instead of stalling forever.
+    let mut bloated =
+        AdaptiveQualityController::new(Mode::Motion, 1920, 1080, 120, BOUNDS, 0).unwrap();
+    let queue_only = |second: u64| Stats {
+        now_ms: second * 1000,
+        recent_video: true,
+        loss_percent: Some(0.0),
+        decode_ms: Some(2.0),
+        jitter_ms: Some(1.0),
+        queue_ms: Some(40.0),
+        ..Stats::default()
+    };
+    for s in 15..30 {
+        assert_eq!(bloated.sample(&queue_only(s), true), None, "second {s}");
+    }
+    assert!(bloated.sample(&queue_only(30), true).is_some());
 }

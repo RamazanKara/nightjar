@@ -350,6 +350,8 @@ pub struct Streaming {
     link_notice: Option<LinkNotice>,
     /// The stream said once that the PC lowered the bitrate (`notices::link_lowered_toast`).
     link_lowered_told: bool,
+    /// Client set a bitrate on this RTSP session (`set_bitrate` or `0x553C`), making host `0x5538` stand back.
+    client_took_bitrate: bool,
     /// What the PC said about how this stream started (`Notice::LaunchWarning`), kept for the
     /// Control Center once its toast is gone.
     launch_notice: Option<String>,

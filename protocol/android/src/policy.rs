@@ -313,6 +313,22 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_clientH
 }
 
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_clientHintSyncHostLink(
+    _: JNIEnv,
+    _: JClass,
+    handle: jlong,
+    host_current_kbps: jint,
+    host_ceiling_kbps: jint,
+) {
+    CLIENT_HINT_SLAB.with(handle, |c| {
+        c.sync_host_link(
+            non_neg_u32(host_current_kbps),
+            non_neg_u32(host_ceiling_kbps),
+        )
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_clientHintSample(
     _: JNIEnv,
     _: JClass,

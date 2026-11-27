@@ -71,6 +71,8 @@ pub struct Answer {
     pub fps_millihz: Option<u32>,
     /// The bitrate is one the player set in the menu, which a reconnect keeps.
     pub by_hand: bool,
+    /// The PC applied or clamped a client bitrate change, so host link-rate/congestion stood back.
+    pub took_bitrate: bool,
 }
 
 pub struct RateChange {
@@ -175,6 +177,11 @@ impl RateChange {
     /// an answer to the query that comes after it may hold that cut, so it is not used.
     pub fn pc_lowered(&mut self) {
         if self.asking { self.cut_before_answer = true; }
+    }
+
+    /// Syncs the client-hint baseline with a host `0x5538` notice before any client takeover.
+    pub fn sync_host_link(&mut self, current_kbps: u32, ceiling_kbps: u32) {
+        if let Some(hint) = &mut self.hint { hint.sync_host_link(current_kbps, ceiling_kbps); }
     }
 
     /// While the query waits, the menu's bitrate cannot change the stream's: a number picked now
@@ -398,6 +405,9 @@ impl RateChange {
         }
         self.menu_fps = f64::from(self.fps_millihz) / 1000.0;
         let changed = matches!(result.bitrate.status, Status::Applied | Status::Clamped);
+        if origin != Origin::Query && changed {
+            answer.took_bitrate = true;
+        }
         match origin {
             Origin::Menu => {
                 if changed && answer.bitrate_kbps.is_some() {

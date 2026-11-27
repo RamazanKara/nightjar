@@ -62,6 +62,7 @@ pub struct Bitrate {
     ceiling_until_ms: Option<u64>,
     probe_backoff_ms: u64,
     pending_kbps: Option<u32>,
+    client_owned: bool,
     stopped: bool,
     /// A cut the stream before an automatic reconnect had made ([`Self::resume_from`]).
     resume_kbps: Option<u32>,
@@ -105,6 +106,7 @@ impl Bitrate {
             ceiling_until_ms: None,
             probe_backoff_ms: 0,
             pending_kbps: None,
+            client_owned: false,
             stopped: false,
             resume_kbps: None,
         }
@@ -194,14 +196,19 @@ impl Bitrate {
                 .ceiling_hold_kbps
                 .map_or(self.max_kbps, |hold| hold.min(self.max_kbps));
             if self.stable_samples >= STABLE_SAMPLES {
-                if self.current_kbps < probe_ceiling {
-                    let step = if self.last_down || self.probe_backoff_ms > 0 {
+                if self.client_owned && self.current_kbps < probe_ceiling {
+                    let step = if self.last_down
+                        || (self.probe_backoff_ms > 0 && self.ceiling_hold_kbps.is_none())
+                    {
                         1.02
                     } else {
                         1.05
                     };
                     target = (current * step).min(f64::from(probe_ceiling));
                 } else {
+                    if self.ceiling_hold_kbps.is_some() && self.ceiling_until_ms.is_none() {
+                        self.ceiling_until_ms = Some(now_ms.saturating_add(self.probe_backoff_ms));
+                    }
                     self.probed_from_kbps = None;
                 }
                 self.stable_samples = 0;
@@ -214,11 +221,11 @@ impl Bitrate {
             } else {
                 (self.probe_backoff_ms * 2).min(MAX_CEILING_HOLD_MS)
             };
-            self.ceiling_until_ms = Some(now_ms.saturating_add(self.probe_backoff_ms));
+            self.ceiling_until_ms = None;
             target = target.min(f64::from(safe_kbps));
         }
         let target = (target as u32).clamp(self.min_kbps, self.max_kbps);
-        if target == self.current_kbps {
+        if target == self.current_kbps || (!self.client_owned && target > self.current_kbps) {
             return None;
         }
         self.pending_kbps = Some(target);
@@ -231,6 +238,7 @@ impl Bitrate {
         let Some(requested) = self.pending_kbps.take() else {
             return;
         };
+        self.client_owned = true;
         if kbps < requested {
             self.limit_kbps = kbps;
             self.max_kbps = self.max_kbps.min(kbps);
@@ -248,6 +256,12 @@ impl Bitrate {
             self.last_down = kbps < self.current_kbps;
         }
         self.current_kbps = kbps;
+        if let Some(hold) = self.ceiling_hold_kbps
+            && self.current_kbps >= hold
+            && self.ceiling_until_ms.is_none()
+        {
+            self.ceiling_until_ms = Some(now_ms.saturating_add(self.probe_backoff_ms));
+        }
         self.last_change_ms = Some(now_ms);
     }
 
@@ -262,6 +276,7 @@ impl Bitrate {
     pub fn overridden(&mut self, kbps: u32, now_ms: u64) {
         *self = Self {
             last_change_ms: Some(now_ms),
+            client_owned: true,
             stopped: self.stopped,
             thermal_level: self.thermal_level,
             ..Self::new(kbps, self.limit_kbps, self.started_ms)
@@ -271,6 +286,27 @@ impl Bitrate {
     /// Prefer bitrate reductions before lowering stream resolution for network congestion.
     pub fn has_room_before_quality_reduction(&self) -> bool {
         !self.stopped && self.current_kbps > self.min_kbps.max(self.max_kbps * 65 / 100)
+    }
+
+    /// Syncs the pre-takeover baseline with a host `0x5538` link notice while this client has not
+    /// yet written a bitrate on the session (`!client_took_bitrate`), preventing the first client
+    /// loss or thermal cut from jumping above a rate the host already cut to without probing up on
+    /// clean samples before the client owns the bitrate.
+    pub fn sync_host_link(&mut self, host_current_kbps: u32, host_ceiling_kbps: u32) {
+        if self.stopped
+            || self.client_owned
+            || self.pending_kbps.is_some()
+            || host_ceiling_kbps == 0
+        {
+            return;
+        }
+        let scaled = if host_current_kbps >= host_ceiling_kbps {
+            self.max_kbps
+        } else {
+            ((u64::from(self.max_kbps) * u64::from(host_current_kbps))
+                / u64::from(host_ceiling_kbps)) as u32
+        };
+        self.current_kbps = scaled.clamp(500, self.max_kbps);
     }
 
     pub fn current_kbps(&self) -> u32 {
@@ -430,23 +466,28 @@ mod tests {
         }
         assert_eq!(c.sample(&tick(9, 0.0)), Some(28_560));
         c.applied(28_560, 9000);
-        // Loss immediately after the probe cuts and remembers 28_000 for 30 s.
+        // Loss immediately after the probe cuts; recovery climbs back to 28_000 and then holds
+        // there for the full 30 s (`INITIAL_CEILING_HOLD_MS`) before cautiously re-probing +2%.
         assert_eq!(c.sample(&tick(11, 10.0)), Some(19_992));
         c.applied(19_992, 11_000);
-        let mut now_s = 13;
-        while now_s < 40 {
+        let mut reached_at = None;
+        for now_s in 13..80 {
             if let Some(req) = c.sample(&tick(now_s, 0.0)) {
                 assert!(
                     req <= 28_000,
-                    "must not probe past learned 28_000 during hold: {req}"
+                    "must not probe past learned 28_000 during hold: {req} at {now_s}s"
                 );
                 c.applied(req, now_s * 1000);
+                if req == 28_000 && reached_at.is_none() {
+                    reached_at = Some(now_s);
+                }
             }
-            now_s += 1;
         }
+        let reached_s = reached_at.expect("climbs back to learned 28_000 ceiling");
         assert_eq!(c.current_kbps(), 28_000);
-        // Once the 30 s hold (until 41_000 ms) expires, cautious +2% probing resumes.
-        let reprobe = (41..50).find_map(|s| c.sample(&tick(s, 0.0)));
+        // Still held just before `reached_s + 30`, then cautious +2% probing resumes after.
+        assert_eq!(c.sample(&tick(reached_s + 29, 0.0)), None);
+        let reprobe = ((reached_s + 30)..(reached_s + 40)).find_map(|s| c.sample(&tick(s, 0.0)));
         assert_eq!(reprobe, Some(28_560));
     }
 

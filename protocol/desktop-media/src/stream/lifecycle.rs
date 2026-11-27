@@ -215,6 +215,7 @@ impl Streaming {
             hardware: None,
             link_notice: None,
             link_lowered_told: false,
+            client_took_bitrate: false,
             launch_notice: None,
             keep_change: None,
             pipeline_rates: None,

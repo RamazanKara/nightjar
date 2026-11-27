@@ -304,7 +304,7 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_quality
     _: JNIEnv,
     _: JClass,
     host_link_notice: jboolean,
-    pc_decides: jboolean,
+    held: jboolean,
     kept: jboolean,
     manual_bitrate: jboolean,
     busy_on: jboolean,
@@ -312,7 +312,7 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_quality
 ) -> jboolean {
     jbool(quality::host_steers_link_bitrate(
         host_link_notice != JNI_FALSE,
-        pc_decides != JNI_FALSE,
+        held != JNI_FALSE,
         kept != JNI_FALSE,
         manual_bitrate != JNI_FALSE,
         busy_on != JNI_FALSE,

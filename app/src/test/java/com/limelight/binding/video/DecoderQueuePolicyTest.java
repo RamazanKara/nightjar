@@ -76,15 +76,19 @@ public class DecoderQueuePolicyTest {
     @Test public void residencyDropsAtMostOneInFour() {
         DecoderQueuePolicy.Residency r = new DecoderQueuePolicy.Residency();
         long now = feed(r, 20, 4 * MS, 1_000_000_000L);
-        now = feed(r, 40, 10 * MS, now);
-        assertTrue(r.shouldDrop(1));
+        now = feed(r, 40, 16 * MS, now);
+        assertTrue(r.shouldDrop(2));
         r.onDropped();
         for (int i = 1; i < DecoderQueuePolicy.Residency.PERIOD; i++) {
             now = feed(r, 1, 10 * MS, now);
             assertFalse("not yet, output " + i, r.shouldDrop(1));
         }
-        feed(r, 1, 10 * MS, now);
+        now = feed(r, 1, 10 * MS, now);
         assertTrue(r.shouldDrop(1));
+        // Once a drop fails to shorten residency further, the floor re-anchors instead of dropping 1 in 4 forever.
+        r.onDropped();
+        feed(r, DecoderQueuePolicy.Residency.PERIOD, 10 * MS, now);
+        assertFalse(r.shouldDrop(1));
     }
 
     @Test public void residencyBaselineIsTheMinimumOfTheLastTenSecondsOnly() {

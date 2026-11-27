@@ -37,6 +37,7 @@ public final class NightjarPolicyJni {
     public static native void clientHintDestroy(long handle);
     public static native void clientHintResumeFrom(long handle, int kbps);
     public static native void clientHintSetThermalLevel(long handle, int thermalLevel);
+    public static native void clientHintSyncHostLink(long handle, int hostCurrentKbps, int hostCeilingKbps);
     public static native int clientHintSample(long handle, long nowMs, boolean recentVideo,
                                               float lossPercent, float queueMs);
     public static native void clientHintApplied(long handle, int kbps, long nowMs);
@@ -88,7 +89,7 @@ public final class NightjarPolicyJni {
                                                      boolean busyOn, boolean hintOn,
                                                      boolean manualBitrate, boolean hostLinkNotice);
     public static native boolean qualityHostSteersLinkBitrate(boolean hostLinkNotice,
-                                                              boolean pcDecides, boolean kept,
+                                                              boolean held, boolean kept,
                                                               boolean manualBitrate, boolean busyOn,
                                                               boolean hintOn);
     public static native boolean qualityHostLinkHasRoom(int linkStateWire, int currentKbps,

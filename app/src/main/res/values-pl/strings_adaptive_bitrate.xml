@@ -9,7 +9,7 @@
     <string name="stream_host_abr_failed">Komputer nie włączył automatycznej szybkości transmisji: %1$s</string>
     <string name="title_auto_bitrate">Obniżaj szybkość transmisji przy obciążonej sieci</string>
     <string name="title_thermal_protection">Ochrona termiczna</string>
-    <string name="dialog_thermal_protection">Obniża szybkość transmisji i rozdzielczość, gdy urządzenie jest gorące, o ile włączono „Obniżaj szybkość transmisji przy obciążonej sieci” lub „Automatyczna jakość”. Włącz tylko wtedy, gdy urządzenie zwalnia z powodu temperatury lub się przegrzewa.</string>
+    <string name="dialog_thermal_protection">Obniża szybkość transmisji i rozdzielczość, gdy urządzenie jest gorące, o ile włączono „Obniżaj wcześniej” lub „Automatyczna jakość”. Włącz tylko wtedy, gdy urządzenie zwalnia z powodu temperatury lub się przegrzewa.</string>
     <string name="title_automatic_bitrate">Automatyczna przepływność</string>
     <string name="dialog_automatic_bitrate">Nightjar dobiera szybkość transmisji do rozdzielczości, liczby klatek i kodeka i dostosowuje ją, gdy się zmienią. Wyłącz, aby ustawić szybkość transmisji samodzielnie.</string>
 </resources>

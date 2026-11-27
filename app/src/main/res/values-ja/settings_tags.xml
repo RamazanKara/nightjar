@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tag_unused_without_any">%1$s、%2$s、%3$s のいずれかがオンでないと使われません</string>
-    <string name="tag_thermal_frames_lost">ビットレート変更に対応した PC では「早めに下げる」と併用されません</string>
     <string name="tag_unused_without">%1$s がオンでないと使われません</string>
 </resources>

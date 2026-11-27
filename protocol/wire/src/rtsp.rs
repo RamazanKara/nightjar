@@ -151,6 +151,11 @@ pub fn response(
 pub const CONTROL_MESSAGES: &str =
     "a=x-rl-control:0x5530,0x5531,0x5532,0x5533,0x5534,0x5535,0x5536,0x5537,0x5538\r\n";
 
+/// Control messages offered when the host's network bitrate adaptation (`bitrate_adaptation = off`)
+/// is disabled: `0x5538` link notices are omitted so clients do not expect host bitrate cuts.
+pub const CONTROL_MESSAGES_WITHOUT_LINK_NOTICE: &str =
+    "a=x-rl-control:0x5530,0x5531,0x5532,0x5533,0x5534,0x5535,0x5536,0x5537\r\n";
+
 /// The `DESCRIBE` answer. `mic` is set when the host takes a client's
 /// microphone: its encryption is then supported and requested, and the
 /// caller ends the answer with `mic::sdp`, whose `m=` line must come last.
@@ -166,6 +171,32 @@ pub fn describe(
     mic: bool,
     roaming: bool,
 ) -> String {
+    describe_with_link_notice(
+        feature_flags,
+        supported,
+        requested,
+        hevc,
+        av1,
+        pyrowave,
+        mic,
+        roaming,
+        true,
+    )
+}
+
+/// Like [`describe`], advertising `0x5538` link notices only when `link_notice` is set.
+#[allow(clippy::too_many_arguments)]
+pub fn describe_with_link_notice(
+    feature_flags: u32,
+    supported: u32,
+    requested: u32,
+    hevc: bool,
+    av1: bool,
+    pyrowave: bool,
+    mic: bool,
+    roaming: bool,
+    link_notice: bool,
+) -> String {
     let (supported, requested) = if mic {
         (
             supported | crate::mic::ENCRYPTION,
@@ -179,7 +210,11 @@ pub fn describe(
     );
     // Rubylight's own control messages (rubylight-protocol); a client sends them
     // only to a host that lists them.
-    s.push_str(CONTROL_MESSAGES);
+    s.push_str(if link_notice {
+        CONTROL_MESSAGES
+    } else {
+        CONTROL_MESSAGES_WITHOUT_LINK_NOTICE
+    });
     // Client roaming, wire format v1; clients that don't know it ignore it.
     if roaming {
         s.push_str(rubylight_protocol::roaming::SDP_ATTRIBUTE);

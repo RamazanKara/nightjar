@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tag_unused_without_any">Non utilisé sans %1$s, %2$s ou %3$s</string>
-    <string name="tag_thermal_frames_lost">Non utilisé avec « Baisser plus tôt » sur un PC qui accepte les changements de débit</string>
     <string name="tag_unused_without">Non utilisé sans %1$s</string>
 </resources>

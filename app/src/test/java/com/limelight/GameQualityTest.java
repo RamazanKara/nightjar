@@ -367,6 +367,14 @@ public class GameQualityTest {
         PreferenceConfiguration config = ReflectionHelpers.getField(game, "prefConfig");
         config.adaptiveQualityMode = AdaptiveQualityController.Mode.DETAIL;
         try {
+            // On a 0x5538 host whose link-rate controller has not yielded, Automatic quality leaves bitrate to the PC.
+            QualityBridge.linkNotice = true;
+            ReflectionHelpers.callInstanceMethod(game.adaptation, "startAdaptiveQuality");
+            assertNull("0x5538 host keeps its own bitrate controller",
+                    ReflectionHelpers.getField(game, "adaptiveBitrate"));
+
+            // Without 0x5538 (e.g. host bitrate_adaptation = off or older host), Automatic quality runs session ABR.
+            QualityBridge.linkNotice = false;
             ReflectionHelpers.callInstanceMethod(game.adaptation, "startAdaptiveQuality");
             assertNotNull("Automatic quality adapts the bitrate during this stream",
                     ReflectionHelpers.getField(game, "adaptiveBitrate"));
@@ -497,6 +505,7 @@ public class GameQualityTest {
         StreamReconfigureRequester requester = ReflectionHelpers.getField(game, "reconfigureRequester");
         requester.start(1920, 1080, 120000, 1920, 1080, 120000);
         QualityBridge.send = true;
+        QualityBridge.linkNotice = false;
         QualityBridge.requests = 0;
         QualityBridge.lastRate = 0;
         return game;
@@ -505,11 +514,14 @@ public class GameQualityTest {
     @Implements(value = MoonBridge.class, isInAndroidSdk = false)
     public static class QualityBridge {
         static boolean send;
+        static boolean linkNotice;
         static int requests;
         static int lastRate;
         static int lastWidth, lastHeight;
         @Implementation protected static void __staticInitializer__() {}
-        @Implementation public static boolean hostSupportsControlMessage(int messageType) { return true; }
+        @Implementation public static boolean hostSupportsControlMessage(int messageType) {
+            return messageType != MoonBridge.CONTROL_MESSAGE_LINK_NOTICE || linkNotice;
+        }
         @Implementation public static long getEstimatedRttInfo() { return 0; }
         @Implementation public static boolean requestReconfigure(int width, int height, int fpsMillihz) {
             requests++;

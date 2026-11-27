@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tag_unused_without_any">%1$s, %2$s veya %3$s olmadan kullanılmıyor</string>
-    <string name="tag_thermal_frames_lost">Bit hızı değişikliklerini kabul eden bir PC’de “Daha erken düşür” ile kullanılmaz</string>
     <string name="tag_unused_without">%1$s olmadan kullanılmıyor</string>
 </resources>

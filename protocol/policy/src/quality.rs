@@ -138,18 +138,19 @@ pub fn own_lowering_at_start(
 }
 
 /// Whether the PC's own `0x5538` link-rate and congestion controllers steer this stream's
-/// bitrate: the host offered `0x5538` (`host_link_notice`), Lower bitrate is `"pc"`
-/// (`pc_decides`), neither Keep my bitrate (`kept`) nor a manual bitrate (`manual_bitrate`)
-/// locked the rate, and no client bitrate controller (`busy_on`, `hint_on`) is running.
+/// bitrate: the host offered `0x5538` and has not yielded to a client bitrate write
+/// (`host_link_notice`), bitrate lowering is not held (`!held`), neither Keep my bitrate (`kept`)
+/// nor a manual bitrate (`manual_bitrate`) locked the rate, and no client bitrate controller
+/// (`busy_on`, `hint_on`) is currently running.
 pub fn host_steers_link_bitrate(
     host_link_notice: bool,
-    pc_decides: bool,
+    held: bool,
     kept: bool,
     manual_bitrate: bool,
     busy_on: bool,
     hint_on: bool,
 ) -> bool {
-    host_link_notice && pc_decides && !kept && !manual_bitrate && !busy_on && !hint_on
+    host_link_notice && !held && !kept && !manual_bitrate && !busy_on && !hint_on
 }
 
 /// Whether a PC's own `0x5538` link-rate / congestion controller still has bitrate headroom to
@@ -206,6 +207,7 @@ pub struct AdaptiveQualityController {
     healthy_since_ms: Option<u64>,
     device_pressure_samples: u32,
     network_pressure_samples: u32,
+    lossless_network_samples: u32,
     tail_pressure_samples: u32,
     timing_generation: i64,
     timing_window_end_ns: i64,
@@ -246,6 +248,7 @@ impl AdaptiveQualityController {
             healthy_since_ms: None,
             device_pressure_samples: 0,
             network_pressure_samples: 0,
+            lossless_network_samples: 0,
             tail_pressure_samples: 0,
             // Java's Long.MIN_VALUE: no generation seen yet.
             timing_generation: i64::MIN,
@@ -423,9 +426,17 @@ impl AdaptiveQualityController {
             || loss.is_some_and(|loss| loss >= 3.0)
             || s.queue_ms
                 .is_some_and(|queue| queue >= 20f32.max(frame_ms * 2.0));
+        // Loss-only bitrate controllers (`LinkRate`, `client_hint::Bitrate`) never cut on
+        // lossless standing queues or `poor_connection` (`loss <= 0.5%`), so after 8 unanswered
+        // seconds Automatic quality stops waiting on bitrate headroom that will not be spent.
+        let lossless_network = network_pressure && loss.is_none_or(|l| l <= 0.5);
+        self.lossless_network_samples = count(
+            lossless_network && bitrate_has_room,
+            self.lossless_network_samples,
+        );
         self.device_pressure_samples = count(device_pressure, self.device_pressure_samples);
         self.network_pressure_samples = count(
-            network_pressure && !bitrate_has_room,
+            network_pressure && (!bitrate_has_room || self.lossless_network_samples > 8),
             self.network_pressure_samples,
         );
         let battery_step = self.level < self.battery_ceiling;
@@ -529,6 +540,7 @@ impl AdaptiveQualityController {
         self.healthy_since_ms = None;
         self.device_pressure_samples = 0;
         self.network_pressure_samples = 0;
+        self.lossless_network_samples = 0;
         self.tail_pressure_samples = 0;
     }
 }

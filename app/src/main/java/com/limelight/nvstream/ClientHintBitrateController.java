@@ -26,6 +26,9 @@ public final class ClientHintBitrateController implements AutoCloseable {
 
     public void resumeFrom(int kbps) { NightjarPolicyJni.clientHintResumeFrom(handle, kbps); }
     public void setThermalLevel(int level) { NightjarPolicyJni.clientHintSetThermalLevel(handle, level); }
+    public void syncHostLink(int hostCurrentKbps, int hostCeilingKbps) {
+        NightjarPolicyJni.clientHintSyncHostLink(handle, hostCurrentKbps, hostCeilingKbps);
+    }
 
     public int sample(long nowMs, boolean recentVideo, float lossPercent, float queueMs) {
         return NightjarPolicyJni.clientHintSample(handle, nowMs, recentVideo, lossPercent, queueMs);

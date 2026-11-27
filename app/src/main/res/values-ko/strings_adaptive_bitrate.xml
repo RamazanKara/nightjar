@@ -9,7 +9,7 @@
     <string name="stream_host_abr_failed">PC가 자동 비트레이트를 시작하지 않았습니다: %1$s</string>
     <string name="title_auto_bitrate">네트워크 혼잡 시 비트레이트 낮추기</string>
     <string name="title_thermal_protection">발열 보호</string>
-    <string name="dialog_thermal_protection">‘네트워크 혼잡 시 비트레이트 낮추기’ 또는 ‘자동 품질’이 켜져 있을 때, 기기가 뜨거운 동안 비트레이트와 해상도를 낮춥니다. 기기가 열 때문에 느려지거나 과열될 때만 켜세요.</string>
+    <string name="dialog_thermal_protection">‘더 일찍 낮추기’ 또는 ‘자동 품질’이 켜져 있을 때, 기기가 뜨거운 동안 비트레이트와 해상도를 낮춥니다. 기기가 열 때문에 느려지거나 과열될 때만 켜세요.</string>
     <string name="title_automatic_bitrate">자동 비트레이트</string>
     <string name="dialog_automatic_bitrate">Nightjar가 해상도, 프레임 속도, 코덱에 맞춰 비트레이트를 고르고, 이 값들이 바뀌면 따라갑니다. 비트레이트를 직접 정하려면 끄세요.</string>
 </resources>

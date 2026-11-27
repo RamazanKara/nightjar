@@ -99,6 +99,7 @@ impl Streaming {
                 }
                 Notice::NetworkLost => self.network_lost(away),
                 Notice::AdaptiveBitrate(result) => {
+                    if result.is_ok() { self.client_took_bitrate = true; }
                     if let Some(error) = apply_adaptive_bitrate_notice(
                         result,
                         &mut self.bitrate_busy,
@@ -140,6 +141,7 @@ impl Streaming {
                     self.bitrate_busy = false;
                     match result {
                         Ok(kbps) => {
+                            self.client_took_bitrate = true;
                             self.facts.bitrate_kbps = i32::try_from(kbps).unwrap_or(i32::MAX);
                             self.bitrate_kbps = kbps;
                             if let Some(rates) = &mut self.rate_change { rates.bitrate_set(kbps, self.started.elapsed().as_millis() as u64); }
@@ -163,6 +165,7 @@ impl Streaming {
                     self.bitrate_busy = false;
                     let (kbps, toast) = doctor::finished(&mut self.doctor.trial, outcome);
                     if let Some(kbps) = kbps.filter(|kbps| *kbps > 0) {
+                        self.client_took_bitrate = true;
                         self.facts.bitrate_kbps = i32::try_from(kbps).unwrap_or(i32::MAX);
                         self.bitrate_kbps = kbps;
                         if let Some(rates) = &mut self.rate_change { rates.bitrate_set(kbps, self.started.elapsed().as_millis() as u64); }
@@ -278,7 +281,13 @@ impl Streaming {
             }
             ControlEvent::LinkNotice(notice) => {
                 // A cut before the PC's answer to the bitrate query: that answer may hold it.
-                if notice.state != LinkState::Full && let Some(rates) = &mut self.rate_change { rates.pc_lowered(); }
+                if let Some(rates) = &mut self.rate_change {
+                    if notice.state != LinkState::Full { rates.pc_lowered(); }
+                    if !self.client_took_bitrate {
+                        let (cur, ceil) = if notice.state == LinkState::Full { (1, 1) } else { (notice.current_kbps, notice.ceiling_kbps) };
+                        rates.sync_host_link(cur, ceil);
+                    }
+                }
                 if let Some(toast) = super::stats::link_notice_toast(&notice, self.link_lowered_told, self.overlay_visible, self.settings.lower_bitrate.keeps(), self.bitrate_kept()) {
                     self.link_lowered_told = true;
                     self.show_toast(toast);

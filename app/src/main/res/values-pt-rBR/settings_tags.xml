@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tag_unused_without_any">Não usado sem %1$s, %2$s ou %3$s</string>
-    <string name="tag_thermal_frames_lost">Não é usado com “Reduzir mais cedo” em um PC que aceita mudanças de taxa de bits</string>
     <string name="tag_unused_without">Não usado sem %1$s</string>
 </resources>

@@ -107,7 +107,7 @@ fn the_controller_ticks_once_a_second_and_one_request_at_a_time() {
     assert!(!rates.menu_busy(), "the controller's request is not the menu's");
     assert_eq!(rates.tick(&stats(4, 10.0)), None, "the first is still pending");
     let answer = rates.result(&result(&request, 14_000, 60_000, Outcome::APPLIED, Outcome::UNCHANGED), 4000);
-    assert_eq!(answer, Answer { bitrate_kbps: Some(14_000), ..Answer::default() }, "the controller's changes are quiet");
+    assert_eq!(answer, Answer { bitrate_kbps: Some(14_000), took_bitrate: true, ..Answer::default() }, "the controller's changes are quiet");
     assert_eq!(rates.tick(&stats(5, 10.0)), None, "cooldown");
     let request = rates.tick(&stats(6, 10.0)).unwrap();
     assert_eq!(request.bitrate_kbps, 9800);

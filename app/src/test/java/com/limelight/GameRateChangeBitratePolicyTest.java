@@ -224,9 +224,42 @@ public class GameRateChangeBitratePolicyTest {
         assertTrue(h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
 
         // Keep my bitrate, manual bitrate, or Lower it sooner disables host link room.
-        keepSwitch(h.openDialog()).setChecked(true);
+        AlertDialog dialog = h.openDialog();
+        keepSwitch(dialog).setChecked(true);
         ShadowLooper.idleMainLooper();
         assertFalse(h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
+
+        // Once the PC applied the takeover on this RTSP session, turning Keep my bitrate off mid-stream
+        // still treats host 0x5538 as yielded until the next stream/reconnect.
+        h.game.rateChange(new RateChangeResult(h.sent.get(h.sent.size() - 1)[0], 50_000, 0,
+                STATUS_APPLIED, REASON_NONE, STATUS_UNCHANGED, REASON_NONE));
+        ShadowLooper.idleMainLooper();
+        keepSwitch(dialog).setChecked(false);
+        ShadowLooper.idleMainLooper();
+        assertTrue(h.game.adaptation.clientTookBitrate);
+        assertFalse("host stays in takeover for this session even after Keep my bitrate turns off",
+                h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
+        assertTrue("automatic quality takes client bitrate once host 0x5538 yielded this session",
+                GameAdaptation.qualityTakesBitrate(h.game.adaptation.bitrateHeld(), true, false, false, 0,
+                        !h.game.adaptation.clientTookBitrate));
+
+        // A new session resets clientTookBitrate; if Lower it sooner is turned off mid-stream before any
+        // client bitrate write, the PC's active 0x5538 controller still steers link room.
+        h.prefs.rateChangeBitrate = true;
+        com.limelight.preferences.AutoBitrateChoice.setForPc(h.game, "rate-change-pc",
+                com.limelight.preferences.AutoBitrateChoice.SOONER);
+        h.startStream(h.recording());
+        assertFalse(h.game.adaptation.clientTookBitrate);
+        assertFalse("active device rate-change ABR steers instead of host",
+                h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
+        h.game.adaptation.rateChange.setRateChangeBitrateEnabled(false);
+        assertTrue("once device ABR turns off before any client write, host 0x5538 still steers",
+                h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
+        // Re-enabling device ABR after a pre-takeover 0x5538 cut seeds automatic() from game.linkNotice.
+        h.game.linkNotice(1, 37_500, 15_000);
+        ShadowLooper.idleMainLooper();
+        h.game.adaptation.rateChange.setRateChangeBitrateEnabled(true);
+        assertEquals(20_000, h.game.rateChanges.automatic().currentKbps());
     }
 
     @Test
@@ -447,13 +480,18 @@ public class GameRateChangeBitratePolicyTest {
         assertEquals("the setting's number, as before the query", 50_000, h.sent.get(0)[1]);
         assertEquals(50_000, (int) ReflectionHelpers.getField(h.game, "currentBitrate"));
 
-        // Automatic bitrate starts from the setting's number too.
+        // Automatic bitrate keeps the setting's 50 Mbps ceiling (ignoring the tainted 5 Mbps query
+        // reply), while its pre-takeover current rate mirrors the active 0x5538 notice until Full.
         h.prefs.keepBitrate = false;
         h.prefs.rateChangeBitrate = true;
         h.startStreamAsking(h.recording());
         h.game.linkNotice(2, 50_000, 5_000);
         ShadowLooper.idleMainLooper();
         h.answerQuery(5_000);
+        assertEquals(50_000, h.game.rateChanges.automatic().maxKbps());
+        assertEquals(5_000, h.game.rateChanges.automatic().currentKbps());
+        h.game.linkNotice(0, 50_000, 50_000);
+        ShadowLooper.idleMainLooper();
         assertEquals(50_000, h.game.rateChanges.automatic().currentKbps());
 
         // A notice from an earlier stream does not count against this one.

@@ -219,6 +219,9 @@ final class GameRateChangeControl {
             }
             streamBitrateKnown(game.rateChanges, result.bitrateKbps);
         }
+        if (answer != StreamRateChanges.Answer.QUERY && GameAdaptation.takeoverHeld(result.bitrateStatus)) {
+            adaptation.clientTookBitrate = true;
+        }
         if (answer == StreamRateChanges.Answer.TAKEOVER && !GameAdaptation.takeoverHeld(result.bitrateStatus)) {
             // A refused takeover: the PC still lowers the bitrate, so the switch shows off and the notice may say so.
             game.bitrateKept = false;
@@ -264,6 +267,7 @@ final class GameRateChangeControl {
         game.rateChanges = changes;
         game.bitrateKept = false;
         game.linkNotice = null;
+        adaptation.clientTookBitrate = false;
         // After an automatic reconnect the player's own rate is the one this stream started at.
         game.playerBitrateKbps = game.sessionManualBitrate;
         game.streamStartBitrateKbps = game.currentBitrate == 0 ? game.prefConfig.bitrate : game.currentBitrate;
@@ -509,6 +513,9 @@ final class GameRateChangeControl {
                 StreamRateChanges.clientLimitKbps(game.prefConfig.layers == null ? null : game.prefConfig.layers.network,
                         game.prefConfig.mobileBitrateLimit),
                 SystemClock.uptimeMillis());
+        if (!adaptation.clientTookBitrate && game.linkNotice != null) {
+            game.rateChanges.automatic().syncHostLink(game.linkNotice.currentKbps, game.linkNotice.ceilingKbps);
+        }
         // After an automatic reconnect it returns to the rate it had cut to, below the same ceiling.
         int resumeKbps = game.streamRecovery.takeAutomaticBitrateStart();
         if (resumeKbps > 0) game.rateChanges.automatic().resumeFrom(resumeKbps);

@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tag_unused_without_any">Nie używane bez: %1$s, %2$s lub %3$s</string>
-    <string name="tag_thermal_frames_lost">Nieużywane z opcją „Obniżaj wcześniej” na komputerze, który przyjmuje zmiany szybkości transmisji</string>
     <string name="tag_unused_without">Nie używane bez: %1$s</string>
 </resources>

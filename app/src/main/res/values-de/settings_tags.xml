@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tag_unused_without_any">Ohne %1$s, %2$s oder %3$s nicht verwendbar</string>
-    <string name="tag_thermal_frames_lost">Wird mit „Früher senken“ nicht verwendet, wenn der PC Bitratenänderungen annimmt</string>
     <string name="tag_unused_without">Ohne %1$s nicht verwendbar</string>
 </resources>

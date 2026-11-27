@@ -70,6 +70,8 @@ final class GameAdaptation {
     }
 
     private int adaptiveBitrateClaimFailures;
+    // Set once any client bitrate write succeeded on this RTSP session, making the PC's 0x5538 controllers stand back.
+    boolean clientTookBitrate;
     // A Foundation Sunshine PC's own bitrate controller, on in place of this device's.
     private com.limelight.nvstream.http.FoundationAbr foundationAbr;
 
@@ -206,12 +208,9 @@ final class GameAdaptation {
     }
 
     boolean hostLinkHasRoomBeforeQualityReduction(boolean hostLinkNotice) {
-        String pcUuid = game.getIntent() == null ? null : game.getIntent().getStringExtra(Game.EXTRA_PC_UUID);
-        boolean pcDecides = !bitrateHeld()
-                && (game.prefConfig == null || (!game.prefConfig.autoBitrate && !game.prefConfig.rateChangeBitrate))
-                && !AutoBitrateChoice.isOn(game, pcUuid);
+        boolean effectiveHostLink = hostLinkNotice && !clientTookBitrate;
         if (!com.limelight.nvstream.jni.NightjarPolicyJni.qualityHostSteersLinkBitrate(
-                hostLinkNotice, pcDecides, game.bitrateKept, game.sessionManualBitrate != 0,
+                effectiveHostLink, bitrateHeld(), game.bitrateKept, game.sessionManualBitrate != 0,
                 isAdaptiveBitrateEnabled(), isRateChangeBitrateOn())) {
             return false;
         }
@@ -269,7 +268,9 @@ final class GameAdaptation {
                 int target = undo ? original : Math.max(500, (int) ((long) previous * 4 / 5));
                 int applied = connection.setBitrate(target);
                 game.runOnUiThread(() -> {
-                    if (!game.connected || game.conn != connection || game.isFinishing() || isAdaptiveBitrateEnabled() || game.adaptiveQuality != null) return;
+                    if (!game.connected || game.conn != connection || game.isFinishing()) return;
+                    clientTookBitrate = true;
+                    if (isAdaptiveBitrateEnabled() || game.adaptiveQuality != null) return;
                     game.currentBitrate = applied;
                     game.healthOriginalBitrate = undo ? 0 : previous;
                     game.healthTrialBitrate = undo ? 0 : applied;
@@ -365,6 +366,7 @@ final class GameAdaptation {
                     if (!game.connected || game.conn != connection || game.isFinishing()) {
                         return;
                     }
+                    clientTookBitrate = true;
                     game.currentBitrate = applied;
                     game.sessionManualBitrate = applied;
                     game.healthOriginalBitrate = game.healthTrialBitrate = 0;
@@ -533,6 +535,7 @@ final class GameAdaptation {
                 int applied = connection.setBitrate(details == null ? target : com.limelight.nvstream.jni.NightjarPolicyJni.recoveryAutomaticBitrateStart(details.encoderBitrateKbps, resumeKbps));
                 game.runOnUiThread(() -> {
                     if (game.connected && game.conn == connection && !game.isFinishing()) {
+                        clientTookBitrate = true;
                         if (game.adaptiveBitrate == controller && game.pyroWaveBitrate == pyroController) {
                             game.currentBitrate = applied;
                             game.adaptiveBitrateRetryAt = 0;

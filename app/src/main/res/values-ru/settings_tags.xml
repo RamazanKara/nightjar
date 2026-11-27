@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tag_unused_without_any">Не используется без: %1$s, %2$s или %3$s</string>
-    <string name="tag_thermal_frames_lost">Не используется с «Снижать раньше» на ПК, который принимает изменения битрейта</string>
     <string name="tag_unused_without">Не используется без: %1$s</string>
 </resources>

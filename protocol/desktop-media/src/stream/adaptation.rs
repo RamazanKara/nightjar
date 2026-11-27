@@ -31,7 +31,7 @@ impl Streaming {
             self.adaptive_bitrate || self.bitrate_busy || self.host_abr_start.is_some(),
             self.client_hint_active(),
             self.plan.bitrate_before_manual.is_some(),
-            self.facts.link_notice,
+            self.facts.link_notice && !self.client_took_bitrate,
         )
     }
 
@@ -39,7 +39,7 @@ impl Streaming {
     /// bitrate and still have bitrate headroom before automatic quality lowers resolution or FPS.
     pub(super) fn host_link_has_room(&self) -> bool {
         host_link_room_for_stream(
-            self.facts.link_notice,
+            self.facts.link_notice && !self.client_took_bitrate,
             self.settings.lower_bitrate,
             self.rate_change.as_ref().is_some_and(|rates| rates.kept()),
             self.plan.bitrate_before_manual.is_some(),
@@ -228,6 +228,7 @@ impl Streaming {
     pub(super) fn rate_change_result(&mut self, result: &RateChangeResult) {
         let Some(rates) = &mut self.rate_change else { return };
         let answer = rates.result(result, self.started.elapsed().as_millis() as u64);
+        if answer.took_bitrate { self.client_took_bitrate = true; }
         if let Some(kbps) = answer.bitrate_kbps {
             self.facts.bitrate_kbps = i32::try_from(kbps).unwrap_or(i32::MAX);
             self.bitrate_kbps = kbps;
@@ -518,7 +519,7 @@ fn host_link_room_for_stream(
 ) -> bool {
     nightjar_policy::quality::host_steers_link_bitrate(
         host_link_notice,
-        lower_bitrate == nightjar_policy::choices::LowerBitrate::Off,
+        lower_bitrate.keeps(),
         kept,
         manual_bitrate,
         busy_on,
@@ -602,13 +603,41 @@ mod tests {
         assert!(!host_link_room_for_stream(true, LowerBitrate::Off, false, false, false, false, Some(&limited_cut)));
         assert!(!host_link_room_for_stream(true, LowerBitrate::Off, false, false, false, false, Some(&floor)));
 
-        // Non-0x5538 hosts, "sooner", "keep", Keep my bitrate, manual bitrate, or active client ABR never claim host link room.
+        // Non-0x5538 hosts, "keep", Keep my bitrate, manual bitrate, or active client ABR never claim host link room;
+        // if "sooner" stopped or was turned off before any client bitrate write, the active 0x5538 host still steers.
         assert!(!host_link_room_for_stream(false, LowerBitrate::Off, false, false, false, false, None));
-        assert!(!host_link_room_for_stream(true, LowerBitrate::WhenFramesLost, false, false, false, false, None));
+        assert!(!host_link_room_for_stream(true, LowerBitrate::WhenFramesLost, false, false, false, true, None));
+        assert!(host_link_room_for_stream(true, LowerBitrate::WhenFramesLost, false, false, false, false, None));
         assert!(!host_link_room_for_stream(true, LowerBitrate::Keep, false, false, false, false, None));
         assert!(!host_link_room_for_stream(true, LowerBitrate::Off, true, false, false, false, None));
         assert!(!host_link_room_for_stream(true, LowerBitrate::Off, false, true, false, false, None));
         assert!(!host_link_room_for_stream(true, LowerBitrate::Off, false, false, true, false, None));
         assert!(!host_link_room_for_stream(true, LowerBitrate::Off, false, false, false, true, None));
+
+        // Once the client wrote any bitrate this session (`client_took_bitrate`), host `0x5538` stood back
+        // even if Keep my bitrate or Stream Doctor trial is later turned off/undone.
+        use rubylight_protocol::rate_change::{Outcome, Reason, Status};
+        let mut rates = rate_change::RateChange::new(20_000, 60_000, false, 0, 0);
+        let query = rates.query_request(0);
+        let q_ans = rates.result(&RateChangeResult {
+            serial: query.serial,
+            bitrate_kbps: 20_000,
+            fps_millihz: 60_000,
+            bitrate: Outcome::UNCHANGED,
+            fps: Outcome::UNCHANGED,
+        }, 100);
+        assert!(!q_ans.took_bitrate, "query never takes host bitrate ownership");
+        let keep_req = rates.keep_now(1_000).unwrap();
+        let k_ans = rates.result(&RateChangeResult {
+            serial: keep_req.serial,
+            bitrate_kbps: 20_000,
+            fps_millihz: 60_000,
+            bitrate: Outcome { status: Status::Applied, reason: Reason::None },
+            fps: Outcome::UNCHANGED,
+        }, 1_100);
+        assert!(k_ans.took_bitrate);
+        rates.release();
+        assert!(!host_link_room_for_stream(!k_ans.took_bitrate, LowerBitrate::Off, rates.kept(), false, false, false, None));
+        assert!(nightjar_policy::quality::quality_takes_bitrate(rates.kept(), true, false, false, false, !k_ans.took_bitrate));
     }
 }

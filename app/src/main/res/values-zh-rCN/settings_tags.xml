@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tag_unused_without_any">未开启 %1$s、%2$s 或 %3$s 时不使用</string>
-    <string name="tag_thermal_frames_lost">在支持调整码率的电脑上，不与“更早降低”一起使用</string>
     <string name="tag_unused_without">未开启 %1$s 时不使用</string>
 </resources>

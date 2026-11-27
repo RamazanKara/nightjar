@@ -49,10 +49,12 @@ public class UnusedSettingTagsTest {
     public void thermalProtectionNamesTheThreeItActsThrough() {
         assertEquals("Not used without Lower bitrate, Automatic quality or Boost GPU performance for PyroWave",
                 reason(PreferenceConfiguration.THERMAL_PROTECTION_PREF_STRING));
-        // Lower it sooner: its controller follows no heat on a PC that takes rate changes.
+        // Lower it sooner acts on heat (both over 0x553C rate changes and over the busy-network controller);
+        // Never: keep my bitrate leaves Thermal protection unused without Automatic quality or PyroWave boost.
         prefs.edit().putString(AutoBitrateChoice.SETTINGS_KEY, AutoBitrateChoice.SOONER).commit();
-        assertEquals("Not used with Lower it sooner on a PC that takes bitrate changes",
-                reason(PreferenceConfiguration.THERMAL_PROTECTION_PREF_STRING));
+        assertNull(reason(PreferenceConfiguration.THERMAL_PROTECTION_PREF_STRING));
+        prefs.edit().putString(AutoBitrateChoice.SETTINGS_KEY, AutoBitrateChoice.KEEP).commit();
+        assertNotNull(reason(PreferenceConfiguration.THERMAL_PROTECTION_PREF_STRING));
         prefs.edit().clear().putString("adaptive_quality_mode", "motion").commit();
         assertNull(reason(PreferenceConfiguration.THERMAL_PROTECTION_PREF_STRING));
         // The boost acts only on PyroWave.
