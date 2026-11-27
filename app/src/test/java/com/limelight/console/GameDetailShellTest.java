@@ -126,6 +126,24 @@ public class GameDetailShellTest {
         }
     }
 
+    /** The game's page opens the controller editor: Settings at its Controller section. */
+    @Test
+    public void theControllerRowOpensTheControllerEditor() {
+        ActivityController<Detail> controller = detail();
+        try {
+            Detail page = controller.get();
+            View row = page.findViewById(R.id.detail_controller);
+            assertEquals(View.VISIBLE, row.getVisibility());
+            assertTrue(row.isFocusable());
+            row.performClick();
+            Intent settings = shadowOf(page).getNextStartedActivity();
+            assertEquals(StreamSettings.class.getName(), settings.getComponent().getClassName());
+            assertEquals(StreamSettings.CONTROLLER_SECTION, settings.getStringExtra(StreamSettings.EXTRA_SECTION));
+        } finally {
+            controller.pause().stop().destroy();
+        }
+    }
+
     @Test
     public void pcsFromThePageGoesBackToHomeWhenHomeIsTheRoot() {
         ActivityController<Detail> controller = detail();

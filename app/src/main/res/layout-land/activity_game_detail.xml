@@ -115,6 +115,8 @@
                         </FrameLayout>
                         <include layout="@layout/view_detail_quit_on_leave" android:layout_width="match_parent"
                             android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xs" />
+                        <include layout="@layout/view_detail_controller" android:layout_width="match_parent"
+                            android:layout_height="wrap_content" />
                     </LinearLayout>
                 </LinearLayout>
             </com.limelight.ui.ContentFrame>

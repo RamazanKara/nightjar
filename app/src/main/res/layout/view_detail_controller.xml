@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The controller editor from a game's page: Settings' Controller section, every controller setting in one place. Its
+     settings hold for every game, so the row opens Settings (GameDetailView). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/detail_controller" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:minHeight="@dimen/settings_row_min_height" android:orientation="vertical" android:gravity="center_vertical"
+    android:paddingStart="@dimen/detail_row_padding" android:paddingEnd="@dimen/detail_row_padding"
+    android:paddingTop="@dimen/space_s" android:paddingBottom="@dimen/space_s"
+    android:background="@drawable/focus_ring_row" android:foreground="?attr/selectableItemBackground"
+    android:focusable="true" android:clickable="true">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/settings_section_controller"
+        android:textAppearance="@style/TextAppearance.Nightjar.Body" android:textColor="?attr/colorOnSurface" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xs" android:text="@string/controller_editor_summary"
+        android:textAppearance="@style/TextAppearance.Nightjar.Supporting" android:textColor="?attr/colorOnSurfaceVariant" />
+</LinearLayout>

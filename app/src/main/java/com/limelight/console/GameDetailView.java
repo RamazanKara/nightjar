@@ -96,6 +96,9 @@ final class GameDetailView {
         quitOnLeaveSwitch = activity.findViewById(R.id.detail_quit_on_leave_switch);
         quitOnLeaveNote = activity.findViewById(R.id.detail_quit_on_leave_note);
         quitOnLeave.setOnClickListener(v -> onQuitOnLeave());
+        // The controller editor, Settings' Controller section: its settings hold for every game.
+        activity.findViewById(R.id.detail_controller).setOnClickListener(v -> com.limelight.preferences.StreamSettings.open(
+                activity, com.limelight.preferences.StreamSettings.CONTROLLER_SECTION, null));
         androidx.core.view.ViewCompat.setAccessibilityDelegate(quitOnLeave, new androidx.core.view.AccessibilityDelegateCompat() {
             @Override
             public void onInitializeAccessibilityNodeInfo(View host,
