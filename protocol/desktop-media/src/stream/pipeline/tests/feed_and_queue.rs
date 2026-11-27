@@ -408,3 +408,91 @@ fn a_presenter_that_sleeps_between_wakes_misses_no_picture() {
     assert_eq!(taken, PICTURES);
     assert!(sleeps <= PICTURES);
 }
+
+#[test]
+fn only_a_synchronous_key_frame_recovery_stream_flushes_on_decode_error() {
+    use nightjar_core::sdp::{VIDEO_FORMAT_H264, VIDEO_FORMAT_MASK_AV1, VIDEO_FORMAT_MASK_H265};
+
+    let setup = |format| VideoSetup {
+        format,
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        chroma_packing: 0,
+        logical_width: 0,
+        logical_height: 0,
+        color_space: 1,
+        color_range: 1,
+    };
+    let device = std::ptr::null_mut();
+    // H.264 never has reference frame invalidation (`connect::video_capabilities`), so synchronous
+    // backends flush on decode error.
+    for backend in [Hardware::D3d11(device), Hardware::Vaapi, Hardware::Cuda, Hardware::None] {
+        assert!(
+            flushes_on_decode_error(&setup(VIDEO_FORMAT_H264), backend),
+            "{} on H.264 recovers with key frames",
+            backend.label()
+        );
+    }
+    // HEVC and AV1 on a backend that takes RFI keep their references for the host's repair.
+    assert!(!flushes_on_decode_error(&setup(VIDEO_FORMAT_MASK_H265), Hardware::D3d11(device)));
+    assert!(!flushes_on_decode_error(&setup(VIDEO_FORMAT_MASK_AV1), Hardware::D3d11(device)));
+    assert!(!flushes_on_decode_error(&setup(VIDEO_FORMAT_MASK_H265), Hardware::Vaapi));
+    // A synchronous backend without RFI (NVDEC/CUDA) recovers with key frames and flushes.
+    assert!(flushes_on_decode_error(&setup(VIDEO_FORMAT_MASK_H265), Hardware::Cuda));
+    assert!(flushes_on_decode_error(&setup(VIDEO_FORMAT_MASK_AV1), Hardware::Cuda));
+    // Asynchronous V4L2 M2M keeps kernel queues across `avcodec_flush_buffers`, so never flushes.
+    for format in [VIDEO_FORMAT_H264, VIDEO_FORMAT_MASK_H265, VIDEO_FORMAT_MASK_AV1] {
+        assert!(!flushes_on_decode_error(&setup(format), Hardware::V4l2m2m));
+    }
+}
+
+#[test]
+fn decode_frame_flushes_on_need_idr_only_when_policy_allows() {
+    use nightjar_core::sdp::{VIDEO_FORMAT_H264, VIDEO_FORMAT_MASK_H265};
+
+    let fixture = include_bytes!("../../../../tests/fixtures/h264-444-8.bin").as_slice();
+    let (mut h264_decoder, _shared) = decoder();
+    let h264_setup = VideoSetup {
+        format: VIDEO_FORMAT_H264,
+        width: 128,
+        height: 128,
+        fps: 60,
+        chroma_packing: 0,
+        logical_width: 128,
+        logical_height: 128,
+        color_space: 1,
+        color_range: 0,
+    };
+    h264_decoder.setup(&h264_setup).unwrap();
+    {
+        let inner = h264_decoder.decoder.as_mut().expect("software H.264 decoder");
+        assert_eq!(inner.send(fixture, 1 << 32), 0);
+        assert!(matches!(inner.receive(), media::Received::Frame(_)));
+    }
+    h264_decoder.pictured = true;
+
+    // An empty/damaged frame in steady state triggers NeedIdr; H.264 is IDR-only and synchronous,
+    // so `decode_frame` flushes FFmpeg's buffers and clears `in_flight`, and the next IDR decodes.
+    assert_eq!(h264_decoder.decode_frame(&Frame::default()), DecodeStatus::NeedIdr);
+    assert!(h264_decoder.in_flight.is_empty(), "H.264 NeedIdr flushed and cleared in_flight");
+    {
+        let inner = h264_decoder.decoder.as_mut().expect("software H.264 decoder after flush");
+        assert_eq!(inner.send(fixture, 2 << 32), 0);
+        let media::Received::Frame(pic) = inner.receive() else {
+            panic!("recovery key frame did not decode after flush_buffers");
+        };
+        assert_eq!(pic.info().pts, 2 << 32);
+    }
+
+    // HEVC on an RFI-capable synchronous decoder (Hardware::None) does NOT flush on NeedIdr.
+    let (mut rfi_decoder, _shared) = decoder();
+    let hevc_setup = VideoSetup { format: VIDEO_FORMAT_MASK_H265, ..h264_setup };
+    rfi_decoder.setup(&hevc_setup).unwrap();
+    rfi_decoder.pictured = true;
+    assert_eq!(rfi_decoder.decode_frame(&Frame::default()), DecodeStatus::NeedIdr);
+    assert!(
+        !rfi_decoder.in_flight.is_empty(),
+        "RFI-capable HEVC decoder must not flush or clear in_flight on NeedIdr"
+    );
+}

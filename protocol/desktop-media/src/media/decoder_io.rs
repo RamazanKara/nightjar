@@ -2,7 +2,7 @@
 //! (DMA-BUF export, VAAPI/CUDA Vulkan mapping, D3D11 bridge export), and Linux decode stage timing.
 
 use std::ffi::{c_int, c_void};
-use std::ptr::{self, NonNull};
+use std::ptr;
 
 use nightjar_core::video::{FrameBytes, FRAME_PADDING};
 
@@ -362,10 +362,10 @@ impl VideoDecoder {
             let mut frame = match self.spare.take() {
                 Some(frame) => frame,
                 None => {
-                    let Some(raw) = NonNull::new(av_frame_alloc()) else {
+                    let Some(frame) = Frame::pooled(&self.frames) else {
                         return Received::Error;
                     };
-                    Frame::new(raw)
+                    frame
                 }
             };
             let raw = frame.raw;
@@ -400,11 +400,10 @@ impl VideoDecoder {
                 // Linux and macOS (unix): map VAAPI surface into Vulkan images for the GPU renderer.
                 #[cfg(unix)]
                 if let Some(map) = self.vulkan_map.as_mut() {
-                    let Some(target) = NonNull::new(av_frame_alloc()) else {
+                    let Some(mapped) = Frame::pooled(&self.frames) else {
                         return Received::Error;
                     };
-                    let mapped = Frame::new(target);
-                    match map.map(raw.as_ptr(), target.as_ptr()) {
+                    match map.map(raw.as_ptr(), mapped.raw.as_ptr()) {
                         Ok(()) => {
                             // The mapped picture holds the surface; the decoded frame is empty
                             // again for the next `receive`.
@@ -427,12 +426,12 @@ impl VideoDecoder {
                 // Linux and macOS (unix): copy CUDA picture into Vulkan images via interop when active.
                 #[cfg(unix)]
                 if self.cuda_map.is_some() {
-                    let Some(target) = NonNull::new(av_frame_alloc()) else {
+                    let Some(copied) = Frame::pooled(&self.frames) else {
                         return Received::Error;
                     };
-                    let copied = Frame::new(target);
                     let source = raw.as_ptr();
-                    if copy_or_drop_map(&mut self.cuda_map, &mut self.cuda_fallback, |map| map.copy(source, target.as_ptr())) {
+                    let target = copied.raw.as_ptr();
+                    if copy_or_drop_map(&mut self.cuda_map, &mut self.cuda_fallback, |map| map.copy(source, target)) {
                         // The copy is queued on the decoder's CUDA stream, ahead of any later
                         // use of the CUDA picture; the decoded frame is empty again.
                         av_frame_unref(raw.as_ptr());
@@ -441,12 +440,11 @@ impl VideoDecoder {
                     }
                 }
                 // NVDEC's pictures are in CUDA memory, which only CUDA itself can read: copied out.
-                let Some(memory) = NonNull::new(av_frame_alloc()) else {
+                let Some(memory) = Frame::pooled(&self.frames) else {
                     av_frame_unref(raw.as_ptr());
                     self.spare = Some(frame);
                     return Received::Error;
                 };
-                let memory = Frame::new(memory);
                 let ok = av_hwframe_transfer_data(memory.raw.as_ptr(), raw.as_ptr(), 0) >= 0
                     && av_frame_copy_props(memory.raw.as_ptr(), raw.as_ptr()) >= 0;
                 av_frame_unref(raw.as_ptr());

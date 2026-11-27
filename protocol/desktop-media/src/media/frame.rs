@@ -74,9 +74,104 @@ pub(super) fn frame_kind(format: AVPixelFormat, sw_format: Option<AVPixelFormat>
     }
 }
 
+/// The empty `AVFrame` structures a decoder and its presenter pass back and forth: the decoder
+/// makes its pictures from them, and the presenter gives each back when it lets the picture go
+/// instead of freeing it. Bounded, so a presenter that stops taking pictures cannot keep more
+/// than a few.
+pub(super) struct FramePool {
+    free: std::sync::Mutex<Vec<NonNull<AVFrame>>>,
+    /// The structures made and the ones taken back, for the tests that count allocations.
+    #[cfg(test)]
+    made: std::sync::atomic::AtomicU64,
+    #[cfg(test)]
+    reused: std::sync::atomic::AtomicU64,
+}
+
+/// The empty frame structures a decoder keeps for its stream's pictures: the one being decoded,
+/// the presenter's queue (8 pictures at most, host times keeps every one) and the pacer's share,
+/// with room for a stray one. Each structure is a few hundred bytes, none of them a surface.
+pub(super) const POOLED_FRAMES: usize = 16;
+
+// SAFETY: An `AVFrame` structure is allocated and freed by whichever thread FFmpeg's frame API is
+// called on; a pooled one is unreferenced and empty, and only its former owner takes it again.
+unsafe impl Send for FramePool {}
+unsafe impl Sync for FramePool {}
+
+impl FramePool {
+    pub(super) fn new() -> Self {
+        Self {
+            free: std::sync::Mutex::default(),
+            #[cfg(test)]
+            made: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(test)]
+            reused: std::sync::atomic::AtomicU64::new(0),
+        }
+    }
+
+    /// An empty frame: one a picture gave back, or a new one.
+    pub(super) fn take(&self) -> Option<NonNull<AVFrame>> {
+        if let Some(raw) = self.free.lock().unwrap_or_else(|e| e.into_inner()).pop() {
+            #[cfg(test)]
+            self.reused.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            return Some(raw);
+        }
+        #[cfg(test)]
+        self.made.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // SAFETY: An allocated structure, empty as FFmpeg makes it.
+        NonNull::new(unsafe { av_frame_alloc() })
+    }
+
+    /// Takes an empty frame back for the next picture, or frees it when the pool is full.
+    pub(super) fn give(&self, raw: NonNull<AVFrame>) {
+        // SAFETY: The picture is being let go; what it held (a decoder surface, a mapping) is
+        // unreferenced here, as `av_frame_free` did, before the structure is reused.
+        unsafe { av_frame_unref(raw.as_ptr()) };
+        let kept = {
+            let mut free = self.free.lock().unwrap_or_else(|e| e.into_inner());
+            if free.len() < POOLED_FRAMES {
+                free.push(raw);
+                true
+            } else {
+                false
+            }
+        };
+        if !kept {
+            // SAFETY: An empty structure of `av_frame_alloc`, no longer pooled.
+            unsafe { av_frame_free(&mut raw.as_ptr()) };
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn counts(&self) -> (u64, u64) {
+        (
+            self.made.load(std::sync::atomic::Ordering::Relaxed),
+            self.reused.load(std::sync::atomic::Ordering::Relaxed),
+        )
+    }
+
+    #[cfg(test)]
+    pub(super) fn idle(&self) -> usize {
+        self.free.lock().unwrap_or_else(|e| e.into_inner()).len()
+    }
+}
+
+impl Drop for FramePool {
+    fn drop(&mut self) {
+        // SAFETY: Empty structures of `av_frame_alloc`, and no picture holds them: it holds the
+        // pool instead.
+        for raw in self.free.get_mut().unwrap_or_else(|e| e.into_inner()).drain(..) {
+            unsafe { av_frame_free(&mut raw.as_ptr()) };
+        }
+    }
+}
+
 pub struct Frame {
     pub(crate) raw: NonNull<AVFrame>,
     pub(super) wavelet: bool,
+    /// The decoder's empty frames: a picture made from one goes back there when it is let go, so
+    /// the stream allocates no frame struct per picture. None for a frame made elsewhere (the
+    /// wavelet pass).
+    pool: Option<std::sync::Arc<FramePool>>,
     /// The VAAPI surface's DMA-BUFs, for a presenter that imports them.
     // Linux and macOS (unix): DMA-BUF export attached to VAAPI frames.
     #[cfg(unix)]
@@ -107,6 +202,7 @@ impl Frame {
         Self {
             raw,
             wavelet: false,
+            pool: None,
             // Linux and macOS (unix): no DMA-BUF export by default.
             #[cfg(unix)]
             dmabuf: None,
@@ -117,6 +213,30 @@ impl Frame {
         }
     }
 
+    /// An empty frame of `pool`, which takes its structure back when the picture is let go.
+    pub(super) fn pooled(pool: &std::sync::Arc<FramePool>) -> Option<Self> {
+        Some(Self {
+            raw: pool.take()?,
+            wavelet: false,
+            pool: Some(pool.clone()),
+            // Linux and macOS (unix): no DMA-BUF export by default.
+            #[cfg(unix)]
+            dmabuf: None,
+            #[cfg(windows)]
+            shared: None,
+            #[cfg(windows)]
+            exported: None,
+        })
+    }
+
+    /// An empty frame of this picture's pool, or a new one when it has none.
+    fn empty_like(&self) -> Option<Self> {
+        match &self.pool {
+            Some(pool) => Self::pooled(pool),
+            None => Some(Self::new(NonNull::new(unsafe { av_frame_alloc() })?)),
+        }
+    }
+
     /// Another reference to the same picture (its surface, for a hardware one), without the
     /// export: what keeps an imported surface from going back to the decoder while it is shown.
     pub fn reference(&self) -> Option<Self> {
@@ -124,15 +244,17 @@ impl Frame {
         if self.shared.is_some() {
             // Bridged frames already released FFmpeg's `AVFrame`; carry only the shared surface
             // lease and snapshotted metadata so callers hold no decoder surface across frames.
-            // SAFETY: `av_frame_alloc` returns an empty frame valid for `Frame::drop`.
-            let mut frame = Self::new(NonNull::new(unsafe { av_frame_alloc() })?);
+            let mut frame = self.empty_like()?;
             frame.wavelet = self.wavelet;
             frame.shared = self.shared.clone();
             frame.exported = self.exported.clone();
             return Some(frame);
         }
-        // SAFETY: a live frame; the clone is a new reference to its buffers.
-        let mut frame = Self::new(NonNull::new(unsafe { av_frame_clone(self.raw.as_ptr()) })?);
+        let mut frame = self.empty_like()?;
+        // SAFETY: a live frame; the reference is a new one to its buffers, in a frame of the pool.
+        if unsafe { av_frame_ref(frame.raw.as_ptr(), self.raw.as_ptr()) } < 0 {
+            return None;
+        }
         frame.wavelet = self.wavelet;
         Some(frame)
     }
@@ -168,7 +290,7 @@ impl Frame {
     pub fn map_to_memory(&self) -> Option<Self> {
         // SAFETY: a live frame; the mapping is a new frame of its own.
         unsafe {
-            let memory = Self::new(NonNull::new(av_frame_alloc())?);
+            let memory = self.empty_like()?;
             (av_hwframe_map(memory.raw.as_ptr(), self.raw.as_ptr(), AV_HWFRAME_MAP_READ as c_int) >= 0
                 && av_frame_copy_props(memory.raw.as_ptr(), self.raw.as_ptr()) >= 0)
                 .then_some(memory)
@@ -390,7 +512,16 @@ impl DolbyVision {
 
 impl Drop for Frame {
     fn drop(&mut self) {
-        unsafe { av_frame_free(&mut self.raw.as_ptr()) };
+        // Linux and macOS (unix): close DMA-BUF FDs before returning the VAAPI surface to FFmpeg's pool.
+        #[cfg(unix)]
+        {
+            self.dmabuf = None;
+        }
+        match &self.pool {
+            // The presenter gave the picture back: its structure becomes the decoder's next one.
+            Some(pool) => pool.give(self.raw),
+            None => unsafe { av_frame_free(&mut self.raw.as_ptr()) },
+        }
     }
 }
 

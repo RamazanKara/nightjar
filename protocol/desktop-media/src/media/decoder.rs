@@ -15,7 +15,7 @@ use super::d3d11;
 use super::decoder_io::stage_summary;
 use super::error;
 use super::ffi::*;
-use super::frame::Frame;
+use super::frame::{Frame, FramePool};
 use super::hardware::{decoder_extra_hw_frames, first_opened, Codec, Hardware, Pictures};
 // Linux and macOS (unix): VAAPI render node path helper and node kind.
 #[cfg(unix)]
@@ -165,9 +165,11 @@ pub struct VideoDecoder {
     #[cfg(unix)]
     pub(super) cuda_fallback: Option<String>,
     /// The empty frame of the last `receive` that brought no picture, for the next one: each
-    /// decoded frame ends with such a call, so this saves an allocation per frame. Pictures
-    /// themselves go to the presenter and are freed there.
+    /// decoded frame ends with such a call, so this saves an allocation per frame.
     pub(super) spare: Option<Frame>,
+    /// The empty frame structures the presenter gives back when it lets a picture go, for the
+    /// decoder's next pictures: a stream allocates no frame per picture in steady state.
+    pub(super) frames: std::sync::Arc<FramePool>,
     /// A hardware decoder made a picture that is not its hardware format: FFmpeg could not decode
     /// the stream with this backend after all and went to software. `told` once `renamed` has
     /// said so.
@@ -376,6 +378,7 @@ impl VideoDecoder {
                 #[cfg(unix)]
                 cuda_fallback: None,
                 spare: None,
+                frames: std::sync::Arc::new(FramePool::new()),
                 refused: false,
                 told: false,
                 #[cfg(windows)]
@@ -509,6 +512,22 @@ impl VideoDecoder {
             });
             Ok(video)
         }
+    }
+
+    /// The picture structures this decoder made, and the ones a picture gave back
+    /// (`FramePool`): a stream that reuses them allocates only the first few.
+    #[cfg(test)]
+    pub fn frame_allocations(&self) -> (u64, u64) {
+        self.frames.counts()
+    }
+
+    /// Drops FFmpeg's buffered packets and reference pictures (`avcodec_flush_buffers`) without
+    /// clearing mid-stream renderer mappers or refusal flags: used after a decode failure
+    /// (`DecodeStatus::NeedIdr`) on synchronous key-frame-recovery streams so stale DPB
+    /// references do not linger until the next IDR.
+    pub fn flush_buffers(&mut self) {
+        // SAFETY: the context is allocated and opened, on its decoder thread.
+        unsafe { avcodec_flush_buffers(self.context) };
     }
 
     /// Empties the decoder for a stream that starts over on it (a reconnect reusing it): no

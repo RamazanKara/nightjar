@@ -248,4 +248,6 @@ pub(crate) fn hevc_444_10_fixture_code(plane: usize, x: usize, y: usize) -> u16 
 }
 
 #[cfg(test)]
+mod frame_pool_tests;
+#[cfg(test)]
 mod tests;

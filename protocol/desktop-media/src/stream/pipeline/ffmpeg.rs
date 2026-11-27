@@ -177,6 +177,23 @@ pub(super) fn recovers_with_rfi(backend: Option<Hardware>) -> bool {
     backend.is_none_or(super::super::connect::takes_rfi)
 }
 
+/// Whether a mid-stream decode failure (`DecodeStatus::NeedIdr`) drops what FFmpeg's decoder
+/// holds (`VideoDecoder::flush_buffers`). Only a synchronous stream that recovers with key frames
+/// does: the IDR asked for next needs no state from before the failure, so stale DPB references
+/// can be released immediately. Where the host may repair a loss with reference frame invalidation
+/// instead (HEVC or AV1 on a backend that takes it; H.264 never does, `connect::video_capabilities`),
+/// the next decodable picture may be an inter frame built on references the decoder already holds,
+/// so those stay. Asynchronous V4L2 M2M decoders are excluded too: FFmpeg's `v4l2_m2m_dec.c` has
+/// no `.flush` callback, so kernel queues outlive `avcodec_flush_buffers` and clearing `in_flight`
+/// would mismatch timestamps on pictures still queued in the driver.
+pub(super) fn flushes_on_decode_error(setup: &VideoSetup, backend: Hardware) -> bool {
+    if backend == Hardware::V4l2m2m {
+        return false;
+    }
+    let rfi_format = setup.format & (VIDEO_FORMAT_MASK_H265 | VIDEO_FORMAT_MASK_AV1) != 0;
+    !(rfi_format && recovers_with_rfi(Some(backend)))
+}
+
 /// FFmpeg took to software the Vulkan video decoder (`refused`) that stood in for a VAAPI decoder
 /// whose pictures could not be mapped (`stands_in`, the stream format it did so for): VAAPI
 /// decodes that stream, through memory.
@@ -623,6 +640,17 @@ impl Decoder {
         }
         let status = frame_status(&fed, asynchronous, self.pictured);
         self.pictured |= fed.pictures > 0;
+        // The submitted frame decoded damaged, failed, or made no picture: on synchronous
+        // key-frame-recovery streams, drop FFmpeg's stale DPB references now rather than holding
+        // them until the requested IDR arrives (RFI streams keep references; V4L2 M2M driver
+        // queues outlive `avcodec_flush_buffers`, `flushes_on_decode_error`).
+        if status == DecodeStatus::NeedIdr
+            && !asynchronous
+            && flushes_on_decode_error(&setup, decoder.hardware)
+        {
+            decoder.flush_buffers();
+            self.in_flight.clear();
+        }
         if status == DecodeStatus::NeedIdr {
             self.shared.counters.decode_errors.fetch_add(1, Ordering::Relaxed);
             if !(fed.refused || fed.failed) {
