@@ -78,7 +78,7 @@ Every screen works with a controller or a TV remote as well as touch, mouse and 
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="docs/assets/readme/handheld-home.webp" alt="Home on a handheld: Racing Game running, with Resume, Favourite and Quit game, a Continue playing list and the Recently played row, under a glass top bar (demo library)"><br><sub><b>Made for handhelds.</b> Every action has its button on screen.</sub></td>
+<td width="50%" valign="top"><img src="docs/assets/readme/handheld-home.webp" alt="Home on a handheld: Racing Game running, with Resume, Favourite and Quit game, a Continue playing list and the Recently played row, under a glass top bar with the controller's buttons for Resume and Options (demo library)"><br><sub><b>Made for handhelds.</b> Every action has its button on screen.</sub></td>
 <td width="50%" valign="top"><img src="docs/assets/readme/desktop-home.webp" alt="Nightjar on the desktop: Home with Racing Game in progress, Resume and Quit game, and a row of cover art per store, under a top bar with Home, PCs, Settings and Help (demo library)"><br><sub><b>On the desktop too.</b> Windows, Linux and macOS, with a row per store on Home. <a href="protocol/desktop/README.md#using-nightjar">More of the desktop app</a></sub></td>
 </tr>
 <tr>
@@ -88,7 +88,7 @@ Every screen works with a controller or a TV remote as well as touch, mouse and 
 </table>
 
 <p align="center">
-  <img src="docs/assets/readme/phone-home.webp" width="270" alt="Home on a phone held upright: a card that says once what the automatic settings use with this PC, then the Continue playing list (demo library)">
+  <img src="docs/assets/readme/phone-home.webp" width="270" alt="Home on a phone held upright: a card that says once what the automatic settings use with this PC, then Racing Game's cover with Resume above the tab bar (demo library)">
   &nbsp;&nbsp;
   <img src="docs/assets/readme/phone-game.webp" width="270" alt="A game's page on a phone held upright: the cover on its own colours and a sheet below it with Resume, Add to favourites, Quit game and the stream settings (demo library)"><br>
   <sub><b>On a phone.</b> Home says once what the automatic settings use; a game's page is a sheet under its cover.</sub>
@@ -100,7 +100,7 @@ Settings open on **Recommended**: **Stream smoothness**, **Picture quality**, th
 
 Phones, TVs and computers share one settings layout, and **Interface layout** (Automatic, TV or Handheld) in every Android build gives a handheld the TV screens or a TV the touch ones. Desktop users can scroll the launcher directly by dragging a touchscreen and match the launcher window to **Window** mode (`Fullscreen`, `Borderless` or `Windowed`). Settings can differ per PC and per game, with profiles that switch by network (mobile data, home Wi-Fi or other Wi-Fi) or follow the screen you play on. Nightjar comes in 15 languages, with high contrast, reduced motion and screen reader support.
 
-<p align="center"><img src="docs/assets/readme/desktop-settings.webp" width="820" alt="Settings on the desktop, on the Recommended page: Stream smoothness, Picture quality, Screen and HDR on Auto, a Console mode switch and Back to recommended, beside Controls, Audio, App and More settings (demo data)"></p>
+<p align="center"><img src="docs/assets/readme/desktop-settings.webp" width="820" alt="Settings on the desktop, on the Recommended page: Stream smoothness, Picture quality and HDR on Auto, the screen's resolution, a Console mode switch and Back to recommended, beside Controls, Audio, App and More settings (demo data)"></p>
 
 ### Smooth, and it stays in the game
 
@@ -142,7 +142,7 @@ A performance overlay in three levels of detail shows the network and decoding, 
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="docs/assets/readme/stream-menu.webp" alt="Nightjar's Control Center over a running game: keyboard, PC keyboard, overlay, microphone, touch mode, on-screen controls, zoom and clipboard buttons, a bitrate slider, Disconnect and Quit game (demo stream)"><br><sub><b>The Control Center.</b> Keyboard, touch mode, clipboard and the bitrate, with Disconnect and Quit game.</sub></td>
+<td width="50%" valign="top"><img src="docs/assets/readme/control-center.webp" alt="Nightjar's Control Center over a running game: a rail with Quick, Picture, Audio, PC, Controller and Power, the Quick cards for the keyboard, the PC keyboard, the overlay and touch mode, then Return to stream, Disconnect and Quit game (demo stream)"><br><sub><b>The Control Center.</b> Keyboard, overlay and touch mode up front, picture, audio and the PC one step away, with Disconnect and Quit game.</sub></td>
 <td width="50%" valign="top"><img src="docs/assets/readme/stream-stats.webp" alt="A stream with the Statistics overlay: resolution, codec, frame rate, bitrate, round trip, decode time and the PC's CPU and GPU readings (demo stream with scripted readings)"><br><sub><b>Know why a stream stuttered.</b> The overlay, from one line to every stage.</sub></td>
 </tr>
 </table>
