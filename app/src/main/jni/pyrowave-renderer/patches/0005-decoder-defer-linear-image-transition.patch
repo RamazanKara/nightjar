@@ -4,7 +4,7 @@ The General layout policy does not suppress Granite's automatic initial
 transition. An undefined requested initial layout suppresses it, while
 LinearHost still creates the Vulkan image as PREINITIALIZED. The existing
 first-upload transition is then the only PREINITIALIZED-to-GENERAL
-transition. Applies to PyroWave 502a3b52 with Granite fb178c80.
+transition. Applies to PyroWave a32b05e0 with Granite 53090429.
 
 diff --git a/pyrowave_decoder.cpp b/pyrowave_decoder.cpp
 --- a/pyrowave_decoder.cpp

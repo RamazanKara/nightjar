@@ -59,8 +59,8 @@ status, frame limiter) follow its protocol approach, retain Moonlight attributio
 pinned common-c submodule unchanged.
 
 PyroWave and Granite are by Hans-Kristian Arntzen under the
-[PyroWave MIT license](https://github.com/Themaister/pyrowave/blob/502a3b52a39312ab82c85b1e2fc0e746faee91a4/LICENSE)
-and the [Granite MIT license](https://github.com/Themaister/Granite/blob/fb178c8080d163419e8d20f10715c61c53c1ec9b/LICENSE);
+[PyroWave MIT license](https://github.com/Themaister/pyrowave/blob/a32b05e03d70826b19d4d11ff74fe166ed74371b/LICENSE)
+and the [Granite MIT license](https://github.com/Themaister/Granite/blob/53090429539bf3404250d18fe58db971f0907c04/LICENSE);
 their notices and volk's are packaged in `assets/pyrowave_notices.txt`. The Android renderer port
 is credited in [milestone 4b](#milestone-4b-vulkan-decoder-port-historical-implementation-record).
 
@@ -90,7 +90,7 @@ full MIT notices are included there. The necessary new runtime dependency is `li
 Both ARM64 and x86-64 libraries were rebuilt with Windows NDK 29, rather than copied from the fork.
 32-bit APKs retain the ordinary decoders and tolerate the absent Vulkan library.
 
-Pinned dependency sources: PyroWave `7fe0e2667cd3076b8b2bf04bcb80bc8d691b800b`, Granite
+Pinned dependency sources: PyroWave `a32b05e03d70826b19d4d11ff74fe166ed74371b`, Granite
 `53090429539bf3404250d18fe58db971f0907c04`, volk `47cddf7ed97b94118a08aacb548a411188e016cc`,
 Vulkan-Headers `6802bb4733b63ed5efd3adb308a6c885ef180ea1`. The decoder short-block patch from
 Rubylight `6772d401` is retained unchanged in `jni/pyrowave-renderer/patches/`. Two additional
@@ -191,8 +191,8 @@ executables; use a matching C API installation in `$PyroInstall`):
 ```powershell
 $Bench = Join-Path $env:TEMP 'bp-pyrowave-bench'
 New-Item -ItemType Directory -Force $Bench | Out-Null
-$PyroInstall = 'C:/Users/ramaz/git/pyrowave-build/install-502a3b52'
-$VulkanHeaders = 'C:/Users/ramaz/git/pyrowave-build/src-502a3b52/Granite/third_party/khronos/vulkan-headers/include'
+$PyroInstall = 'C:/Users/ramaz/git/pyrowave-build/install-a32b05e0'
+$VulkanHeaders = 'C:/Users/ramaz/git/pyrowave-build/src-a32b05e0/Granite/third_party/khronos/vulkan-headers/include'
 $env:PATH = 'C:/msys64/ucrt64/bin;' + $env:PATH
 g++ -std=c++17 -O2 app/src/test/native/pyrowave_frame_test.cpp -o "$Bench/frame-test.exe"
 & "$Bench/frame-test.exe"
@@ -230,7 +230,7 @@ $Ndk = "$Sdk/ndk/29.0.14206865"
 $env:PATH = "$Sdk/cmake/3.22.1/bin;" + $env:PATH
 git init $Source
 git -C $Source remote add origin https://github.com/Themaister/pyrowave.git
-git -C $Source fetch --depth 1 origin 7fe0e2667cd3076b8b2bf04bcb80bc8d691b800b
+git -C $Source fetch --depth 1 origin a32b05e03d70826b19d4d11ff74fe166ed74371b
 git -C $Source checkout --detach FETCH_HEAD
 git init "$Source/Granite"
 git -C "$Source/Granite" remote add origin https://github.com/Themaister/Granite.git
@@ -301,6 +301,23 @@ archives of the same commits, with the options above.
 | --- | ---: | --- |
 | arm64-v8a | 1,249,048 | `488a4ad102d4475db787830df71e5d07b14ccdc8c8998c97b2d4a69df034434b` |
 | x86_64 | 1,303,208 | `728d4a2a2179a076d9a89a5b2e79742ed6956bd65f8bec2e6230db61a9b90505` |
+
+On 2026-11-21 the libraries were rebuilt with the same toolchain, options and three patches at
+PyroWave `a32b05e0` with its Granite `53090429`, the upstream commit the host and the desktop
+client now pin. Upstream's `a32b05e0` fixes dequantization plane offsets for Vulkan subgroup sizes
+below 16 threads (`shaders/wavelet_dequant.comp`); GPUs whose subgroups are narrower decode those
+streams correctly now. The encoder-side commits in the same range (the rate-control fixes
+`e87453a9` and `e79b2736`, Vulkan P010 input `146d5a35`) do not change this decoder. Between
+`502a3b52` and `a32b05e0` the `bitstream/` directory, `pyrowave_common.*` and the decoder's C++
+sources are identical, `pyrowave.h` changes only in encoder comments (P010 is allowed for scaled
+encode) and min Vulkan 1.2 falls to 1.1, so the C API stays 1.0.0 with the same 48 exports and the
+stream stays the `186f0393` bitstream. The SONAME and 16 KiB LOAD alignment were rechecked; the
+three patches apply unchanged but for the commit names in their headers.
+
+| ABI | Bytes | SHA-256 |
+| --- | ---: | --- |
+| arm64-v8a | 1,251,400 | `9c93c943aae5593c545509b92a71e8d3a9ca704a8ab2277a68d86d0e068d47a4` |
+| x86_64 | 1,305,576 | `13efcdd38026ea4c158895660d8196c9eec936ac6b673e57c44280a7bb66b47e` |
 
 To regenerate `shaders_spv.h`, compile each `shaders/fullscreen.vert`, `shaders/planar_csc.frag` and
 `shaders/sgsr.frag` with NDK `shader-tools/windows-x86_64/glslc.exe -O --target-env=vulkan1.1 -mfmt=c`, and put

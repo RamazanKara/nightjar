@@ -3,7 +3,7 @@ Include dequantization metadata reads in the post-upload dependency.
 The metadata is always read through a storage buffer, including when the
 payload is sampled through a texel buffer or aliased linear image. Keep
 sampled-read visibility for those payload paths and add storage-read
-visibility for the metadata. Applies to PyroWave 502a3b52.
+visibility for the metadata. Applies to PyroWave a32b05e0.
 
 diff --git a/pyrowave_decoder.cpp b/pyrowave_decoder.cpp
 index 429ba8b..d897913 100644
