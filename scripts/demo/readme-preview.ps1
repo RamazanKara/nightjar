@@ -11,9 +11,14 @@ param(
 # window narrower than about 500 px, so the phone view is a 393 px wide column in a wider window, cropped to 393.
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
-$edge = @('C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe', 'C:\Program Files\Microsoft\Edge\Application\msedge.exe') |
-    Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-if (-not $edge) { throw 'Microsoft Edge is required for the preview.' }
+$playwrightChromes = @(Get-ChildItem (Join-Path $env:LOCALAPPDATA 'ms-playwright\chromium-*\chrome-win64\chrome.exe') -ErrorAction SilentlyContinue |
+    Sort-Object FullName -Descending | Select-Object -ExpandProperty FullName)
+$edge = @(
+    'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
+    'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
+    'C:\Program Files\Google\Chrome\Application\chrome.exe'
+) + $playwrightChromes | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+if (-not $edge) { throw 'Microsoft Edge or Chromium is required for the preview.' }
 $readme = Join-Path $Docs 'README.md'
 # gh prints UTF-8; decode it as such so the middle dots and arrows in the README are not turned into mojibake.
 $previousEncoding = [Console]::OutputEncoding
@@ -45,9 +50,9 @@ function Capture([int]$Width, [string]$Path, [bool]$Phone) {
     [IO.File]::WriteAllText($page, $html, (New-Object Text.UTF8Encoding($false)))
     $raw = "$Path.raw.png"
     $window = [Math]::Max($Width, 600)
-    & $edge --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=1 --window-size="$window,4200" `
-        --virtual-time-budget=4000 --screenshot="$raw" ([Uri]$page).AbsoluteUri 2>&1 | Out-Null
-    if (-not (Test-Path -LiteralPath $raw)) { throw "Edge produced no screenshot at ${Width}px." }
+    & $edge --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=1 --window-size="$window,14000" `
+        --virtual-time-budget=5000 --screenshot="$raw" ([Uri]$page).AbsoluteUri 2>&1 | Out-Null
+    if (-not (Test-Path -LiteralPath $raw)) { throw "Browser produced no screenshot at ${Width}px." }
     # Crop to the requested width and trim the empty page background below the card.
     $bitmap = [Drawing.Bitmap]::FromFile($raw)
     try {
