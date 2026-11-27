@@ -441,6 +441,19 @@ public final class ModernController {
         if (onLayoutChanged != null) onLayoutChanged.run();
     }
 
+    /**
+     * Removes the layout kept for the controller whose layout shows (#154) and closes the editor without saving: the
+     * layouts for this game and all games stay as they were, and the controls show the one that applies now.
+     */
+    void forgetControllerLayout() {
+        if (controllerModel == null) return;
+        SharedPreferences.Editor edit = store.edit();
+        PadControllerLayouts.remove(edit, controllerModel);
+        edit.apply();
+        controllerModel = null;
+        finishEditing(false);
+    }
+
     private Runnable onLayoutChanged;
 
     /** Runs when the editor closes, so what sits below the top row (the microphone button) can move with it. */

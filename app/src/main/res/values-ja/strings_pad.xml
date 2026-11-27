@@ -65,4 +65,5 @@
     <string name="pad_edit_mirror">左右をミラーリング</string>
     <string name="pad_edit_this_controller">%1$s のときだけ</string>
     <string name="pad_edit_touch_area">タッチ範囲</string>
+    <string name="pad_edit_forget_controller">%1$s 用のレイアウトを削除</string>
 </resources>

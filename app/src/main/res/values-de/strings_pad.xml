@@ -65,4 +65,5 @@
     <string name="pad_edit_mirror">Links und rechts spiegeln</string>
     <string name="pad_edit_this_controller">Nur mit %1$s</string>
     <string name="pad_edit_touch_area">Berührungsfläche</string>
+    <string name="pad_edit_forget_controller">Layout für %1$s entfernen</string>
 </resources>

@@ -65,4 +65,5 @@
     <string name="pad_edit_mirror">Solu ve sağı yansıt</string>
     <string name="pad_edit_this_controller">Yalnızca %1$s ile</string>
     <string name="pad_edit_touch_area">Dokunma alanı</string>
+    <string name="pad_edit_forget_controller">%1$s düzenini kaldır</string>
 </resources>

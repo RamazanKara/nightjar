@@ -71,4 +71,5 @@
     <string name="pad_edit_mirror">Mirror left and right</string>
     <string name="pad_edit_this_controller">Only with %1$s</string>
     <string name="pad_edit_touch_area">Touch area</string>
+    <string name="pad_edit_forget_controller">Remove the layout for %1$s</string>
 </resources>

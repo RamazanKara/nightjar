@@ -108,6 +108,28 @@ public class PadControllerLayoutsTest extends ModernControllerHarness {
         assertTrue("The draft went to all games", controller.layout().spec(PadLayout.Control.LB).hidden);
     }
 
+    @Test public void removingAControllersLayoutLeavesTheOtherLayouts() {
+        ModernController controller = controller(GAME);
+        PadLayout shared = controller.layout().copy();
+        shared.setScale(PadLayout.Control.FACE, .8f);
+        controller.save(shared, false);
+        String sharedText = store().getString(PadLayoutKeys.key(true, null), null);
+        assertNotNull(sharedText);
+        controller.setControllers(connected(XBOX));
+        PadLayout own = controller.layout().copy();
+        own.spec(PadLayout.Control.LB).hidden = true;
+        controller.save(own, false, XBOX[0]);
+
+        controller.startEditing();
+        controller.forgetControllerLayout();
+        assertFalse(controller.isEditing());
+        assertFalse(PadControllerLayouts.has(store(), XBOX[0]));
+        assertNull(store().getString(PadControllerLayouts.nameKey(XBOX[0]), null));
+        assertEquals("all games' layout untouched", sharedText, store().getString(PadLayoutKeys.key(true, null), null));
+        assertFalse("the shared layout shows", controller.layout().spec(PadLayout.Control.LB).hidden);
+        assertEquals(.8f, controller.layout().spec(PadLayout.Control.FACE).scale(), 1e-3);
+    }
+
     @Test public void theOtherOrientationIsTheFallback() {
         ModernController controller = controller(GAME);
         controller.setControllers(connected(XBOX));

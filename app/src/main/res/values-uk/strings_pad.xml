@@ -65,4 +65,5 @@
     <string name="pad_edit_mirror">Дзеркально ліворуч і праворуч</string>
     <string name="pad_edit_this_controller">Лише з %1$s</string>
     <string name="pad_edit_touch_area">Область дотику</string>
+    <string name="pad_edit_forget_controller">Видалити розкладку для %1$s</string>
 </resources>

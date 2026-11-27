@@ -65,4 +65,5 @@
     <string name="pad_edit_mirror">Đối xứng trái phải</string>
     <string name="pad_edit_this_controller">Chỉ với %1$s</string>
     <string name="pad_edit_touch_area">Vùng chạm</string>
+    <string name="pad_edit_forget_controller">Xóa bố cục cho %1$s</string>
 </resources>

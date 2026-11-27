@@ -176,6 +176,11 @@ final class PadEditor extends FrameLayout {
         controller.finishEditing(save);
     }
 
+    /** Removes the shown controller's own layout and closes, keeping the other layouts (#154). */
+    void forgetControllerLayout() {
+        controller.forgetControllerLayout();
+    }
+
     void resetDraft() {
         checkpoint(null);
         draft.reset();

@@ -65,4 +65,5 @@
     <string name="pad_edit_mirror">Specchia sinistra e destra</string>
     <string name="pad_edit_this_controller">Solo con %1$s</string>
     <string name="pad_edit_touch_area">Area di tocco</string>
+    <string name="pad_edit_forget_controller">Rimuovi il layout per %1$s</string>
 </resources>

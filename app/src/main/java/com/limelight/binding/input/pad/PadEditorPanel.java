@@ -258,6 +258,12 @@ final class PadEditorPanel {
             editor.setForController(checked);
             thisGame.setEnabled(!checked);
         });
+        // The layout showing is that controller's own: it can go without touching the other layouts.
+        if (!on) return;
+        MaterialButton forget = panel.findViewById(R.id.pad_editor_forget_controller);
+        forget.setText(forget.getContext().getString(R.string.pad_edit_forget_controller, name));
+        forget.setVisibility(View.VISIBLE);
+        forget.setOnClickListener(v -> editor.forgetControllerLayout());
     }
 
     /**
