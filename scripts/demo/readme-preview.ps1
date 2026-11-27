@@ -19,13 +19,27 @@ $edge = @(
     'C:\Program Files\Google\Chrome\Application\chrome.exe'
 ) + $playwrightChromes | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 if (-not $edge) { throw 'Microsoft Edge or Chromium is required for the preview.' }
+$Docs = [IO.Path]::GetFullPath($Docs)
 $readme = Join-Path $Docs 'README.md'
-# gh prints UTF-8; decode it as such so the middle dots and arrows in the README are not turned into mojibake.
-$previousEncoding = [Console]::OutputEncoding
-[Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
-try { $body = & gh api markdown -f "text=$([IO.File]::ReadAllText($readme))" -f mode=gfm } finally { [Console]::OutputEncoding = $previousEncoding }
-if ($LASTEXITCODE -ne 0) { throw 'gh api markdown failed.' }
-$base = ([Uri](Join-Path $Docs '.')).AbsoluteUri
+# gh prints UTF-8; pipe the markdown via stdin and decode stdout as UTF-8 even in headless hosts without a console handle.
+$tmpIn = Join-Path ([IO.Path]::GetTempPath()) "readme-md-$([Guid]::NewGuid().ToString('N')).json"
+$tmpOut = "$tmpIn.html"
+try {
+    $payload = @{ text = [IO.File]::ReadAllText($readme, [Text.Encoding]::UTF8); mode = 'gfm' } | ConvertTo-Json -Compress
+    [IO.File]::WriteAllText($tmpIn, $payload, (New-Object Text.UTF8Encoding($false)))
+    $ghExe = (Get-Command gh).Source
+    $psi = New-Object Diagnostics.ProcessStartInfo($ghExe, "api markdown --input `"$tmpIn`"")
+    $psi.RedirectStandardOutput = $true
+    $psi.StandardOutputEncoding = [Text.Encoding]::UTF8
+    $psi.UseShellExecute = $false
+    $p = [Diagnostics.Process]::Start($psi)
+    $body = $p.StandardOutput.ReadToEnd()
+    $p.WaitForExit()
+    if ($p.ExitCode -ne 0) { throw 'gh api markdown failed.' }
+} finally {
+    Remove-Item -LiteralPath $tmpIn -ErrorAction SilentlyContinue
+}
+$base = ([Uri]($Docs.TrimEnd('\', '/') + '\')).AbsoluteUri
 $css = @'
 body{margin:0;background:#fff;color:#1f2328;font:16px/1.5 -apple-system,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif}
 .page{max-width:1012px;margin:24px auto;border:1px solid #d1d9e0;border-radius:6px}

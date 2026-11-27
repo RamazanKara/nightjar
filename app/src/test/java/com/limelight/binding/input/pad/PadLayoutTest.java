@@ -205,11 +205,14 @@ public class PadLayoutTest {
 
     @Test public void defaultLeftTriggerClearsCompactTopLeftStatsHudInLandscape() {
         PadLayout layout = new PadLayout();
-        // Standard 1080p phone (2400x1080 @ 2.625x) and 720p/1080p handhelds in landscape clear the 40dp stats capsule.
+        // Standard 1080p phone (2400x1080 @ 2.625x) and 720p/1080p handhelds in landscape clear the compact top HUD capsules.
         for (float[] s : new float[][] {{2400, 1080, 2.625f}, {1920, 1080, 2f}, {1280, 720, 1.5f}}) {
             float[] lt = layout.bounds(PadLayout.Control.LT, s[0], s[1], s[2], new float[4]);
-            assertTrue("LT top clears 40dp stats HUD on " + s[0] + "x" + s[1] + ": " + (lt[1] / s[2]) + "dp",
+            float[] rt = layout.bounds(PadLayout.Control.RT, s[0], s[1], s[2], new float[4]);
+            assertTrue("LT top clears top-left stats HUD on " + s[0] + "x" + s[1] + ": " + (lt[1] / s[2]) + "dp",
                     lt[1] >= 38f * s[2]);
+            assertTrue("RT top matches symmetric HUD clearance on " + s[0] + "x" + s[1] + ": " + (rt[1] / s[2]) + "dp",
+                    rt[1] >= 38f * s[2]);
         }
     }
 

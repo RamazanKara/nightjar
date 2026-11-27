@@ -210,7 +210,8 @@ public final class DemoGameActivity extends Activity implements SurfaceHolder.Ca
                 androidx.core.content.ContextCompat.getColor(this, R.color.nj_surface_hud_rim));
         label.setBackground(hudPill);
         label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-2, -2,
+                showControls ? (Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL) : (Gravity.TOP | Gravity.END));
         int margin = Math.round(12 * density);
         params.setMargins(margin, margin, margin, margin);
         container.addView(label, params);

@@ -160,6 +160,7 @@ public final class DemoLauncherActivity extends Activity {
                 .putExtra("orientation", getIntent().getStringExtra("orientation"))
                 .putExtra("size", getIntent().getStringExtra("size"))
                 .putExtra("page", getIntent().getStringExtra("page"))
+                .putExtra(com.limelight.preferences.StreamSettings.EXTRA_SECTION, getIntent().getStringExtra("page"))
                 // Settings as the shell bar opens it: a top-level page with no back arrow.
                 .putExtra(com.limelight.ui.ShellBar.EXTRA_FROM_SHELL, "settings".equals(screen))
                 .putExtra(com.limelight.console.AllGamesActivity.EXTRA_FILTER, getIntent().getStringExtra("filter"))

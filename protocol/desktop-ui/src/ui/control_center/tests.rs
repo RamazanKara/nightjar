@@ -157,6 +157,27 @@ impl Demo {
                                 "night_mode" => {
                                     menu_style::switch(ui, Icon::Speaker, "Night mode", night_mode);
                                 }
+                                "image_clipboard_send" => {
+                                    menu_style::action(ui, Icon::Image, "Send image to PC", None);
+                                }
+                                "image_clipboard_receive" => {
+                                    menu_style::action(ui, Icon::Image, "Copy PC image here", None);
+                                }
+                                "help" => {
+                                    menu_style::action(ui, Icon::Help, HELP, None);
+                                }
+                                "usb_devices" => {
+                                    menu_style::action(ui, Icon::Usb, "USB devices", None);
+                                }
+                                "controller_settings" => {
+                                    menu_style::action(ui, Icon::Controller, "Controller settings", None);
+                                }
+                                "session" => {
+                                    menu_style::action(ui, Icon::More, "Session & graphics", None);
+                                }
+                                "guests" => {
+                                    menu_style::action(ui, Icon::More, "Guests", None);
+                                }
                                 id => {
                                     menu_style::action(ui, Icon::More, id, None);
                                 }

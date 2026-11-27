@@ -342,7 +342,30 @@ final class HomeChrome {
         int capsule = res.getDimensionPixelSize(R.dimen.glass_capsule);
         int gap = res.getDimensionPixelSize(R.dimen.space_s);
         if (form == GlassForm.TELEVISION) {
+            float density = res.getDisplayMetrics().density;
             topRow.setPadding(left, top, right, 0);
+            View hero = activity.findViewById(R.id.home_hero);
+            if (hero != null && hero.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams hp = (ViewGroup.MarginLayoutParams) hero.getLayoutParams();
+                hp.topMargin = Math.round(88 * density) + top;
+                hero.setLayoutParams(hp);
+            }
+            if (list.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) list.getLayoutParams();
+                lp.topMargin = Math.round(176 * density) + top;
+                list.setLayoutParams(lp);
+            }
+            View pairing = activity.findViewById(R.id.home_pairing_banner);
+            if (pairing != null && pairing.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams pp = (ViewGroup.MarginLayoutParams) pairing.getLayoutParams();
+                pp.topMargin = Math.round(88 * density) + top;
+                pairing.setLayoutParams(pp);
+            }
+            if (card.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams cp = (ViewGroup.MarginLayoutParams) card.getLayoutParams();
+                cp.topMargin = Math.round(88 * density) + top;
+                card.setLayoutParams(cp);
+            }
             list.setPadding(left + listInset, list.getPaddingTop(), right + listInset, list.getPaddingBottom());
             ViewGroup.MarginLayoutParams row = (ViewGroup.MarginLayoutParams) topRow.getLayoutParams();
             placeSearch(left, right, top + row.topMargin, capsule, gap, bottom + res.getDimensionPixelSize(R.dimen.space_xl), row.getMarginStart());

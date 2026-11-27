@@ -447,6 +447,7 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = super.onCreateView(inflater, container, savedInstanceState);
+        StreamSettingsChrome.stylePreferenceList(view, getActivity(), true);
         ListView list = view.findViewById(android.R.id.list);
         String raw = getArguments() == null ? null : getArguments().getString(ARG_SECTION);
         String normalized = StreamSettings.normalizeSection(raw);
@@ -457,7 +458,6 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
         } else {
             studioCard = null;
         }
-        StreamSettingsChrome.stylePreferenceList(view, getActivity(), true);
         return view;
     }
 
