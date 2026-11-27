@@ -36,6 +36,7 @@ impl InputQueue {
             self.release_held(out);
         }
         let motion_interval = self.motion_interval();
+        let relative_interval = self.relative_motion_interval();
         let mut wake: Option<Instant> = None;
         let mut index = 0;
         while index < self.entries.len() {
@@ -70,7 +71,7 @@ impl InputQueue {
                 }
                 let wait_until = match entry {
                     Entry::RelativeMouse if self.entries.len() == index + 1 => {
-                        self.last_mouse.map(|t| t + motion_interval.max(self.relative_floor))
+                        self.last_mouse.map(|t| t + relative_interval)
                     }
                     Entry::AbsoluteMouse if self.entries.len() == index + 1 => {
                         self.last_mouse.map(|t| t + motion_interval)

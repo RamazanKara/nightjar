@@ -436,6 +436,7 @@ impl ControlClient {
                 .extend(std::iter::from_fn(|| session.poll_transmit()));
             wake
         };
+        let mut queued = false;
         let peer = self.host.peer_mut(self.peer);
         let channels = peer.channel_count();
         for out in self.outgoing.drain(..) {
@@ -445,7 +446,14 @@ impl ControlClient {
                 channel::GENERIC
             };
             // A peer that is no longer connected reports a disconnect from service().
-            let _ = peer.send(channel, &packet(out.datagram, out.delivery));
+            if peer.send(channel, &packet(out.datagram, out.delivery)).is_ok() {
+                queued = true;
+            }
+        }
+        if queued {
+            // Flush queued input/control datagrams immediately before service() processes
+            // incoming events so outgoing packets leave in the same turn.
+            self.host.flush();
         }
         match (input_wake, session_wake) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -540,6 +548,7 @@ impl ControlClient {
             }
             // ENet's resend timers backed off during the outage; a ping gets traffic going.
             self.host.peer_mut(self.peer).ping();
+            self.host.flush();
         }
         self.roam_events.extend(events);
         timer

@@ -154,6 +154,7 @@ pub struct InputQueue {
     batched_scroll: bool,
     stopped: bool,
     unbatched: bool,
+    motion_interval_override: Option<Duration>,
     relative_floor: Duration,
     entries: VecDeque<Entry>,
     next_id: u64,
@@ -195,6 +196,7 @@ impl InputQueue {
             batched_scroll: caps.version_at_least(7, 1, 409) && !caps.is_sunshine(),
             stopped: false,
             unbatched: false,
+            motion_interval_override: None,
             relative_floor: Duration::ZERO,
             entries: VecDeque::new(),
             next_id: 0,
@@ -248,6 +250,12 @@ impl InputQueue {
     /// the queue behind other packets.
     pub fn set_unbatched(&mut self, unbatched: bool) {
         self.unbatched = unbatched;
+    }
+
+    /// Overrides the batching interval used for mouse and pen motion when [`Self::set_unbatched`]
+    /// is false. Relative mouse motion still respects [`Self::set_relative_motion_floor`].
+    pub fn set_motion_batching_interval(&mut self, interval: Duration) {
+        self.motion_interval_override = Some(interval);
     }
 
     /// Relative mouse motion leaves at most once per `floor` after the last packet, unbatched
@@ -307,6 +315,19 @@ impl InputQueue {
     fn motion_interval(&self) -> Duration {
         if self.unbatched {
             Duration::ZERO
+        } else {
+            self.motion_interval_override
+                .unwrap_or(MOTION_BATCHING_INTERVAL)
+        }
+    }
+
+    fn relative_motion_interval(&self) -> Duration {
+        if self.unbatched {
+            self.relative_floor
+        } else if let Some(interval) = self.motion_interval_override {
+            interval.max(self.relative_floor)
+        } else if !self.relative_floor.is_zero() {
+            self.relative_floor
         } else {
             MOTION_BATCHING_INTERVAL
         }

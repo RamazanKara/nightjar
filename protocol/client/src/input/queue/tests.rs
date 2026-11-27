@@ -529,3 +529,91 @@ fn consecutive_text_streams_without_rewaiting_settle() {
         [Input::Text("b".into())]
     );
 }
+
+#[test]
+fn fast_mouse_floor_is_not_shadowed_by_default_batching() {
+    let mut q = queue(&sunshine());
+    q.set_relative_motion_floor(FAST_MOUSE_FLOOR);
+    let t0 = Instant::now();
+
+    // First report leaves immediately and records last_mouse.
+    q.send_mouse_move(2, 0).unwrap();
+    assert_eq!(take(&mut q, t0), [Input::Relative { x: 2, y: 0 }]);
+
+    // 4 kHz report at +250 us is batched to the 500 us floor, not 1000 us.
+    q.send_mouse_move(3, 0).unwrap();
+    let mut out = Vec::new();
+    assert_eq!(
+        q.poll(t0 + Duration::from_micros(250), false, &mut out),
+        Some(t0 + FAST_MOUSE_FLOOR)
+    );
+    assert!(out.is_empty());
+    let sent = t0 + FAST_MOUSE_FLOOR;
+    assert_eq!(take(&mut q, sent), [Input::Relative { x: 3, y: 0 }]);
+
+    // 1 kHz report arriving at +750 us leaves immediately without waiting to 1000 us.
+    q.send_mouse_move(4, 1).unwrap();
+    out.clear();
+    assert_eq!(q.poll(sent + Duration::from_micros(750), false, &mut out), None);
+    assert_eq!(
+        out.iter().map(|p| decode(&p.data).unwrap()).collect::<Vec<_>>(),
+        [Input::Relative { x: 4, y: 1 }]
+    );
+
+    // AbsoluteMouse and Pen still use the default 1 ms MOTION_BATCHING_INTERVAL.
+    let abs_t = sent + Duration::from_micros(750);
+    q.send_mouse_position(10, 20, 100, 100).unwrap();
+    out.clear();
+    assert_eq!(
+        q.poll(abs_t + Duration::from_micros(750), false, &mut out),
+        Some(abs_t + MOTION_BATCHING_INTERVAL)
+    );
+    assert!(out.is_empty());
+    assert_eq!(take(&mut q, abs_t + MOTION_BATCHING_INTERVAL).len(), 1);
+
+    let pen_t = abs_t + MOTION_BATCHING_INTERVAL;
+    q.send_pen(touch_event::MOVE, 1, 0, 0.2, 0.5, 0.5, 0., 0., 0, 0, pen::ROLL_UNKNOWN)
+        .unwrap();
+    assert_eq!(take(&mut q, pen_t).len(), 1);
+    q.send_pen(touch_event::MOVE, 1, 0, 0.3, 0.5, 0.5, 0., 0., 0, 0, pen::ROLL_UNKNOWN)
+        .unwrap();
+    out.clear();
+    assert_eq!(
+        q.poll(pen_t + Duration::from_micros(750), false, &mut out),
+        Some(pen_t + MOTION_BATCHING_INTERVAL)
+    );
+    assert!(out.is_empty());
+    assert_eq!(take(&mut q, pen_t + MOTION_BATCHING_INTERVAL).len(), 1);
+}
+
+#[test]
+fn explicit_motion_batching_interval_still_bounds_relative_floor() {
+    let mut q = queue(&sunshine());
+    q.set_relative_motion_floor(FAST_MOUSE_FLOOR);
+    q.set_motion_batching_interval(Duration::from_millis(2));
+    let t0 = Instant::now();
+    q.send_mouse_move(1, 0).unwrap();
+    assert_eq!(take(&mut q, t0).len(), 1);
+
+    // Explicit 2 ms override holds relative mouse past 750 us up to 2 ms.
+    q.send_mouse_move(2, 0).unwrap();
+    let mut out = Vec::new();
+    assert_eq!(
+        q.poll(t0 + Duration::from_micros(750), false, &mut out),
+        Some(t0 + Duration::from_millis(2))
+    );
+    assert!(out.is_empty());
+    assert_eq!(take(&mut q, t0 + Duration::from_millis(2)).len(), 1);
+
+    // An explicit interval shorter than relative_floor still honors relative_floor.
+    let t1 = t0 + Duration::from_millis(2);
+    q.set_motion_batching_interval(Duration::from_micros(200));
+    q.send_mouse_move(3, 0).unwrap();
+    out.clear();
+    assert_eq!(
+        q.poll(t1 + Duration::from_micros(250), false, &mut out),
+        Some(t1 + FAST_MOUSE_FLOOR)
+    );
+    assert!(out.is_empty());
+    assert_eq!(take(&mut q, t1 + FAST_MOUSE_FLOOR).len(), 1);
+}

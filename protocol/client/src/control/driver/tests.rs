@@ -3,6 +3,8 @@ use crate::roaming::{Rejections, MAX_ATTEMPT};
 use std::cell::Cell;
 use std::net::IpAddr;
 
+mod wake;
+
 /// A code [`datagram_lost`] takes for packet loss: network unreachable.
 const UNREACHABLE: i32 = if cfg!(windows) {
     10051
