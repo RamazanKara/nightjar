@@ -458,6 +458,7 @@ final class GameStreamUiSetup {
         game.controllerHandler.setControllerAddedListener(() -> game.sayControllersOff(1));
         game.controllerHandler.setPresenceListener(game::setPhysicalControllerConnected);
         game.physicalControllerConnected = game.controllerHandler.hasExternalControllers();
+        game.controllerHandler.setModelListener(game::setControllerModels);
         if (DualScreen.isSecond(game.getIntent())) game.controllerHandler.stop();
         game.conn.setControllerPreparation(game.controllerHandler::prepareControllersForLaunch);
         game.videoOutput.updateInputPollingRate();

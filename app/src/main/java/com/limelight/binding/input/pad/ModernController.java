@@ -15,9 +15,12 @@ import com.limelight.binding.input.LayoutGamepad;
 import com.limelight.binding.input.touch.PointerAcceleration;
 import com.limelight.preferences.PreferenceConfiguration;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The modern on-screen controller: analog sticks that float or stay put, a D-pad, the face cluster,
@@ -26,7 +29,8 @@ import java.util.Map;
  * and Xbox, PlayStation or Nintendo glyphs. Controls are separate views in the stream's frame
  * so touches between them reach the stream. Its input is the on-screen gamepad, the same report the classic
  * controller sends (the WASD stick sends keys, the pointer touchpad mouse input), and its layout is kept per
- * orientation for all games or for one game. With the Steam Controller controls setting it adds that
+ * orientation for all games, for one game or for one physical controller, which brings its own layout while it is
+ * connected ({@link PadControllerLayouts}). With the Steam Controller controls setting it adds that
  * controller's trackpads, back buttons and grip touch — a tap on a trackpad clicks the pad — sent as
  * the classic controller sends them.
  */
@@ -55,6 +59,12 @@ public final class ModernController {
     private final float[] box = new float[4];
     private TouchSink touchSink;
     private PointerSink pointerSink;
+    /** The connected external controllers, {model, name} pairs in the order they connected. */
+    private List<String[]> controllers = Collections.emptyList();
+    /** The controller whose own layout shows, or null while the layout for this game or all games shows. */
+    private String controllerModel;
+    /** The controller the open editor's Only with switch saves for, or null when none is connected. */
+    private String editTarget;
 
     /** Where the Steam Controller trackpads' touches go: touchpad 0 of the on-screen controls' pad. */
     public interface TouchSink {
@@ -99,6 +109,15 @@ public final class ModernController {
     }
 
     private void load() {
+        // A connected controller's own layout first: the player saved it for that controller, in any game.
+        controllerModel = chooseController();
+        if (controllerModel != null) {
+            perGame = false;
+            layout = PadLayout.parse(PadControllerLayouts.read(store, landscape, controllerModel));
+            painter.setGlyph(layout.glyph());
+            painter.setFacesSwapped(layout.facesSwapped());
+            return;
+        }
         // This game's own layout first, in this version or the older one, then the layout shared by all games. A
         // game's own choice always wins, so a shared layout saved later never shadows it.
         String text = store.getString(PadLayoutKeys.key(landscape, gameKey), null);
@@ -112,6 +131,46 @@ public final class ModernController {
         layout = PadLayout.parse(text);
         painter.setGlyph(layout.glyph());
         painter.setFacesSwapped(layout.facesSwapped());
+    }
+
+    private String chooseController() {
+        return chooseController(store, controllers);
+    }
+
+    private static String chooseController(SharedPreferences store, List<String[]> connected) {
+        List<String> models = new ArrayList<>(connected.size());
+        for (String[] pair : connected) models.add(pair[0]);
+        return PadControllerLayouts.choose(models, model -> PadControllerLayouts.has(store, model));
+    }
+
+    /**
+     * Whether one of the connected controllers brings a layout of its own: the player saved it to use touch with that
+     * controller, so a connected controller does not hide the controls then. False without any such layout.
+     */
+    public static boolean controllerBringsLayout(Context context, List<String[]> connected) {
+        if (connected == null || connected.isEmpty()) return false;
+        return chooseController(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE), connected) != null;
+    }
+
+    /**
+     * The connected controllers changed: shows the layout saved for the last one to connect that has one, or the
+     * layout for this game or all games when none has, as before. An open editor keeps its draft; Done saves where
+     * its switches say and the layout to show is chosen then.
+     */
+    public void setControllers(List<String[]> connected) {
+        controllers = connected == null ? Collections.emptyList() : new ArrayList<>(connected);
+        if (editor != null || Objects.equals(controllerModel, chooseController())) return;
+        releaseInput();
+        load();
+        applyAppearance();
+        place();
+        if (onLayoutChanged != null) onLayoutChanged.run();
+    }
+
+    /** The name a connected controller model shows under, or the model itself. */
+    private String controllerName(String model) {
+        for (String[] pair : controllers) if (pair[0].equals(model)) return pair[1];
+        return model;
     }
 
     /** Sends the Steam Controller trackpads' touches here; without a sink they send nothing. */
@@ -329,11 +388,20 @@ public final class ModernController {
         return editor != null;
     }
 
+    /** Whether the controls are on screen, unless the editor covers them. */
+    public boolean isShown() {
+        return shown;
+    }
+
     /** Opens the layout editor over the stream; input pauses until it closes. */
     public void startEditing() {
         if (editor != null) return;
         releaseInput();
-        editor = new PadEditor(context, this, painter, layout.copy(), perGame, gameKey != null);
+        // Only with names the controller whose layout shows, else the controller that connected last.
+        editTarget = controllerModel != null ? controllerModel
+                : controllers.isEmpty() ? null : controllers.get(controllers.size() - 1)[0];
+        editor = new PadEditor(context, this, painter, layout.copy(), perGame, gameKey != null,
+                editTarget == null ? null : controllerName(editTarget), controllerModel != null);
         place();
         frame.addView(editor, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
@@ -345,7 +413,7 @@ public final class ModernController {
         PadEditor closing = editor;
         editor = null;
         frame.removeView(closing);
-        if (save) save(closing.draft(), closing.perGame());
+        if (save) save(closing.draft(), closing.perGame(), closing.forController() ? editTarget : null);
         else load(); // Cancel after a rotation shows the new orientation's saved layout, not the old one.
         // Cancel also restores the glyphs and pointer mode the editor previewed.
         applyAppearance();
@@ -361,9 +429,29 @@ public final class ModernController {
     }
 
     void save(PadLayout draft, boolean forThisGame) {
+        save(draft, forThisGame, null);
+    }
+
+    /**
+     * Keeps {@code draft} for {@code forController}, a controller model, when it is set; else for this game or all
+     * games. Saving a controller's layout for a game or all games instead takes that controller's own layout away.
+     */
+    void save(PadLayout draft, boolean forThisGame, String forController) {
         layout.copyFrom(draft);
         SharedPreferences.Editor edit = store.edit();
         String text = draft.serialize();
+        if (forController != null) {
+            PadControllerLayouts.save(edit, landscape, forController, controllerName(forController), text);
+            edit.apply();
+            perGame = false;
+            controllerModel = forController;
+            applyAppearance();
+            return;
+        }
+        if (controllerModel != null) {
+            PadControllerLayouts.remove(edit, controllerModel);
+            controllerModel = null;
+        }
         if (forThisGame && gameKey != null) {
             edit.putString(PadLayoutKeys.key(landscape, gameKey), text);
         } else {
@@ -382,6 +470,8 @@ public final class ModernController {
         }
         edit.apply();
         perGame = forThisGame && gameKey != null;
+        // Another connected controller with its own layout still brings it.
+        if (chooseController() != null) load();
         applyAppearance();
     }
 

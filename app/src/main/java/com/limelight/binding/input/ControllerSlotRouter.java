@@ -78,10 +78,25 @@ final class ControllerSlotRouter {
             handler.mainThreadHandler.post(this::announcePresence);
             return;
         }
+        // Which controllers first, so the presence listener already knows whether one of them brings its own layout.
+        if (handler.modelListener != null) {
+            java.util.List<String[]> models = handler.classifier.externalControllerModels();
+            if (!sameModels(models, handler.controllerModels)) {
+                handler.controllerModels = models;
+                handler.modelListener.onControllerModelsChanged(models);
+            }
+        }
         boolean now = handler.hasExternalControllers();
         if (now == handler.externalPresent) return;
         handler.externalPresent = now;
         if (handler.presenceListener != null) handler.presenceListener.onControllerPresenceChanged(now);
+    }
+
+    /** Whether two {model, name} lists name the same models in the same order. */
+    static boolean sameModels(java.util.List<String[]> a, java.util.List<String[]> b) {
+        if (a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) if (!a.get(i)[0].equals(b.get(i)[0])) return false;
+        return true;
     }
 
     void controllerAdded() {

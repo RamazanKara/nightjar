@@ -54,6 +54,7 @@ final class PadEditorPanel {
     private final float density;
     private final PadStudioInspector inspector;
     private final View panel, tray, sizeRow, opacityRow, controlSection, pointerMode, mouseCard, cameraCard, thisGame;
+    private final MaterialSwitch thisController;
     private final LinearLayout layoutSection, options, addSection;
     private final TextView selection, sizeText, opacityText, hint;
     private final MaterialButton hide, split, join;
@@ -133,6 +134,7 @@ final class PadEditorPanel {
         gameSwitch.setVisibility(gameAvailable ? View.VISIBLE : View.GONE);
         gameSwitch.setChecked(perGame);
         gameSwitch.setOnCheckedChangeListener((button, checked) -> editor.setPerGame(checked));
+        thisController = panel.findViewById(R.id.pad_editor_this_controller);
         opacityText = panel.findViewById(R.id.pad_studio_opacity_value);
         // The app's 7.0 slider: a round thumb on the thin track, and a ring around it while a controller or a
         // keyboard has it, as wide as a finger's touch. Its value stands at the row's end, so none floats over it;
@@ -222,6 +224,22 @@ final class PadEditorPanel {
         } else {
             editor.post(this::showPlacedPanel);
         }
+    }
+
+    /**
+     * The Only with switch for the connected controller {@code name}, on when the layout is already its own; hidden
+     * without a controller. While it is on the layout is that controller's in every game, so the game switch rests.
+     */
+    void offerController(String name, boolean on) {
+        if (name == null) return;
+        thisController.setText(thisController.getContext().getString(R.string.pad_edit_this_controller, name));
+        thisController.setVisibility(View.VISIBLE);
+        thisController.setChecked(on);
+        thisGame.setEnabled(!on);
+        thisController.setOnCheckedChangeListener((button, checked) -> {
+            editor.setForController(checked);
+            thisGame.setEnabled(!checked);
+        });
     }
 
     /**

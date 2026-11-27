@@ -63,4 +63,5 @@
     <string name="pad_dpad_left">Крестовина влево</string>
     <string name="pad_dpad_right">Крестовина вправо</string>
     <string name="pad_edit_mirror">Зеркально слева и справа</string>
+    <string name="pad_edit_this_controller">Только с %1$s</string>
 </resources>

@@ -348,6 +348,42 @@ final class ControllerDeviceClassifier {
         return false;
     }
 
+    /**
+     * The external controllers {@link #hasExternalControllers} counts, as {model, name} pairs in the order they
+     * connected (Android numbers input devices upwards as they attach; the USB driver's come after), each model once.
+     * The model is the key its button mapping uses, so the on-screen controls can bring the layout saved for it.
+     */
+    java.util.List<String[]> externalControllerModels() {
+        java.util.List<String[]> out = new java.util.ArrayList<>();
+        if (handler.inputManager != null) {
+            int[] ids = handler.inputManager.getInputDeviceIds().clone();
+            java.util.Arrays.sort(ids);
+            for (int id : ids) {
+                InputDevice device = handler.inputManager.getInputDevice(id);
+                if (device == null) continue;
+                ControllerHandler.InputDeviceContext context = handler.inputDeviceContexts.get(id);
+                boolean external = context != null ? context.external : isExternal(device);
+                if (!ControllerHandler.countsAsExternalController(external, isGamepadDevice(device),
+                        isRemoteControlDevice(device), isAlphabeticKeyboard(device), isHandheldControls(device))) continue;
+                addModel(out, ControllerButtonMap.deviceKey(device.getVendorId(), device.getProductId(), device.getName()),
+                        device.getName());
+            }
+        }
+        java.util.List<ControllerHandler.UsbDeviceContext> usb = new java.util.ArrayList<>(handler.usbDeviceContexts.values());
+        usb.sort((a, b) -> Integer.compare(a.id, b.id));
+        for (ControllerHandler.UsbDeviceContext context : usb) {
+            String model = ControllerButtonMap.deviceKey(context.vendorId, context.productId, null);
+            addModel(out, model, String.format(java.util.Locale.ROOT, "USB %04x:%04x",
+                    context.vendorId & 0xFFFF, context.productId & 0xFFFF));
+        }
+        return out;
+    }
+
+    private static void addModel(java.util.List<String[]> out, String model, String name) {
+        for (String[] known : out) if (known[0].equals(model)) return;
+        out.add(new String[] {model, name == null || name.trim().isEmpty() ? model : name.trim()});
+    }
+
     boolean shouldIgnoreBack(InputDevice dev) {
         boolean external = isExternal(dev);
         boolean internalGamepad = false;

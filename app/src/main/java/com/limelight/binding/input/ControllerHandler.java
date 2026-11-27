@@ -127,6 +127,8 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
     PresenceListener presenceListener;
     boolean externalPresent;
+    ModelListener modelListener;
+    java.util.List<String[]> controllerModels = java.util.Collections.emptyList();
     Runnable controllerAddedListener;
     volatile PadCapture padCapture;
     final AtomicInteger captureGeneration = new AtomicInteger();
@@ -197,6 +199,14 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         void onControllerPresenceChanged(boolean connected);
     }
 
+    /**
+     * Tells a listener which external controllers are connected, as {model, name} pairs in the order they connected,
+     * whenever that changes, so the on-screen controls can switch to a layout saved for one of them.
+     */
+    public interface ModelListener {
+        void onControllerModelsChanged(java.util.List<String[]> models);
+    }
+
     /** Takes over the buttons and left stick of USB-driver controllers while the on-screen PC keyboard is open. */
     public interface PadCapture {
         void button(int flag, boolean down);
@@ -221,6 +231,13 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     public synchronized void setPresenceListener(PresenceListener listener) {
         presenceListener = listener;
         externalPresent = hasExternalControllers();
+    }
+
+    /** Reports the connected controllers' models now and whenever they change; see {@link ModelListener}. */
+    public synchronized void setModelListener(ModelListener listener) {
+        modelListener = listener;
+        controllerModels = classifier.externalControllerModels();
+        if (listener != null) listener.onControllerModelsChanged(controllerModels);
     }
 
     public synchronized boolean hasExternalControllers() { return classifier.hasExternalControllers(); }

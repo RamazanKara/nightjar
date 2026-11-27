@@ -63,4 +63,5 @@
     <string name="pad_dpad_left">D-pad trái</string>
     <string name="pad_dpad_right">D-pad phải</string>
     <string name="pad_edit_mirror">Đối xứng trái phải</string>
+    <string name="pad_edit_this_controller">Chỉ với %1$s</string>
 </resources>

@@ -148,6 +148,8 @@ public class Game extends Activity implements SurfaceHolder.Callback, TextureVie
     com.limelight.binding.input.pad.ModernController modernController;
     // An external gamepad is connected; with Hide while a controller is connected the on-screen controls leave.
     volatile boolean physicalControllerConnected;
+    /** The connected external controllers, {model, name} in the order they connected (ControllerHandler.ModelListener). */
+    java.util.List<String[]> controllerModels = java.util.Collections.emptyList();
     com.limelight.ui.MicButton micButton;
     com.limelight.ui.MenuButton menuButton;
 
@@ -540,6 +542,7 @@ public class Game extends Activity implements SurfaceHolder.Callback, TextureVie
 
     boolean onscreenControlsShown() { return onscreenControls.onscreenControlsShown(); }
     void setPhysicalControllerConnected(boolean connected) { onscreenControls.setPhysicalControllerConnected(connected); }
+    void setControllerModels(java.util.List<String[]> models) { onscreenControls.setControllerModels(models); }
     void onGameButtonsEditing() { onscreenControls.onGameButtonsEditing(); }
     void hideOnscreenControllers() { onscreenControls.hideOnscreenControllers(); }
     void showOnscreenController() { onscreenControls.showOnscreenController(); }

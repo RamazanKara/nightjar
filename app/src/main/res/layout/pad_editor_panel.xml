@@ -425,6 +425,16 @@
                         android:textAppearance="@style/TextAppearance.Nightjar.Body"
                         android:textColor="@color/night_on_surface" />
                 </LinearLayout>
+
+                <!-- Only with the connected controller: its own layout, shown while it is connected (#154). -->
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/pad_editor_this_controller"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:visibility="gone"
+                    android:textAppearance="@style/TextAppearance.Nightjar.Body"
+                    android:textColor="@color/night_on_surface" />
             </LinearLayout>
 
             <TextView

@@ -63,4 +63,5 @@
     <string name="pad_dpad_left">Croce direzionale sinistra</string>
     <string name="pad_dpad_right">Croce direzionale destra</string>
     <string name="pad_edit_mirror">Specchia sinistra e destra</string>
+    <string name="pad_edit_this_controller">Solo con %1$s</string>
 </resources>

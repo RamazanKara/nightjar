@@ -69,4 +69,5 @@
     <string-array name="pad_preset_names"><item>@string/pad_preset_default</item><item>@string/pad_preset_minimal</item><item>@string/pad_preset_full</item></string-array>
     <string-array name="pad_glyph_names"><item>@string/pad_glyph_xbox</item><item>@string/pad_glyph_playstation</item><item>@string/pad_glyph_nintendo</item></string-array>
     <string name="pad_edit_mirror">Mirror left and right</string>
+    <string name="pad_edit_this_controller">Only with %1$s</string>
 </resources>

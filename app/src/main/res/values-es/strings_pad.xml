@@ -63,4 +63,5 @@
     <string name="pad_dpad_left">Cruceta izquierda</string>
     <string name="pad_dpad_right">Cruceta derecha</string>
     <string name="pad_edit_mirror">Reflejar izquierda y derecha</string>
+    <string name="pad_edit_this_controller">Solo con %1$s</string>
 </resources>

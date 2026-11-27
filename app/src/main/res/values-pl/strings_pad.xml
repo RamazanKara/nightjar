@@ -63,4 +63,5 @@
     <string name="pad_dpad_left">Krzyżak w lewo</string>
     <string name="pad_dpad_right">Krzyżak w prawo</string>
     <string name="pad_edit_mirror">Odbicie lustrzane lewo–prawo</string>
+    <string name="pad_edit_this_controller">Tylko z %1$s</string>
 </resources>

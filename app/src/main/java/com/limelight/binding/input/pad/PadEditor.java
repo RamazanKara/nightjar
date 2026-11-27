@@ -52,6 +52,9 @@ final class PadEditor extends FrameLayout {
     private final PadLayout draft;
     private final boolean gameAvailable;
     private boolean perGame;
+    /** The connected controller the Only with switch names, or null without one; and whether the switch is on. */
+    private final String controllerName;
+    private boolean forController;
     private PadLayout.Control selected;
     private final PadEditorSurface surface;
     private final PadEditorPanel panel;
@@ -72,6 +75,15 @@ final class PadEditor extends FrameLayout {
 
     PadEditor(Context context, ModernController controller, PadPainter painter, PadLayout draft,
               boolean perGame, boolean gameAvailable) {
+        this(context, controller, painter, draft, perGame, gameAvailable, null, false);
+    }
+
+    /**
+     * @param controllerName the connected controller a layout can be kept for, or null when none is connected
+     * @param forController  whether the layout being edited is that controller's own
+     */
+    PadEditor(Context context, ModernController controller, PadPainter painter, PadLayout draft,
+              boolean perGame, boolean gameAvailable, String controllerName, boolean forController) {
         // The stream's dark surfaces whatever theme the activity has, like the stream menu.
         super(new androidx.appcompat.view.ContextThemeWrapper(context, R.style.StreamTheme));
         context = getContext();
@@ -80,10 +92,13 @@ final class PadEditor extends FrameLayout {
         this.draft = draft;
         this.perGame = perGame && gameAvailable;
         this.gameAvailable = gameAvailable;
+        this.controllerName = controllerName;
+        this.forController = forController && controllerName != null;
         density = context.getResources().getDisplayMetrics().density;
         surface = new PadEditorSurface(context, this, painter, draft, density);
         addView(surface, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         panel = new PadEditorPanel(context, this, surface, density, this.perGame, gameAvailable);
+        panel.offerController(controllerName, this.forController);
         setClickable(true);
         panel.update();
         panel.animateEntrance();
@@ -125,6 +140,15 @@ final class PadEditor extends FrameLayout {
 
     void setPerGame(boolean checked) {
         perGame = checked;
+    }
+
+    /** Whether Done keeps the layout for the connected controller alone (#154). */
+    boolean forController() {
+        return forController && controllerName != null;
+    }
+
+    void setForController(boolean checked) {
+        forController = checked;
     }
 
     PadLayout.Control selected() {

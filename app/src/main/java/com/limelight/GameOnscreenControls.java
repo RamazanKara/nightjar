@@ -24,7 +24,24 @@ final class GameOnscreenControls {
     boolean onscreenControlsShown() {
         return game.prefConfig != null && PadVisibility.shouldShow(
                 game.prefConfig.onscreenController, game.prefConfig.oscAutoHideOnController, game.physicalControllerConnected,
-                game.prefConfig.sendControllers, touchControlsWithPad()) && !movingGameButtons();
+                game.prefConfig.sendControllers, touchControlsWithPad() || controllerBringsLayout()) && !movingGameButtons();
+    }
+
+    /** A connected controller has an on-screen layout of its own (#154): the player keeps touch beside that pad. */
+    private boolean controllerBringsLayout() {
+        return game.physicalControllerConnected && ModernController.controllerBringsLayout(game, game.controllerModels);
+    }
+
+    /**
+     * The connected controllers changed: the on-screen controls show the layout saved for one of them, if any, and
+     * whether a controller hides them is decided again once one with its own layout came or went. Without such a
+     * layout nothing else happens, so the controls show and hide exactly as before.
+     */
+    void setControllerModels(java.util.List<String[]> models) {
+        boolean before = controllerBringsLayout();
+        game.controllerModels = models;
+        if (game.modernController != null) game.modernController.setControllers(models);
+        if (controllerBringsLayout() != before) setPhysicalControllerConnected(game.physicalControllerConnected);
     }
 
     private boolean movingGameButtons() {
@@ -116,6 +133,8 @@ final class GameOnscreenControls {
                                 leftX, leftY, rightX, rightY, leftTrigger, rightTrigger);
                     }
                 }, game.prefConfig, profile);
+        // The layout of a connected controller that has one, before anything listens for layout changes.
+        game.modernController.setControllers(game.controllerModels);
         // The Steam Controller trackpads, on touchpad 0 of the on-screen gamepad.
         game.modernController.setTouchSink((type, pointer, x, y, pressure) -> {
             if (game.controllerHandler != null) game.controllerHandler.reportOscTouch(type, pointer, x, y, pressure);
@@ -152,8 +171,11 @@ final class GameOnscreenControls {
         game.modernController.setOnLayoutChanged(() -> {
             if (game.micButton != null) game.micButton.place();
             if (game.menuButton != null) game.menuButton.place();
-            // An editor opened while a gamepad kept the controls off brings them back only if it should.
+            // An editor opened while a gamepad kept the controls off brings them back only if it should; a layout
+            // just saved for the connected controller brings them back.
             if (!onscreenControlsShown()) game.modernController.hide();
+            else if (!game.modernController.isShown() && !game.modernController.isEditing() && !game.isHidingOverlays
+                    && game.conn != null && game.conn.canSendInput()) game.showOnscreenController();
         });
         game.modernController.refreshLayout();
         // Editing may build the controls while a gamepad keeps them off the screen; the editor itself still shows.
