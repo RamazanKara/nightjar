@@ -333,7 +333,7 @@
   --nj-glass-menu-baked-blur: 0px;
   --nj-glass-menu-baked-saturate: 1;
   --nj-glass-menu-baked-brightness: 1;
-  --nj-glass-menu-baked-fill: #0E1016EB;
+  --nj-glass-menu-baked-fill: #0E1016F7;
   --nj-glass-menu-baked-sheen-top: #FFFFFF0F;
   --nj-glass-menu-baked-sheen-end: 0.12;
   --nj-glass-menu-baked-rim-top: #FFFFFF4D;
@@ -781,7 +781,7 @@
   --nj-size-control-center-card: 76px;
   --nj-size-preview-card: 124px;
   --nj-surface-control-center-fill: #0E1016CC;
-  --nj-surface-control-center-baked-fill: #0E1016EB;
+  --nj-surface-control-center-baked-fill: #0E1016F7;
   --nj-surface-control-center-solid-fill: #000000FF;
   --nj-surface-control-center-rim-top: #FFFFFF4D;
   --nj-surface-control-center-rim-bottom: #FFFFFF14;

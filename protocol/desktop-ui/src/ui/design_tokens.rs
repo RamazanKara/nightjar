@@ -324,7 +324,7 @@ mod values {
     pub const GLASS_MENU_BAKED_BLUR: f32 = 0.0;
     pub const GLASS_MENU_BAKED_SATURATE: f32 = 1.0;
     pub const GLASS_MENU_BAKED_BRIGHTNESS: f32 = 1.0;
-    pub const GLASS_MENU_BAKED_FILL: Color32 = Color32::from_rgba_premultiplied(13, 15, 20, 235);
+    pub const GLASS_MENU_BAKED_FILL: Color32 = Color32::from_rgba_premultiplied(14, 15, 21, 247);
     pub const GLASS_MENU_BAKED_SHEEN_TOP: Color32 = Color32::from_rgba_premultiplied(15, 15, 15, 15);
     pub const GLASS_MENU_BAKED_SHEEN_END: f32 = 0.12;
     pub const GLASS_MENU_BAKED_RIM_TOP: Color32 = Color32::from_rgba_premultiplied(77, 77, 77, 77);
@@ -544,7 +544,7 @@ mod values {
     pub const SIZE_CONTROL_CENTER_CARD: f32 = 76.0;
     pub const SIZE_PREVIEW_CARD: f32 = 124.0;
     pub const SURFACE_CONTROL_CENTER_FILL: Color32 = Color32::from_rgba_premultiplied(11, 13, 18, 204);
-    pub const SURFACE_CONTROL_CENTER_BAKED_FILL: Color32 = Color32::from_rgba_premultiplied(13, 15, 20, 235);
+    pub const SURFACE_CONTROL_CENTER_BAKED_FILL: Color32 = Color32::from_rgba_premultiplied(14, 15, 21, 247);
     pub const SURFACE_CONTROL_CENTER_SOLID_FILL: Color32 = Color32::from_rgba_premultiplied(0, 0, 0, 255);
     pub const SURFACE_CONTROL_CENTER_RIM_TOP: Color32 = Color32::from_rgba_premultiplied(77, 77, 77, 77);
     pub const SURFACE_CONTROL_CENTER_RIM_BOTTOM: Color32 = Color32::from_rgba_premultiplied(20, 20, 20, 20);

@@ -334,7 +334,7 @@
     <dimen name="nj_glass_menu_baked_blur">0dp</dimen>
     <item name="nj_glass_menu_baked_saturate" type="dimen" format="float">1.0</item>
     <item name="nj_glass_menu_baked_brightness" type="dimen" format="float">1.0</item>
-    <color name="nj_glass_menu_baked_fill">#EB0E1016</color>
+    <color name="nj_glass_menu_baked_fill">#F70E1016</color>
     <color name="nj_glass_menu_baked_sheen_top">#0FFFFFFF</color>
     <item name="nj_glass_menu_baked_sheen_end" type="dimen" format="float">0.12</item>
     <color name="nj_glass_menu_baked_rim_top">#4DFFFFFF</color>
@@ -782,7 +782,7 @@
     <dimen name="nj_size_control_center_card">76dp</dimen>
     <dimen name="nj_size_preview_card">124dp</dimen>
     <color name="nj_surface_control_center_fill">#CC0E1016</color>
-    <color name="nj_surface_control_center_baked_fill">#EB0E1016</color>
+    <color name="nj_surface_control_center_baked_fill">#F70E1016</color>
     <color name="nj_surface_control_center_solid_fill">#000000</color>
     <color name="nj_surface_control_center_rim_top">#4DFFFFFF</color>
     <color name="nj_surface_control_center_rim_bottom">#14FFFFFF</color>
