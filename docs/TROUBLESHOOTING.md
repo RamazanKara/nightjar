@@ -4,6 +4,8 @@
 
 Find the symptom, make one change and try again. For performance problems, first open **Diagnostics** on the Control Center's Picture page, choose **Debug** and use **Copy stats**, so you can compare the numbers before and after the change. The first three tables describe the Android app; [Nightjar for Windows and Linux](#nightjar-for-windows-and-linux) has its own table.
 
+When the PC refuses a request, Nightjar shows the PC's own headline for it, then **What to do:** with the next step and, below, **Technical details:**, from PCs that send them; other PCs show the same message as before. When a PC starts a stream after a setup fallback, for example showing its physical display because its virtual display is unavailable, Nightjar shows the PC's notice once the stream runs; an automatic reconnect does not repeat it.
+
 ## Add and pair a host
 
 Start on the same local network, with the PC awake and its host running, and follow the [PIN flow](pairing.md#pin-flow).
@@ -55,7 +57,7 @@ Nightjar uses the ports the host advertises, including custom port offsets; chec
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| A USB DualSense has no adaptive triggers | The USB driver is off, USB access was denied, or the host sends no trigger effects. | Turn on **Settings → Controls → USB DualSense driver**, reconnect the cable and allow USB access when asked during a stream. Over Bluetooth the controller uses Android's input path. |
+| A USB DualSense has no adaptive triggers | The USB driver is off, USB access was denied, or the host sends no trigger effects. | Turn on **Settings → Controller → USB DualSense driver**, reconnect the cable and allow USB access when asked during a stream. Over Bluetooth the controller uses Android's input path. |
 | Mouse look behaves like a desktop cursor | **Mouse mode** is set to **Desktop pointer**, or input is not captured. | Set **Mouse mode** to **Captured** and press **Ctrl+Alt+Shift+Z** to capture input again. |
 | A stick drifts | The dead zone is too small for that controller or game. | Increase **Stick dead zone** slightly and compare. |
 | Touch behaves like a mouse | Trackpad or direct mouse mode is selected, or the host has no native touch. | Select multi-touch and grant **Touch input** on the host. Without native touch on the host, Nightjar uses direct mouse. |

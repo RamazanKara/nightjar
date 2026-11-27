@@ -53,6 +53,8 @@ Nightjar opens fullscreen without a window border. The controller drives everyth
 | Control Center | LT / RT | Steps through its modules |
 | Control Center | B | Returns to the stream |
 
+In Game Mode, when gamescope's frame queue holds a V-Sync stream back after a game changes its frame rate, Nightjar notices within a few seconds and shows the newest frame at each refresh instead, still without tearing, and says so. This applies to Lowest latency, Balanced and PC's frame times; a gamescope frame limit keeps its own pacing.
+
 Steam keeps the Steam button in Game Mode, so the Hold Guide shortcut does not reach Nightjar there; Start+Back opens the Control Center instead, and the first seconds of each stream say so. The trackpads move the pointer, and the pointer hides again as soon as the controller is used. The Quick Access menu (…) still opens Steam's own overlay.
 
 ## HDR

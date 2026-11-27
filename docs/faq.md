@@ -52,7 +52,7 @@ Start with the automatic codec and the default upscaling. Change them only after
 
 ## Is the overlay latency the delay I feel?
 
-Not entirely. **Statistics** shows network round trip, host processing, decode time and display wait separately, and **Debug** adds detailed stage timings. None of them covers the full path from input sampling to display scan-out; that needs an external measurement. Choose the view on the stream menu's **Diagnostics** tile.
+Not entirely. **Statistics** shows network round trip, host processing, decode time and display wait separately, and **Debug** adds detailed stage timings. None of them covers the full path from input sampling to display scan-out; that needs an external measurement. Choose the view on the Control Center's Picture page (on Android under **Diagnostics**).
 
 ## Can I use my launcher?
 

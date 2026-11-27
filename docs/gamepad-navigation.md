@@ -22,7 +22,7 @@ To open the PC keyboard with only a controller, open the Control Center (**Start
 
 Only one controller steers the keyboard at a time: a push on another controller takes over, and a second controller resting at center does not cancel a direction held on the first. Unplugging a controller, closing the keyboard or losing input stops any held direction.
 
-On Nintendo-style controllers, the south button (labelled B) confirms, because Android reports buttons by position. Turn on **Settings → Controls → Nintendo button layout** to make the button labelled A confirm.
+On Nintendo-style controllers, the south button (labelled B) confirms, because Android reports buttons by position. Turn on **Settings → Controller → Nintendo button layout** to make the button labelled A confirm.
 
 ## Behavior details
 

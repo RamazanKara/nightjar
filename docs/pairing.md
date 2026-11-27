@@ -22,7 +22,7 @@ Discovery does not cross guest networks, VLANs or VPNs. Add the PC by its addres
 ## PIN flow
 
 1. Select the unpaired PC in Nightjar.
-2. Keep the PIN dialog open.
+2. Keep the pairing panel open: it shows the PIN in large digits, says where to type it and waits for the PC. A failed pairing says why on the same panel (on the desktop with **Try again**).
 3. Enter the PIN in the host's web UI or settings on the PC.
 4. Wait for Nightjar to report success, then open the PC's library.
 5. If the host grants permissions per device, enable this device and set its permissions there.
@@ -49,7 +49,7 @@ Create a one-time PIN and passphrase in the host's web UI. In Nightjar, open the
 
 A host with QR pairing (Rubylight 3.0) shows a QR code on its **Devices** page for each of the PC's network addresses. The code carries a one-time PIN that works once and expires after three minutes.
 
-- **Android:** choose **Add PC**, then **Scan QR code**, and point the camera at the code. Nightjar asks for camera access only at this point; without it, enter the address instead. Devices without a camera do not show the button.
+- **Android:** choose **Add PC**, then **Scan QR code**, and point the camera at the code; the viewfinder's corners light up when they read a pairing code. Nightjar asks for camera access only at this point; without it, enter the address instead. Devices without a camera do not show the button.
 - **Windows and Linux:** choose **Copy pairing link** under the code on the PC, then **Paste link** in Nightjar's **Add PC** dialog, or paste the link into its address field.
 - **Any device with Nightjar:** choose **Open in Nightjar** under the code, or scan the code with another QR reader and open the link. See [Open a pairing link](#open-a-pairing-link).
 

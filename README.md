@@ -40,18 +40,18 @@
 <table>
   <tr>
     <td width="33%" valign="top"><h4>Engineered in Rust for low latency</h4>One shared Rust streaming engine across every platform, with per-chip decoder flags, decoder receive priority and non-blocking decode hand-off.<br><a href="#smooth-and-it-stays-in-the-game">Latency &amp; core</a></td>
-    <td width="33%" valign="top"><h4>Real VRR, Frame Warp &amp; pacing</h4>Frames pace to your game’s own rhythm under VRR, camera turns update on your screen’s next refresh, and wired desktop PyroWave races the beam.<br><a href="#smooth-and-it-stays-in-the-game">Smoothness</a></td>
-    <td width="33%" valign="top"><h4>Stays solid on real networks</h4>Bounded adaptive bitrate, loss-aware error correction, connection recovery after dropouts and seamless network roaming keep you in the game.<br><a href="#smooth-and-it-stays-in-the-game">Resilience</a></td>
+    <td width="33%" valign="top"><h4>Real VRR, Frame Warp &amp; pacing</h4>Frames pace to your game’s own rhythm under VRR, mouse, stick and gyro camera turns update on your screen’s next refresh, and wired desktop PyroWave races the beam.<br><a href="#smooth-and-it-stays-in-the-game">Smoothness</a></td>
+    <td width="33%" valign="top"><h4>Stays solid on real networks</h4>Bounded adaptive bitrate, loss-aware error correction, connection recovery after dropouts, network roaming and a Stream Doctor that names what stuttered keep you in the game.<br><a href="#smooth-and-it-stays-in-the-game">Resilience</a></td>
   </tr>
   <tr>
-    <td valign="top"><h4>One library for every PC</h4>Every paired PC’s games on one Home with cover art, Continue playing, store shelves, sorting by play time or installed state, and Wake-on-LAN.<br><a href="#one-library-for-every-pc">The library</a></td>
+    <td valign="top"><h4>One library for every PC</h4>Every paired PC’s games on one Home with cover art, Continue playing, store shelves, sorting by play time or installed state, and Wake-on-LAN, from away too.<br><a href="#one-library-for-every-pc">The library</a></td>
     <td valign="top"><h4>At home on every screen</h4>Android phones, handhelds &amp; TVs, Windows, Linux (Desktop, KMS &amp; Steam Deck) and macOS—controller, remote, touch drag, mouse or keyboard, with Auto UI scaling.<br><a href="#at-home-on-every-screen">Screens</a></td>
-    <td valign="top"><h4>Simple first, deep when needed</h4>Recommended defaults tuned for immediate playback, paired with per-game profiles, network-aware presets, presets search and 15 languages.<br><a href="#simple-first-every-setting-when-you-want-it">Settings</a></td>
+    <td valign="top"><h4>Simple first, deep when needed</h4>Recommended defaults tuned for immediate playback, paired with per-game and per-screen profiles, presets such as Smooth TV and Wi-Fi / Away, search and 15 languages.<br><a href="#simple-first-every-setting-when-you-want-it">Settings</a></td>
   </tr>
   <tr>
     <td valign="top"><h4>The picture your screen can show</h4>H.264, HEVC, AV1 and GPU PyroWave (macOS Apple silicon included), HDR10, HDR10+, Dolby Vision, HLG, 4:4:4, FSR/SGSR/MetalFX and 7.1.4 sound.<br><a href="#the-picture-and-sound-your-setup-can-play">Picture and sound</a></td>
-    <td valign="top"><h4>Every controller, touch and pen</h4>Up to 16 controllers, custom on-screen controls, Steam Controller pads/grips, USB DualSense haptics &amp; audio, precision touchpads and pens.<br><a href="#every-controller-touch-and-pen">Controls</a></td>
-    <td valign="top"><h4>Tune, share &amp; play together</h4>In-stream bitrate/FPS/driver menu, Continue here, Dual screen, co-op, guests, bidirectional clipboard, files and USB forwarding.<br><a href="#tune-it-while-you-play">Tune &amp; share</a></td>
+    <td valign="top"><h4>Every controller, touch and pen</h4>Up to 16 controllers, one controller editor, custom on-screen controls, Steam Controller pads/grips, DualSense haptics &amp; audio, precision touchpads and pens.<br><a href="#every-controller-touch-and-pen">Controls</a></td>
+    <td valign="top"><h4>Tune, share &amp; play together</h4>The Control Center for bitrate, picture and PC mid-stream, Quick Suspend, Instant Replay, Continue here, Dual screen, co-op, guests, clipboard, files and USB forwarding.<br><a href="#tune-it-while-you-play">Tune &amp; share</a></td>
   </tr>
 </table>
 
@@ -61,7 +61,7 @@ Nightjar speaks the Moonlight protocol, so it works with the host you already ru
 
 ### One library for every PC
 
-Home gathers the games of every paired PC, with cover art, **Continue playing**, flexible sorting (by title, last played or play time) and grouping (including installed games apart from unowned/uninstalled entries), and a page for each game showing its store, the PC it runs on, whether it is running and the exact settings the stream will use. The glass takes the colours of the cover in focus. On a TV, each store gets its own shelf. Pick a game on a sleeping PC and Nightjar wakes the PC and starts it.
+Home gathers the games of every paired PC, with cover art, **Continue playing**, flexible sorting (by title, last played or play time) and grouping (including installed games apart from unowned/uninstalled entries), and a page for each game showing its store, the PC it runs on, whether it is running and the exact settings the stream will use. The glass takes the colours of the cover in focus. On a TV, each store gets its own shelf, and on the desktop Home opens on a stage with the lit cover of the game to continue. Pick a game on a sleeping PC and Nightjar wakes the PC and starts it; with a Rubylight PC that offers it, the game's cover stays over the stream until the game is in front.
 
 Store shelves, Steam collections and Playnite categories, play time and the richer game pages come from a Rubylight PC; with any other Moonlight host, Home shows the PC’s app list. Games from any host also launch from Android TV’s home screen, Beacon, ES-DE, Daijisho, Pegasus and the desktop command line, which takes moonlight-qt’s `stream` options too, so launchers such as MoonDeck keep working.
 
@@ -74,7 +74,7 @@ Store shelves, Steam collections and Playnite categories, play time and the rich
 
 ### At home on every screen
 
-Every screen works with a controller or a TV remote as well as touch, mouse and keyboard. On a handheld, Home, the library and the stream menu follow the controller, with the button for each action on screen. On a phone held upright, a game's page is a sheet under its cover. Android adds picture-in-picture, rotation and foldables; the desktop app runs natively on Windows (x86-64 and ARM64), Linux, the Steam Deck in Game Mode and macOS, with the same engine and settings.
+Every screen works with a controller or a TV remote as well as touch, mouse and keyboard. On a handheld, Home, the library and the Control Center follow the controller, with the button for each action on screen. On a phone held upright, a game's page is a sheet under its cover. Android adds picture-in-picture, rotation, foldables, and **Safe fit** and **Picture position** to keep the picture clear of a camera cutout; the desktop app runs natively on Windows (x86-64 and ARM64), Linux, the Steam Deck in Game Mode and macOS, with the same engine and settings.
 
 <table>
 <tr>
@@ -96,9 +96,9 @@ Every screen works with a controller or a TV remote as well as touch, mouse and 
 
 ### Simple first, every setting when you want it
 
-Settings open on **Recommended**: **Stream smoothness**, **Picture quality**, the screen and **HDR**, each on Auto, with **Back to recommended** to reset at any time. **Console mode** opens Nightjar straight into Home, and the desktop & TV launcher scales its text and controls to your display by default (`Auto`, or `Ctrl+0` to reset). Controls, Audio and App follow, and **More settings** unfolds the rest with search, presets and help on every row.
+Settings open on **Recommended**: **Stream smoothness**, **Picture quality**, the screen and **HDR**, each on Auto, with **Back to recommended** to reset at any time. **Console mode** opens Nightjar straight into Home, and the desktop & TV launcher scales its text and controls to your display by default (`Auto`, or `Ctrl+0` to reset). Controls, Audio and App follow, and **More settings** unfolds the rest with search, presets (now with **Smooth TV** and **Wi-Fi / Away**) and help on every row; Frame pacing, HDR, Upscaling and Video size show a small picture of what each choice does.
 
-Phones, TVs and computers share one settings layout, and **Interface layout** (Automatic, TV or Handheld) in every Android build gives a handheld the TV screens or a TV the touch ones. Desktop users can scroll the launcher directly by dragging a touchscreen and match the launcher window to **Window** mode (`Fullscreen`, `Borderless` or `Windowed`). Settings can differ per PC and per game, with profiles that switch by network: mobile data, home Wi-Fi or other Wi-Fi. Nightjar comes in 15 languages, with high contrast, reduced motion and screen reader support.
+Phones, TVs and computers share one settings layout, and **Interface layout** (Automatic, TV or Handheld) in every Android build gives a handheld the TV screens or a TV the touch ones. Desktop users can scroll the launcher directly by dragging a touchscreen and match the launcher window to **Window** mode (`Fullscreen`, `Borderless` or `Windowed`). Settings can differ per PC and per game, with profiles that switch by network (mobile data, home Wi-Fi or other Wi-Fi) or follow the screen you play on. Nightjar comes in 15 languages, with high contrast, reduced motion and screen reader support.
 
 <p align="center"><img src="docs/assets/readme/desktop-settings.webp" width="820" alt="Settings on the desktop, on the Recommended page: Stream smoothness, Picture quality, Screen and HDR on Auto, a Console mode switch and Back to recommended, beside Controls, Audio, App and More settings (demo data)"></p>
 
@@ -108,7 +108,7 @@ Every Nightjar client runs the same Rust streaming engine (`nightjar-core`) with
 
 - **Stays in the game.** The bitrate adapts automatically when the network is busy, following loss, round-trip variation and decode headroom, while error correction scales to measured loss with supporting hosts. An interrupted stream recovers into the running game, holds through up to a minute of network silence, and follows your phone across network changes on a Rubylight PC.
 - **Real VRR,** on by default with Variable refresh rate: on a G-Sync, FreeSync, HDMI VRR or Android adaptive screen, frames land on the game's own rhythm instead of the network's. Fixed high-refresh screens can hold an even cadence with Fractional V-Sync. [How it works](docs/real-vrr.md)
-- **Frame Warp,** with a Rubylight PC: a mouse or right-stick camera turn shows on your screen's next refresh while the game's HUD stays locked in place. [How it works](docs/protocol/frame-warp.md)
+- **Frame Warp 2,** with a current Rubylight PC: a mouse, right-stick or gyro camera turn shows on your screen's next refresh while the game's HUD stays locked in place. [How it works](docs/protocol/frame-warp.md)
 
 ### The picture and sound your setup can play
 
@@ -118,11 +118,11 @@ Sound comes in stereo, 5.1, 7.1 and 7.1.4, or as PCM, Dolby Digital or Dolby Dig
 
 ### Every controller, touch and pen
 
-Up to 16 controllers, with mapping per model. Sunshine-based PCs add DualSense adaptive triggers, motion and touchpads, and on Android Nightjar's own USB drivers handle the DualSense's lightbar and haptics, Xbox and Switch Pro controllers. Touch works as a trackpad, directly, as multi-touch or with a local cursor, with pinch zoom, and pens send pressure and tilt; a laptop's touchpad gives the PC its own touchpad gestures on PCs that take them.
+Up to 16 controllers, with mapping per model. Sunshine-based PCs add DualSense adaptive triggers, motion and touchpads, and on Android Nightjar's own USB drivers handle the DualSense's lightbar and haptics, Xbox and Switch Pro controllers; on Windows and Linux a DualSense plays its speaker and haptics over Bluetooth too. Settings' **Controller** page holds every controller setting in one place. Touch works as a trackpad, directly, as multi-touch or with a local cursor, with pinch zoom, and pens send pressure and tilt; a laptop's touchpad gives the PC its own touchpad gestures on PCs that take them.
 
-- **On-screen controls you lay out yourself.** Classic and Modern styles with an editor inside the stream, Xbox, PlayStation or Nintendo glyphs, presets, a layout for each orientation, and a pointer touchpad that moves the mouse or the camera. They hide while a controller is connected, and can be a player of their own.
+- **On-screen controls you lay out yourself.** An editor inside the stream that snaps each control into place, with Undo, a mirror lock and a touch area per control, Xbox, PlayStation or Nintendo glyphs, presets, a layout for each orientation or for one controller, and a pointer touchpad that moves the mouse or the camera. They hide while a controller is connected, and can be a player of their own.
 - **A real PC keyboard.** Esc, F1 to F12, arrows and sticky modifiers, by touch, controller or TV remote, and a soft keyboard that opens when a text field on the PC takes focus.
-- **Your own hotkeys.** Every stream hotkey can be changed or turned off, your keyboard shortcuts become stream-menu tiles, and controller chords open the menu.
+- **Your own hotkeys.** Every stream hotkey can be changed or turned off, your keyboard shortcuts become Control Center cards, and controller chords open the Control Center.
 - **Input-only.** An **Input-only** stream sends controls and feedback without the video, to any PC.
 
 <table>
@@ -134,11 +134,11 @@ Up to 16 controllers, with mapping per model. Sunshine-based PCs add DualSense a
 
 ### Tune it while you play
 
-The stream menu changes the bitrate and frame rate during a stream, with hosts that accept it. With a Rubylight PC it does much more: the PC's Radeon or NVIDIA graphics settings, a game's frame generation on the PC, **Continue here** to move a running game to the device in your hands, **Stream here too**, a second screen for dual-screen devices, **Microphone only**, and the PC's power and update controls.
+The **[Control Center](docs/controls.md#the-control-center)** opens over the stream with a rail of modules (Quick, Picture, Audio, Clips, PC, Controller, Guests and Power). It docks at the side, or rises as a sheet on a phone held upright, a controller's triggers step through it, and Return to stream, Disconnect and Quit game stand under every page. It changes the bitrate and frame rate during a stream, with hosts that accept it. With a Rubylight PC there is much more: the PC's Radeon or NVIDIA graphics settings, a game's frame generation on the PC, **Suspend game** to pause the game on the PC, **Save clip** for the last moments of the stream, **Continue here** to move a running game to the device in your hands, **Stream here too**, a second screen for dual-screen devices, **Microphone only**, and the PC's power and update controls.
 
-With Apollo, Vibepollo and Rubylight, clipboard text travels to the PC. With a Rubylight PC, the clipboard syncs both ways, with images, and files, the PC's shared folders and USB devices plugged into your device reach the PC.
+With Apollo, Vibepollo and Rubylight, clipboard text travels to the PC. With a Rubylight PC, the clipboard syncs both ways, with images, and files, the PC's shared folders and USB devices plugged into your device reach the PC; on Windows, usbipd-win forwards a device even while another driver holds it.
 
-A performance overlay in three levels of detail shows the network and decoding, and the PC's CPU and GPU readings from a host that sends them. A [stream health](docs/stream-health.md) report explains stutter in plain words, and an input latency test, a decoder benchmark that runs without a PC, frame timings as CSV, a network speed test and redacted problem reports help find the rest.
+A performance overlay in three levels of detail shows the network and decoding, and the PC's CPU, GPU and video encoder readings from a host that sends them. The [Stream Doctor](docs/stream-health.md) names what made the stream stutter with the number behind it and offers fixes for this stream that one tap undoes, and an input latency test, a decoder benchmark that runs without a PC, frame timings as CSV, a network speed test and redacted problem reports help find the rest.
 
 <table>
 <tr>
@@ -150,9 +150,10 @@ A performance overlay in three levels of detail shows the network and decoding, 
 ### Play together, and away from home
 
 - **Join as a guest.** On a PC that offers guests, **Join** on a game another device plays asks that device to let you in: the same picture and sound, your own controller, and the keyboard and mouse only if the player grants them.
-- **Invite a friend over the internet.** **Guests** in the stream menu makes a one-time link, `rubylight://invite`, for one friend. Their Nightjar opens it, or takes it pasted under **Add PC**, and joins as a guest without a PIN or port forwarding once you let them in.
+- **Invite a friend over the internet.** **Guests** in the Control Center makes a one-time link, `rubylight://invite`, for one friend. Their Nightjar opens it, or takes it pasted under **Add PC**, and joins as a guest without a PIN or port forwarding once you let them in.
 - **Take a co-op seat.** Take a free player slot in a PC's split-screen co-op session, or return to your own.
 - **Play away from home.** **Play away from home** in a PC's settings walks you through connecting this device and the PC over a private VPN such as Tailscale, then tests the PC from where you are. Nightjar also tries the PC's IPv6 address and a forwarded port, and with a Rubylight PC that offers it, a direct path both sides punch through their routers, without port forwarding. [Play away from home](docs/remote-setup.md)
+- **Wake it from away.** With a Rubylight PC, an always-on computer at home running `nightjar wake-relay` wakes the sleeping PC when Nightjar for Android asks from away. [Wake the PC from away](docs/remote-setup.md#wake-the-pc-from-away)
 
 ### Private by design
 
@@ -242,9 +243,10 @@ Discovery, PIN pairing, Wake-on-LAN, the app library, H.264, HEVC and AV1, HDR10
 | --- | --- | --- |
 | Sunshine protocol extensions | Sunshine and hosts built on it | DualSense adaptive triggers and lightbar, controller motion and touchpads, native touch and pen |
 | Device permissions and virtual displays | Apollo, Vibepollo, Rubylight | One-time PIN pairing, per-device permissions, a virtual display at the device's resolution, fractional refresh rates, clipboard transfer and server commands |
-| Rubylight native API and stream extensions | [Rubylight](https://ramazankara.github.io/Rubylight/) 3.0 and later | Home with games from every store, the Session and graphics menu with Radeon settings, QR pairing, clipboard sync, files, shared folders and USB forwarding, co-op sessions, HDR10+, HLG and Dolby Vision, 7.1.4 and audio passthrough, bitrate and frame-rate changes during a stream, host hardware readings |
+| Rubylight native API and stream extensions | [Rubylight](https://ramazankara.github.io/Rubylight/) 3.0 and later | Home with games from every store, the Session and graphics page with Radeon settings, QR pairing, clipboard sync, files, shared folders and USB forwarding, co-op sessions, HDR10+, HLG and Dolby Vision, 7.1.4 and audio passthrough, bitrate and frame-rate changes during a stream, host hardware readings |
+| Rubylight 7.0 extensions | Rubylight 7.0 and later | Frame Warp 2, Quick Suspend, Instant Replay (Stream DVR), the launch curtain, the PC's side of the Stream Doctor, waking the PC from away through a wake relay, the PC's video encoder load |
 
-The **Error correction** setting and host-side automatic bitrate also work with Sunshine-based PCs that support them, and PyroWave works with any host that offers it. When a PC's host lacks a feature, Nightjar hides it or names the host setting or permission it requires. [Host feature support](docs/PARITY-MATRIX.md) lists every capability and the hosts known to provide it.
+The **Error correction** setting and host-side automatic bitrate also work with Sunshine-based PCs that support them, PyroWave works with any host that offers it, and Dolby passthrough on Android also comes from other PCs that offer it. When a PC's host lacks a feature, Nightjar hides it or names the host setting or permission it requires. [Host feature support](docs/PARITY-MATRIX.md) lists every capability and the hosts known to provide it.
 
 ## Requirements
 
@@ -265,7 +267,7 @@ The [documentation index](docs/index.md) lists every page. The most used:
 | Topic | Pages |
 | --- | --- |
 | Setup | [Quick start](docs/quick-start.md), [pairing and permissions](docs/pairing.md), [play away from home](docs/remote-setup.md) |
-| Daily use | [Home and the session menu](docs/console.md), [controls](docs/controls.md), [clipboard, files and USB devices](docs/sharing.md) |
+| Daily use | [Home and the session menu](docs/console.md), [the Control Center](docs/controls.md#the-control-center), [controls](docs/controls.md), [clipboard, files and USB devices](docs/sharing.md) |
 | Tuning | [Video and latency](docs/video-and-latency.md), [recovery and automatic quality](docs/recovery-and-quality.md), [settings reference](docs/settings.md) |
 | Problems | [Troubleshooting](docs/TROUBLESHOOTING.md), [stream health](docs/stream-health.md), [FAQ](docs/faq.md) |
 | Desktop | [Nightjar for macOS, Windows and Linux](protocol/desktop/README.md), [Android and desktop compared](docs/CLIENT-PARITY.md) |

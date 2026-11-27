@@ -35,6 +35,10 @@ The tables below have no macOS column. The Mac client shares the desktop library
 | Store shelves, All games and the TV layout | Yes | Partial | Partial | The desktop Home has a row per store with an **All N** tile, and All games filters by All, Installed, each store and Other apps, as on Android. It has no **Not added** chip and no per-PC last-played row, because the desktop API does not provide that data, and no separate TV layout. |
 | Launch, resume, quit, and quit and start another | Yes | Yes | Yes | |
 | Confirmation before a running game closes | Yes | Yes | Yes | |
+| Launch curtain: the game's cover over the stream while it starts | Yes | Yes | Yes | With a PC that offers it. Android keeps its connecting screen up; the desktop draws the cover over the stream. |
+| Quick Suspend: Suspend game and Resume game | Yes | Yes | Yes | On the Control Center's Power page, with a PC that has Quick Suspend on. |
+| Instant Replay: save a clip, record | Yes | Yes | Yes | On the Control Center's Clips page, with a PC that offers Stream DVR. |
+| Wake a sleeping PC from away through a wake relay | Yes | No | No | The desktop runs the relay itself instead (`nightjar wake-relay`, also on macOS). |
 | Continue here: move the running game's stream between devices | Yes | Yes | Yes | Hosts with `session.continue_here`, for a device with View and Launch |
 | Join co-op (Nucleus Co-op) | Yes | Yes | Yes | |
 | A game's frame generation on the PC | Yes | Yes | Yes | In the game's menu (Android) or on its page (desktop), on hosts with `neural.frame_generation`, for a device with View; turning it on or off needs Host control. On or Off with the reason, in the app's words, before any try (the Visual C++ runtime to install on the PC among them); the PC's note when frame generation runs on another GPU than the one it streams with; the release once on. |
@@ -44,9 +48,11 @@ The tables below have no macOS column. The Mac client shares the desktop library
 | Remote Monitor and Input-only entries | Yes | Yes | Yes | Remote Monitor sends no input, microphone, clipboard or commands. |
 | Input-only on any PC | Yes | Yes | Yes | Off by default. A 640×360, 30 fps, 500 kbps stream that is neither shown nor played. |
 | Settings per PC and per game, profiles by network, mobile data cap | Yes | Yes | Yes | |
+| Profile for this screen | Yes | Yes | Yes | A stream started on that screen uses the profile, ahead of the network choice. |
 | Settings that open on the main rows, with "More … settings" | Yes | Yes | Yes | The same sections (Video, Display & image, Controls, Audio, Streaming, App, Advanced, Debug), groups and labels on both; rarely needed settings sit in Debug at the end, listed once **App → Show debug settings** is on or while one of its settings is changed (search finds them either way). On Android, rows for hardware this device lacks (mouse, touchpad, keyboard, touch screen, a fold, a chip Chipset tuning tunes) and rows under a main switch only the main settings control are left out until they can act, unless they hold a changed value; the desktop has no device rows and leaves out only the IGDB client secret until its client ID is set. Search finds them all. |
 | Settings search | Yes | Yes | Yes | Desktop: the search field or Ctrl+F. |
-| Settings presets (Native, Battery saver) | Yes | No | No | |
+| Settings presets (Native, Smooth TV, Wi-Fi / Away, Battery saver) | Yes | Yes | Yes | |
+| Preview pictures for Frame pacing, HDR, Upscaling and Video size | Yes | Yes | Yes | |
 | PIN lock | Yes | Yes | Yes | Android can also lock individual PCs. |
 | Launching from a launcher or frontend | Yes | Yes | Yes | Android: TV home screen, Beacon, ES-DE, Daijisho, Pegasus and shortcuts. Desktop: `nightjar --host … [--app …] [--quit-on-exit]`, or moonlight-qt's `nightjar stream … …` with its stream options. |
 | Host software in the PC's details, host web UI button | Yes | Yes | Yes | |
@@ -89,6 +95,7 @@ The tables below have no macOS column. The Mac client shares the desktop library
 | Phase-lock frame timing | Yes | Yes | Partial | Linux: X11 (EGL/GLX sync control), Wayland (`wp_presentation`), KMS, and DRM vblank (including the GPU/Vulkan renderer). macOS does not report vblank timing yet. |
 | Beam racing and early decode (PyroWave, wired) | N/A | Yes | Yes | Both off by default; see [beam racing](beam-racing.md). |
 | Rotation, picture-in-picture, external displays | Yes | N/A | N/A | |
+| Safe fit, Picture position, Landscape (either side), Flip screen 180° | Yes | N/A | N/A | For a phone's camera cutout, curved edges and a controller plugged in on either side. |
 
 ### Sharper colored text (YUV 4:4:4)
 
@@ -119,7 +126,7 @@ Android needs no scan-line check: SurfaceFlinger never flips mid-scan.
 | Recover interrupted streams | Yes | Yes | Yes | On by default. |
 | Wait through network dropouts | Yes | Yes | Yes | |
 | Wi-Fi and link speed reported to the PC | Yes | Yes | Yes | |
-| Stream health report and bitrate trial | Yes | Yes | Yes | |
+| Stream Doctor: the cause, one-tap fixes with undo, upscaler advice | Yes | Yes | Yes | The PC's stage report needs a PC that offers it (Rubylight). |
 | Speed test and PyroWave frame pace | Yes | Yes | Yes | **Settings → Streaming → Connection test** and **Settings → Advanced → PyroWave frame pace**, and both in each PC's settings; with several paired PCs you choose the PC. |
 | Connection test | Yes | Partial | Partial | The desktop's **Connection test** measures the download speed only, on PCs that offer the test; it has no ping, jitter, loss, network path or delay test. Its **Remote access** check verifies the paired PC over HTTPS. |
 | Test the network after a failed start | Yes | Yes | Yes | Moonlight's port-test server checks whether a firewall blocks the streaming ports. Android also runs the check by itself after some failed connections; the desktop runs it only when you choose it. |
@@ -143,13 +150,15 @@ Android needs no scan-line check: SurfaceFlinger never flips mid-scan.
 
 | Feature | Android | Windows | Linux | Notes |
 | --- | --- | --- | --- | --- |
+| The Control Center | Yes | Yes | Yes | A dock at the side, or a sheet on a phone held upright (Android) or in a narrow upright window (desktop). The desktop also steps through its modules with Ctrl+Tab. |
+| Controller editor (**Settings → Controller**) | Yes | Yes | Yes | The desktop's has no on-screen controls. |
 | Controllers and per-model mapping | Yes | Yes | Yes | The desktop drives rumble, motion, touchpads, LEDs, battery and DualSense features through SDL's gamepad API. |
 | Controller test, stick and trigger dead zones, Back button: Back, Stream menu, Guide | Yes | Yes | Yes | The desktop's **Controller buttons** page can also set dead zones per controller. |
 | Steam Deck Game Mode (gamescope) | N/A | N/A | Yes | Under gamescope the Flatpak opens fullscreen without a border; the pointer hides while the controller is used, and Start+Back opens the Control Center since Steam keeps the Guide button. [Steam Deck](steam-deck.md) |
 | Extra buttons: touchpad click, Share / Capture, paddles | Yes | Yes | Yes | The desktop maps every SDL button. |
 | DualSense, Xbox and Switch Pro USB drivers | Yes | N/A | N/A | SDL handles these controllers on the desktop. |
 | DualSense speaker and haptics over Bluetooth | No | Yes | Yes | The desktop sends Sony's Bluetooth audio reports through its own HID handle. Android without root lets no app send those reports to a Bluetooth controller, so there they need USB. [DualSense audio and haptics](dualsense-haptics.md#bluetooth-on-windows-and-linux) |
-| On-screen controls | Yes | No | No | |
+| On-screen controls, with Touch area and layouts per controller | Yes | No | No | |
 | Per-game touch controls | Yes | No | No | |
 | Touch modes (trackpad, direct, multi-touch, local cursor) | Yes | Partial | Partial | The desktop sends native touch only. |
 | Host cursor shapes | Yes | Yes | Yes | |
@@ -173,13 +182,13 @@ Each sharing feature appears only when the host reports it and allows it for thi
 | Clipboard images | Yes | Yes | Yes | |
 | Files | Yes | Yes | Yes | |
 | Shared folders | Yes | Yes | Yes | |
-| USB forwarding | Yes | Yes | Yes | |
+| USB forwarding | Yes | Yes | Yes | Windows also forwards a device another driver holds through usbipd-win; Linux opens a device your user may not open through its own USB/IP server after a password prompt. |
 
 ## Diagnostics
 
 | Feature | Android | Windows | Linux | Notes |
 | --- | --- | --- | --- | --- |
-| Performance overlay: Compact, Statistics, Debug, host CPU and GPU | Yes | Yes | Yes | The desktop also shows the host's pipeline frame rates. |
+| Performance overlay: Compact, Statistics, Debug, host CPU and GPU, the PC's video encoder load | Yes | Yes | Yes | The desktop also shows the host's pipeline frame rates. |
 | Input latency test, decoder benchmark, timing CSV | Yes | Partial | Partial | The desktop exports statistics and the timing CSV; it has no latency test or benchmark. |
 
 ## Verification on our hardware

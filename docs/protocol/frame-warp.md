@@ -4,9 +4,9 @@
 
 Status: version 2 (Frame Warp 2), which replaces version 1: neither end speaks version 1 any more. Nightjar implements the client side, and Rubylight the host side. Any host can implement it; a client checks the advertisement, never the host name.
 
-A camera turn reaches the screen a network round trip plus the game's own delay after the input. Frame Warp lets the client show it on its next refresh: it shifts each picture by the turn that its own mouse or right-stick input has not reached that picture with yet, and leaves what stays put on screen (crosshair, health, minimap, the weapon) where it is. The host does the learning: per game, how far the picture moves per mouse count and per second of stick, how long the game takes to show an input, and where the HUD is. It tags each frame with how much input the frame reflects. The client only adds up what it sent.
+A camera turn reaches the screen a network round trip plus the game's own delay after the input. Frame Warp lets the client show it on its next refresh: it shifts each picture by the turn that its own mouse, right-stick or gyro input has not reached that picture with yet, and leaves what stays put on screen (crosshair, health, minimap, the weapon) where it is. The host does the learning: per game, how far the picture moves per mouse count, per second of stick and per turn of the pad's gyro, how long the game takes to show an input, and where the HUD is. It tags each frame with how much input the frame reflects. The client only adds up what it sent.
 
-The shift is a translation. It is right for a camera turn near the screen's centre, approximate near its edges at wide fields of view, and does not predict movement such as strafing.
+Where the model carries the game's field of view, the client turns the picture as the game's camera would ("The lens" below); without it, the shift moves the picture alike everywhere, which is right near the screen's centre and approximate near its edges at wide fields of view. Neither predicts movement such as strafing.
 
 ## Overview
 

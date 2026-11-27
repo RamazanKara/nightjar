@@ -31,6 +31,8 @@ New to Nightjar? Read the [quick start](quick-start.md): install a host, add the
 | Find my way around Home, a game's page and the PC's options | [Home and the session menu](console.md) |
 | Use the Control Center during a stream, or leave a game | [The Control Center](controls.md#the-control-center) · [Leaving a game](controls.md#leaving-a-game) |
 | Wake or put the PC to sleep | [Wake a sleeping PC](pairing.md#wake-a-sleeping-pc) · [The PC's power](console.md#the-pcs-power-and-host-updates) |
+| Pause the game on the PC, or save a clip of the last moments | [Quick Suspend](console.md#quick-suspend) · [Instant Replay](console.md#instant-replay) |
+| Keep the PC's desktop hidden while a game starts | [The launch curtain](console.md#the-launch-curtain) |
 | Start games from Beacon, ES-DE, Daijisho, Pegasus or the TV's home screen | [Launcher integrations](FRONTENDS.md) |
 | Share the clipboard, files, folders or USB devices with the PC | [Clipboard, files, folders and USB devices](sharing.md) |
 | Change how a setting, a profile or one game behaves | [Settings reference](settings.md) |
@@ -42,6 +44,7 @@ New to Nightjar? Read the [quick start](quick-start.md): install a host, add the
 | --- | --- |
 | Play away from home | [Play away from home](remote-setup.md) |
 | Reach a PC without a VPN | [Without a VPN](remote-setup.md#without-a-vpn) |
+| Wake a sleeping PC from away | [Wake the PC from away](remote-setup.md#wake-the-pc-from-away) · [Run a wake relay](../protocol/desktop/README.md#away-wake-relay) |
 | Keep my stream when the network changes | [Recovering a connection](recovery-and-quality.md#recovering-a-connection) |
 
 ## Play together
@@ -57,6 +60,7 @@ New to Nightjar? Read the [quick start](quick-start.md): install a host, add the
 | I want to | Read |
 | --- | --- |
 | Choose a codec, HDR, a refresh rate or an upscaler | [Video and latency](video-and-latency.md) |
+| Keep the picture clear of a camera cutout or curved edges | [Video size](video-and-latency.md#video-size) · [Picture position](video-and-latency.md#picture-position) |
 | Keep a VRR screen on the game's rhythm | [Real VRR](real-vrr.md) |
 | See camera turns on the next refresh with a Rubylight PC | [Frame Warp](video-and-latency.md#frame-warp) |
 | Let Nightjar pick resolution, frame rate and bitrate | [Recovery and automatic quality](recovery-and-quality.md) |
@@ -66,7 +70,7 @@ New to Nightjar? Read the [quick start](quick-start.md): install a host, add the
 
 | I want to | Read |
 | --- | --- |
-| Set up a controller, gyro, touch, mouse, keyboard or pen | [Controls](controls.md) |
+| Set up a controller, gyro, touch, mouse, keyboard or pen | [Controls](controls.md) · [The controller editor](controls.md#the-controller-editor) |
 | Use the menus with a controller or a remote | [Gamepad navigation](gamepad-navigation.md) · [Menu navigation](controls.md#menu-navigation) |
 | Use on-screen controls on a phone or tablet | [On-screen controls](controls.md#on-screen-controls) |
 | Get DualSense haptics and controller audio over USB | [USB DualSense audio and haptics](dualsense-haptics.md) |
@@ -78,7 +82,7 @@ New to Nightjar? Read the [quick start](quick-start.md): install a host, add the
 | Page | Contents |
 | --- | --- |
 | [Troubleshooting](TROUBLESHOOTING.md) | Symptoms, causes and fixes, and how to share a problem report |
-| [Stream health](stream-health.md) | Reading **Why did my stream stutter?** and its reversible bitrate trial |
+| [Stream health](stream-health.md) | Reading the Stream Doctor (**Why did my stream stutter?**): the cause, one-tap fixes with undo and upscaler advice |
 | [FAQ](faq.md) | Short answers to common questions |
 
 ## Reference
