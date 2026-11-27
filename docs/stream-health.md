@@ -2,7 +2,39 @@
 
 [Nightjar docs](index.md) › [Troubleshooting](index.md#troubleshooting)
 
-**Why did my stream stutter?** explains stutter from measurements Nightjar already collects. Open the stream menu, then **Diagnostics → Why did my stream stutter?** (on Windows and Linux, the stream menu's **Why did my stream stutter?**).
+**Why did my stream stutter?**, the Stream Doctor, names what made the stream stutter in plain words, with the number behind it, offers fixes for this stream that one tap undoes, and says when an upscaler costs more than it gives. Open it on the Control Center's Picture page: on Android under **Diagnostics**, on Windows, Linux and macOS directly on the page.
+
+## What it names
+
+The card leads with one finding, the stage that cost the stream its smoothness, and the measurement behind it:
+
+| Finding | The number it shows |
+| --- | --- |
+| Wi-Fi or network: frames arrive unevenly | How many frames were lost, or in how many of the last seconds frames arrived bunched |
+| PC: sending the video takes too long | How many pictures left the PC late, and the time lost |
+| PC: the GPU or encoder falls behind | How long the PC took per frame, beside how long a frame lasts |
+| This device: the decoder falls behind | How long decoding took, beside how long a frame lasts |
+| Screen: frames are shown late | How long frames waited to be shown, beside how long a frame lasts |
+| This device: the receive buffer is too small | How much receive buffer the system granted of what Nightjar asked for |
+
+Until it has a few seconds of video it reads **Checking your stream**, and with nothing repeated in the last 30 seconds **Your stream is running smoothly**. Advice follows the finding: a cable or a less busy 5 or 6 GHz Wi-Fi channel, background Wi-Fi scans when stalls come on a beat, closing other work on the PC or capping the game's frame rate, a lower frame rate or another frame pacing mode for the next stream, or letting this device cool down.
+
+With a PC that offers its own measurements (Rubylight), the finding also uses the PC's stage report: how many pictures left the PC late and the time lost in capture, colour conversion, encoding, packetizing and sending, under **Show technical measurements**. Other PCs get the finding from this device's measurements alone.
+
+## Fixes for this stream
+
+Where it helps, the card offers one-tap fixes that last for this stream only and change no setting:
+
+- **Lower bitrate to** a fifth less **(this stream)**, through the PC's own doctor where it offers one, otherwise as the classic bitrate trial below.
+- **Lower resolution to** one step down **(this stream)**, with a PC that can change a running stream's size. If the PC can't change it or keeps the size, the card says so and nothing changes.
+
+Each fix turns into its undo once applied (on Android **Undo: back to** the earlier bitrate or size; on the desktop **Undo bitrate trial** and **Undo resolution change**). Only the device that started the stream can apply them; a guest sees the finding without the fixes.
+
+## Upscalers
+
+When a lower resolution would help, the card names the upscaler that keeps the picture sharp at it for the next stream (FSR or SGSR, MetalFX on a Mac). When the upscaler in use costs more than it gives, it says so: the stream is already as large as the screen, or the screen or the decoder falls behind with it on, with a lighter upscaler to try or the advice to turn it off for the next stream.
+
+## The measurements
 
 The report uses up to 30 seconds of stream measurements, the start times of network stalls from the last 20 minutes, and the current Wi-Fi reading. It does not move the mouse, record video, contact any service, or write a history to disk. Copying the report puts only the displayed evidence and advice on the clipboard.
 
@@ -10,7 +42,7 @@ The report identifies network loss and variation, slow decoding, host processing
 
 Play for a few seconds, then open the report right after a stutter. Sampling continues while menus are open and pauses while the app is in the background or a host action runs. Stage counters older than two seconds are not used, old history expires, and advice is withheld when there is no recent video.
 
-When the network findings repeat and the host supports bitrate changes during a stream (Rubylight 3.0), the report offers **Try a lower bitrate**. It lowers the encoder bitrate by 20%, to no less than 500 kbps, for this session. Play similar content for another 30 seconds, then return and choose **Undo bitrate trial** if nothing improved. The trial is not offered while **Lower bitrate when the network is busy**, automatic quality or a manual change controls the bitrate. With other hosts the report gives the same findings and advice without the trial.
+The classic bitrate trial needs a host that supports bitrate changes during a stream (Rubylight 3.0): it lowers the encoder bitrate by 20%, to no less than 500 kbps, for this session. Play similar content for another 30 seconds, then return and undo it if nothing improved. It is not offered while **Lower bitrate when the network is busy**, automatic quality or a manual change controls the bitrate. With other hosts the card gives the same findings and advice without the bitrate fix.
 
 ## Wi-Fi facts
 
