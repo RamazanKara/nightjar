@@ -25,6 +25,7 @@ public final class ClientHintBitrateController implements AutoCloseable {
     }
 
     public void resumeFrom(int kbps) { NightjarPolicyJni.clientHintResumeFrom(handle, kbps); }
+    public void setThermalLevel(int level) { NightjarPolicyJni.clientHintSetThermalLevel(handle, level); }
 
     public int sample(long nowMs, boolean recentVideo, float lossPercent, float queueMs) {
         return NightjarPolicyJni.clientHintSample(handle, nowMs, recentVideo, lossPercent, queueMs);
@@ -39,6 +40,7 @@ public final class ClientHintBitrateController implements AutoCloseable {
     public int maxKbps() { return NightjarPolicyJni.clientHintState(handle)[2]; }
     public boolean pending() { return NightjarPolicyJni.clientHintState(handle)[3] != 0; }
     public boolean stopped() { return NightjarPolicyJni.clientHintState(handle)[4] != 0; }
+    public boolean hasRoomBeforeQualityReduction() { return NightjarPolicyJni.clientHintState(handle)[5] != 0; }
 
     @Override public void close() { reaper.close(); }
     public void destroy() { close(); }

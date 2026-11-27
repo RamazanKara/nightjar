@@ -30,7 +30,7 @@ public class StreamRateChangesTest {
         assertEquals("the start delay holds", 0, c.sample(2000, true, 0, 0));
         assertEquals(9_000, c.sample(ClientHintBitrateController.START_DELAY_MS, true, 0, 0));
         c.applied(9_000, 3000);
-        assertEquals("the ceiling is the stream's own", 40_000, c.maxKbps());
+        assertEquals("the ceiling is the stream's own", 20_000, c.maxKbps());
         int climbed = 0;
         for (long now = 5000; now < 30_000 && climbed == 0; now += 1000) climbed = c.sample(now, true, 0, 0);
         assertTrue("climbs back: " + climbed, climbed > 9_000);
@@ -43,8 +43,18 @@ public class StreamRateChangesTest {
         return new RateChangeResult(serial, kbps, 0, status, reason, STATUS_UNCHANGED, REASON_NONE);
     }
 
-    // Clean samples until automatic bitrate asks for more; its request.
-    private int[] automaticRequest(long fromMs) {
+    // Loss samples until automatic bitrate asks to cut; its request.
+    private int[] automaticLossRequest(long fromMs) {
+        for (long now = fromMs; now < fromMs + 20_000; now += 1000) {
+            int before = sent.size();
+            assertTrue(changes.sampleAutomatic(now, true, 10, 0));
+            if (sent.size() > before) return sent.get(sent.size() - 1);
+        }
+        throw new AssertionError("automatic bitrate never asked");
+    }
+
+    // Clean samples until automatic bitrate probes back toward the ceiling; its request.
+    private int[] automaticProbeRequest(long fromMs) {
         for (long now = fromMs; now < fromMs + 20_000; now += 1000) {
             int before = sent.size();
             assertTrue(changes.sampleAutomatic(now, true, 0, 0));
@@ -120,7 +130,7 @@ public class StreamRateChangesTest {
         sendWorks = true;
         changes.startAutomatic(20_000, 0);
         // Nothing outstanding, so automatic bitrate samples and asks.
-        int[] request = automaticRequest(ClientHintBitrateController.START_DELAY_MS);
+        int[] request = automaticLossRequest(ClientHintBitrateController.START_DELAY_MS);
         assertEquals(1, sent.size());
         assertEquals(StreamRateChanges.Answer.AUTOMATIC,
                 changes.onResult(bitrate(request[0], request[1], STATUS_APPLIED, REASON_NONE), 10_000).answer);
@@ -129,29 +139,32 @@ public class StreamRateChangesTest {
     @Test
     public void automaticBitrateFollowsTheHostsAnswer() {
         changes.startAutomatic(20_000, 0);
-        int[] request = automaticRequest(ClientHintBitrateController.START_DELAY_MS);
-        assertEquals(21_000, request[1]);
-        assertEquals("only bitrate", 0, request[2]);
+        assertTrue("has room to cut at ceiling", changes.hasRoomBeforeQualityReduction());
+        int[] cut = automaticLossRequest(ClientHintBitrateController.START_DELAY_MS);
+        assertEquals(14_000, cut[1]);
+        assertEquals("only bitrate", 0, cut[2]);
         assertTrue(changes.automatic().pending());
         assertEquals(StreamRateChanges.Answer.AUTOMATIC,
-                changes.onResult(bitrate(request[0], 21_000, STATUS_APPLIED, REASON_NONE), 10_000).answer);
-        assertEquals(21_000, changes.automatic().currentKbps());
+                changes.onResult(bitrate(cut[0], 14_000, STATUS_APPLIED, REASON_NONE), 10_000).answer);
+        assertEquals(14_000, changes.automatic().currentKbps());
 
-        request = automaticRequest(20_000);
+        int[] request = automaticProbeRequest(12_000);
+        assertEquals(14_280, request[1]);
         assertEquals(StreamRateChanges.Answer.AUTOMATIC,
-                changes.onResult(bitrate(request[0], 21_500, STATUS_CLAMPED, REASON_HOST_LIMIT), 30_000).answer);
-        assertEquals("the host's cap is the ceiling", 21_500, changes.automatic().maxKbps());
+                changes.onResult(bitrate(request[0], 14_100, STATUS_CLAMPED, REASON_HOST_LIMIT), 20_000).answer);
+        assertEquals("the host's cap is the ceiling", 14_100, changes.automatic().maxKbps());
     }
 
     @Test
     public void aRefusalStopsAutomaticBitrateForTheStream() {
         changes.startAutomatic(20_000, 0);
-        int[] request = automaticRequest(ClientHintBitrateController.START_DELAY_MS);
+        int[] request = automaticLossRequest(ClientHintBitrateController.START_DELAY_MS);
         assertEquals(StreamRateChanges.Answer.AUTOMATIC_STOPPED,
                 changes.onResult(bitrate(request[0], 20_000, STATUS_REFUSED, REASON_CODEC), 10_000).answer);
         assertFalse(changes.automaticOn());
+        assertFalse(changes.hasRoomBeforeQualityReduction());
         int before = sent.size();
-        assertTrue(changes.sampleAutomatic(60_000, true, 0, 0));
+        assertTrue(changes.sampleAutomatic(60_000, true, 10, 0));
         assertEquals(before, sent.size());
     }
 
@@ -159,12 +172,12 @@ public class StreamRateChangesTest {
     public void automaticBitrateWaitsForTheMenuAndStartsAgainFromItsBitrate() {
         changes.startAutomatic(20_000, 0);
         assertTrue(changes.sendManual(50_000, 0, 0));
-        for (long now = 0; now < 20_000; now += 1000) assertTrue(changes.sampleAutomatic(now, true, 0, 0));
+        for (long now = 0; now < 20_000; now += 1000) assertTrue(changes.sampleAutomatic(now, true, 10, 0));
         assertEquals("nothing while the menu's request is out", 1, sent.size());
         assertEquals(StreamRateChanges.Answer.MANUAL,
                 changes.onResult(bitrate(sent.get(0)[0], 50_000, STATUS_APPLIED, REASON_NONE), 20_000).answer);
         assertEquals(50_000, changes.automatic().currentKbps());
-        assertEquals(100_000, changes.automatic().maxKbps());
+        assertEquals(50_000, changes.automatic().maxKbps());
     }
 
     @Test
@@ -172,11 +185,11 @@ public class StreamRateChangesTest {
         // The host answers bitrate-only requests as they come, so automatic bitrate's comes first
         // and the bitrate set by hand is the one that stays.
         changes.startAutomatic(20_000, 0);
-        int[] request = automaticRequest(ClientHintBitrateController.START_DELAY_MS);
+        int[] request = automaticLossRequest(ClientHintBitrateController.START_DELAY_MS);
         assertTrue(changes.sendManual(50_000, 0, 10_000));
         int manual = sent.get(sent.size() - 1)[0];
         StreamRateChanges.Outcome automatic =
-                changes.onResult(bitrate(request[0], 21_000, STATUS_APPLIED, REASON_NONE), 10_000);
+                changes.onResult(bitrate(request[0], 14_000, STATUS_APPLIED, REASON_NONE), 10_000);
         assertEquals(StreamRateChanges.Answer.AUTOMATIC, automatic.answer);
         assertTrue(automatic.takesBitrate);
         StreamRateChanges.Outcome byHand = changes.onResult(bitrate(manual, 50_000, STATUS_APPLIED, REASON_NONE), 10_100);
@@ -189,11 +202,11 @@ public class StreamRateChangesTest {
     @Test
     public void anAutomaticResultFromBeforeItStartedAgainIsStale() {
         changes.startAutomatic(20_000, 0);
-        int[] request = automaticRequest(ClientHintBitrateController.START_DELAY_MS);
+        int[] request = automaticLossRequest(ClientHintBitrateController.START_DELAY_MS);
         // Turned off and on again from the stream menu while its request was out.
         changes.stopAutomatic();
         changes.startAutomatic(30_000, 9_000);
-        StreamRateChanges.Outcome late = changes.onResult(bitrate(request[0], 21_000, STATUS_APPLIED, REASON_NONE), 10_000);
+        StreamRateChanges.Outcome late = changes.onResult(bitrate(request[0], 14_000, STATUS_APPLIED, REASON_NONE), 10_000);
         assertEquals(StreamRateChanges.Answer.STALE, late.answer);
         assertTrue("the host set it, and nothing later did", late.takesBitrate);
         assertTrue(changes.automaticOn());
@@ -201,8 +214,6 @@ public class StreamRateChangesTest {
         assertFalse(changes.automatic().pending());
     }
 
-    // R8: from 28000 kbps the range reaches twice the start by design (V+'s balanced range, as on
-    // desktop); on a mobile network the mobile data limit caps it, as desktop's bitrate_limit does.
     @Test
     public void theMobileDataLimitCapsAutomaticBitrateOnlyOnAMobileNetwork() {
         assertEquals(25_000, StreamRateChanges.clientLimitKbps(
@@ -216,14 +227,23 @@ public class StreamRateChangesTest {
         }
 
         changes.startAutomatic(28_000, 0);
-        assertEquals("twice the start without a cap", 56_000, changes.automatic().maxKbps());
-        changes.startAutomatic(20_000, StreamRateChanges.clientLimitKbps(
+        assertEquals("never exceeds the stream's start", 28_000, changes.automatic().maxKbps());
+        for (long t = ClientHintBitrateController.START_DELAY_MS; t < 40_000; t += 1000) {
+            assertTrue("clean links stay quiet at the configured bitrate", changes.sampleAutomatic(t, true, 0, 0));
+        }
+        assertTrue(sent.isEmpty());
+
+        changes.startAutomatic(40_000, StreamRateChanges.clientLimitKbps(
                 StreamLayers.Network.MOBILE, 25_000), 0);
         assertEquals(25_000, changes.automatic().maxKbps());
+        changes.automatic().resumeFrom(18_000);
+        int[] resumed = automaticProbeRequest(ClientHintBitrateController.START_DELAY_MS);
+        assertEquals(18_000, resumed[1]);
+        changes.onResult(bitrate(resumed[0], 18_000, STATUS_APPLIED, REASON_NONE), 3_000);
         // Clean seconds probe up to the cap and never past it.
-        long now = ClientHintBitrateController.START_DELAY_MS;
+        long now = 5_000;
         for (int i = 0; i < 20; i++, now += 10_000) {
-            int[] request = automaticRequest(now);
+            int[] request = automaticProbeRequest(now);
             assertTrue(request[1] <= 25_000);
             changes.onResult(bitrate(request[0], request[1], STATUS_APPLIED, REASON_NONE), now);
             if (request[1] == 25_000) break;
@@ -267,13 +287,13 @@ public class StreamRateChangesTest {
                 changes.onResult(bitrate(serial, 30_000, STATUS_APPLIED, REASON_NONE), 7000).answer);
         // Automatic bitrate no longer waits for it.
         changes.startAutomatic(20_000, 7000);
-        automaticRequest(7000 + ClientHintBitrateController.START_DELAY_MS);
+        automaticLossRequest(7000 + ClientHintBitrateController.START_DELAY_MS);
     }
 
     @Test
     public void anAutomaticRequestTheHostNeverAnswersStopsAutomaticBitrate() {
         changes.startAutomatic(20_000, 0);
-        int[] request = automaticRequest(ClientHintBitrateController.START_DELAY_MS);
+        int[] request = automaticLossRequest(ClientHintBitrateController.START_DELAY_MS);
         long sentMs = changes.nextExpiryMs() - StreamRateChanges.ANSWER_MS;
         assertTrue(changes.expire(sentMs + StreamRateChanges.ANSWER_MS - 1).isEmpty());
         assertTrue(changes.automaticOn());
@@ -285,7 +305,7 @@ public class StreamRateChangesTest {
 
         // One from before automatic bitrate started again stops nothing.
         changes.startAutomatic(20_000, 0);
-        automaticRequest(ClientHintBitrateController.START_DELAY_MS);
+        automaticLossRequest(ClientHintBitrateController.START_DELAY_MS);
         changes.startAutomatic(20_000, 0);
         assertTrue(changes.expire(60_000).isEmpty());
         assertTrue(changes.automaticOn());
@@ -298,7 +318,7 @@ public class StreamRateChangesTest {
         sendWorks = false;
         boolean failed = false;
         for (long now = ClientHintBitrateController.START_DELAY_MS; now < 20_000 && !failed; now += 1000) {
-            failed = !changes.sampleAutomatic(now, true, 0, 0);
+            failed = !changes.sampleAutomatic(now, true, 10, 0);
         }
         assertTrue(failed);
         assertFalse(changes.automaticOn());

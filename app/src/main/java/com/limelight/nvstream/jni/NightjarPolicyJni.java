@@ -36,6 +36,7 @@ public final class NightjarPolicyJni {
     public static native long clientHintCreate(int initialKbps, int limitKbps, long nowMs);
     public static native void clientHintDestroy(long handle);
     public static native void clientHintResumeFrom(long handle, int kbps);
+    public static native void clientHintSetThermalLevel(long handle, int thermalLevel);
     public static native int clientHintSample(long handle, long nowMs, boolean recentVideo,
                                               float lossPercent, float queueMs);
     public static native void clientHintApplied(long handle, int kbps, long nowMs);

@@ -4,7 +4,8 @@
   "new": [20000, 0, 0],
   "calls": [
     {"call": "min_kbps", "args": [], "expect": 6000},
-    {"call": "max_kbps", "args": [], "expect": 40000},
+    {"call": "max_kbps", "args": [], "expect": 20000},
+    {"call": "has_room_before_quality_reduction", "args": [], "expect": true},
     {"call": "sample", "args": [2000, true, 10, -1], "expect": 0},
     {"call": "sample", "args": [3000, true, 10, -1], "expect": 14000},
     {"call": "pending", "args": [], "expect": true},

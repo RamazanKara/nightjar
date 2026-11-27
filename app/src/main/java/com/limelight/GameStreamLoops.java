@@ -67,6 +67,7 @@ final class GameStreamLoops {
     void runUpdateRateChangeBitrate() {
         if (!game.connected || game.rateChanges == null || !game.rateChanges.automaticOn() || game.decoderRenderer == null) return;
         long now = SystemClock.uptimeMillis();
+        game.rateChanges.setThermalLevel(game.adaptation.adaptationThermalLevel());
         if (!game.hostActionInProgress && game.streamMenu == null && !game.rateChanges.sampleAutomatic(now,
                 game.decoderRenderer.hasRecentVideoFrames(now), game.decoderRenderer.getNetworkFrameLossPercent(),
                 game.decoderRenderer.getQueueDelayMs())) {
@@ -126,7 +127,8 @@ final class GameStreamLoops {
                     game.decoderRenderer.getNetworkFrameLossPercent(), game.decoderRenderer.getDecodeTimeMs(),
                     rtt == -1 ? -1 : (float) (rtt & 0xffffffffL), game.decoderRenderer.getQueueDelayMs(),
                     game.adaptation.adaptationThermalLevel(),
-                    game.adaptiveBitrate != null && game.adaptiveBitrate.hasRoomBeforeQualityReduction(),
+                    (game.adaptiveBitrate != null && game.adaptiveBitrate.hasRoomBeforeQualityReduction())
+                            || (game.rateChanges != null && game.rateChanges.hasRoomBeforeQualityReduction()),
                     game.decoderRenderer.takeDecodeTiming(game.streamFps));
             if (target != null && !game.adaptation.applyAdaptiveQuality(target, now)) return;
         }

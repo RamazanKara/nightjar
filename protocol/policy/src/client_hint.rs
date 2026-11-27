@@ -1,20 +1,22 @@
 //! Client-hint bitrate adaptation over 0x553C rate changes: [`Bitrate`] is Android's
 //! `ClientHintBitrateController.java`.
 //!
-//! The decisions are Moonlight V+'s local controller (`AdaptiveBitrateService.tickLocal` and
-//! `bitrateRange`, balanced mode, GPL-3.0): loss cuts the bitrate by a step that grows with
-//! the loss, and five clean seconds probe it up by 5 % (2 % after a cut), with two seconds
-//! between changes. The client hints the host over the control stream instead of HTTP, so a
-//! change reaches the encoder on its next frame without a keyframe.
+//! Adapted from Moonlight V+'s local controller (`AdaptiveBitrateService.tickLocal`, balanced
+//! mode, GPL-3.0; originally ported into Rubylight by RamazanKara): loss cuts the bitrate by a
+//! step that grows with the loss, and five clean seconds probe it back up by 2–5 %, with two
+//! seconds between changes. The client hints the host over the control stream instead of HTTP,
+//! so a change reaches the encoder on its next frame without a keyframe.
 //!
-//! Beyond V+: no decision without recent video; one request outstanding at a time, its
-//! result the stream's bitrate; a host that caps a request lowers the ceiling to the cap; a
-//! refusal stops the controller; a standing network queue holds probes (it never cuts by
-//! itself, as V+ reads only loss) so a probe never adds latency.
+//! Beyond V+: the ceiling never exceeds the user's configured `initial_kbps` (so clean links
+//! never over-probe above the chosen bitrate or preempt host congestion control); a probe that
+//! meets loss holds at the last proven clean rate with exponential backoff instead of
+//! sawtoothing; device heat holds (warm) or steps down (hot) the bitrate; no decision runs
+//! without recent video; one request is outstanding at a time; a host cap lowers the ceiling;
+//! a refusal stops the controller; and a standing network queue holds upward probes.
 
 use serde_json::Value;
 
-use crate::stats::{known, Stats};
+use crate::stats::{Stats, known};
 use crate::trace::{Args, Subject};
 
 /// Time between two changes (V+'s balanced cooldown).
@@ -25,17 +27,22 @@ pub const START_DELAY_MS: u64 = 3000;
 pub const STABLE_SAMPLES: u32 = 5;
 /// A network queue at or above this holds probes.
 pub const QUEUE_HOLD_MS: f32 = 20.0;
+/// Consecutive hot (`thermal_level >= 2`) samples before stepping bitrate down.
+pub const THERMAL_HOT_SAMPLES: u32 = 3;
+/// Initial hold at the pre-probe ceiling after an upward probe meets frame loss.
+pub const INITIAL_CEILING_HOLD_MS: u64 = 30_000;
+/// Maximum backoff hold at a learned loss ceiling.
+pub const MAX_CEILING_HOLD_MS: u64 = 300_000;
 
-/// The balanced range around a starting bitrate, as V+'s `bitrateRange`: 0.3x (at least 3
-/// Mbps) to 2x (at most 150 Mbps), always holding the start, within 0.5-800 Mbps.
+/// The bounded range below a starting bitrate: 0.3x (at least 3 Mbps where `initial_kbps`
+/// allows it) up to `initial_kbps` itself, clamped within 0.5–800 Mbps.
 pub fn range(initial_kbps: u32) -> (u32, u32) {
     let baseline = initial_kbps.clamp(500, 800_000);
     let low = 3000.max((f64::from(baseline) * 0.3) as u32);
-    let high = 150_000.min(baseline * 2);
-    (baseline.min(low).max(500), baseline.max(high).min(800_000))
+    (baseline.min(low).max(500), baseline)
 }
 
-/// Steers the stream's bitrate from this client's loss, one 0x553C request at a time.
+/// Steers the stream's bitrate from this client's loss and heat, one 0x553C request at a time.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Bitrate {
     min_kbps: u32,
@@ -47,7 +54,13 @@ pub struct Bitrate {
     last_change_ms: Option<u64>,
     stable_samples: u32,
     loss_streak: u32,
+    hot_samples: u32,
+    thermal_level: u32,
     last_down: bool,
+    probed_from_kbps: Option<u32>,
+    ceiling_hold_kbps: Option<u32>,
+    ceiling_until_ms: Option<u64>,
+    probe_backoff_ms: u64,
     pending_kbps: Option<u32>,
     stopped: bool,
     /// A cut the stream before an automatic reconnect had made ([`Self::resume_from`]).
@@ -59,6 +72,11 @@ impl Bitrate {
     /// cut to, inside the range of the stream's own bitrate, which it may climb back to.
     pub fn resume_from(&mut self, kbps: u32) {
         self.resume_kbps = (kbps > 0 && kbps < self.current_kbps).then_some(kbps);
+    }
+
+    /// Updates the device thermal level (`0` normal, `1` warm holds, `>= 2` hot steps down).
+    pub fn set_thermal_level(&mut self, level: u32) {
+        self.thermal_level = level;
     }
 
     /// `initial_kbps` is the stream's bitrate and `limit_kbps` this client's own cap (0 for
@@ -79,7 +97,13 @@ impl Bitrate {
             last_change_ms: None,
             stable_samples: 0,
             loss_streak: 0,
+            hot_samples: 0,
+            thermal_level: 0,
             last_down: false,
+            probed_from_kbps: None,
+            ceiling_hold_kbps: None,
+            ceiling_until_ms: None,
+            probe_backoff_ms: 0,
             pending_kbps: None,
             stopped: false,
             resume_kbps: None,
@@ -93,10 +117,15 @@ impl Bitrate {
         if self.stopped || self.pending_kbps.is_some() {
             return None;
         }
+        if self.ceiling_until_ms.is_some_and(|until| now_ms >= until) {
+            self.ceiling_until_ms = None;
+            self.ceiling_hold_kbps = None;
+        }
         // Without video the loss is not current.
         if !stats.recent_video {
             self.stable_samples = 0;
             self.loss_streak = 0;
+            self.hot_samples = 0;
             return None;
         }
         if now_ms < self.started_ms + START_DELAY_MS
@@ -118,34 +147,75 @@ impl Bitrate {
             self.stable_samples = 0;
             return None;
         };
+        let thermal = stats.thermal_level.max(self.thermal_level);
         let current = f64::from(self.current_kbps);
         let mut target = current;
+        let mut loss_cut = false;
         if loss > 5.0 {
             target = current * 0.7;
             self.stable_samples = 0;
             self.loss_streak += 1;
+            self.hot_samples = 0;
+            loss_cut = true;
         } else if loss > 2.0 {
             self.stable_samples = 0;
             self.loss_streak += 1;
+            self.hot_samples = 0;
             if self.loss_streak >= 2 {
                 target = current * 0.9;
+                loss_cut = true;
             }
         } else if loss > 0.5 {
             self.loss_streak += 1;
             self.stable_samples = 0;
+            self.hot_samples = 0;
             if self.loss_streak >= 4 {
                 target = current * 0.95;
+                loss_cut = true;
             }
-        } else if known(stats.queue_ms).is_some_and(|queue| queue >= QUEUE_HOLD_MS) {
+        } else if thermal >= 2 {
             self.loss_streak = 0;
+            self.stable_samples = 0;
+            self.hot_samples += 1;
+            if self.hot_samples >= THERMAL_HOT_SAMPLES {
+                target = current * 0.9;
+                self.hot_samples = 0;
+            }
+        } else if thermal == 1 || known(stats.queue_ms).is_some_and(|queue| queue >= QUEUE_HOLD_MS)
+        {
+            self.loss_streak = 0;
+            self.hot_samples = 0;
             self.stable_samples = 0;
         } else {
             self.loss_streak = 0;
+            self.hot_samples = 0;
             self.stable_samples += 1;
-            if self.stable_samples >= STABLE_SAMPLES && self.current_kbps < self.max_kbps {
-                target = current * if self.last_down { 1.02 } else { 1.05 };
+            let probe_ceiling = self
+                .ceiling_hold_kbps
+                .map_or(self.max_kbps, |hold| hold.min(self.max_kbps));
+            if self.stable_samples >= STABLE_SAMPLES {
+                if self.current_kbps < probe_ceiling {
+                    let step = if self.last_down || self.probe_backoff_ms > 0 {
+                        1.02
+                    } else {
+                        1.05
+                    };
+                    target = (current * step).min(f64::from(probe_ceiling));
+                } else {
+                    self.probed_from_kbps = None;
+                }
                 self.stable_samples = 0;
             }
+        }
+        if loss_cut && let Some(safe_kbps) = self.probed_from_kbps.take() {
+            self.ceiling_hold_kbps = Some(safe_kbps);
+            self.probe_backoff_ms = if self.probe_backoff_ms == 0 {
+                INITIAL_CEILING_HOLD_MS
+            } else {
+                (self.probe_backoff_ms * 2).min(MAX_CEILING_HOLD_MS)
+            };
+            self.ceiling_until_ms = Some(now_ms.saturating_add(self.probe_backoff_ms));
+            target = target.min(f64::from(safe_kbps));
         }
         let target = (target as u32).clamp(self.min_kbps, self.max_kbps);
         if target == self.current_kbps {
@@ -166,6 +236,14 @@ impl Bitrate {
             self.max_kbps = self.max_kbps.min(kbps);
             self.min_kbps = self.min_kbps.min(self.max_kbps);
         }
+        if kbps > self.current_kbps {
+            self.probed_from_kbps = Some(self.current_kbps);
+            if kbps >= self.max_kbps {
+                self.probe_backoff_ms = 0;
+            }
+        } else if kbps < self.current_kbps {
+            self.probed_from_kbps = None;
+        }
         if kbps != self.current_kbps {
             self.last_down = kbps < self.current_kbps;
         }
@@ -185,8 +263,14 @@ impl Bitrate {
         *self = Self {
             last_change_ms: Some(now_ms),
             stopped: self.stopped,
+            thermal_level: self.thermal_level,
             ..Self::new(kbps, self.limit_kbps, self.started_ms)
         };
+    }
+
+    /// Prefer bitrate reductions before lowering stream resolution for network congestion.
+    pub fn has_room_before_quality_reduction(&self) -> bool {
+        !self.stopped && self.current_kbps > self.min_kbps.max(self.max_kbps * 65 / 100)
     }
 
     pub fn current_kbps(&self) -> u32 {
@@ -242,6 +326,16 @@ impl Subject for Bitrate {
                 };
                 Ok(self.sample(&stats).unwrap_or(0).into())
             }
+            "resume_from" => {
+                let a = Args::new(args, 1)?;
+                self.resume_from(a.int(0)?);
+                Ok(Value::Null)
+            }
+            "set_thermal_level" => {
+                let a = Args::new(args, 1)?;
+                self.set_thermal_level(a.int(0)?);
+                Ok(Value::Null)
+            }
             "applied" => {
                 let a = Args::new(args, 2)?;
                 self.applied(a.int(0)?, a.int(1)?);
@@ -257,13 +351,21 @@ impl Subject for Bitrate {
                 self.overridden(a.int(0)?, a.int(1)?);
                 Ok(Value::Null)
             }
-            "current_kbps" | "min_kbps" | "max_kbps" | "pending" | "stopped" => {
+            "current_kbps"
+            | "min_kbps"
+            | "max_kbps"
+            | "pending"
+            | "stopped"
+            | "has_room_before_quality_reduction" => {
                 Args::new(args, 0)?;
                 Ok(match method {
                     "current_kbps" => self.current_kbps.into(),
                     "min_kbps" => self.min_kbps.into(),
                     "max_kbps" => self.max_kbps.into(),
                     "pending" => self.pending().into(),
+                    "has_room_before_quality_reduction" => {
+                        self.has_room_before_quality_reduction().into()
+                    }
                     _ => self.stopped.into(),
                 })
             }
@@ -286,13 +388,19 @@ mod tests {
     }
 
     #[test]
-    fn the_range_is_v_plus_balanced() {
-        assert_eq!(range(20_000), (6000, 40_000));
-        assert_eq!(range(5000), (3000, 10_000));
-        assert_eq!(range(100), (500, 1000));
-        assert_eq!(range(100_000), (30_000, 150_000));
+    fn the_range_is_capped_at_the_starting_bitrate() {
+        assert_eq!(range(20_000), (6000, 20_000));
+        assert_eq!(range(5000), (3000, 5000));
+        assert_eq!(range(100), (500, 500));
+        assert_eq!(range(100_000), (30_000, 100_000));
         assert_eq!(range(500_000), (150_000, 500_000));
         assert_eq!(range(u32::MAX), (240_000, 800_000));
+
+        // Clean links stay quiet at the configured bitrate instead of over-probing to 2x.
+        let mut clean = Bitrate::new(40_000, 0, 0);
+        for second in 0..60 {
+            assert_eq!(clean.sample(&tick(second, 0.0)), None, "second {second}");
+        }
     }
 
     /// An automatic reconnect starts again from the cut, below the same ceiling.
@@ -303,12 +411,66 @@ mod tests {
         assert_eq!(c.sample(&tick(2, 0.0)), None, "the start delay holds");
         assert_eq!(c.sample(&tick(3, 0.0)), Some(9_000));
         c.applied(9_000, 3000);
-        assert_eq!(c.max_kbps(), 40_000, "the ceiling is the stream's own");
+        assert_eq!(c.max_kbps(), 20_000, "the ceiling is the stream's own");
         let climbed = (5..30).find_map(|s| c.sample(&tick(s, 0.0)));
         assert!(climbed.is_some_and(|kbps| kbps > 9_000), "{climbed:?}");
         let mut higher = Bitrate::new(20_000, 0, 0);
         higher.resume_from(25_000);
         assert_eq!(higher.sample(&tick(3, 0.0)), None, "no cut to return to");
+    }
+
+    #[test]
+    fn a_failed_upward_probe_holds_at_the_proven_ceiling_with_backoff() {
+        let mut c = Bitrate::new(40_000, 0, 0);
+        assert_eq!(c.sample(&tick(3, 10.0)), Some(28_000));
+        c.applied(28_000, 3000);
+        // 5 clean seconds probe +2% from 28_000 -> 28_560.
+        for s in 5..9 {
+            assert_eq!(c.sample(&tick(s, 0.0)), None);
+        }
+        assert_eq!(c.sample(&tick(9, 0.0)), Some(28_560));
+        c.applied(28_560, 9000);
+        // Loss immediately after the probe cuts and remembers 28_000 for 30 s.
+        assert_eq!(c.sample(&tick(11, 10.0)), Some(19_992));
+        c.applied(19_992, 11_000);
+        let mut now_s = 13;
+        while now_s < 40 {
+            if let Some(req) = c.sample(&tick(now_s, 0.0)) {
+                assert!(
+                    req <= 28_000,
+                    "must not probe past learned 28_000 during hold: {req}"
+                );
+                c.applied(req, now_s * 1000);
+            }
+            now_s += 1;
+        }
+        assert_eq!(c.current_kbps(), 28_000);
+        // Once the 30 s hold (until 41_000 ms) expires, cautious +2% probing resumes.
+        let reprobe = (41..50).find_map(|s| c.sample(&tick(s, 0.0)));
+        assert_eq!(reprobe, Some(28_560));
+    }
+
+    #[test]
+    fn thermal_warm_holds_probes_and_hot_steps_down_while_has_room_tracks_65_percent() {
+        let mut c = Bitrate::new(20_000, 0, 0);
+        assert!(c.has_room_before_quality_reduction());
+        c.set_thermal_level(2);
+        assert_eq!(c.sample(&tick(3, 0.0)), None);
+        assert_eq!(c.sample(&tick(4, 0.0)), None);
+        assert_eq!(c.sample(&tick(5, 0.0)), Some(18_000));
+        c.applied(18_000, 5000);
+        assert!(c.has_room_before_quality_reduction());
+
+        // Warm holds upward recovery even on clean loss=0 samples.
+        c.set_thermal_level(1);
+        for s in 7..25 {
+            assert_eq!(c.sample(&tick(s, 0.0)), None);
+        }
+
+        // Below 65% of max_kbps (13_000), Automatic quality may step down stream size.
+        assert_eq!(c.sample(&tick(26, 10.0)), Some(12_600));
+        c.applied(12_600, 26_000);
+        assert!(!c.has_room_before_quality_reduction());
     }
 
     #[test]
@@ -321,7 +483,7 @@ mod tests {
         assert_eq!(c.sample(&tick(5, 10.0)), None, "cooldown");
         assert_eq!(c.sample(&tick(6, 10.0)), Some(9800));
         c.refused();
-        assert!(c.stopped() && !c.pending());
+        assert!(c.stopped() && !c.pending() && !c.has_room_before_quality_reduction());
         assert!((7..60).all(|s| c.sample(&tick(s, 10.0)).is_none()));
         c.overridden(30_000, 60_000);
         assert!(
@@ -331,9 +493,11 @@ mod tests {
     }
 
     #[test]
-    fn a_client_limit_caps_the_range() {
+    fn a_client_limit_caps_the_range_without_raising_above_initial() {
         let c = Bitrate::new(20_000, 25_000, 0);
-        assert_eq!((c.min_kbps(), c.max_kbps()), (6000, 25_000));
+        assert_eq!((c.min_kbps(), c.max_kbps()), (6000, 20_000));
+        let c = Bitrate::new(20_000, 15_000, 0);
+        assert_eq!((c.min_kbps(), c.max_kbps()), (6000, 15_000));
         let c = Bitrate::new(20_000, 1000, 0);
         assert_eq!((c.min_kbps(), c.max_kbps()), (1000, 1000));
     }
@@ -341,11 +505,14 @@ mod tests {
     #[test]
     fn moderate_loss_streak_resets_stable_samples() {
         let mut c = Bitrate::new(10_000, 0, 0);
-        for second in 3..7 {
+        c.resume_from(7_000);
+        assert_eq!(c.sample(&tick(3, 0.0)), Some(7_000));
+        c.applied(7_000, 3000);
+        for second in 5..9 {
             assert_eq!(c.sample(&tick(second, 0.0)), None);
         }
         // Single > 2% loss sample resets the clean-sample streak even before a cut.
-        assert_eq!(c.sample(&tick(7, 3.0)), None);
-        assert_eq!(c.sample(&tick(8, 0.0)), None);
+        assert_eq!(c.sample(&tick(9, 3.0)), None);
+        assert_eq!(c.sample(&tick(10, 0.0)), None);
     }
 }

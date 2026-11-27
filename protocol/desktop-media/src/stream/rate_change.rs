@@ -264,9 +264,9 @@ impl RateChange {
         self.hint.as_ref().is_some_and(|hint| !hint.stopped())
     }
 
-    /// The controller can still raise the bitrate.
+    /// The controller can still lower the bitrate before Automatic quality reduces the stream size.
     pub fn hint_has_room(&self) -> bool {
-        self.hint.as_ref().is_some_and(|hint| !hint.stopped() && hint.current_kbps() < hint.max_kbps())
+        self.hint.as_ref().is_some_and(client_hint::Bitrate::has_room_before_quality_reduction)
     }
 
     /// A menu request waits for its result.

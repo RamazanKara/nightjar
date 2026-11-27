@@ -58,19 +58,42 @@ fn residency_streak_period_and_window_expiry() {
     let mut now = feed_residency(&mut r, 20, 4 * MS, 1_000_000_000);
     assert!(!r.should_drop(3));
     for _ in 0..(Residency::FRAMES - 1) {
-        now = feed_residency(&mut r, 1, 10 * MS, now);
+        now = feed_residency(&mut r, 1, 22 * MS, now);
         assert!(!r.should_drop(2));
     }
-    now = feed_residency(&mut r, 1, 10 * MS, now);
+    now = feed_residency(&mut r, 1, 22 * MS, now);
     assert!(r.should_drop(1));
     assert!(!r.should_drop(0));
     r.on_dropped();
+    // Real two-frame backlog: first drop shortens residency from 22 ms -> 11 ms, so after
+    // PERIOD outputs it may drop once more to drain the remaining queued buffer.
     for _ in 1..Residency::PERIOD {
-        now = feed_residency(&mut r, 1, 10 * MS, now);
+        now = feed_residency(&mut r, 1, 11 * MS, now);
         assert!(!r.should_drop(1));
     }
-    feed_residency(&mut r, 1, 10 * MS, now);
+    now = feed_residency(&mut r, 1, 11 * MS, now);
     assert!(r.should_drop(1));
+
+    // Slower decode compute (4 ms -> 10 ms) where a drop does not shorten residency:
+    // re-anchors the baseline after one test drop instead of dropping 1 in 4 frames for 10 s.
+    r.reset();
+    now = feed_residency(&mut r, 20, 4 * MS, now);
+    now = feed_residency(&mut r, Residency::FRAMES as usize, 10 * MS, now);
+    assert!(r.should_drop(1));
+    r.on_dropped();
+    for _ in 0..120 {
+        now = feed_residency(&mut r, 1, 10 * MS, now);
+        assert!(
+            !r.should_drop(1),
+            "unhelpful drop must stop 1-in-4 frame drops"
+        );
+    }
+    // A real queue building on top of the 10 ms compute floor (10 -> 21 ms) still triggers,
+    // and returning to 4 ms immediately re-learns the faster baseline.
+    now = feed_residency(&mut r, Residency::FRAMES as usize, 21 * MS, now);
+    assert!(r.should_drop(1));
+    let _ = feed_residency(&mut r, 1, 4 * MS, now);
+    assert_eq!(r.on_output(4 * MS, now + CONTENT_NS), 0);
 
     // 10s window expiry ages out old floor
     r.reset();

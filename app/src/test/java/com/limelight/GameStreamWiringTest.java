@@ -82,6 +82,14 @@ public class GameStreamWiringTest {
         assertTrue(easesLoad());
 
         ReflectionHelpers.setField(game, "adaptiveBitrate", null);
+        StreamRateChanges rateChanges = new StreamRateChanges((s, k, m) -> true);
+        rateChanges.startAutomatic(50_000, 0);
+        ReflectionHelpers.setField(game, "rateChanges", rateChanges);
+        game.adaptation.sampleStreamHealth.run();
+        assertTrue("rate-change bitrate holds and eases under heat too", holdsBitrate());
+        assertTrue(easesLoad());
+        ReflectionHelpers.setField(game, "rateChanges", null);
+
         ReflectionHelpers.setField(game, "adaptiveQuality", new AdaptiveQualityController(
                 AdaptiveQualityController.Mode.MOTION, 1920, 1080, 60, 720, 30, 2, 2, 0));
         game.adaptation.sampleStreamHealth.run();

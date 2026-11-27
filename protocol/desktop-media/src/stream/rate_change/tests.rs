@@ -126,6 +126,16 @@ fn the_controller_ticks_once_a_second_and_one_request_at_a_time() {
     assert_eq!(answer.toast.as_deref(), Some("Loss-based bitrate stopped: this stream’s codec keeps its rates"));
     assert!(!rates.hint_active() && !rates.hint_has_room());
     assert!((11..60).all(|s| rates.tick(&stats(s, 10.0)).is_none()));
+
+    // Automatic quality waits while the controller still has >=35% room to lower bitrate first.
+    let mut room = RateChange::new(20_000, 60_000, true, 0, 0);
+    assert!(room.hint_has_room(), "at ceiling it can still lower bitrate before cutting resolution");
+    let cut1 = room.tick(&stats(4, 10.0)).unwrap();
+    room.result(&result(&cut1, 14_000, 60_000, Outcome::APPLIED, Outcome::UNCHANGED), 4_000);
+    assert!(room.hint_has_room(), "14_000 > 13_000 (65% of 20_000)");
+    let cut2 = room.tick(&stats(7, 10.0)).unwrap();
+    room.result(&result(&cut2, 9_800, 60_000, Outcome::APPLIED, Outcome::UNCHANGED), 7_000);
+    assert!(!room.hint_has_room(), "below 65% of ceiling, Automatic quality may step down");
 }
 
 /// After an automatic reconnect the client-hint controller's first request is the cut the

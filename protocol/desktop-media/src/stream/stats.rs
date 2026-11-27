@@ -550,6 +550,7 @@ impl Streaming {
                     poor_connection: tick.poor_connection,
                     loss_percent,
                     queue_ms: tick.queue_ms,
+                    thermal_level: tick.thermal_level,
                     ..Default::default()
                 });
                 if let Some(request) = request { self.send_rate_change(request); }

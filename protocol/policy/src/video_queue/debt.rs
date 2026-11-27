@@ -3,7 +3,8 @@
 use super::gate::{DisplayGate, RecentLevel};
 
 /// Residency governor: tracks the minimum input-to-output latency over a sliding 10-second
-/// window and requests dropping an older decoded output when surplus residency persists.
+/// window and requests dropping an older decoded output when surplus residency persists and
+/// dropping outputs measurably shortens the queue.
 #[derive(Debug, Clone)]
 pub struct Residency {
     window_min_ns: [i64; Self::WINDOWS],
@@ -11,6 +12,11 @@ pub struct Residency {
     slot: usize,
     window_start_ns: i64,
     current_min_ns: i64,
+    last_i2o_ns: i64,
+    last_excess_ns: i64,
+    check_excess_ns: Option<i64>,
+    post_drop_min_excess_ns: i64,
+    post_drop_min_i2o_ns: i64,
     streak: i32,
     since_drop: i32,
 }
@@ -28,6 +34,11 @@ impl Residency {
             slot: 0,
             window_start_ns: 0,
             current_min_ns: i64::MAX,
+            last_i2o_ns: 0,
+            last_excess_ns: 0,
+            check_excess_ns: None,
+            post_drop_min_excess_ns: i64::MAX,
+            post_drop_min_i2o_ns: i64::MAX,
             streak: 0,
             since_drop: Self::PERIOD,
         }
@@ -37,8 +48,10 @@ impl Residency {
     /// second minimum (zero for the first frame or an unknown time).
     pub fn on_output(&mut self, input_to_output_ns: i64, now_ns: i64) -> i64 {
         if input_to_output_ns <= 0 {
+            self.last_i2o_ns = 0;
             return 0;
         }
+        self.last_i2o_ns = input_to_output_ns;
         if self.window_start_ns == 0 {
             self.window_start_ns = now_ns;
         }
@@ -58,8 +71,11 @@ impl Residency {
     }
 
     /// Counts the output for the streak and the drop period; call after [`Self::on_output`], once
-    /// per output.
+    /// per output. When a previous governor drop failed to shorten residency over [`Self::PERIOD`]
+    /// outputs (e.g. slower decoder clocks or heavier pictures rather than a queued buffer),
+    /// re-anchors the sliding minimum so it stops dropping 1 in 4 frames for 10 seconds.
     pub fn track(&mut self, excess_ns: i64, content_interval_ns: i64) {
+        self.last_excess_ns = excess_ns;
         self.streak = if excess_ns > content_interval_ns / 2 {
             self.streak + 1
         } else {
@@ -67,6 +83,28 @@ impl Residency {
         };
         if self.since_drop < Self::PERIOD {
             self.since_drop += 1;
+            self.post_drop_min_excess_ns = self.post_drop_min_excess_ns.min(excess_ns);
+            if self.last_i2o_ns > 0 {
+                self.post_drop_min_i2o_ns = self.post_drop_min_i2o_ns.min(self.last_i2o_ns);
+            }
+            if self.since_drop == Self::PERIOD
+                && let Some(before_excess) = self.check_excess_ns.take()
+            {
+                let min_gain = (content_interval_ns.max(0) * 2) / 5;
+                let shortened = self.post_drop_min_excess_ns <= content_interval_ns / 2
+                    || i128::from(before_excess) - i128::from(self.post_drop_min_excess_ns)
+                        >= i128::from(min_gain);
+                if !shortened && self.post_drop_min_i2o_ns < i64::MAX {
+                    let floor = self.post_drop_min_i2o_ns;
+                    if self.current_min_ns < i64::MAX {
+                        self.current_min_ns = self.current_min_ns.max(floor);
+                    }
+                    for w in self.window_min_ns.iter_mut().take(self.windows) {
+                        *w = (*w).max(floor);
+                    }
+                    self.streak = 0;
+                }
+            }
         }
     }
 
@@ -77,6 +115,9 @@ impl Residency {
 
     pub fn on_dropped(&mut self) {
         self.since_drop = 0;
+        self.check_excess_ns = Some(self.last_excess_ns);
+        self.post_drop_min_excess_ns = i64::MAX;
+        self.post_drop_min_i2o_ns = i64::MAX;
     }
 
     pub fn reset(&mut self) {
@@ -84,6 +125,11 @@ impl Residency {
         self.slot = 0;
         self.window_start_ns = 0;
         self.current_min_ns = i64::MAX;
+        self.last_i2o_ns = 0;
+        self.last_excess_ns = 0;
+        self.check_excess_ns = None;
+        self.post_drop_min_excess_ns = i64::MAX;
+        self.post_drop_min_i2o_ns = i64::MAX;
         self.streak = 0;
         self.since_drop = Self::PERIOD;
     }

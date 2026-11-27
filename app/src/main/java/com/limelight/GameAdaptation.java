@@ -76,8 +76,9 @@ final class GameAdaptation {
     final Runnable sampleStreamHealth = new Runnable() {
         @Override public void run() {
             if (!game.connected || game.decoderRenderer == null || game.app.getRole() == NvApp.Role.INPUT_ONLY) return;
-            game.decoderRenderer.setHeatEffects(heatHoldsBitrate(game.prefConfig.thermalProtection, isAdaptiveBitrateEnabled()),
-                    heatEasesLoad(game.prefConfig.thermalProtection, isAdaptiveBitrateEnabled(), game.adaptiveQuality != null));
+            boolean bitrateFollowsHeat = isAdaptiveBitrateEnabled() || isRateChangeBitrateOn();
+            game.decoderRenderer.setHeatEffects(heatHoldsBitrate(game.prefConfig.thermalProtection, bitrateFollowsHeat),
+                    heatEasesLoad(game.prefConfig.thermalProtection, bitrateFollowsHeat, game.adaptiveQuality != null));
             game.decoderRenderer.setStreamBitrateKbps(game.currentBitrate == 0 ? game.prefConfig.bitrate : game.currentBitrate);
             if (game.foreground && !game.hostActionInProgress) {
                 // A hanging decoder holds the locks this sample reads for seconds: never on the main thread.

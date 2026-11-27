@@ -155,7 +155,7 @@ final class StreamRateChanges {
     }
 
     // Automatic bitrate's own cap: the mobile data limit on a mobile network, none elsewhere, as
-    // on desktop (Profiles::bitrate_limit). Its range otherwise reaches twice the start.
+    // on desktop (Profiles::bitrate_limit). Its range never exceeds the stream's own bitrate.
     static int clientLimitKbps(StreamLayers.Network network, int mobileLimitKbps) {
         return network == StreamLayers.Network.MOBILE && mobileLimitKbps > 0 ? mobileLimitKbps : 0;
     }
@@ -168,6 +168,14 @@ final class StreamRateChanges {
 
     boolean automaticOn() {
         return automatic != null;
+    }
+
+    boolean hasRoomBeforeQualityReduction() {
+        return automatic != null && automatic.hasRoomBeforeQualityReduction();
+    }
+
+    void setThermalLevel(int level) {
+        if (automatic != null) automatic.setThermalLevel(level);
     }
 
     ClientHintBitrateController automatic() {

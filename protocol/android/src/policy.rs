@@ -303,6 +303,16 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_clientH
 }
 
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_clientHintSetThermalLevel(
+    _: JNIEnv,
+    _: JClass,
+    handle: jlong,
+    thermal_level: jint,
+) {
+    CLIENT_HINT_SLAB.with(handle, |c| c.set_thermal_level(non_neg_u32(thermal_level)));
+}
+
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_clientHintSample(
     _: JNIEnv,
     _: JClass,
@@ -375,9 +385,10 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_clientH
                 c.max_kbps() as i32,
                 i32::from(c.pending()),
                 i32::from(c.stopped()),
+                i32::from(c.has_room_before_quality_reduction()),
             ]
         })
-        .unwrap_or([0, 0, 0, 0, 1]);
+        .unwrap_or([0, 0, 0, 0, 1, 0]);
     int_array(&mut env, &state)
 }
 
