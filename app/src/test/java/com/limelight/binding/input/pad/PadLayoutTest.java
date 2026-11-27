@@ -203,6 +203,16 @@ public class PadLayoutTest {
         assertEquals(.8f, back.spec(PadLayout.Control.DPAD).scale(), 1e-3);
     }
 
+    @Test public void defaultLeftTriggerClearsCompactTopLeftStatsHudInLandscape() {
+        PadLayout layout = new PadLayout();
+        // Standard 1080p phone (2400x1080 @ 2.625x) and 720p/1080p handhelds in landscape clear the 40dp stats capsule.
+        for (float[] s : new float[][] {{2400, 1080, 2.625f}, {1920, 1080, 2f}, {1280, 720, 1.5f}}) {
+            float[] lt = layout.bounds(PadLayout.Control.LT, s[0], s[1], s[2], new float[4]);
+            assertTrue("LT top clears 40dp stats HUD on " + s[0] + "x" + s[1] + ": " + (lt[1] / s[2]) + "dp",
+                    lt[1] >= 38f * s[2]);
+        }
+    }
+
     @Test public void brokenOrUnknownEntriesAreSkippedAndTheRestKept() {
         PadLayout layout = PadLayout.parse("v1|PADDLE,0.5,0.5,1,100,0|LB,x,0.2,1,100,0|RB,-,-,1.5,70,0|LT,0.1|"
                 + "RT,7,-3,900,500,1");

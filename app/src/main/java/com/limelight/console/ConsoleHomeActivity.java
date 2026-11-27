@@ -341,7 +341,7 @@ public class ConsoleHomeActivity extends NightjarActivity implements HostFeed.Li
                 if (ambience != null) ambience.heroShown(card);
             }
             @Override public void onHeroFocus(CharSequence go) {
-                if (go != null && hints != null) hints.onFocus(go, getString(R.string.console_hint_options));
+                if (go != null && hints != null) hints.onFocus(go.length() == 0 ? null : go, getString(R.string.console_hint_options));
             }
             @Override public void onHostMoreMark(Object owner, Runnable clear) {
                 if (clear != null) {

@@ -28,8 +28,9 @@ final class FocusRing {
         this.view = view;
         Context context = view.getContext();
         boolean highContrast = AppTheme.isHighContrast(context);
+        boolean dayOnMoon = onMoon && AppTheme.look(context) == AppTheme.Look.DAY;
         ringWidth = context.getResources().getDimension(highContrast ? R.dimen.nj_hc_focus_ring_width : R.dimen.glass_ring_width);
-        gapWidth = context.getResources().getDimension(R.dimen.glass_ring_gap);
+        gapWidth = context.getResources().getDimension(R.dimen.glass_ring_gap) * (dayOnMoon ? 0.5f : 1f);
         haloBlur = highContrast ? 0f : context.getResources().getDimension(R.dimen.glass_halo_blur);
         ring.setStyle(Paint.Style.STROKE);
         ring.setStrokeWidth(ringWidth);

@@ -4,10 +4,10 @@
          carry yet. They move there when the tokens gain them. -->
     <!-- Between two cards, and between a card's icon and its name. -->
     <dimen name="control_center_gap">8dp</dimen>
-    <dimen name="control_center_card_icon">24dp</dimen>
+    <dimen name="control_center_card_icon">18dp</dimen>
     <!-- A card in a window too low for two rows of size.controlCenterCard under the header: a handheld, a phone on its side. -->
     <dimen name="control_center_card_low">60dp</dimen>
-    <dimen name="control_center_card_pad">14dp</dimen>
+    <dimen name="control_center_card_pad">11dp</dimen>
     <!-- A module on the rail: its icon over its name. -->
     <dimen name="control_center_rail_icon_gap">2dp</dimen>
     <dimen name="control_center_rail_entry">56dp</dimen>

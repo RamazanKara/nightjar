@@ -368,14 +368,29 @@ final class HomeChrome {
         listTop = rowTop + capsule + gap;
         android.widget.FrameLayout.LayoutParams cardParams = (android.widget.FrameLayout.LayoutParams) card.getLayoutParams();
         cardParams.gravity = android.view.Gravity.TOP | android.view.Gravity.START;
+        cardParams.width = handheld ? ViewGroup.LayoutParams.WRAP_CONTENT : ViewGroup.LayoutParams.MATCH_PARENT;
         cardParams.topMargin = listTop;
         cardParams.leftMargin = topRow.getPaddingLeft();
         cardParams.rightMargin = topRow.getPaddingRight();
         card.setLayoutParams(cardParams);
+        if (!handheld) {
+            View textWrap = card.findViewById(R.id.home_setup_text);
+            if (textWrap != null && textWrap.getLayoutParams() instanceof LinearLayout.LayoutParams) {
+                LinearLayout.LayoutParams tp = (LinearLayout.LayoutParams) textWrap.getLayoutParams();
+                tp.width = 0;
+                tp.weight = 1f;
+                textWrap.setLayoutParams(tp);
+            }
+            TextView setupTitle = card.findViewById(R.id.home_setup_title);
+            TextView setupValues = card.findViewById(R.id.home_setup_values);
+            if (setupTitle != null) setupTitle.setMaxWidth(Integer.MAX_VALUE);
+            if (setupValues != null) setupValues.setMaxWidth(Integer.MAX_VALUE);
+        }
         bottomRow.setPadding(left + res.getDimensionPixelSize(R.dimen.space_m), 0, right + res.getDimensionPixelSize(R.dimen.space_m),
                 bottom + res.getDimensionPixelSize(R.dimen.space_s));
         int foot = handheld ? bottom + res.getDimensionPixelSize(R.dimen.space_xl)
-                : bottom + res.getDimensionPixelSize(R.dimen.nj_size_tab_bar_height) + 3 * res.getDimensionPixelSize(R.dimen.space_m);
+                : bottom + res.getDimensionPixelSize(R.dimen.nj_size_tab_bar_height)
+                        + res.getDimensionPixelSize(R.dimen.space_s) + 2 * res.getDimensionPixelSize(R.dimen.space_xl);
         list.setPadding(left + listInset, listTop, right + listInset, foot);
         fitSetupCard();
         // Scrolled, the list fades out under the top row: a bright button never slides whole under the PC capsule.

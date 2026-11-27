@@ -112,6 +112,10 @@ public final class TileGrid extends ViewGroup {
         private int besideEnd = -1, cornerEnd, besideTop;
         private boolean inCorner;
         private boolean isSwitch;
+        // Desktop-parity Control Center card header: icon at top-start, cap at top-end, full-width label below.
+        private android.graphics.drawable.Drawable topStartIcon;
+        private android.content.res.ColorStateList topStartTint;
+        private int topStartSize, topStartPad;
 
         public Tile(Context context) {
             this(context, com.google.android.material.R.attr.materialButtonOutlinedStyle);
@@ -158,6 +162,27 @@ public final class TileGrid extends ViewGroup {
             this.cornerEnd = cornerEnd;
             besideTop = getPaddingTop();
             requestLayout();
+        }
+
+        /** Places {@code iconRes} in the top-start corner above a full-width label, matching desktop Control Center cards. */
+        void setTopStartHeader(int iconRes, int iconSize, android.content.res.ColorStateList tint, int sidePad, int topPad,
+                               int iconGap, int bottomPad) {
+            super.setIcon(null);
+            android.graphics.drawable.Drawable raw = androidx.appcompat.content.res.AppCompatResources.getDrawable(getContext(), iconRes);
+            topStartIcon = raw == null ? null : raw.mutate();
+            topStartTint = tint;
+            topStartSize = iconSize;
+            topStartPad = topPad;
+            inCorner = hotkey != null && capShown;
+            int textTop = Math.max(topPad + iconSize + iconGap, inCorner ? capFoot() + Math.round(2 * dp) : 0);
+            setPaddingRelative(sidePad, textTop, sidePad, bottomPad);
+            requestLayout();
+            invalidate();
+        }
+
+        @Override
+        public android.graphics.drawable.Drawable getIcon() {
+            return topStartIcon != null ? topStartIcon : super.getIcon();
         }
 
         /** Whether the cap stands in the top end corner now, as its name needs the room beside it. */
@@ -230,7 +255,9 @@ public final class TileGrid extends ViewGroup {
         protected void onMeasure(int widthSpec, int heightSpec) {
             if (MeasureSpec.getMode(widthSpec) != MeasureSpec.UNSPECIFIED) {
                 int size = MeasureSpec.getSize(widthSpec);
-                if (besideEnd >= 0 && hotkey != null && capShown) {
+                if (topStartIcon != null) {
+                    inCorner = hotkey != null && capShown;
+                } else if (besideEnd >= 0 && hotkey != null && capShown) {
                     int end = getPaddingEnd();
                     inCorner = !wordsFit(size - getCompoundPaddingLeft() - getCompoundPaddingRight() + end - besideEnd);
                     int want = inCorner ? cornerEnd : besideEnd;
@@ -248,8 +275,18 @@ public final class TileGrid extends ViewGroup {
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-            int quiet = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant);
             boolean rtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
+            if (topStartIcon != null && topStartSize > 0) {
+                int side = getPaddingStart();
+                int ix = rtl ? getWidth() - side - topStartSize : side;
+                int iy = topStartPad;
+                if (topStartTint != null) {
+                    topStartIcon.setTint(topStartTint.getColorForState(getDrawableState(), getCurrentTextColor()));
+                }
+                topStartIcon.setBounds(ix, iy, ix + topStartSize, iy + topStartSize);
+                topStartIcon.draw(canvas);
+            }
+            int quiet = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant);
             if (hotkey != null && capShown) {
                 paint.setStyle(Paint.Style.FILL);
                 paint.setTextSize(capText);
@@ -257,9 +294,10 @@ public final class TileGrid extends ViewGroup {
                 float text = paint.measureText(hotkey);
                 float w = capWidth(text), h = capText * 1.45f;
                 boolean beside = hotkeyAtEnd && !inCorner;
-                float inset = inCorner ? cornerInset : capInset();
+                float inset = topStartIcon != null ? getPaddingEnd() : (inCorner ? cornerInset : capInset());
                 float left = rtl != hotkeyAtEnd ? getWidth() - inset - w : inset;
-                float top = beside ? (getHeight() - h) / 2 : cornerInset - dp;
+                float top = topStartIcon != null ? Math.max(2 * dp, topStartPad + (topStartSize - h) / 2f)
+                        : (beside ? (getHeight() - h) / 2 : cornerInset - dp);
                 box.set(left, top, left + w, top + h);
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(dp);

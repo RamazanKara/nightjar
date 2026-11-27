@@ -58,8 +58,11 @@ public class HeroStageView extends View {
     static final float MIDDLE_DOWN_TALL = .25f;
     /** Of the cover's height that does not fit, this share is cut off above: the picture is in the upper part. */
     static final float CROP_ABOVE = .22f;
-    /** The baked copy's longer side at most, in pixels: a 2:3 cover of 480x720, about 1.4 MB. */
-    static final int HELD_SIDE = 720;
+    /** The baked copy's longer side at most, in pixels: a 2:3 cover of 96x144, blurred wide so cover text dissolves. */
+    static final int HELD_SIDE = 144;
+    /** Three wide separable box passes on the 96x144 grid melt cover typography and 8x8 JPEG macroblocks into smooth light. */
+    static final int HELD_BLUR_RADIUS = 12;
+    static final int HELD_BLUR_PASSES = 3;
     /** WCAG's contrast for text, and for the glyph of a control. */
     public static final double TEXT_CONTRAST = 4.5;
     public static final double CONTROL_CONTRAST = 3.0;
@@ -184,10 +187,15 @@ public class HeroStageView extends View {
             float shrink = Math.min(1f, HELD_SIDE / (float) Math.max(readable.getWidth(), readable.getHeight()));
             int width = Math.max(1, Math.round(readable.getWidth() * shrink));
             int height = Math.max(1, Math.round(readable.getHeight() * shrink));
-            small = shrink < 1f ? Bitmap.createScaledBitmap(readable, width, height, true) : readable;
+            int opaqueCanvas = canvas | 0xFF000000;
+            small = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            small.eraseColor(opaqueCanvas);
+            BackdropBlur.smooth(readable, small);
             int[] pixels = new int[width * height];
             small.getPixels(pixels, 0, width, 0, 0, width, height);
-            hold(pixels, canvas | 0xFF000000, day);
+            int radius = Math.max(1, Math.round(HELD_BLUR_RADIUS * Math.max(width, height) / (float) HELD_SIDE));
+            BackdropBlur.dissolve(pixels, width, height, radius, HELD_BLUR_PASSES);
+            hold(pixels, opaqueCanvas, day);
             Bitmap result = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888);
             result.setHasAlpha(false);
             return result;

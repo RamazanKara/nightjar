@@ -724,20 +724,23 @@ public class ShellNavigationTest {
         } finally {
             controller.pause().stop().destroy();
         }
-        // All games and the game page start their headings and covers on the same edge as their bar.
+        // All games and the TV game page start their headings and covers on the same keyline edge.
         try (var other = Robolectric.buildActivity(MotionTest.Screen.class).setup().visible()) {
             android.app.Activity activity = other.get();
-            for (int layout : new int[] {R.layout.activity_all_games, R.layout.activity_game_detail_tv}) {
-                android.widget.FrameLayout host = new android.widget.FrameLayout(activity);
-                ViewGroup page = (ViewGroup) android.view.LayoutInflater.from(activity).inflate(layout, host, false);
-                host.addView(page);
-                layOut(host);
-                int bar = contentLeft(host, page.findViewById(R.id.shell_bar));
-                View content = layout == R.layout.activity_all_games ? page.findViewById(R.id.all_games_title)
-                        : page.findViewById(R.id.detail_poster);
-                assertEquals(activity.getResources().getResourceEntryName(layout), contentLeft(host, content)
-                        - (layout == R.layout.activity_all_games ? 0 : content.getPaddingStart()), bar);
-            }
+            android.widget.FrameLayout allHost = new android.widget.FrameLayout(activity);
+            ViewGroup allGames = (ViewGroup) android.view.LayoutInflater.from(activity).inflate(R.layout.activity_all_games, allHost, false);
+            allHost.addView(allGames);
+            layOut(allHost);
+            int keyline = contentLeft(allHost, allGames.findViewById(R.id.shell_bar));
+            assertEquals("activity_all_games", keyline, contentLeft(allHost, allGames.findViewById(R.id.all_games_title)));
+
+            android.widget.FrameLayout detailHost = new android.widget.FrameLayout(activity);
+            ViewGroup detailTv = (ViewGroup) android.view.LayoutInflater.from(activity).inflate(R.layout.activity_game_detail_tv, detailHost, false);
+            detailHost.addView(detailTv);
+            layOut(detailHost);
+            assertNull("TV game detail is a full page with no nav bar", detailTv.findViewById(R.id.shell_bar));
+            View poster = detailTv.findViewById(R.id.detail_poster);
+            assertEquals("activity_game_detail_tv", keyline, contentLeft(detailHost, poster) - poster.getPaddingStart());
         }
     }
 }

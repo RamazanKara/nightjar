@@ -25,10 +25,10 @@ public final class BackdropBlur {
     static final int PASSES = 3;
 
     /** The token values (ambient.*, day.ambient.*); constants so the bake needs no Context on its thread. */
-    static final float SATURATE = 1.3f;
-    static final float DAY_SATURATE = 1.5f;
-    static final float MAX_LUMA = 0.085f;
-    static final float MIN_LUMA_DAY = 0.5f;
+    static final float SATURATE = 1.2f;
+    static final float DAY_SATURATE = 1.3f;
+    static final float MAX_LUMA = 0.08f;
+    static final float MIN_LUMA_DAY = 0.56f;
 
     private BackdropBlur() { }
 
@@ -204,6 +204,36 @@ public final class BackdropBlur {
         Bitmap result = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888);
         result.setHasAlpha(false);
         return result;
+    }
+
+    /** Composites {@code cover} into {@code into}, halving progressively first so cover typography never aliases. */
+    static void smooth(Bitmap cover, Bitmap into) {
+        if (cover != null && cover.getWidth() > 0 && cover.getHeight() > 0) {
+            draw(cover, into);
+        }
+    }
+
+    /**
+     * Multi-pass separable box blur over {@code pixels} ({@code width} × {@code height}), wide enough to dissolve cover
+     * letters and 8×8 JPEG macroblocks into smooth directional colour gradients before luminance clamping.
+     */
+    static void dissolve(int[] pixels, int width, int height, int radius, int passes) {
+        if (pixels.length == 0 || (width <= 1 && height <= 1) || radius <= 0 || passes <= 0) return;
+        int rx = width > 1 ? Math.max(1, Math.min(radius, width - 1)) : 0;
+        int ry = height > 1 ? Math.max(1, Math.min(radius, height - 1)) : 0;
+        int[] scratch = new int[pixels.length];
+        for (int pass = 0; pass < passes; pass++) {
+            if (rx > 0 && ry > 0) {
+                box(pixels, scratch, width, height, rx, true);
+                box(scratch, pixels, width, height, ry, false);
+            } else if (rx > 0) {
+                box(pixels, scratch, width, height, rx, true);
+                System.arraycopy(scratch, 0, pixels, 0, pixels.length);
+            } else if (ry > 0) {
+                box(pixels, scratch, width, height, ry, false);
+                System.arraycopy(scratch, 0, pixels, 0, pixels.length);
+            }
+        }
     }
 
     /** The whole cover, halved until it is near thumbnail size so the final bilinear step does not alias. */

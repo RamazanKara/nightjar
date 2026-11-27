@@ -598,8 +598,7 @@ public class GameDetailActivity extends NightjarActivity implements HostFeed.Lis
         NvApp app = app();
         int message = model.endAction == GameDetailModel.EndAction.CLOSE_GAME
                 ? R.string.stream_close_game_confirm : R.string.applist_quit_confirmation;
-        int action = model.endAction == GameDetailModel.EndAction.CLOSE_GAME
-                ? R.string.stream_close_game : R.string.applist_menu_quit;
+        int action = R.string.applist_menu_quit;
         UiHelper.showDialog(this, new com.limelight.ui.NavigationDialogBuilder(this).startOnCancel()
                 .setMessage(message)
                 .setPositiveButton(action, (dialog, which) -> end(app, computer, () -> runOnUiThread(() -> {

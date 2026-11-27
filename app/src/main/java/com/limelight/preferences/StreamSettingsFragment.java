@@ -63,6 +63,7 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
     Thread decoderProbe;
     boolean dualSenseConsentShowing;
     private com.limelight.binding.audio.MicProcessing.Availability micEffects;
+    private com.limelight.ui.ControllerStudioCardView studioCard;
 
     /** Attaching or removing a mouse, keyboard or touchpad shows or hides their rows at once. */
     private final android.hardware.input.InputManager.InputDeviceListener deviceListener =
@@ -112,6 +113,7 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
 
     void filterPreferences() {
         StreamSettingsSearchAndSummaries.filterPreferences(this);
+        syncStudioCard();
     }
 
     /** Values and summaries follow the stored settings; so do the settings that apply only given the others. */
@@ -120,6 +122,28 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
         applySettingRules(getPreferenceManager().getSharedPreferences());
         StreamSettingsSearchAndSummaries.updateValueSummaries(this, getPreferenceScreen());
         StreamSettingsSearchAndSummaries.showWhenReasons(this, getPreferenceManager().getSharedPreferences());
+        syncStudioCard();
+    }
+
+    private boolean wantsControllerStudio() {
+        if (!(getActivity() instanceof StreamSettings)) return false;
+        StreamSettings activity = (StreamSettings) getActivity();
+        if (!activity.searchQuery.isEmpty()) return false;
+        String raw = getArguments() == null ? null : getArguments().getString(ARG_SECTION);
+        String normalized = StreamSettings.normalizeSection(raw);
+        return StreamSettings.CONTROLLER_SECTION.equals(raw) || "input".equals(normalized);
+    }
+
+    private void syncStudioCard() {
+        if (studioCard == null) return;
+        boolean visible = wantsControllerStudio();
+        if ((studioCard.getVisibility() == View.VISIBLE) != visible) {
+            studioCard.setVisibility(visible ? View.VISIBLE : View.GONE);
+            studioCard.requestLayout();
+        }
+        if (visible && getPreferenceManager() != null) {
+            studioCard.syncFromPreferences(getPreferenceManager().getSharedPreferences());
+        }
     }
 
     /** Records whether a setting applies; placeRows then puts it in or out of the list. */
@@ -423,6 +447,16 @@ public abstract class StreamSettingsFragment extends PreferenceFragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = super.onCreateView(inflater, container, savedInstanceState);
+        ListView list = view.findViewById(android.R.id.list);
+        String raw = getArguments() == null ? null : getArguments().getString(ARG_SECTION);
+        String normalized = StreamSettings.normalizeSection(raw);
+        if (list != null && (StreamSettings.CONTROLLER_SECTION.equals(raw) || "input".equals(normalized))) {
+            studioCard = new com.limelight.ui.ControllerStudioCardView(getActivity());
+            list.addHeaderView(studioCard, null, false);
+            syncStudioCard();
+        } else {
+            studioCard = null;
+        }
         StreamSettingsChrome.stylePreferenceList(view, getActivity(), true);
         return view;
     }

@@ -26,6 +26,7 @@ public class GlassTabs extends LinearLayout {
     /** The pill's share of its own opacity while another tab holds focus. */
     static final float PILL_BEHIND_FOCUS = 0.35f;
 
+    private final Paint trackRim = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pillRim = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final int pillAlpha;
@@ -47,6 +48,9 @@ public class GlassTabs extends LinearLayout {
         super(context, attrs);
         setWillNotDraw(false);
         inset = context.getResources().getDimension(R.dimen.glass_tab_inset);
+        trackRim.setStyle(Paint.Style.STROKE);
+        trackRim.setStrokeWidth(Math.max(1f, context.getResources().getDisplayMetrics().density));
+        trackRim.setColor(MaterialColors.getColor(context, R.attr.glassControlRim, 0));
         pill.setColor(MaterialColors.getColor(context, R.attr.glassSelectedFill, 0));
         pillRim.setStyle(Paint.Style.STROKE);
         pillRim.setStrokeWidth(Math.max(1f, context.getResources().getDisplayMetrics().density * 0.75f));
@@ -140,6 +144,12 @@ public class GlassTabs extends LinearLayout {
 
     @Override
     protected void dispatchDraw(Canvas canvas) {
+        if (getWidth() > 0 && getHeight() > 0 && getChildCount() > 0) {
+            float tr = getHeight() / 2f;
+            float th = trackRim.getStrokeWidth() / 2f;
+            rect.set(th, th, getWidth() - th, getHeight() - th);
+            canvas.drawRoundRect(rect, tr - th, tr - th, trackRim);
+        }
         if (left >= 0f && getChildCount() > 0) {
             float top = inset;
             float bottom = getHeight() - inset;

@@ -151,7 +151,7 @@ final class PadEditorPanel {
         opacity.setThumbRadius(thumb / 2);
         opacity.setHaloRadius(Math.round(PadLayout.MIN_TOUCH_DP / 2 * density));
         opacity.setHaloTintList(ColorStateList.valueOf(ColorUtils.setAlphaComponent(
-                ContextCompat.getColor(context, R.color.night_primary), 0x55)));
+                ContextCompat.getColor(context, R.color.nj_color_moon), 0x55)));
         opacity.setLabelFormatter(value -> percent(Math.round(value)));
         opacity.addOnChangeListener((slider, value, fromUser) -> {
             opacityText.setText(percent(Math.round(value)));
@@ -161,7 +161,7 @@ final class PadEditorPanel {
         reach.setThumbRadius(thumb / 2);
         reach.setHaloRadius(Math.round(PadLayout.MIN_TOUCH_DP / 2 * density));
         reach.setHaloTintList(ColorStateList.valueOf(ColorUtils.setAlphaComponent(
-                ContextCompat.getColor(context, R.color.night_primary), 0x55)));
+                ContextCompat.getColor(context, R.color.nj_color_moon), 0x55)));
         reach.setLabelFormatter(value -> percent(Math.round(value)));
         reach.addOnChangeListener((slider, value, fromUser) -> {
             reachText.setText(percent(Math.round(value)));
@@ -463,7 +463,7 @@ final class PadEditorPanel {
                     LinearLayout block = new LinearLayout(context);
                     block.setOrientation(LinearLayout.VERTICAL);
                     block.addView(heading(groupName(group), R.style.TextAppearance_Nightjar_Caption,
-                            R.color.night_on_surface_variant));
+                            R.color.nj_color_label_secondary));
                     flow = new TileFlow(context, gap, gap);
                     block.addView(flow);
                     groups.addView(block);

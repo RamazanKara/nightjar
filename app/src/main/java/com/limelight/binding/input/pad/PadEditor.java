@@ -537,7 +537,7 @@ final class PadEditor extends FrameLayout {
             caption.setTextAlign(Paint.Align.CENTER);
             captionSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 11, getResources().getDisplayMetrics());
             caption.setTextSize(captionSize);
-            caption.setColor(ContextCompat.getColor(context, R.color.night_on_surface));
+            caption.setColor(ContextCompat.getColor(context, R.color.nj_color_label));
             refresh();
         }
 

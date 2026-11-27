@@ -355,6 +355,21 @@ public class ControlCenterTest {
             assertEquals(margin, panel.getTop());
             assertEquals(frame.getHeight() - margin, panel.getBottom());
             assertTrue("most of the picture stays in sight", panel.getLeft() > frame.getWidth() / 2);
+            assertTrue("vertical fade softens bottom edge", dock.page().scroll().isVerticalFadingEdgeEnabled());
+            assertTrue(dock.page().scroll().getVerticalFadingEdgeLength() >= Math.round(16 * res.getDisplayMetrics().density));
+            assertFalse(dock.page().content().getClipToPadding());
+            for (int i = 0; i < menu.grid().getChildCount(); i++) {
+                if (!(menu.grid().getChildAt(i) instanceof TileGrid.Tile)) continue;
+                TileGrid.Tile card = (TileGrid.Tile) menu.grid().getChildAt(i);
+                assertEquals(card.getText() + ": never hyphenates mid-word on compact dock",
+                        android.text.Layout.HYPHENATION_FREQUENCY_NONE, card.getHyphenationFrequency());
+                String firstLine = card.getText().toString().split("\n", 2)[0];
+                if (!firstLine.contains(" ")) {
+                    int line0End = card.getLayout().getLineEnd(0);
+                    assertTrue("single-word label '" + firstLine + "' stays unbroken on line 0",
+                            line0End >= firstLine.length());
+                }
+            }
             menu.sheet().dismiss();
         }
     }

@@ -47,7 +47,7 @@ public class BackdropBlurTest {
     @Test
     public void whiteIsHeldToASafeGreyAndDarkArtKeepsItsColour() {
         int white = BackdropBlur.bakeNight(0xFFFFFFFF, new float[3]);
-        assertEquals(82, (white >> 8) & 0xFF, 2);
+        assertEquals(80, (white >> 8) & 0xFF, 2);
         int dark = BackdropBlur.bakeNight(0xFF102040, new float[3]);
         assertTrue("dark art is not held down", (dark & 0xFF) >= 0x40);
     }
@@ -67,8 +67,31 @@ public class BackdropBlurTest {
         assertEquals(BackdropBlur.HEIGHT, made.getWidth());
         assertEquals(BackdropBlur.WIDTH, made.getHeight());
         int pixel = made.getPixel(20, 40);
-        assertEquals(188, (pixel >> 8) & 0xFF, 2);
+        assertEquals(198, (pixel >> 8) & 0xFF, 2);
         for (int text : DAY_TEXT) assertTrue(ColorUtils.calculateContrast(text, pixel) >= 4.5);
+    }
+
+    @Test
+    public void dissolveMeltsSharpHighContrastStripesIntoSmoothGradient() {
+        int w = 96, h = 144;
+        int[] pixels = new int[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                // Simulated giant white cover letters and 8x8 JPEG macroblock edges on black.
+                boolean bright = y >= 24 && y < 64 && ((x / 8) % 2 == 0);
+                pixels[y * w + x] = bright ? 0xFFFFFFFF : 0xFF050608;
+            }
+        }
+        BackdropBlur.dissolve(pixels, w, h, 12, 3);
+        int maxStep = 0;
+        for (int y = 24; y < 64; y++) {
+            for (int x = 1; x < w; x++) {
+                int a = (pixels[y * w + x - 1] >> 8) & 0xFF;
+                int b = (pixels[y * w + x] >> 8) & 0xFF;
+                maxStep = Math.max(maxStep, Math.abs(a - b));
+            }
+        }
+        assertTrue("8x8 high-contrast letter edges dissolved (max neighbour step " + maxStep + ")", maxStep <= 8);
     }
 
     @Test

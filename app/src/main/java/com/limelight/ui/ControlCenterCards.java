@@ -236,13 +236,13 @@ final class ControlCenterCards {
     }
 
     /**
-     * A card: its icon at the start, its short name and under it its state. {@code on} is a switch's state, null for an
-     * action; {@code hotkey} the controller button that runs it ({@code "Y"}), shown as a cap at its end while
-     * {@code capsShown}.
+     * A card: its icon at top-start, optional controller cap at top-end, and full-width short name + state below,
+     * matching desktop Nightjar's Control Center cards so single words never split mid-word on compact docks.
      */
     static TileGrid.Tile card(Context context, int icon, CharSequence label, CharSequence state, Boolean on, String hotkey,
                               boolean capsShown) {
         Resources res = context.getResources();
+        float density = res.getDisplayMetrics().density;
         TileGrid.Tile card = new TileGrid.Tile(context);
         card.setAllCaps(false);
         card.setTextAppearance(context, R.style.TextAppearance_Nightjar_Label);
@@ -250,13 +250,11 @@ final class ControlCenterCards {
         card.setSingleLine(false);
         card.setMaxLines(3);
         card.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        card.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        //noinspection WrongConstant
+        card.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
+        card.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE);
+        card.setGravity(Gravity.START | Gravity.BOTTOM);
         card.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
-        card.setIconResource(icon);
-        card.setIconGravity(MaterialButton.ICON_GRAVITY_START);
-        card.setIconSize(res.getDimensionPixelSize(R.dimen.control_center_card_icon));
-        card.setIconPadding(res.getDimensionPixelSize(R.dimen.control_center_gap));
-        card.setIconTint(ink(context, true));
         int height = cardHeight(context);
         card.setMinHeight(height);
         card.setMinimumHeight(height);
@@ -265,15 +263,16 @@ final class ControlCenterCards {
         card.setInsetTop(0);
         card.setInsetBottom(0);
         int side = res.getDimensionPixelSize(R.dimen.control_center_card_pad);
+        int tall = res.getConfiguration().screenHeightDp;
+        boolean low = !television(context) && tall > 0 && tall < LOW_WINDOW_DP;
+        int iconSize = low ? Math.round(16 * density) : res.getDimensionPixelSize(R.dimen.control_center_card_icon);
+        int topPad = Math.round((low ? 5 : 9) * density);
+        int iconGap = Math.round((low ? 2 : 4) * density);
+        int bottomPad = Math.round((low ? 5 : 8) * density);
         card.setHotkey(hotkey);
         card.setHotkeyAtEnd(true, side);
         card.setCapShown(capsShown);
-        boolean cap = hotkey != null && capsShown;
-        // The cap stands at the end as far in as the icon at the start, and the end padding makes room for it as wide as it is.
-        int beside = Math.round(card.capReach()) + side / 2;
-        card.setPaddingRelative(side, side / 2, cap ? beside : side, side / 2);
-        // A card too narrow for its name's longest word beside the cap, a handheld's, takes the cap up into its corner.
-        if (cap) card.setCapMoves(beside, side);
+        card.setTopStartHeader(icon, iconSize, ink(context, true), side, topPad, iconGap, bottomPad);
         card.setBackground(new Tint(context, Tint.Kind.CARD, res.getDimension(R.dimen.nj_radius_control)));
         card.setOn(on);
         if (television(context)) card.setStateListAnimator(Motion.controlFocus(context));

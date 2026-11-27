@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat;
 import androidx.core.graphics.ColorUtils;
 
 import com.limelight.R;
+import com.limelight.ui.AppTheme;
 
 /**
  * The 7.0 material of the on-screen controller: console hardware drawn on glass, from the design tokens
@@ -43,6 +44,8 @@ final class PadSkin70 {
     private static final float GLYPH_KEYLINE = 1.75f;
     /** How many degrees each band of an arc's spill ends before the band inside it, so the light tapers off. */
     private static final float ARC_TAPER = 7;
+    /** Subtle top inner specular bevel (#24FFFFFF) for tactile 7.0 studio depth, neutral so rest has zero amber. */
+    private static final int SPECULAR_CAP = 0x24FFFFFF;
 
     final float density, rimWidth, keyline;
     final int fill, rim, label, pressedFill, pressedRim, shadow;
@@ -73,8 +76,7 @@ final class PadSkin70 {
         ink.setStrokeCap(Paint.Cap.ROUND);
         ink.setStrokeJoin(Paint.Join.ROUND);
         text.setTextAlign(Paint.Align.CENTER);
-        // The stream's overlays keep the system face, as its menu does.
-        text.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        text.setTypeface(AppTheme.uiTypeface(context, true, Typeface.create("sans-serif-medium", Typeface.NORMAL)));
         text.setStrokeJoin(Paint.Join.ROUND);
     }
 
@@ -105,6 +107,7 @@ final class PadSkin70 {
 
     /** A round part with a body and a rim of the given colours, {@code sunk} pixels smaller than its place. */
     void disc(Canvas canvas, float cx, float cy, float rx, float ry, int bodyColor, int rimColor, float sunk) {
+        if (hidden()) return;
         float half = rimWidth / 2;
         rx -= sunk + half;
         ry -= sunk + half;
@@ -114,6 +117,13 @@ final class PadSkin70 {
         oval(canvas, cx, cy, rx, ry, edge);
         body.setColor(tint(bodyColor));
         oval(canvas, cx, cy, rx, ry, body);
+        float capInset = rimWidth * 1.25f;
+        if (rx > capInset + density && ry > capInset + density) {
+            edge.setStrokeWidth(Math.max(1f, density));
+            edge.setColor(tint(SPECULAR_CAP));
+            rect.set(cx - (rx - capInset), cy - (ry - capInset), cx + (rx - capInset), cy + (ry - capInset));
+            canvas.drawArc(rect, 210f, 120f, false, edge);
+        }
         edge.setStrokeWidth(rimWidth);
         edge.setColor(tint(rimColor));
         oval(canvas, cx, cy, rx, ry, edge);
@@ -126,6 +136,7 @@ final class PadSkin70 {
 
     /** A rounded part with a body and a rim of the given colours, {@code sunk} pixels smaller than {@code shape}. */
     void slab(Canvas canvas, RectF shape, float radius, int bodyColor, int rimColor, float sunk) {
+        if (hidden()) return;
         float half = rimWidth / 2;
         inner.set(shape);
         inner.inset(sunk, sunk);
@@ -138,6 +149,14 @@ final class PadSkin70 {
         canvas.drawRoundRect(rect, r, r, edge);
         body.setColor(tint(bodyColor));
         canvas.drawRoundRect(rect, r, r, body);
+        float capY = rect.top + rimWidth + density * 0.5f;
+        float capX0 = rect.left + Math.max(rimWidth * 2f, r * 0.65f);
+        float capX1 = rect.right - Math.max(rimWidth * 2f, r * 0.65f);
+        if (capX1 > capX0) {
+            edge.setStrokeWidth(Math.max(1f, density));
+            edge.setColor(tint(SPECULAR_CAP));
+            canvas.drawLine(capX0, capY, capX1, capY, edge);
+        }
         edge.setStrokeWidth(rimWidth);
         edge.setColor(tint(rimColor));
         canvas.drawRoundRect(rect, r, r, edge);

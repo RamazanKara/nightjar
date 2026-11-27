@@ -53,7 +53,7 @@ abstract class HomeHeroViews {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) play.setFocusedByDefault(true);
         play.setOnFocusChangeListener((v, focused) -> {
             if (focused && game != null) listener.onHeroShown(game);
-            listener.onHeroFocus(focused ? play.getText() : null);
+            listener.onHeroFocus(focused ? "" : null);
         });
     }
 
@@ -177,7 +177,7 @@ abstract class HomeHeroViews {
             game = card;
             name(card, true);
             play.setText(HomeHero.playLabel(card));
-            if (play.isFocused()) listener.onHeroFocus(play.getText());
+            if (play.isFocused()) listener.onHeroFocus("");
         }
 
         @Override
@@ -319,15 +319,14 @@ abstract class HomeHeroViews {
             storeChip.setText(store);
             storeChip.setVisibility(store == null ? View.GONE : View.VISIBLE);
             play.setText(HomeHero.playLabel(card));
-            if (play.isFocused()) listener.onHeroFocus(play.getText());
+            if (play.isFocused()) listener.onHeroFocus("");
             favourite.setVisibility(card.notAdded() ? View.GONE : View.VISIBLE);
             favourite.setIconResource(card.favourite ? R.drawable.ic_star_filled : R.drawable.ic_glass_star);
             favourite.setSelected(card.favourite);
             favourite.setContentDescription(context.getString(card.favourite ? R.string.console_favourite_remove : R.string.console_favourite_add));
-            boolean running = !away && card.badge == HomeModel.Badge.RUNNING && host != null
-                    && host.hasPermission(ComputerDetails.PERMISSION_LAUNCH);
-            if (quit.isFocused() && !running) play.requestFocus();
-            quit.setVisibility(running ? View.VISIBLE : View.GONE);
+            // Keep hero actions capped to Play/Resume + 1 secondary pill (Favourite); Quit game lives in Options / Game Detail.
+            if (quit.isFocused()) play.requestFocus();
+            quit.setVisibility(View.GONE);
             int lines = rows.getAdapter() == null ? 0 : rows.getAdapter().getItemCount();
             panel.setVisibility(lines > 0 ? View.VISIBLE : View.GONE);
             // Three lines stand beside the hero, more scroll inside the panel.

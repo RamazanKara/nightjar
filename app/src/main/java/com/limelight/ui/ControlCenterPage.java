@@ -31,8 +31,9 @@ final class ControlCenterPage {
         int edge = context.getResources().getDimensionPixelSize(R.dimen.stream_menu_edge);
         content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(edge - spacing, 0, edge - spacing, spacing / 2);
-        if (television) content.setClipToPadding(false);
+        content.setPadding(edge - spacing, 0, edge - spacing, spacing * 2);
+        content.setClipToPadding(false);
+        if (television) content.setClipChildren(false);
         scroll = new ActionSheet.StillScroll(context);
         scroll.setClipToPadding(false);
         // The rows go on under the footer: they fade there instead of ending on a cut edge.

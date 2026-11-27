@@ -18,7 +18,6 @@ import com.limelight.preferences.StreamProfilePicker;
 import com.limelight.ui.ActionSheet;
 import com.limelight.ui.AppTheme;
 import com.limelight.ui.BackdropView;
-import com.limelight.ui.ShellBar;
 import com.limelight.ui.TopAppBar;
 
 /**
@@ -63,14 +62,17 @@ final class GameDetailView {
 
     void bind(String hostUuid, int appId, String titleExtra, String hostNameExtra,
               Runnable onPlay, Runnable onEnd, Runnable onFavourite) {
-        // The page heads itself with the game's title beside the cover; the bar keeps only the way back.
+        // The page heads itself with the game's title beside the cover; Phone/Handheld show a clean Back pill, TV has no nav bar.
         if (titleExtra != null) activity.setTitle(titleExtra);
         TopAppBar.setUpNavigation(TopAppBar.configure(activity, R.id.detail_toolbar, "", 0),
                 View.NO_ID, v -> activity.getOnBackPressedDispatcher().onBackPressed());
-        // A game's page belongs to Home: Home in the bar is the page it came from, so it closes this one. The
-        // other two replace Home's stack the way they do from Home itself.
-        ShellBar.install(activity, ShellBar.Destination.HOME);
-        activity.findViewById(R.id.shell_home).setOnClickListener(v -> activity.finish());
+        View back = activity.findViewById(R.id.detail_back);
+        if (back != null) {
+            back.setOnClickListener(v -> {
+                v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                activity.getOnBackPressedDispatcher().onBackPressed();
+            });
+        }
         loading = activity.findViewById(R.id.detail_loading);
         cover = activity.findViewById(R.id.detail_cover);
         coverText = activity.findViewById(R.id.detail_cover_text);
@@ -219,9 +221,6 @@ final class GameDetailView {
 
         switch (m.endAction) {
             case CLOSE_GAME:
-                end.setText(R.string.stream_close_game);
-                end.setVisibility(View.VISIBLE);
-                break;
             case QUIT:
                 end.setText(R.string.applist_menu_quit);
                 end.setVisibility(View.VISIBLE);
@@ -261,6 +260,8 @@ final class GameDetailView {
     private void renderQuitOnLeave(GameDetailModel m, ComputerDetails computer) {
         boolean offered = offersQuitOnLeave(m, computer);
         quitOnLeave.setVisibility(offered ? View.VISIBLE : View.GONE);
+        View divider = activity.findViewById(R.id.detail_quit_divider);
+        if (divider != null) divider.setVisibility(offered ? View.VISIBLE : View.GONE);
         quitOnLeaveGame = offered ? m : null;
         quitOnLeaveComputer = offered ? computer : null;
         if (!offered) return;
@@ -315,18 +316,29 @@ final class GameDetailView {
         thread.start();
     }
 
-    /** The TV chip line: the state with its dot, installed or not when the host says, and HDR when the game has it. */
+    /** Status chips capped at <= 2: omits redundant Installed whenever Running or Suspended is shown. */
     private void renderChips(GameDetailModel m, boolean hasState) {
         int dot = m.state == GameDetailModel.State.RUNNING ? R.drawable.tv_dot_live : R.drawable.tv_dot_suspended;
         status.setCompoundDrawablesRelativeWithIntrinsicBounds(hasState ? dot : 0, 0, 0, 0);
+        int shown = hasState ? 1 : 0;
         Boolean isInstalled = m.source != null ? m.source.installed : null;
-        installed.setText(Boolean.FALSE.equals(isInstalled) ? R.string.console_chip_not_installed : R.string.console_detail_installed);
-        installed.setVisibility(isInstalled == null ? View.GONE : View.VISIBLE);
-        hdr.setVisibility(m.source != null && m.source.hdrSupported ? View.VISIBLE : View.GONE);
-        if (store != null) renderStore(m.source);
-        boolean any = hasState || isInstalled != null || hdr.getVisibility() == View.VISIBLE
-                || (store != null && store.getVisibility() == View.VISIBLE);
-        chips.setVisibility(any ? View.VISIBLE : View.GONE);
+        boolean showNotInstalled = Boolean.FALSE.equals(isInstalled) && shown < 2;
+        if (showNotInstalled) shown++;
+        if (store != null) {
+            renderStore(m.source);
+            if (store.getVisibility() == View.VISIBLE) {
+                if (shown < 2) shown++;
+                else store.setVisibility(View.GONE);
+            }
+        }
+        boolean showHdr = m.source != null && m.source.hdrSupported && shown < 2;
+        hdr.setVisibility(showHdr ? View.VISIBLE : View.GONE);
+        if (showHdr) shown++;
+        boolean showInstalled = showNotInstalled || (Boolean.TRUE.equals(isInstalled) && !hasState && shown < 2);
+        installed.setText(showNotInstalled ? R.string.console_chip_not_installed : R.string.console_detail_installed);
+        installed.setVisibility(showInstalled ? View.VISIBLE : View.GONE);
+        if (showInstalled && !showNotInstalled) shown++;
+        chips.setVisibility(shown > 0 ? View.VISIBLE : View.GONE);
         chips.setContentDescription(chipsDescription((ViewGroup) chips));
     }
 

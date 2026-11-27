@@ -63,6 +63,16 @@ final class PadLayoutDefaults {
         return Math.max(baseHeight(control) * u * scale, PadLayout.MIN_TOUCH_DP * density);
     }
 
+    /** Vertical centers [ltY, lbY] clearing the compact 40dp top-left stats HUD while staying above LEFT_STICK. */
+    private static void leftShoulderCenters(float u, float density, float pillH, float stickTop, float[] ys) {
+        float minGap = 4 * density;
+        float hudClearTop = Math.max(.04f * u, 40 * density);
+        float top = Math.min(hudClearTop, Math.max(.04f * u, stickTop - 2 * pillH - minGap - 2 * density));
+        float gap = Math.max(minGap, Math.min(.03f * u, stickTop - top - 2 * pillH - 2 * density));
+        ys[0] = top + pillH / 2;
+        ys[1] = top + pillH + gap + pillH / 2;
+    }
+
     /**
      * The default center of a control, in pixels, from the nearest edges of the surface. Edge controls
      * keep their margins from their own size, so a control grown to its minimum touch on a small
@@ -74,6 +84,10 @@ final class PadLayoutDefaults {
         float round = width(PadLayout.Control.HOME, u, density, 1), click = width(PadLayout.Control.L3, u, density, 1);
         float rowStep = Math.max(.17f * u, round + 8 * density);
         float clickTop = height - .035f * u - click - .02f * u;
+        float stickH = height(PadLayout.Control.LEFT_STICK, u, density, 1);
+        float stickTop = Math.min(height - .44f * u, clickTop - stickH / 2) - stickH / 2;
+        float[] leftShoulders = new float[2];
+        leftShoulderCenters(u, density, pillH, stickTop, leftShoulders);
         float x, y;
         switch (control) {
             case LEFT_STICK:
@@ -86,8 +100,8 @@ final class PadLayoutDefaults {
                 y = Math.min(height - .44f * u, clickTop - height(control, u, density, 1) / 2);
                 break;
             case RIGHT_STICK: x = width - .68f * u; y = height - .19f * u; break;
-            case LT: x = .045f * u + pillW / 2; y = .04f * u + pillH / 2; break;
-            case LB: x = .045f * u + pillW / 2; y = .07f * u + pillH * 1.5f; break;
+            case LT: x = .045f * u + pillW / 2; y = leftShoulders[0]; break;
+            case LB: x = .045f * u + pillW / 2; y = leftShoulders[1]; break;
             case RT: x = width - .045f * u - pillW / 2; y = .04f * u + pillH / 2; break;
             case RB: x = width - .045f * u - pillW / 2; y = .07f * u + pillH * 1.5f; break;
             case L3: x = .035f * u + click / 2; y = height - .035f * u - click / 2; break;

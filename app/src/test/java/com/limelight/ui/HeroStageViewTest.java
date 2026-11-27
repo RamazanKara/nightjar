@@ -174,6 +174,35 @@ public class HeroStageViewTest {
     }
 
     @Test
+    public void sharpCoverTitleLettersDissolveAndHonorNightAndDayLumaBounds() {
+        Bitmap cover = Bitmap.createBitmap(400, 600, Bitmap.Config.ARGB_8888);
+        cover.eraseColor(0xFF080A10);
+        android.graphics.Paint letterPaint = new android.graphics.Paint();
+        letterPaint.setColor(0xFFFFFFFF);
+        Canvas coverCanvas = new Canvas(cover);
+        // High-contrast vertical letter strokes across the upper third ("RACING GAME" title band).
+        for (int x = 40; x < 360; x += 32) {
+            coverCanvas.drawRect(x, 80, x + 16, 176, letterPaint);
+        }
+
+        Bitmap night = HeroStageView.held(cover, NIGHT_CANVAS, false);
+        double[] nightRange = range(night);
+        assertTrue("night luma ceiling respected: " + nightRange[1], nightRange[1] <= BackdropBlur.MAX_LUMA + ROUNDING);
+        int maxHorizontalJump = 0;
+        int titleRow = night.getHeight() / 5;
+        for (int x = 1; x < night.getWidth(); x++) {
+            int prev = (night.getPixel(x - 1, titleRow) >> 8) & 0xFF;
+            int curr = (night.getPixel(x, titleRow) >> 8) & 0xFF;
+            maxHorizontalJump = Math.max(maxHorizontalJump, Math.abs(curr - prev));
+        }
+        assertTrue("cover title strokes dissolved into smooth wash: jump=" + maxHorizontalJump, maxHorizontalJump <= 6);
+
+        Bitmap day = HeroStageView.held(cover, DAY_CANVAS, true);
+        double[] dayRange = range(day);
+        assertTrue("day luma floor respected: " + dayRange[0], dayRange[0] >= BackdropBlur.MIN_LUMA_DAY - ROUNDING * 2);
+    }
+
+    @Test
     public void theArtTakesTheEndSideOfAWideWindowAndTheTopOfATallOne() {
         Rect rect = new Rect();
         HeroStageView.artRect(1920, 1080, .56f, false, rect);

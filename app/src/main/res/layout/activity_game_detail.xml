@@ -15,7 +15,17 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"
         android:clipChildren="false" android:clipToPadding="false">
         <include android:id="@+id/detail_toolbar" layout="@layout/view_top_app_bar" android:visibility="gone" />
-        <include layout="@layout/view_shell_bar" />
+        <FrameLayout android:id="@+id/detail_top_bar" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:paddingStart="@dimen/screen_gutter" android:paddingEnd="@dimen/screen_gutter"
+            android:paddingTop="@dimen/space_xs" android:paddingBottom="@dimen/space_xs"
+            android:clipChildren="false" android:clipToPadding="false">
+            <com.limelight.ui.GlassButton android:id="@+id/detail_back" style="@style/Widget.Nightjar.Glass.Control"
+                android:layout_width="wrap_content" android:layout_height="48dp"
+                android:minWidth="48dp" android:minHeight="48dp"
+                android:singleLine="true" android:maxLines="1"
+                android:text="@string/sheet_back" app:icon="@drawable/ic_arrow_back"
+                android:nextFocusDown="@+id/detail_play" />
+        </FrameLayout>
         <ProgressBar android:id="@+id/detail_loading" style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent" android:layout_height="4dp" android:indeterminate="true" />
         <ScrollView android:id="@+id/detail_scroll" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
@@ -95,30 +105,40 @@
                             android:text="@string/applist_menu_quit" app:icon="@drawable/ic_glass_power" android:visibility="gone"
                             android:nextFocusUp="@id/detail_play" />
                     </com.limelight.ui.WrapRow>
-                    <!-- A FrameLayout: its foreground, the focus ring, draws on every Android this runs on. -->
-                    <FrameLayout android:id="@+id/detail_profile" android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_l" android:background="@drawable/glass_group"
-                        android:clickable="true" android:focusable="true" android:foreground="@drawable/focus_ring_row">
-                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:orientation="vertical"
-                            android:paddingStart="@dimen/space_l" android:paddingEnd="@dimen/space_l"
-                            android:paddingTop="@dimen/space_m" android:paddingBottom="@dimen/space_m">
-                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="@string/console_detail_profile"
-                                android:textAppearance="@style/TextAppearance.Nightjar.Caption" android:textColor="?attr/colorOnSurfaceVariant" />
-                            <TextView android:id="@+id/detail_profile_values" android:layout_width="match_parent"
-                                android:layout_height="wrap_content" android:layout_marginTop="2dp"
-                                android:textAppearance="@style/TextAppearance.Nightjar.Body" android:fontFamily="?attr/nightjarFaceStrong"
-                                android:textColor="?attr/colorOnSurface" />
-                            <TextView android:id="@+id/detail_profile_layers" android:layout_width="match_parent"
-                                android:layout_height="wrap_content" android:layout_marginTop="2dp"
-                                android:textAppearance="@style/TextAppearance.Nightjar.Supporting" android:textColor="?attr/colorOnSurfaceVariant" />
-                        </LinearLayout>
-                    </FrameLayout>
-                    <include layout="@layout/view_detail_quit_on_leave" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xs" />
-                    <include layout="@layout/view_detail_controller" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" />
+                    <!-- Studio card container grouping stream profile, quit-on-leave, and controller rows. -->
+                    <LinearLayout android:id="@+id/detail_studio_card" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_l"
+                        android:orientation="vertical" android:background="@drawable/glass_group"
+                        android:clipToOutline="true">
+                        <FrameLayout android:id="@+id/detail_profile" android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:clickable="true" android:focusable="true" android:foreground="@drawable/focus_ring_row">
+                            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:paddingStart="@dimen/space_l" android:paddingEnd="@dimen/space_l"
+                                android:paddingTop="@dimen/space_m" android:paddingBottom="@dimen/space_m">
+                                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                    android:text="@string/console_detail_profile"
+                                    android:textAppearance="@style/TextAppearance.Nightjar.Caption" android:textColor="?attr/colorOnSurfaceVariant" />
+                                <TextView android:id="@+id/detail_profile_values" android:layout_width="match_parent"
+                                    android:layout_height="wrap_content" android:layout_marginTop="2dp"
+                                    android:textAppearance="@style/TextAppearance.Nightjar.Body" android:fontFamily="?attr/nightjarFaceStrong"
+                                    android:textColor="?attr/colorOnSurface" />
+                                <TextView android:id="@+id/detail_profile_layers" android:layout_width="match_parent"
+                                    android:layout_height="wrap_content" android:layout_marginTop="2dp"
+                                    android:textAppearance="@style/TextAppearance.Nightjar.Supporting" android:textColor="?attr/colorOnSurfaceVariant" />
+                            </LinearLayout>
+                        </FrameLayout>
+                        <View android:id="@+id/detail_quit_divider" android:layout_width="match_parent" android:layout_height="1dp"
+                            android:layout_marginStart="@dimen/detail_row_padding" android:layout_marginEnd="@dimen/detail_row_padding"
+                            android:background="?attr/glassSeparator" android:visibility="gone" />
+                        <include layout="@layout/view_detail_quit_on_leave" android:layout_width="match_parent"
+                            android:layout_height="wrap_content" />
+                        <View android:id="@+id/detail_controller_divider" android:layout_width="match_parent" android:layout_height="1dp"
+                            android:layout_marginStart="@dimen/detail_row_padding" android:layout_marginEnd="@dimen/detail_row_padding"
+                            android:background="?attr/glassSeparator" />
+                        <include layout="@layout/view_detail_controller" android:layout_width="match_parent"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
         </ScrollView>

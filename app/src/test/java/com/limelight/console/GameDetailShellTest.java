@@ -83,25 +83,33 @@ public class GameDetailShellTest {
     }
 
     @Test
-    public void theBarListsHomeAsTheCurrentDestination() {
+    public void phoneDetailShowsCleanTopBackPillInsteadOfShellBarAndStudioCardGroupsRows() {
         ActivityController<Detail> controller = detail();
         try {
             Detail page = controller.get();
-            assertEquals(View.VISIBLE, page.findViewById(R.id.shell_home).getVisibility());
-            assertTrue(page.findViewById(R.id.shell_home).isSelected());
-            assertFalse(page.findViewById(R.id.shell_pcs).isSelected());
-            assertFalse(page.findViewById(R.id.shell_settings).isSelected());
+            assertNull("no top [Home | PCs | Settings] bar on Game Detail", page.findViewById(R.id.shell_bar));
+            View back = page.findViewById(R.id.detail_back);
+            assertEquals(View.VISIBLE, back.getVisibility());
+            float density = page.getResources().getDisplayMetrics().density;
+            assertTrue("touch target >= 48dp", back.getMinimumHeight() >= Math.round(48 * density));
+            assertTrue("touch target >= 48dp", back.getMinimumWidth() >= Math.round(48 * density));
+            View studioCard = page.findViewById(R.id.detail_studio_card);
+            assertSame(studioCard, page.findViewById(R.id.detail_profile).getParent());
+            assertSame(studioCard, page.findViewById(R.id.detail_quit_on_leave).getParent());
+            assertSame(studioCard, page.findViewById(R.id.detail_controller).getParent());
         } finally {
             controller.pause().stop().destroy();
         }
     }
 
     @Test
-    public void homeInTheBarClosesThePageInsteadOfStackingAnotherHome() {
+    public void backPillClosesThePageInsteadOfStackingAnotherHome() {
         ActivityController<Detail> controller = detail();
         try {
             Detail page = controller.get();
-            page.findViewById(R.id.shell_home).performClick();
+            View back = page.findViewById(R.id.detail_back);
+            back.performClick();
+            assertEquals(android.view.HapticFeedbackConstants.VIRTUAL_KEY, shadowOf(back).lastHapticFeedbackPerformed());
             assertTrue(page.isFinishing());
             assertNull("Home is already underneath", shadowOf(page).getNextStartedActivity());
         } finally {
@@ -110,18 +118,34 @@ public class GameDetailShellTest {
     }
 
     @Test
-    public void settingsFromThePageIsTheSettingsTheBarOpensAnywhere() {
+    public void runningOrSuspendedGameOmitsRedundantInstalledChipAndCapsPillsAtTwo() throws Exception {
+        ConsoleRig rig = new ConsoleRig(temporary.newFolder());
         ActivityController<Detail> controller = detail();
         try {
-            Detail page = controller.get();
-            View tab = page.findViewById(R.id.shell_settings);
-            tab.performClick();
-            assertEquals("a tab answers the tap (nightjar#44)", android.view.HapticFeedbackConstants.VIRTUAL_KEY,
-                    shadowOf(tab).lastHapticFeedbackPerformed());
-            Intent settings = shadowOf(page).getNextStartedActivity();
-            assertEquals(StreamSettings.class.getName(), settings.getComponent().getClassName());
-            assertTrue(settings.getBooleanExtra(com.limelight.ui.ShellBar.EXTRA_FROM_SHELL, false));
+            rig.transport.reply("tower", "library", NativeApiFixtures.ok(NativeApiFixtures.library("t1",
+                    "{\"install_id\":\"t-portal\",\"app_id\":11,\"title\":\"Portal\",\"installed\":true,\"running\":true,"
+                            + "\"hdr_supported\":true,\"store\":{\"source\":\"steam\",\"id\":\"400\"}}")));
+            rig.transport.reply("tower", "session", NativeApiFixtures.ok(NativeApiFixtures.session(
+                    "active", "you", "{\"id\":11,\"title\":\"Portal\"}", "[\"close_game\"]")));
+            ConsoleSnapshot snapshot = rig.repository.refresh(
+                    Collections.singletonList(NativeApiFixtures.nativeHost("tower", "Tower", true)));
+            GameDetailModel running = GameDetailModel.of(snapshot, "tower", 11, "Portal", "Tower", true, true, true);
+            Detail page = loaded(controller);
+            ComputerDetails host = tower();
+            host.runningGameId = 11;
+            page.render(running, host);
+            assertEquals(View.VISIBLE, page.findViewById(R.id.detail_status).getVisibility());
+            assertEquals("Installed omitted when Running", View.GONE, page.findViewById(R.id.detail_installed).getVisibility());
+            android.view.ViewGroup chips = page.findViewById(R.id.detail_chips);
+            int visible = 0;
+            for (int i = 0; i < chips.getChildCount(); i++) {
+                if (chips.getChildAt(i).getVisibility() == View.VISIBLE) visible++;
+            }
+            assertTrue("status pills capped at <= 2: " + visible, visible <= 2);
+            android.widget.Button end = page.findViewById(R.id.detail_end);
+            assertEquals(page.getString(R.string.applist_menu_quit), end.getText().toString());
         } finally {
+            rig.close();
             controller.pause().stop().destroy();
         }
     }
@@ -145,49 +169,15 @@ public class GameDetailShellTest {
     }
 
     @Test
-    public void pcsFromThePageGoesBackToHomeWhenHomeIsTheRoot() {
-        ActivityController<Detail> controller = detail();
-        ActivityController<PcViewLifecycleTest.Library> pcs = null;
-        try {
-            Detail page = controller.get();
-            View tab = page.findViewById(R.id.shell_pcs);
-            tab.performClick();
-            assertEquals(android.view.HapticFeedbackConstants.VIRTUAL_KEY, shadowOf(tab).lastHapticFeedbackPerformed());
-            Intent opened = shadowOf(page).getNextStartedActivity();
-            assertEquals(com.limelight.PcView.class.getName(), opened.getComponent().getClassName());
-            assertFalse("the page stays underneath", page.isFinishing());
-
-            // Same extras, the test subclass in place of PcView; Back from it is the Back of PcView.
-            Intent forTest = new Intent(opened).setClass(context, PcViewLifecycleTest.Library.class);
-            pcs = Robolectric.buildActivity(PcViewLifecycleTest.Library.class, forTest).setup().visible();
-            PcViewLifecycleTest.Library list = pcs.get();
-            list.getOnBackPressedDispatcher().onBackPressed();
-            Intent home = shadowOf(list).getNextStartedActivity();
-            assertEquals(ConsoleHomeActivity.class.getName(), home.getComponent().getClassName());
-            assertEquals(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP,
-                    home.getFlags() & (Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
-            assertTrue(list.isFinishing());
-        } finally {
-            if (pcs != null) pcs.pause().stop().destroy();
-            controller.pause().stop().destroy();
-        }
-    }
-
-    @Test
     @Config(qualifiers = "television")
-    public void onTelevisionTheDpadWalksTheBarThenPlayThenTheStar() {
+    public void onTelevisionFullPageHasNoNavBarAndDpadWalksPlayThenTheStar() {
         ActivityController<Detail> controller = detail();
         try {
             Detail page = controller.get();
+            assertNull("TV Game Detail has no nav bar (design/README.md)", page.findViewById(R.id.shell_bar));
+            assertNull(page.findViewById(R.id.detail_back));
             View play = page.findViewById(R.id.detail_play);
             play.setEnabled(true);
-            View home = page.findViewById(R.id.shell_home);
-            View pcs = page.findViewById(R.id.shell_pcs);
-            View settings = page.findViewById(R.id.shell_settings);
-            assertSame(pcs, HomeShellTest.focusAfter(page, home, View.FOCUS_RIGHT));
-            assertSame(settings, HomeShellTest.focusAfter(page, pcs, View.FOCUS_RIGHT));
-            View below = HomeShellTest.focusAfter(page, home, View.FOCUS_DOWN);
-            assertSame("down from the bar reaches Play first", play, below);
             assertSame("then the star, beside Play in the TV action row", page.findViewById(R.id.detail_favourite),
                     HomeShellTest.focusAfter(page, play, View.FOCUS_RIGHT));
             assertSame("and back", play, HomeShellTest.focusAfter(page, page.findViewById(R.id.detail_favourite), View.FOCUS_LEFT));

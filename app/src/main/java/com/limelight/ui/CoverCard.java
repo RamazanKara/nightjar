@@ -109,9 +109,10 @@ public class CoverCard extends LinearLayout {
         shadowPaint.setColor(ResourcesCompat.getColor(res, R.color.nj_cover_shadow, null));
         shadowBlur = highContrast ? 0f : res.getDimension(R.dimen.nj_cover_shadow_blur);
         shadowY = res.getDimension(R.dimen.nj_cover_shadow_y);
-        dimAlpha = AppTheme.look(context) == AppTheme.Look.DAY
+        float baseDim = AppTheme.look(context) == AppTheme.Look.DAY
                 ? ResourcesCompat.getFloat(res, R.dimen.nj_day_focus_neighbour_alpha)
                 : ResourcesCompat.getFloat(res, R.dimen.nj_focus_neighbour_dim);
+        dimAlpha = television && !highContrast ? Math.max(baseDim, 0.88f) : baseDim;
         boolean reduced = Motion.reduced(context);
         focusScaleUsual = reduced ? 1f : ResourcesCompat.getFloat(res, television ? R.dimen.nj_focus_scale_cover_tv : R.dimen.nj_focus_scale_cover);
         focusScale = focusScaleUsual;
@@ -342,7 +343,7 @@ public class CoverCard extends LinearLayout {
         canvas.translate(l, t);
         float dim = frame.getAlpha();
         int alpha = Math.round(255 * dim);
-        rim.setAlpha(isHovered() ? 255 : alpha);
+        rim.setAlpha(isHovered() || showsFocus() ? 255 : Math.max(210, alpha));
         rect.set(0, 0, w, h);
         if (!highContrast) {
             sheen.setAlpha(alpha);

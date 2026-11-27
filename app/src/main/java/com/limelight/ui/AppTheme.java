@@ -235,13 +235,27 @@ public final class AppTheme {
      * Whether the bundled Figtree (Latin-1) has the language's letters. Elsewhere the whole interface keeps the system
      * face, so a word never mixes two fonts. Same list as the desktop client's.
      */
-    static boolean figtreeCovers(java.util.Locale locale) {
+    public static boolean figtreeCovers(java.util.Locale locale) {
         if (locale == null) return true;
         switch (locale.getLanguage()) {
             case "pl": case "tr": case "vi": case "ru": case "uk": case "ja": case "ko": case "zh":
                 return false;
             default:
                 return true;
+        }
+    }
+
+    /** Returns the bundled Figtree typeface when covered by the current locale, or {@code fallback} otherwise. */
+    public static android.graphics.Typeface uiTypeface(Context context, boolean strong, android.graphics.Typeface fallback) {
+        if (context == null || "robolectric".equals(android.os.Build.FINGERPRINT)) return fallback;
+        java.util.Locale locale = context.getResources().getConfiguration().getLocales().get(0);
+        if (!figtreeCovers(locale)) return fallback;
+        try {
+            android.graphics.Typeface face = androidx.core.content.res.ResourcesCompat.getFont(
+                    context, strong ? R.font.figtree_600 : R.font.figtree);
+            return face != null ? face : fallback;
+        } catch (android.content.res.Resources.NotFoundException e) {
+            return fallback;
         }
     }
 
