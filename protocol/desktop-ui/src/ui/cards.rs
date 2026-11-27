@@ -218,7 +218,7 @@ pub(super) fn host_status(host: &Host) -> (String, Role, Role) {
     match (host.reach, host.paired()) {
         (Reach::Offline, _) => (words, OUTLINE, OUTLINE),
         (Reach::Unknown, _) => (words, ON_SURFACE_VARIANT, ON_SURFACE_VARIANT),
-        (Reach::Online, false) => (words, TERTIARY, ON_SURFACE_VARIANT),
+        (Reach::Online, false) => (words, ON_SURFACE_VARIANT, ON_SURFACE_VARIANT),
         (Reach::Online, true) => (words, OK, OK),
     }
 }

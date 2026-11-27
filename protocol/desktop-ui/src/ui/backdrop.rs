@@ -39,9 +39,8 @@ const OVERSCAN: f32 = 0.14;
 const FADE_FROM: f32 = 0.30;
 const FADE_NEAR: f32 = 0.58;
 const FADE_NEAR_ALPHA: f32 = 0.95;
-/// By day the page's light colour lies this strong over a game's ambient: the ambient is baked dark
-/// for white text, and dark text by day needs it light (with it its luminance is 0.5 or more,
-/// Android's `MIN_LUMA_DAY`), the cover's colour still showing through as a tint.
+/// By day, fallback wash strength only when a synthetic test `Want::Art` has no Day bake.
+/// Real covers and fallback tiles use [`ambient::bake_day`] and [`ambient::bake_tile_day`] directly.
 const DAY_WASH: f32 = 0.65;
 /// The stage light, in fractions of the window: its middle hangs above the top edge, so its
 /// brightest part is never in view to read as a lamp, and it reaches wider than the window and
@@ -71,22 +70,42 @@ const VEIL_COLUMNS: u32 = 24;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Shows {
+    /// Baked ambient (Night or true Day bake): needs no canvas wash overlay.
     Art,
+    /// Unbaked synthetic test texture shown in Day mode: falls back to [`DAY_WASH`].
+    UnbakedDayArt,
     Stage,
+}
+
+#[derive(Clone, Default)]
+enum LastWant {
+    #[default]
+    None,
+    Art {
+        key: String,
+        texture: TextureHandle,
+        glow: Color32,
+    },
+    Tile {
+        title: String,
+    },
 }
 
 #[derive(Default)]
 pub(super) struct Ambient {
     fade: glass::CrossFade,
     shows: Option<Shows>,
-    /// What showed before the fade now running, for the day's wash over art to fade with it.
+    /// What showed before the fade now running, for fallback day wash over unbaked art to fade with it.
     before: Option<Shows>,
     key: u64,
     /// When the fade now running was asked for: a second change in that frame changes its mind, it
     /// does not fade from what never showed.
     shown_at: Option<f64>,
-    tiles: HashMap<String, (TextureHandle, Color32)>,
-    tile_order: VecDeque<String>,
+    tiles: HashMap<(String, bool), (TextureHandle, Color32)>,
+    tile_order: VecDeque<(String, bool)>,
+    day_art: HashMap<String, TextureHandle>,
+    day_art_order: VecDeque<String>,
+    last_want: LastWant,
     /// The stage, baked once for the look it shows in.
     stage: Option<(Look, TextureHandle)>,
     /// The cover's glow this frame, the one it fades to with what shows, and the one it fades from.
@@ -153,6 +172,9 @@ impl Ambient {
     pub(super) fn renderer_changed(&mut self) {
         self.tiles.clear();
         self.tile_order.clear();
+        self.day_art.clear();
+        self.day_art_order.clear();
+        self.last_want = LastWant::None;
         self.stage = None;
         self.fade = glass::CrossFade::default();
         self.shows = None;
@@ -162,7 +184,7 @@ impl Ambient {
     /// Whether a game's ambient shows, for a test.
     #[cfg(test)]
     pub(super) fn shows_art(&self) -> bool {
-        self.shows == Some(Shows::Art)
+        matches!(self.shows, Some(Shows::Art | Shows::UnbakedDayArt))
     }
 
     /// The cover's glow this frame, fading as the ambient does. Nothing on the stage and in high
@@ -171,8 +193,37 @@ impl Ambient {
         self.glow
     }
 
-    fn tile(&mut self, ctx: &Context, title: &str) -> (TextureHandle, Color32) {
-        if let Some(cached) = self.tiles.get(title) {
+    fn day_art_texture(
+        &mut self,
+        ctx: &Context,
+        key: &str,
+        night: &TextureHandle,
+        glow: Color32,
+    ) -> Option<TextureHandle> {
+        if let Some(cached) = self.day_art.get(key) {
+            return Some(cached.clone());
+        }
+        let baked = ambient::day_for(night.id(), glow)?;
+        while self.day_art.len() >= TILES_KEPT {
+            let Some(old) = self.day_art_order.pop_front() else {
+                self.day_art.clear();
+                break;
+            };
+            self.day_art.remove(&old);
+        }
+        let handle = ctx.load_texture(
+            format!("ambient-day-{key}"),
+            baked,
+            TextureOptions::LINEAR,
+        );
+        self.day_art_order.push_back(key.to_owned());
+        self.day_art.insert(key.to_owned(), handle.clone());
+        Some(handle)
+    }
+
+    fn tile(&mut self, ctx: &Context, title: &str, day: bool) -> (TextureHandle, Color32) {
+        let cache_key = (title.to_owned(), day);
+        if let Some(cached) = self.tiles.get(&cache_key) {
             return cached.clone();
         }
         while self.tiles.len() >= TILES_KEPT {
@@ -184,18 +235,66 @@ impl Ambient {
         }
         let pair = nightjar_policy::tile::tile_pair(nightjar_policy::tile::title_hash(title));
         let (top, bottom) = super::cards::tile_colors(pair);
-        let baked = ambient::bake_tile(top, bottom);
-        let glow = ambient::glow_of(&baked);
-        let entry = (ctx.load_texture("ambient-tile", baked, TextureOptions::LINEAR), glow);
-        self.tile_order.push_back(title.to_owned());
-        self.tiles.insert(title.to_owned(), entry.clone());
+        let night_baked = ambient::bake_tile(top, bottom);
+        let glow = ambient::glow_of(&night_baked);
+        let baked = if day {
+            ambient::bake_tile_day(top, bottom)
+        } else {
+            night_baked
+        };
+        let entry = (
+            ctx.load_texture("ambient-tile", baked, TextureOptions::LINEAR),
+            glow,
+        );
+        self.tile_order.push_back(cache_key.clone());
+        self.tiles.insert(cache_key, entry.clone());
         entry
+    }
+
+    fn show_art(&mut self, ctx: &Context, key: String, night: TextureHandle, glow: Color32) {
+        let is_day = look() == Look::Day;
+        self.last_want = LastWant::Art {
+            key: key.clone(),
+            texture: night.clone(),
+            glow,
+        };
+        if is_day {
+            if let Some(day_tex) = self.day_art_texture(ctx, &key, &night, glow) {
+                self.show(ctx, hash_of(("art-day", &key)), day_tex, Shows::Art, glow);
+            } else {
+                self.show(
+                    ctx,
+                    hash_of(("art-unbaked-day", &key)),
+                    night,
+                    Shows::UnbakedDayArt,
+                    glow,
+                );
+            }
+        } else {
+            self.show(ctx, hash_of(("art", &key)), night, Shows::Art, glow);
+        }
+    }
+
+    fn show_tile(&mut self, ctx: &Context, title: String) {
+        let is_day = look() == Look::Day;
+        self.last_want = LastWant::Tile {
+            title: title.clone(),
+        };
+        let (texture, glow) = self.tile(ctx, &title, is_day);
+        self.show(
+            ctx,
+            hash_of(("tile", &title, is_day)),
+            texture,
+            Shows::Art,
+            glow,
+        );
     }
 
     /// Shows the stage: baked for the same overscanned area as an ambient, so one fades into the
     /// other, once for the look it shows in. It is the same on every page, so going from one page
     /// without art to the next changes nothing behind them.
     fn show_stage(&mut self, ctx: &Context) {
+        self.last_want = LastWant::None;
         let look = look();
         let texture = match &self.stage {
             Some((baked, texture)) if *baked == look => texture.clone(),
@@ -226,14 +325,15 @@ impl Ambient {
             return;
         }
         match want {
-            Want::Art { key, texture, glow } => {
-                self.show(ctx, hash_of(("art", key)), texture, Shows::Art, glow)
+            Want::Art { key, texture, glow } => self.show_art(ctx, key, texture, glow),
+            Want::Tile { title } => self.show_tile(ctx, title),
+            Want::Keep if matches!(self.shows, Some(Shows::Art | Shows::UnbakedDayArt)) => {
+                match self.last_want.clone() {
+                    LastWant::Art { key, texture, glow } => self.show_art(ctx, key, texture, glow),
+                    LastWant::Tile { title } => self.show_tile(ctx, title),
+                    LastWant::None => {}
+                }
             }
-            Want::Tile { title } => {
-                let (texture, glow) = self.tile(ctx, &title);
-                self.show(ctx, hash_of(("tile", title)), texture, Shows::Art, glow);
-            }
-            Want::Keep if self.shows == Some(Shows::Art) => {}
             // Nothing to keep yet: the stage rather than a bare canvas. A stage that is kept is
             // shown again, for the look may have changed under it.
             Want::Keep | Want::Stage => self.show_stage(ctx),
@@ -254,13 +354,15 @@ impl Ambient {
         backdrop
     }
 
-    /// How much of what shows is a game's art, with `behind` cross-fading: the day's wash over art
-    /// comes and goes with it.
-    fn art_share(&self, behind: &glass::Backdrop) -> f32 {
-        let is_art = |shows: Option<Shows>| f32::from(u8::from(shows == Some(Shows::Art)));
+    /// Share of unbaked synthetic art in Day mode (0.0 for all real Day-baked covers and tiles).
+    fn unbaked_day_share(&self, behind: &glass::Backdrop) -> f32 {
+        let is_unbaked =
+            |shows: Option<Shows>| f32::from(u8::from(shows == Some(Shows::UnbakedDayArt)));
         match (behind.base, behind.top) {
-            (Some(_), Some(top)) => egui::lerp(is_art(self.before)..=is_art(self.shows), top.alpha),
-            _ => is_art(self.shows),
+            (Some(_), Some(top)) => {
+                egui::lerp(is_unbaked(self.before)..=is_unbaked(self.shows), top.alpha)
+            }
+            _ => is_unbaked(self.shows),
         }
     }
 
@@ -281,7 +383,7 @@ impl Ambient {
         if let Some(top) = backdrop.top {
             out.push(layer_mesh(top.texture, top.area, top.alpha));
         }
-        if let Some(wash) = day_wash(screen, self.art_share(&backdrop)) {
+        if let Some(wash) = day_wash(screen, self.unbaked_day_share(&backdrop)) {
             out.push(wash);
         }
         // The page's colour rises over art and stage alike, so it holds still through a fade

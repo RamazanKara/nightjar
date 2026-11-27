@@ -43,6 +43,39 @@ for (const m of ['chrome', 'panel', 'menu', 'chip']) {
 glass('', 'menu', 'window', WHITE, ...night);
 line('stats on a white frame, label', [contrast(night[0], over(hex(t['stats.fill']), WHITE))]);
 
+// Console Control Center (surface.controlCenter.*): sheet, baked, solid, and quick-toggle cards over worst-case white stream frame.
+const ccLabel = hex(t['surface.controlCenter.label']);
+const ccSecondary = hex(t['surface.controlCenter.labelSecondary']);
+const ccScrimWhite = over(hex(t['surface.controlCenter.scrim']), WHITE);
+const ccLive = over(hex(t['surface.controlCenter.fill']), WHITE);
+const ccLiveScrim = over(hex(t['surface.controlCenter.fill']), ccScrimWhite);
+const ccBaked = over(hex(t['surface.controlCenter.baked.fill']), WHITE);
+const ccSolid = hex(t['surface.controlCenter.solid.fill']);
+const ccCardOff = over(hex(t['surface.controlCenter.card.fill']), ccLiveScrim);
+const ccCardOn = over(hex(t['surface.controlCenter.card.fillOn']), ccLiveScrim);
+line('surface.controlCenter.live over white', [contrast(ccLabel, ccLive), contrast(ccSecondary, ccLive)]);
+line('surface.controlCenter.baked over white', [contrast(ccLabel, ccBaked), contrast(ccSecondary, ccBaked)]);
+line('surface.controlCenter.solid (hc)', [contrast(hex(t['hc.color.label']), ccSolid), contrast(hex(t['hc.color.labelSecondary']), ccSolid)], 7);
+line('surface.controlCenter.card off/on', [contrast(ccLabel, ccCardOff), contrast(ccSecondary, ccCardOff), contrast(ccLabel, ccCardOn)]);
+
+// Stream HUD pill (surface.hud.*): zero-blur overlay over worst-case white video frame.
+const hudBase = over(hex(t['surface.hud.fill']), WHITE);
+line('surface.hud.label over white frame', [contrast(hex(t['surface.hud.label']), hudBase)]);
+
+// Virtual Controller Studio & Touch Pad Skin (pad.studio.*, pad.skin.*).
+const padInspector = over(hex(t['pad.studio.inspector.fill']), WHITE);
+line('pad.studio.inspector over white', [contrast(night[0], padInspector), contrast(night[1], padInspector)]);
+const MID = [128, 128, 128];
+const padDark = over(hex(t['pad.skin.fill']), BLACK);
+const padMid = over(hex(t['pad.skin.fill']), MID);
+const padWhite = over(hex(t['pad.skin.fill']), WHITE);
+line('pad.skin.label on dark & mid game', [contrast(over(hex(t['pad.skin.label']), padDark), padDark), contrast(over(hex(t['pad.skin.label']), padMid), padMid)]);
+line('pad.skin.label & rims UI 3:1', [
+  contrast(over(hex(t['pad.skin.label']), padWhite), padWhite),
+  contrast(over(hex(t['pad.skin.rim']), BLACK), BLACK),
+  contrast(hex(t['pad.skin.pressed.rim']), over(hex(t['pad.skin.pressed.fill']), BLACK)),
+], 3);
+
 // Ambient: text straight on the bake, at the clamp.
 line('night ambient, ceiling', night.map((c) => lumaText(c, t['ambient.textZoneMaxLuma'])));
 line('day ambient, floor', day.map((c) => lumaText(c, t['day.ambient.textZoneMinLuma'])));

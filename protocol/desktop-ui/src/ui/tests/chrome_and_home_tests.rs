@@ -39,7 +39,7 @@ fn a_game_the_pc_has_not_installed_cannot_be_played_from_its_page() {
     f.settle();
     assert!(shows(&f, "Desk  \u{b7}  Not installed"), "{:?}", f.drawn);
     assert!(shows(&f, "Den, not installed"), "Also on marks it: {:?}", f.drawn);
-    let closes = "Game 01 is running. Playing this game closes it.";
+    let closes = "Game 01 is running. Playing this game quits it.";
     assert!(!shows(&f, closes), "{:?}", f.drawn);
     assert!(f.ctx.memory(|m| m.focused()).is_some(), "something has focus for the D-pad");
     let play = f.placed.iter().find(|(t, ..)| t == "Play").map(|p| p.1).expect("Play is shown");
@@ -501,7 +501,7 @@ fn a_pc_that_is_up_reads_green_and_amber_never_stands_for_a_state() {
     }
     assert_eq!([*looks[0].1, *looks[1].1], [*OK, *OK], "up and paired, playing or not, is green");
     assert_eq!(*looks[2].1, *OUTLINE, "offline is quiet");
-    assert_eq!(*looks[3].1, *TERTIARY, "not paired is information");
+    assert_eq!(*looks[3].1, *ON_SURFACE_VARIANT, "not paired is secondary status");
     assert_ne!(*looks[4].2, *OK, "a PC still being checked is not shown as up");
 }
 

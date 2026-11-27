@@ -322,6 +322,46 @@ fn by_day_the_wash_lies_over_art_and_never_over_the_stage() {
     let whole = wash(&frame(&ctx, &mut ambient, art("a", &a), 3.0)).expect("over the art");
     assert_eq!(whole, (DAY_WASH * 255.0).round() as u8);
     assert!(half > 20 && half < whole - 20, "{half} of {whole}");
+
+    // Covers baked through `ambient::bake` and fallback tiles use true `bake_day` /
+    // `bake_tile_day` textures in Look::Day and paint ZERO muddy white overlay rects!
+    let cover = egui::ColorImage::filled([120, 180], Color32::from_rgb(30, 80, 200));
+    let night_baked = crate::ambient::bake(&cover);
+    let glow = crate::ambient::glow_of(&night_baked);
+    let night_tex = ctx.load_texture("baked-night", night_baked, TextureOptions::LINEAR);
+    crate::ambient::register_cover(None, Some(night_tex.id()), &cover);
+    let mut day_ambient = Ambient::default();
+    let day_shapes = frame(
+        &ctx,
+        &mut day_ambient,
+        Want::Art {
+            key: "real-cover".into(),
+            texture: night_tex.clone(),
+            glow,
+        },
+        10.0,
+    );
+    assert_eq!(wash(&day_shapes), None, "true Day-baked cover needs no DAY_WASH rect");
+    let day_layers: Vec<(TextureId, u8)> = day_shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::Mesh(mesh) if mesh.texture_id != TextureId::default() => {
+                Some((mesh.texture_id, mesh.vertices[0].color.a()))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(day_layers.len(), 1);
+    assert_ne!(day_layers[0].0, night_tex.id(), "selects the Day-baked texture, not Night");
+    let tile_shapes = frame(
+        &ctx,
+        &mut day_ambient,
+        Want::Tile {
+            title: "Racing Game".into(),
+        },
+        12.0,
+    );
+    assert_eq!(wash(&tile_shapes), None, "Day tile uses bake_tile_day with no wash");
 }
 
 fn veil_of(ctx: &Context, ambient: &Ambient, scrolled: f32) -> Vec<Shape> {

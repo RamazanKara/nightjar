@@ -31,6 +31,10 @@ pub(super) fn draw_video_sections(
             ctx.hdr_probed = true;
         }
         let caps = simple_caps(&display, ctx.hdr_display, vrr_offered);
+        if open == en("Recommended") && !rows.searching() {
+            settings_previews::recommended_strip(ui, s, &display, vrr_offered, ctx.hdr_display);
+            ui.add_space(space::M);
+        }
         // Stream smoothness
         let (mut choices, custom) = simple_state(s, &display, &caps, vrr_offered);
         let mut smoothness = choices.smoothness;
@@ -132,7 +136,7 @@ pub(super) fn draw_video_sections(
         setting_row(ui, s, rows, &[], "Back to recommended",
             "Returns the three choices above to what this device does best; the settings they stand for change with them.",
             |ui, _| {
-                let response = text_button(ui, "Back to recommended");
+                let response = button(ui, Some(Icon::Refresh), tr("Reset"), Tone::Quiet, Size::CHIP);
                 back = response.clicked();
                 response
             });
@@ -253,7 +257,7 @@ pub(super) fn draw_video_sections(
         let mut mbps = bitrate as f32 / 1000.0;
         // A chosen bitrate below PyroWave's minimum stays; the row says what it costs.
         if let Some(warning) = pyrowave_bitrate_warning(s, w, h, fps) {
-            rows.note(warning, *TERTIARY);
+            rows.note(warning, *WARN);
         }
         setting_row(ui, s, rows, &["bitrate_kbps"], "Bitrate", "Video data per second. Higher is sharper and needs a faster network; lower it if the picture stutters or breaks up.", |ui, s| {
             let r = log_slider(ui, &mut mbps, 0.5..=2000.0, 0.5, mbps_text,
@@ -368,7 +372,7 @@ pub(super) fn draw_video_sections(
     if cfg!(target_os = "linux") {
         rows.when(s.hdr);
         if !wayland {
-            rows.note(tr("Not used outside a Wayland desktop").to_owned(), *TERTIARY);
+            rows.note(tr("Not used outside a Wayland desktop").to_owned(), *ON_SURFACE_VARIANT);
         }
         setting_row(ui, s, rows, &["hdr_desktop_brightness"], "HDR brightness follows the desktop", "HDR streams get brighter or dimmer with the desktop’s brightness setting. Leave it off to show them at the brightness the PC sends.", |ui, s| {
             toggle(ui, &mut s.hdr_desktop_brightness)
@@ -485,9 +489,9 @@ pub(super) fn draw_video_sections(
         } else if s.host_frame_times {
             unused_with(rows, frame_pacing_choice_name(FramePacingChoice::HostTimes));
         } else if !fractional_vsync_applies(&video_driver()) {
-            rows.note(tr("Not used: this desktop doesn’t report when pictures are shown").to_owned(), *TERTIARY);
+            rows.note(tr("Not used: this desktop doesn’t report when pictures are shown").to_owned(), *ON_SURFACE_VARIANT);
         } else if let Some(reason) = fractional_vsync_display_reason(s, &display, ctx.fullscreen_modes, cfg!(windows), (crate::platform_hooks::hooks().kms_active)()) {
-            rows.note(reason, *TERTIARY);
+            rows.note(reason, *ON_SURFACE_VARIANT);
         }
     }
     setting_row(ui, s, rows, &["vsync", "fractional_vsync"], "V-Sync", &format!("{} {}", tr("Waits for the screen’s refresh, so the picture never tears; the wait adds latency. Turn it off for the lowest latency if tearing doesn’t bother you."), tr("On a screen at 2 to 4 times the stream’s frame rate (60 fps on 120 Hz), shows every frame for the same number of refreshes, so motion stays even. Each frame waits for its turn, which adds delay; turn it on if motion judders with V-Sync.")), |ui, s| {
@@ -550,7 +554,7 @@ pub(super) fn draw_video_sections(
     // until a choice is made here.
     if !modes && s.host_display != HostDisplay::HostDefault
         && nightjar_policy::http::HostDisplay::from(s.host_display).requests_virtual_display(s.virtual_display) != s.virtual_display {
-        rows.note(trf("This PC doesn’t take display arrangements: it streams as shown here, not as {}", &[&tr(host_display_name(s.host_display))]), *TERTIARY);
+        rows.note(trf("This PC doesn’t take display arrangements: it streams as shown here, not as {}", &[&tr(host_display_name(s.host_display))]), *ON_SURFACE_VARIANT);
     }
     setting_row(ui, s, rows, &["host_display", "virtual_display"], "Display arrangement", "The PC streams from a virtual display that matches the stream, or from its own monitor. The PC’s own setting keeps the PC’s display settings, Virtual display leaves the arrangement to the PC, and the other choices place it beside the PC’s monitors or switch them off during the stream. Needs PC support.", |ui, s| {
         let current = display_choice(s, modes);

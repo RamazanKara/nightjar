@@ -221,22 +221,19 @@ pub fn covers(hosts: &mut Hosts, ctx: &egui::Context) {
         let ambient = crate::ambient::bake(&image);
         Arc::make_mut(&mut pc.ambient_glow)
             .insert(app, crate::ambient::glow_of(&ambient));
-        Arc::make_mut(&mut pc.ambient).insert(
-            app,
-            ctx.load_texture(
-                format!("demo-ambient-{n}"),
-                ambient,
-                egui::TextureOptions::LINEAR,
-            ),
+        let ambient_tex = ctx.load_texture(
+            format!("demo-ambient-{n}"),
+            ambient,
+            egui::TextureOptions::LINEAR,
         );
-        Arc::make_mut(&mut pc.art).insert(
-            app,
-            Art::Ready(ctx.load_texture(
-                format!("demo-cover-{n}"),
-                image,
-                egui::TextureOptions::LINEAR,
-            )),
+        let art_tex = ctx.load_texture(
+            format!("demo-cover-{n}"),
+            image.clone(),
+            egui::TextureOptions::LINEAR,
         );
+        crate::ambient::register_cover(Some(art_tex.id()), Some(ambient_tex.id()), &image);
+        Arc::make_mut(&mut pc.ambient).insert(app, ambient_tex);
+        Arc::make_mut(&mut pc.art).insert(app, Art::Ready(art_tex));
     }
 }
 

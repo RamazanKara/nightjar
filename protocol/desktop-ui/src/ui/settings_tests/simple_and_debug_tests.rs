@@ -286,7 +286,7 @@ fn the_setup_section_shows_the_simple_layer_and_back_applies_it() {
     assert_eq!(FramePacing::Latency, f.l.settings.frame_pacing);
     f.l.settings.frame_pacing = FramePacing::CapFps;
     f.settle();
-    let _ = click_text(&mut f, "Back to recommended");
+    let _ = click_value(&mut f, "Back to recommended", "Reset");
     f.settle();
     assert_eq!(f.l.settings.frame_pacing, FramePacing::Latency);
     assert!(!row_words(&f, "Stream smoothness").contains(&"Custom"), "{:?}", row_words(&f, "Stream smoothness"));

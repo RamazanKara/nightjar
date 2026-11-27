@@ -224,15 +224,26 @@ fn the_heros_words_read_over_the_brightest_art_by_night_and_the_darkest_by_day()
 #[ignore = "writes PNGs; set NIGHTJAR_SHOTS"]
 fn hero_stage_screenshots() {
     const WINDOWS: [(&str, [f32; 2]); 4] = [("1280x800", [1280.0, 800.0]), ("1920x1080", [1920.0, 1080.0]), ("2560x1080", [2560.0, 1080.0]), ("960x600", [960.0, 600.0])];
-    const LOOKS: [(&str, Theme, bool); 3] = [("night", Theme::Dark, false), ("day", Theme::Light, false), ("high-contrast", Theme::Dark, true)];
+    const LOOKS: [(&str, Theme, bool); 4] = [("night", Theme::Dark, false), ("day", Theme::Light, false), ("oled", Theme::Oled, false), ("high-contrast", Theme::Dark, true)];
     let Some(dir) = std::env::var_os("NIGHTJAR_SHOTS").map(std::path::PathBuf::from) else { return };
     std::fs::create_dir_all(&dir).expect("the folder for the screenshots");
+    let only = std::env::var("NIGHTJAR_SHOTS_ONLY").unwrap_or_default();
     for (look_name, theme, high) in LOOKS {
         for (window_name, size) in WINDOWS {
+            let want = |state: &str| {
+                let name = format!("hero-{state}-{look_name}-{window_name}");
+                only.is_empty() || only.split(',').any(|p| name.contains(p))
+            };
+            if !["art", "no-art", "no-games"].into_iter().any(want) {
+                continue;
+            }
             let size = Vec2::from(size);
             let mut empty = home_with_stores(&[]);
             empty.size = size;
             for (state, mut f) in [("art", demo_frames(size)), ("no-art", demo_without_art(size)), ("no-games", empty)] {
+                if !want(state) {
+                    continue;
+                }
                 f.l.settings.theme = theme;
                 f.l.settings.high_contrast = high;
                 // Past every fade and spring: what the page looks like at rest.

@@ -5,8 +5,24 @@
 
 use super::*;
 
+pub(super) fn studio_labels() -> crate::ui::controller_studio::Labels<'static> {
+    crate::ui::controller_studio::Labels {
+        title: tr("Controller Studio"),
+        scope: tr("Applies to every game"),
+        stick_response: tr("Stick response"),
+        stick_deadzone: tr("Stick dead zone"),
+        trigger_deadzone: tr("Trigger dead zone"),
+        motion: tr("Motion"),
+        touchpad: tr("Touchpad input"),
+        vibration: tr("Vibration"),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(super) fn draw_controller_section(
     ui: &mut Ui,
+    pads: &crate::pads_view::PadsView,
+    open: &str,
     s: &mut Settings,
     rows: &mut Rows<'_>,
     layered: bool,
@@ -15,6 +31,10 @@ pub(super) fn draw_controller_section(
     open_controllers: &mut Option<bool>,
 ) {
     rows.section(ui, en("Controller"));
+    if open == en("Controller") && !rows.searching() {
+        crate::ui::controller_studio::show(ui, s, style, pads, layered, &studio_labels());
+        ui.add_space(space::M);
+    }
     setting_row(ui, s, rows, &["controllers", "multi_controller"], "Controllers", "A player each makes every controller its own player and suits almost everyone. One player makes every controller player 1; Off sends no controller to the PC.", |ui, s| {
         let current = Controllers::from_saved(s.controllers, s.multi_controller);
         let mut choice = current;

@@ -7,11 +7,13 @@ use std::cell::RefCell;
 
 use egui::{Color32, CornerRadius, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2, vec2};
 
+#[allow(dead_code, reason = "full launcher icon set; kept available across sections")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Icon {
     Search,
     Down,
     Gamepad,
+    Controller,
     Keyboard,
     StarOn,
     Play,
@@ -111,6 +113,27 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
             line(vec![p(8.3, 10.6), p(8.3, 14.4)]);
             dot(15.4, 14.0, 1.1);
             dot(18.0, 11.2, 1.1);
+        }
+        Icon::Controller => {
+            // Dual-grip console controller silhouette with D-pad cross and face buttons.
+            closed(vec![
+                p(6.2, 6.2),
+                p(17.8, 6.2),
+                p(20.4, 8.6),
+                p(21.4, 15.8),
+                p(19.6, 18.6),
+                p(17.0, 18.2),
+                p(15.0, 14.8),
+                p(9.0, 14.8),
+                p(7.0, 18.2),
+                p(4.4, 18.6),
+                p(2.6, 15.8),
+                p(3.6, 8.6),
+            ]);
+            line(vec![p(6.6, 10.8), p(9.8, 10.8)]);
+            line(vec![p(8.2, 9.2), p(8.2, 12.4)]);
+            dot(15.2, 11.6, 1.0);
+            dot(17.4, 9.6, 1.0);
         }
         // Android's ic_keyboard: a board, two rows of keys and the space bar.
         Icon::Keyboard => {
@@ -386,10 +409,11 @@ fn gear(p: &impl Fn(f32, f32) -> Pos2) -> Vec<Pos2> {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 29] = [
+    const ALL: [Icon; 30] = [
         Icon::Search,
         Icon::Down,
         Icon::Gamepad,
+        Icon::Controller,
         Icon::StarOn,
         Icon::Play,
         Icon::Grid,

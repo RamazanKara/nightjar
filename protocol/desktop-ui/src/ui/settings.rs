@@ -165,10 +165,8 @@ use rows::{
 };
 #[cfg(test)]
 use rows::{stream_menu_button_choice, stream_menu_button_name};
-use view::{
-    found, search_id, search_words, section_index, simple_hdr_name, simple_picture_name,
-    simple_smoothness_name,
-};
+use view::{found, search_id, search_words, section_index, simple_picture_name};
+pub(in crate::ui) use view::{simple_hdr_name, simple_smoothness_name};
 use widgets::{notice, section_chip, KEYS_IN_HAND};
 #[cfg(test)]
 use widgets::banner;
@@ -659,7 +657,7 @@ impl Launcher {
                 style,
             };
             video_sections::draw_video_sections(ui, view, s, &mut rows, &mut ctx);
-            controls_sections::draw_controls_sections(ui, commands, s, &mut rows, &mut ctx);
+            controls_sections::draw_controls_sections(ui, view, commands, s, &mut rows, &mut ctx);
             advanced_sections::draw_advanced_sections(ui, commands, s, &mut rows, &mut ctx);
             mobile_limit = ctx.mobile_limit;
             reset_all = ctx.reset_all;

@@ -159,8 +159,13 @@ fn glass_page_screenshots() {
             let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../app/src/debug/assets/demo/art/{}.jpg", n + 1));
             let image = image::load_from_memory(&std::fs::read(&path).expect("the demo cover")).expect("a JPEG").to_rgba8();
             let image = egui::ColorImage::from_rgba_unmultiplied([image.width() as usize, image.height() as usize], &image);
-            Arc::make_mut(&mut pc.ambient).insert(app.id, f.ctx.load_texture(format!("ambient-{n}"), crate::ambient::bake(&image), egui::TextureOptions::LINEAR));
-            Arc::make_mut(&mut pc.art).insert(app.id, Art::Ready(f.ctx.load_texture(format!("cover-{n}"), image, egui::TextureOptions::LINEAR)));
+            let ambient_img = crate::ambient::bake(&image);
+            Arc::make_mut(&mut pc.ambient_glow).insert(app.id, crate::ambient::glow_of(&ambient_img));
+            let ambient_tex = f.ctx.load_texture(format!("ambient-{n}"), ambient_img, egui::TextureOptions::LINEAR);
+            let cover_tex = f.ctx.load_texture(format!("cover-{n}"), image.clone(), egui::TextureOptions::LINEAR);
+            crate::ambient::register_cover(Some(cover_tex.id()), Some(ambient_tex.id()), &image);
+            Arc::make_mut(&mut pc.ambient).insert(app.id, ambient_tex);
+            Arc::make_mut(&mut pc.art).insert(app.id, Art::Ready(cover_tex));
         }
         let uuid = f.hosts.list[0].record.unique_id.clone();
         for (n, days) in [(2u32, 1u64), (8, 3), (3, 8)] {
@@ -346,7 +351,16 @@ fn polish_screenshots() {
             pc.native.library = Some(Arc::new(Library { revision: "r1".into(), games }));
             pc.apps = Apps::Loaded(Arc::new(apps.clone()));
             for (n, app) in apps.iter().enumerate() {
-                Arc::make_mut(&mut pc.art).insert(app.id, demo_art(&f.ctx, n));
+                let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../app/src/debug/assets/demo/art/{}.jpg", n + 1));
+                let raw = image::load_from_memory(&std::fs::read(&path).expect("the demo cover")).expect("a JPEG").to_rgba8();
+                let img = egui::ColorImage::from_rgba_unmultiplied([raw.width() as usize, raw.height() as usize], &raw);
+                let amb = crate::ambient::bake(&img);
+                Arc::make_mut(&mut pc.ambient_glow).insert(app.id, crate::ambient::glow_of(&amb));
+                let amb_tex = f.ctx.load_texture(format!("polish-amb-{n}"), amb, egui::TextureOptions::LINEAR);
+                let art_tex = f.ctx.load_texture(format!("polish-art-{n}"), img.clone(), egui::TextureOptions::LINEAR);
+                crate::ambient::register_cover(Some(art_tex.id()), Some(amb_tex.id()), &img);
+                Arc::make_mut(&mut pc.ambient).insert(app.id, amb_tex);
+                Arc::make_mut(&mut pc.art).insert(app.id, Art::Ready(art_tex));
             }
         }
         f.hosts.list[1].reach = Reach::Offline;

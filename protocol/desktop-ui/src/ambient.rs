@@ -1,8 +1,13 @@
-//! The ambient backdrop's bake: a cover squashed to a thumbnail, blurred, saturated, its yellows
-//! pulled toward amber and its luminance capped, so white text reads over the brightest cover.
-//! Pure CPU work on small images; hosts/covers.rs runs it off the UI thread beside the cover's decode.
+//! The ambient backdrop's and hero wash's bake: a cover squashed to a thumbnail, blurred,
+//! saturated, and shaped to the active look's luminance envelope (dark obsidian cap by night,
+//! lifted pastel Alabaster floor by day) so text reads cleanly over every cover with zero
+//! ghost cover typography. Pure CPU work on small images; `hosts/covers.rs` runs [`bake`] off
+//! the UI thread beside the cover's decode.
 
-use egui::{Color32, ColorImage};
+use std::collections::VecDeque;
+use std::sync::{Mutex, OnceLock};
+
+use egui::{Color32, ColorImage, TextureId};
 
 use crate::theme::shade;
 use crate::ui::design_tokens as t;
@@ -18,6 +23,152 @@ const SIZE: [usize; 2] = [
     t::TIER_BAKED_THUMB_W as usize,
     t::TIER_BAKED_THUMB_H as usize,
 ];
+/// Downsampled 2:3 grid for the hero stage's directional colour wash.
+pub const HERO_SIZE: [usize; 2] = [96, 144];
+/// Separable Gaussian sigma per pass on [`HERO_SIZE`] (two passes give effective sigma ~22.6 px,
+/// kernel support radius 48 px per pass, dissolving cover lettering completely).
+const HERO_BLUR_SIGMA: f32 = 16.0;
+const MAX_CACHED_COVERS: usize = 256;
+
+struct CachedCover {
+    hash: u64,
+    art_ids: Vec<TextureId>,
+    ambient_ids: Vec<TextureId>,
+    glow: Color32,
+    /// Squashed `HERO_SIZE` sRGB thumbnail, from which Day ambient and Night/Day hero washes bake.
+    thumb: Vec<[u8; 3]>,
+}
+
+fn cover_cache() -> &'static Mutex<VecDeque<CachedCover>> {
+    static CACHE: OnceLock<Mutex<VecDeque<CachedCover>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(VecDeque::new()))
+}
+
+fn thumb_hash(thumb: &[[u8; 3]]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &[r, g, b] in thumb {
+        for byte in [r, g, b] {
+            h ^= u64::from(byte);
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    h
+}
+
+fn thumb_bytes(cover: &ColorImage) -> Vec<[u8; 3]> {
+    squash_to(cover, HERO_SIZE)
+        .into_iter()
+        .map(|c| c.map(|v| (v * 255.0 + 0.5).clamp(0.0, 255.0) as u8))
+        .collect()
+}
+
+fn thumb_image(thumb: &[[u8; 3]]) -> ColorImage {
+    ColorImage {
+        size: HERO_SIZE,
+        source_size: egui::Vec2::new(HERO_SIZE[0] as f32, HERO_SIZE[1] as f32),
+        pixels: thumb
+            .iter()
+            .map(|&[r, g, b]| Color32::from_rgb(r, g, b))
+            .collect(),
+    }
+}
+
+fn push_id(list: &mut Vec<TextureId>, id: Option<TextureId>) {
+    if let Some(id) = id
+        && !list.contains(&id)
+    {
+        if list.len() >= 16 {
+            list.remove(0);
+        }
+        list.push(id);
+    }
+}
+
+fn cache_store(
+    art_id: Option<TextureId>,
+    ambient_id: Option<TextureId>,
+    glow: Option<Color32>,
+    thumb: Vec<[u8; 3]>,
+) {
+    let hash = thumb_hash(&thumb);
+    let mut guard = cover_cache().lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(pos) = guard.iter().rposition(|entry| entry.hash == hash) {
+        let mut entry = guard.remove(pos).expect("entry at pos");
+        push_id(&mut entry.art_ids, art_id);
+        push_id(&mut entry.ambient_ids, ambient_id);
+        if let Some(g) = glow {
+            entry.glow = g;
+        }
+        guard.push_back(entry);
+        return;
+    }
+    let resolved_glow = glow.unwrap_or_else(|| {
+        let small = squash(&thumb_image(&thumb));
+        let soft = gaussian(&small, SIZE, SIZE[0] as f32 / 8.0);
+        let graded: Vec<[f32; 3]> = soft.into_iter().map(grade).collect();
+        glow_of(&finish(&graded, SIZE))
+    });
+    let mut art_ids = Vec::new();
+    let mut ambient_ids = Vec::new();
+    push_id(&mut art_ids, art_id);
+    push_id(&mut ambient_ids, ambient_id);
+    while guard.len() >= MAX_CACHED_COVERS {
+        guard.pop_front();
+    }
+    guard.push_back(CachedCover {
+        hash,
+        art_ids,
+        ambient_ids,
+        glow: resolved_glow,
+        thumb,
+    });
+}
+
+/// Associates uploaded cover/ambient texture IDs with a source `cover` so Day ambient and
+/// hero directional washes resolve immediately by texture ID in MRU order.
+pub fn register_cover(
+    art_id: Option<TextureId>,
+    ambient_id: Option<TextureId>,
+    cover: &ColorImage,
+) {
+    cache_store(art_id, ambient_id, None, thumb_bytes(cover));
+}
+
+/// Lazily bakes a Day-mode ambient (`SIZE`) for a cover previously passed to [`bake`] or [`register_cover`].
+pub fn day_for(ambient_id: TextureId, glow: Color32) -> Option<ColorImage> {
+    let thumb = {
+        let guard = cover_cache().lock().unwrap_or_else(|e| e.into_inner());
+        guard
+            .iter()
+            .rev()
+            .find(|e| e.ambient_ids.contains(&ambient_id))
+            .or_else(|| guard.iter().rev().find(|e| e.glow == glow))
+            .map(|e| e.thumb.clone())?
+    };
+    Some(bake_day(&thumb_image(&thumb)))
+}
+
+/// Lazily bakes a blurred hero directional wash (`HERO_SIZE`) for a cover in Night or Day look.
+pub fn hero_for(
+    art_id: TextureId,
+    ambient_id: Option<TextureId>,
+    glow: Option<Color32>,
+    day: bool,
+) -> Option<ColorImage> {
+    let thumb = {
+        let guard = cover_cache().lock().unwrap_or_else(|e| e.into_inner());
+        guard
+            .iter()
+            .rev()
+            .find(|e| e.art_ids.contains(&art_id))
+            .or_else(|| {
+                ambient_id.and_then(|id| guard.iter().rev().find(|e| e.ambient_ids.contains(&id)))
+            })
+            .or_else(|| glow.and_then(|g| guard.iter().rev().find(|e| e.glow == g)))
+            .map(|e| e.thumb.clone())?
+    };
+    Some(bake_hero(&thumb_image(&thumb), day))
+}
 
 fn to_linear(c: f32) -> f32 {
     if c <= 0.04045 {
@@ -66,8 +217,8 @@ fn hsv_to_rgb([h, s, v]: [f32; 3]) -> [f32; 3] {
     [r + m, g + m, b + m]
 }
 
-/// One thumbnail pixel's colour: saturation lifted, yellow moved toward amber (it dims to olive
-/// otherwise), luminance capped in linear light so a white cover comes out a safe grey.
+/// One thumbnail pixel's colour by night: saturation lifted, yellow moved toward amber (it dims
+/// to olive otherwise), luminance capped in linear light so a white cover comes out a safe grey.
 fn grade(rgb: [f32; 3]) -> [f32; 3] {
     let [mut h, s, v] = rgb_to_hsv(rgb);
     let band = ((h - 25.0) / 15.0).clamp(0.0, 1.0) * ((95.0 - h) / 15.0).clamp(0.0, 1.0);
@@ -79,12 +230,28 @@ fn grade(rgb: [f32; 3]) -> [f32; 3] {
     linear.map(|c| to_srgb(c * scale).clamp(0.0, 1.0))
 }
 
-/// The area average of `cover` over each cell of a `SIZE` thumbnail: all of the cover, squashed.
-fn squash(cover: &ColorImage) -> Vec<[f32; 3]> {
+/// One thumbnail pixel's colour by day: saturation lifted (`DAY_AMBIENT_SATURATE`, 1.3) and linear
+/// luminance lifted toward Alabaster white up to `DAY_AMBIENT_TEXT_ZONE_MIN_LUMA` (0.56) so dark
+/// text reads cleanly over bright pastel colour instead of a muddy grey wash.
+fn grade_day(rgb: [f32; 3]) -> [f32; 3] {
+    let [h, s, v] = rgb_to_hsv(rgb);
+    let lifted = hsv_to_rgb([h, (s * t::DAY_AMBIENT_SATURATE).min(1.0), v]);
+    let linear = lifted.map(to_linear);
+    let luma: f32 = (0..3).map(|i| linear[i] * LUMA[i]).sum();
+    let floor = t::DAY_AMBIENT_TEXT_ZONE_MIN_LUMA;
+    let toward = if luma < floor {
+        ((floor - luma) / (1.0 - luma).max(1e-5)).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    linear.map(|c| to_srgb((c + (1.0 - c) * toward).clamp(0.0, 1.0)))
+}
+
+/// The area average of `cover` over each cell of a `[tw, th]` thumbnail: all of the cover, squashed.
+fn squash_to(cover: &ColorImage, [tw, th]: [usize; 2]) -> Vec<[f32; 3]> {
     let [w, h] = cover.size;
-    let [tw, th] = SIZE;
     let mut out = vec![[0.0f32; 3]; tw * th];
-    if w == 0 || h == 0 {
+    if w == 0 || h == 0 || tw == 0 || th == 0 {
         return out;
     }
     let mut counts = vec![0u32; tw * th];
@@ -112,6 +279,10 @@ fn squash(cover: &ColorImage) -> Vec<[f32; 3]> {
         }
     }
     out
+}
+
+fn squash(cover: &ColorImage) -> Vec<[f32; 3]> {
+    squash_to(cover, SIZE)
 }
 
 /// A separable Gaussian of `sigma` thumbnail pixels; edges repeat.
@@ -159,12 +330,36 @@ fn finish(pixels: &[[f32; 3]], size: [usize; 2]) -> ColorImage {
     image
 }
 
-/// The ambient of a cover: one call per cover, off the UI thread.
+/// The Night ambient of a cover: one call per cover, off the UI thread. Also records a small
+/// squashed thumbnail so Day ambient and hero directional washes materialize on demand.
 pub fn bake(cover: &ColorImage) -> ColorImage {
     let small = squash(cover);
     let soft = gaussian(&small, SIZE, SIZE[0] as f32 / 8.0);
     let graded: Vec<[f32; 3]> = soft.into_iter().map(grade).collect();
+    let out = finish(&graded, SIZE);
+    let glow = glow_of(&out);
+    cache_store(None, None, Some(glow), thumb_bytes(cover));
+    out
+}
+
+/// The Day-mode ambient of a cover: lifted pastel Alabaster luminance (`>= 0.56`) with `1.3x`
+/// saturation so dark text reads cleanly with zero muddy grey wash.
+pub fn bake_day(cover: &ColorImage) -> ColorImage {
+    let small = squash(cover);
+    let soft = gaussian(&small, SIZE, SIZE[0] as f32 / 8.0);
+    let graded: Vec<[f32; 3]> = soft.into_iter().map(grade_day).collect();
     finish(&graded, SIZE)
+}
+
+/// Multi-pass blurred 2:3 hero directional wash (`HERO_SIZE`), graded for Night/OLED (`day == false`)
+/// or lifted Alabaster Day (`day == true`) so box-art lettering dissolves completely into colour.
+pub fn bake_hero(cover: &ColorImage, day: bool) -> ColorImage {
+    let small = squash_to(cover, HERO_SIZE);
+    let pass1 = gaussian(&small, HERO_SIZE, HERO_BLUR_SIGMA);
+    let pass2 = gaussian(&pass1, HERO_SIZE, HERO_BLUR_SIGMA);
+    let map_fn: fn([f32; 3]) -> [f32; 3] = if day { grade_day } else { grade };
+    let graded: Vec<[f32; 3]> = pass2.into_iter().map(map_fn).collect();
+    finish(&graded, HERO_SIZE)
 }
 
 /// What the cover glows with on its page: the bake's own colour lit up, its hue kept, weighted to
@@ -192,8 +387,21 @@ pub fn glow_of(baked: &ColorImage) -> Color32 {
     Color32::from_rgba_premultiplied(r, g, b, (strength * 255.0).round() as u8)
 }
 
-/// The ambient of a game without art: its tile's gradient, under the same luminance cap.
+/// The ambient of a game without art: its tile's gradient, under the Night luminance cap.
 pub fn bake_tile(top: Color32, bottom: Color32) -> ColorImage {
+    bake_tile_with(top, bottom, grade)
+}
+
+/// The Day-mode ambient of a game without art: its tile's gradient lifted to the Day pastel floor.
+pub fn bake_tile_day(top: Color32, bottom: Color32) -> ColorImage {
+    bake_tile_with(top, bottom, grade_day)
+}
+
+fn bake_tile_with(
+    top: Color32,
+    bottom: Color32,
+    grade_fn: fn([f32; 3]) -> [f32; 3],
+) -> ColorImage {
     let [w, h] = SIZE;
     let channel = |c: Color32| [c.r(), c.g(), c.b()].map(|v| f32::from(v) / 255.0);
     let (top, bottom) = (channel(top), channel(bottom));
@@ -206,7 +414,7 @@ pub fn bake_tile(top: Color32, bottom: Color32) -> ColorImage {
             let along =
                 ((x as f32 - w as f32 / 2.0) * dx + (y as f32 - h as f32 / 2.0) * dy) / span + 0.5;
             let mix = std::array::from_fn(|k| top[k] + (bottom[k] - top[k]) * along);
-            pixels[y * w + x] = grade(mix);
+            pixels[y * w + x] = grade_fn(mix);
         }
     }
     finish(&pixels, SIZE)
@@ -395,5 +603,60 @@ mod tests {
             out.pixels.iter().all(|p| p.b() > 20),
             "no empty cell stays black"
         );
+    }
+
+    #[test]
+    fn bake_day_lifts_dark_and_coloured_covers_to_pastel_alabaster_floor() {
+        let black = bake_day(&ColorImage::filled([300, 450], Color32::BLACK));
+        assert!(
+            black
+                .pixels
+                .iter()
+                .all(|p| luma(*p) >= t::DAY_AMBIENT_TEXT_ZONE_MIN_LUMA - 0.01),
+            "black cover lifts cleanly to Day floor"
+        );
+        let cobalt = bake_day(&ColorImage::filled(
+            [300, 450],
+            Color32::from_rgb(20, 60, 210),
+        ));
+        let mid = cobalt.pixels[500];
+        assert!(
+            luma(mid) >= t::DAY_AMBIENT_TEXT_ZONE_MIN_LUMA - 0.01 && mid.b() > mid.r() + 18,
+            "pastel chroma kept: {mid:?}"
+        );
+    }
+
+    #[test]
+    fn bake_hero_dissolves_high_contrast_lettering_into_smooth_wash() {
+        let mut cover = ColorImage::filled([300, 450], Color32::from_rgb(20, 40, 120));
+        // Sharp white horizontal/vertical bars simulating giant title lettering in the upper third.
+        for y in 40..110 {
+            for x in 30..270 {
+                if (x / 12) % 2 == 0 || (y / 14) % 2 == 0 {
+                    cover.pixels[y * 300 + x] = Color32::WHITE;
+                }
+            }
+        }
+        let night = bake_hero(&cover, false);
+        let day = bake_hero(&cover, true);
+        assert_eq!(night.size, HERO_SIZE);
+        assert_eq!(day.size, HERO_SIZE);
+        let [w, h] = HERO_SIZE;
+        for y in 0..h {
+            for x in 0..w {
+                let p = night.pixels[y * w + x];
+                assert!(luma(p) <= t::AMBIENT_TEXT_ZONE_MAX_LUMA + 0.004, "{p:?}");
+                if x + 1 < w {
+                    let next = night.pixels[y * w + x + 1];
+                    let step = (i32::from(p.r()) - i32::from(next.r()))
+                        .abs()
+                        .max((i32::from(p.g()) - i32::from(next.g())).abs())
+                        .max((i32::from(p.b()) - i32::from(next.b())).abs());
+                    assert!(step <= 4, "no sharp letter edge survives at ({x},{y}): step={step}");
+                }
+                let dp = day.pixels[y * w + x];
+                assert!(luma(dp) >= t::DAY_AMBIENT_TEXT_ZONE_MIN_LUMA - 0.01, "{dp:?}");
+            }
+        }
     }
 }

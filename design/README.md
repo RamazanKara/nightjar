@@ -112,7 +112,7 @@ Every tile the stream menu had sits in exactly one module, so nothing is lost; a
 
 Four sections, Recommended first: **Recommended**, **Controls**, **Audio**, **App**, then the **More settings** fold (Presets, Profiles, Video, Display & image, Streaming, Advanced, Debug). The fold is one row until opened; whether it was open is kept as UI state (`settings_more_open`), never as a setting.
 
-**Preview cards** replace the rows whose words nobody can picture: Frame pacing, HDR and tone mapping, Upscaling and sharpness, Video scaling. Each choice is a card `size.previewCard` tall with a small drawn picture of what it does (a frame timeline, a tone curve, a pixel edge, a screen with bars), its name and one line. The chosen card wears the amber container; focus is the ring. The drawings are a few shapes at run time, the same on both apps, and never screenshots. The setting, its key and its values are unchanged: only the control is new.
+**Preview cards** illustrate the settings whose words nobody can picture: a compact three-card visual preview strip (`Stream smoothness`, `HDR`, `Upscaling`) sits at the top of `Recommended`, and detailed preview cards accompany Frame pacing, HDR, Upscaling and Video size in `Video` and `Display & image`. Each card draws a small live vector diagram of what the setting does (a frame timeline, a tone curve, a pixel edge, a screen with bars), its name and active choice; Drawings are runtime vector shapes on both apps, never screenshots. On Desktop, `Controls` and `Controller` open with a **Visual Controller Studio** card showing an adaptive vector controller diagram (`Xbox`, `PlayStation` DualSense with touchpad, `Nintendo`, `Steam Deck`) alongside a live stick deadzone and response curve.
 
 **Presets** are four outcomes, each one tap: Native (recommended), Smooth TV, Wi-Fi / Away, Battery saver. Native is not labelled "lowest latency": no measurement of ours backs that claim. They set existing settings only and read Custom as soon as one of those is changed by hand.
 
@@ -256,4 +256,4 @@ These files have Latin-1 only (`input_glyphs::figtree_covers`): en, de, es, fr, 
 - Desktop has no live saturation and no superellipse corners.
 - Cross-window blur has no colour filter, and devices or battery saver can refuse it.
 - Day has only been judged on screenshots so far, not on a real phone in daylight or a real TV panel.
-- The prototype's pages still show the 6.x sky and moon; the apps are the reference for 7.0.
+- Both the shipping apps (Android and Desktop) and `prototype/` support all four 7.0 Obsidian Cinema looks (`night`, `day`, `oled`, and `hc`) with the calm overhead stage light (`#090A0D` Night, `#F5F7FA` Day, `#000000` OLED/HC, `#F5B041` warm amber) and zero 6.x starry skies or moon-orbit rings.

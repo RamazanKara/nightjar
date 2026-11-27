@@ -11,6 +11,7 @@ use super::*;
 fn settings_screenshots() {
     let Some(dir) = std::env::var_os("NIGHTJAR_SHOTS").map(std::path::PathBuf::from) else { return };
     std::fs::create_dir_all(&dir).expect("the folder for the screenshots");
+    let only = std::env::var("NIGHTJAR_SHOTS_ONLY").unwrap_or_default();
     for (width, height, ppp) in [(1280.0, 800.0, 1.5), (1920.0, 1080.0, 1.0)] {
         for high in [false, true] {
             let size = format!("{}x{}{}", width as u32, height as u32, if high { "-high-contrast" } else { "" });
@@ -27,9 +28,12 @@ fn settings_screenshots() {
                 f
             };
             let shoot = |f: &mut Frames, page: &str| {
+                let full = format!("{page}-{size}");
                 f.settle();
                 f.settle();
-                f.shoot(&dir, &format!("{page}-{size}"));
+                if only.is_empty() || only.split(',').any(|p| full.contains(p)) {
+                    f.shoot(&dir, &full);
+                }
             };
             let mut f = fresh();
             f.l.go(Screen::Settings);

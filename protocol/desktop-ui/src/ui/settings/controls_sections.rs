@@ -4,6 +4,7 @@ use super::*;
 
 pub(super) fn draw_controls_sections(
     ui: &mut Ui,
+    view: &View<'_>,
     commands: &mut Vec<Command>,
     s: &mut Settings,
     rows: &mut Rows<'_>,
@@ -23,7 +24,13 @@ pub(super) fn draw_controls_sections(
     let mut open_page = ctx.open_page;
     let mut open_section = ctx.open_section;
     let style = ctx.style;
+    let open = ctx.open;
     rows.section(ui, en("Controls"));
+    if open == en("Controls") && !rows.searching() {
+        let labels = super::controller_section::studio_labels();
+        crate::ui::controller_studio::show(ui, s, style, view.pads, layered, &labels);
+        ui.add_space(space::M);
+    }
     setting_row(ui, s, rows, &["mouse_mode"], "Mouse mode", "Captured keeps the pointer in the stream and sends relative movement, which games with mouse look need. Desktop pointer moves like an ordinary mouse, for desktop work.", |ui, s| {
         Combo::from_id_salt("mouse")
             .selected_text(mouse_name(s.mouse_mode))
@@ -43,7 +50,7 @@ pub(super) fn draw_controls_sections(
         button
     });
     if !screen_keyboard {
-        rows.note(tr("Not used: this computer has no on-screen keyboard").to_owned(), *TERTIARY);
+        rows.note(tr("Not used: this computer has no on-screen keyboard").to_owned(), *ON_SURFACE_VARIANT);
     }
     setting_row(ui, s, rows, &["keyboard_follows_text_fields"], "Keyboard follows text fields", "Opens the on-screen keyboard when you select a text field on the PC and closes it after. Needs a PC that reports text fields; turn off to open it yourself.", |ui, s| {
         toggle(ui, &mut s.keyboard_follows_text_fields)
@@ -91,7 +98,17 @@ pub(super) fn draw_controls_sections(
         response
     });
     setting_row(ui, s, rows, &["right_alt_as_meta"], "Right Alt as Windows key", "Right Alt sends the Windows key, which a Mac uses as Command. Leave it off if you type characters with AltGr: Right Alt then no longer works as AltGr.", |ui, s| toggle(ui, &mut s.right_alt_as_meta));
-    super::controller_section::draw_controller_section(ui, s, rows, layered, links, style, &mut open_controllers);
+    super::controller_section::draw_controller_section(
+        ui,
+        view.pads,
+        open,
+        s,
+        rows,
+        layered,
+        links,
+        style,
+        &mut open_controllers,
+    );
 
     rows.section(ui, en("Audio"));
     setting_row(ui, s, rows, &["audio"], "Channels", "Stereo, or 5.1, 7.1 or 7.1.4 surround. Use Stereo for headphones or two speakers; pick surround only if your speakers and the PC are set up for it.", |ui, s| {
@@ -365,7 +382,7 @@ pub(super) fn draw_controls_sections(
             button
         });
         let reset_label = if *confirm_reset {
-            rows.note(tr("Every setting on this page goes back to its default. Your language, PCs, games, profiles, PIN lock, controller buttons, shortcuts and anything not on this page stay as they are. This can’t be undone.").to_owned(), *TERTIARY);
+            rows.note(tr("Every setting on this page goes back to its default. Your language, PCs, games, profiles, PIN lock, controller buttons, shortcuts and anything not on this page stay as they are. This can’t be undone.").to_owned(), *WARN);
             en("Reset all settings?")
         } else {
             en("Reset all settings")

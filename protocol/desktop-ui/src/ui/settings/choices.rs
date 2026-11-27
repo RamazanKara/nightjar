@@ -247,7 +247,7 @@ pub(super) fn window_name(mode: WindowMode) -> &'static str {
 /// A row that does nothing with another setting's value says so under its label, naming the value
 /// (client/AGENTS.md), as Android's "Not used with" tags do.
 pub(super) fn unused_with(rows: &mut Rows, value: &str) {
-    rows.note(trf("Not used with {}", &[&value]), *TERTIARY);
+    rows.note(trf("Not used with {}", &[&value]), *ON_SURFACE_VARIANT);
 }
 
 pub(super) fn mouse_name(mode: MouseMode) -> &'static str {

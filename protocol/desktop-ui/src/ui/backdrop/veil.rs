@@ -131,20 +131,30 @@ impl Ambient {
                 Color32::WHITE,
             ));
         }
-        // The page's wash over art by day, as the backdrop has it under the page.
-        let art = self.art_share(&behind);
-        if look() == Look::Day && art > 0.0 {
-            out.push(grid(TextureId::default(), None, DAY_WASH * art, shade::COLOR_CANVAS.get()));
+        // Fallback wash only for synthetic unbaked textures in Day mode; true Day-baked covers
+        // and tiles (`Shows::Art`) carry lifted Alabaster colours directly.
+        let unbaked = self.unbaked_day_share(&behind);
+        if look() == Look::Day && unbaked > 0.0 {
+            out.push(grid(
+                TextureId::default(),
+                None,
+                DAY_WASH * unbaked,
+                shade::COLOR_CANVAS.get(),
+            ));
         }
         out
     }
 }
 
-/// By day, the page's light colour over a game's ambient, as strong as the art shows
-/// ([`DAY_WASH`]); none in the other looks, and none over the stage, which is the page's own light
-/// colour already.
-pub(super) fn day_wash(screen: Rect, art: f32) -> Option<Shape> {
-    (look() == Look::Day && art > 0.0).then(|| Shape::rect_filled(screen, 0.0, shade::COLOR_CANVAS.get().gamma_multiply(DAY_WASH * art)))
+/// Fallback Day wash only when `unbaked > 0.0` (synthetic textures without [`ambient::bake_day`]).
+pub(super) fn day_wash(screen: Rect, unbaked: f32) -> Option<Shape> {
+    (look() == Look::Day && unbaked > 0.0).then(|| {
+        Shape::rect_filled(
+            screen,
+            0.0,
+            shade::COLOR_CANVAS.get().gamma_multiply(DAY_WASH * unbaked),
+        )
+    })
 }
 
 /// The page's colour rising over the backdrop toward the window's foot, so shelves and rows sit on

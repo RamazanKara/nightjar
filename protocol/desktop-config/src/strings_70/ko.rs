@@ -159,4 +159,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Leave and open controller settings", "나가서 컨트롤러 설정 열기"),
     ("Opening controller settings leaves the stream; the game keeps running on the PC.", "컨트롤러 설정을 열면 스트림을 나갑니다. 게임은 PC에서 계속 실행됩니다."),
     ("Forwarding this device needs your password, so it isn’t attached automatically. Press Attach to forward it.", "이 기기를 전달하려면 암호가 필요하므로 자동으로 연결되지 않습니다. 전달하려면 연결을 누르세요."),
+    ("{} is running. Playing this game quits it.", "{}이(가) 실행 중입니다. 이 게임을 시작하면 종료됩니다."),
+    ("Controller Studio", "컨트롤러 스튜디오"),
+    ("Applies to every game", "모든 게임에 적용"),
+    ("Stick response", "스틱 반응 곡선"),
+    ("Touchpad input", "터치패드 입력"),
 ];

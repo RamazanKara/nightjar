@@ -159,4 +159,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Leave and open controller settings", "Wyjdź i otwórz ustawienia kontrolera"),
     ("Opening controller settings leaves the stream; the game keeps running on the PC.", "Otwarcie ustawień kontrolera kończy stream; gra działa dalej na PC."),
     ("Forwarding this device needs your password, so it isn’t attached automatically. Press Attach to forward it.", "Przekazanie tego urządzenia wymaga hasła, więc nie jest ono podłączane automatycznie. Naciśnij Podłącz, aby je przekazać."),
+    ("{} is running. Playing this game quits it.", "Gra {} jest uruchomiona. Uruchomienie tej gry ją zakończy."),
+    ("Controller Studio", "Studio kontrolera"),
+    ("Applies to every game", "Dotyczy każdej gry"),
+    ("Stick response", "Krzywa reakcji drążka"),
+    ("Touchpad input", "Panel dotykowy"),
 ];

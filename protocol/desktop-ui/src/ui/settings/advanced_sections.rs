@@ -152,7 +152,7 @@ pub(super) fn draw_advanced_sections(
     });
     rows.group(en("PyroWave"));
     if let Some(reason) = &gpu_decoder_error {
-        rows.note(trf("GPU decoding isn’t available here: {}", &[reason]), *TERTIARY);
+        rows.note(trf("GPU decoding isn’t available here: {}", &[reason]), *WARN);
     }
     setting_row(ui, s, rows, &["pyrowave_decoder"], "PyroWave decoder", if cfg!(target_os = "macos") { en("Decodes PyroWave on the GPU or the CPU. On a Mac, GPU needs Apple silicon and macOS 26 or later and copies each picture back through memory before it is drawn; where it can’t start, the CPU decodes and the stream says so. Leave it on CPU unless the CPU can’t keep up with the stream.") } else { en("Decodes PyroWave on the GPU or the CPU. GPU measured lower latency; where it can’t run, PyroWave is not offered until you choose CPU.") }, |ui, s| {
         Combo::from_id_salt("pyrowave-decoder")

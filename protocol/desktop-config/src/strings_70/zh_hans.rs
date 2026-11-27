@@ -159,4 +159,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Leave and open controller settings", "离开并打开手柄设置"),
     ("Opening controller settings leaves the stream; the game keeps running on the PC.", "打开手柄设置会离开串流；游戏继续在电脑上运行。"),
     ("Forwarding this device needs your password, so it isn’t attached automatically. Press Attach to forward it.", "转发此设备需要你的密码，因此不会自动连接。按“连接”即可转发。"),
+    ("{} is running. Playing this game quits it.", "{} 正在运行。启动此游戏会将其退出。"),
+    ("Controller Studio", "手柄工作室"),
+    ("Applies to every game", "适用于所有游戏"),
+    ("Stick response", "摇杆响应曲线"),
+    ("Touchpad input", "触控板"),
 ];

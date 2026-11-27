@@ -361,7 +361,7 @@ impl Launcher {
                 x += info_chip(ui, x, mid, Some(*OK), tr("Running")) + CHIP_GAP;
             }
             GameState::Suspended => {
-                x += info_chip(ui, x, mid, Some(*TERTIARY), tr("Suspended")) + CHIP_GAP;
+                x += info_chip(ui, x, mid, Some(*WARN), tr("Suspended")) + CHIP_GAP;
             }
             GameState::Idle => {}
         }
@@ -408,10 +408,10 @@ impl Launcher {
                 .map(|other| {
                     (
                         trf(
-                            "{} is running. Playing this game closes it.",
+                            "{} is running. Playing this game quits it.",
                             &[&at_sentence_start(other)],
                         ),
-                        *TERTIARY,
+                        *WARN,
                     )
                 })
         };

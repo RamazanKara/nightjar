@@ -254,7 +254,7 @@ pub(in crate::ui) fn setting_row(
         return None;
     }
     if let Some(reason) = reason.filter(|_| note.is_none()) {
-        note = Some((reason, *TERTIARY));
+        note = Some((reason, *ON_SURFACE_VARIANT));
     }
     let first = keys.first().copied();
     let second = first.is_some_and(|k| rows.reset_drawn.contains(&k));
@@ -432,7 +432,11 @@ pub(super) fn settings_row(
             let row = ui.min_rect().expand2(vec2(18.0, 8.0));
             let focused = ui.memory(|m| m.focused()).and_then(|id| ui.ctx().read_response(id)).is_some_and(|r| row.contains(r.rect.center()));
             let active = focused || ui.rect_contains_pointer(row);
-            let open = focused && ui.data(|d| d.get_temp::<bool>(Id::unique(KEYS_IN_HAND))).unwrap_or(false);
+            // Any focused row wraps its full subtitle cleanly (preventing mid-sentence clipping on
+            // Recommended and clicked rows), while pointer hover alone stays one line so rows below
+            // never shift away from the cursor.
+            let _ = KEYS_IN_HAND;
+            let open = focused;
             if open != was_open {
                 // One more pass lays the hint out whole, or back to one line.
                 ui.data_mut(|d| d.insert_temp(open_id, open));
@@ -531,8 +535,8 @@ pub(super) fn section_icon(name: &str) -> Icon {
         n if n == en("Recommended") => Icon::Star,
         n if n == en("Video") => Icon::Video,
         n if n == en("Display & image") => Icon::Monitor,
-        n if n == en("Controls") => Icon::Keyboard,
-        n if n == en("Controller") => Icon::Gamepad,
+        n if n == en("Controls") => Icon::Controller,
+        n if n == en("Controller") => Icon::Controller,
         n if n == en("Audio") => Icon::Speaker,
         n if n == en("Streaming") => Icon::Network,
         n if n == en("App") => Icon::App,

@@ -218,7 +218,7 @@ const LOOKS: [(Look, f64); 4] = [(Look::Night, 4.5), (Look::Day, 4.5), (Look::Ol
 #[test]
 fn text_meets_wcag_aa_in_every_look_and_seven_to_one_in_high_contrast() {
     for (look, floor) in LOOKS {
-        for text in [ON_SURFACE, ON_SURFACE_VARIANT, OUTLINE, MOON, TERTIARY, ERROR, OK, WARN] {
+        for text in [ON_SURFACE, ON_SURFACE_VARIANT, OUTLINE, MOON, ERROR, OK, WARN] {
             for ground in GROUNDS {
                 let ratio = contrast(color(look, text), color(look, ground));
                 assert!(ratio >= floor, "{look:?}: text {text:?} on {ground:?} is {ratio:.2}:1, wants {floor}");

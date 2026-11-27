@@ -231,7 +231,10 @@ pub(super) fn demo_art(ctx: &egui::Context, n: usize) -> Art {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../app/src/debug/assets/demo/art/{}.jpg", n + 1));
     let image = image::load_from_memory(&std::fs::read(&path).expect("the demo cover")).expect("a JPEG").to_rgba8();
     let size = [image.width() as usize, image.height() as usize];
-    Art::Ready(ctx.load_texture(format!("demo-art-{n}"), egui::ColorImage::from_rgba_unmultiplied(size, &image), egui::TextureOptions::LINEAR))
+    let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &image);
+    let tex = ctx.load_texture(format!("demo-art-{n}"), color_image.clone(), egui::TextureOptions::LINEAR);
+    crate::ambient::register_cover(Some(tex.id()), None, &color_image);
+    Art::Ready(tex)
 }
 
 /// The showcase library. Store keys as a host sends them (console.rs names them). Ten Steam games

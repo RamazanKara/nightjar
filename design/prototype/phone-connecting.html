@@ -5,8 +5,8 @@
 const launch = Q.get('stage') === 'launch';
 const n = launch ? null : 'racing-game'; const name = launch ? 'Big Picture' : 'Racing Game';
 mount(`
-${launch ? `<div class="ambient"><div style="position:absolute;inset:0;background:${pairGradient(name)};opacity:${DAY ? 0.22 : 0.9}"></div><div class="fade" style="background:${themeFade('linear-gradient(180deg,rgba(14,14,22,.05),rgba(14,14,22,.3) 44%,rgba(20,22,31,.94) 78%,#14161f)')}"></div></div>`
-    : ambient(n, { fade: 'linear-gradient(180deg,rgba(14,14,22,.05),rgba(14,14,22,.3) 44%,rgba(20,22,31,.94) 78%,#14161f)' })}
+${launch ? `<div class="ambient"><div style="position:absolute;inset:0;background:${pairGradient(name)};opacity:${DAY ? 0.22 : 0.9}"></div><div class="fade" style="background:${themeFade('linear-gradient(180deg,rgba(9,10,13,.05),rgba(9,10,13,.3) 44%,rgba(9,10,13,.94) 78%,#090a0d)')}"></div></div>`
+    : ambient(n, { fade: 'linear-gradient(180deg,rgba(9,10,13,.05),rgba(9,10,13,.3) 44%,rgba(9,10,13,.94) 78%,#090a0d)' })}
 ${statusBar()}
 <div style="position:absolute;left:0;top:0;width:412px;height:915px">${orbit(186, { cx: 206, cy: 316, dur: 1.8 })}</div>
 <div style="position:absolute;left:101px;top:158px;width:210px">${app(n, name, { w: 210, style: 'box-shadow:0 26px 60px rgba(0,0,0,.6)' })}</div>

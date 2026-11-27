@@ -248,7 +248,11 @@ impl Launcher {
             key: "controller-editor".into(),
             label: tr("Controller").to_owned(),
             sub: Some((tr("Sticks, triggers, motion, vibration and buttons").to_owned(), *ON_SURFACE_VARIANT)),
-            said: None,
+            said: Some(format!(
+                "{} · {}",
+                tr("Applies to every game"),
+                tr("Sticks, triggers, motion, vibration and buttons")
+            )),
             wrap: false,
             enabled: true,
             act: RowAct::ControllerEditor,
@@ -271,10 +275,24 @@ impl Launcher {
         let set: Vec<_> = rows
             .iter()
             .map(|row| {
+                let scope_tag = matches!(row.act, RowAct::ControllerEditor) && width >= 340.0;
+                let scope_w = if scope_tag {
+                    ui.painter()
+                        .layout_no_wrap(
+                            tr("All games").to_owned(),
+                            regular(t::TYPE_CAPTION_SIZE),
+                            *ON_SURFACE_VARIANT,
+                        )
+                        .size()
+                        .x
+                        + 12.0
+                } else {
+                    0.0
+                };
                 let trailing = if row.switch().is_some() {
                     SWITCH.x
                 } else {
-                    16.0
+                    16.0 + scope_w
                 };
                 let room = width - 2.0 * ROW_PAD - trailing - 12.0;
                 let ink = if row.enabled { *ON_SURFACE } else { *OUTLINE };
@@ -409,6 +427,18 @@ impl Launcher {
                     } else {
                         *OUTLINE
                     };
+                    if matches!(row.act, RowAct::ControllerEditor) && width >= 340.0 {
+                        let tag = ui.painter().layout_no_wrap(
+                            tr("All games").to_owned(),
+                            regular(t::TYPE_CAPTION_SIZE),
+                            *ON_SURFACE_VARIANT,
+                        );
+                        out.push(Shape::galley(
+                            pos2(tip.x - 14.0 - tag.size().x, rect.center().y - tag.size().y / 2.0),
+                            tag,
+                            *ON_SURFACE_VARIANT,
+                        ));
+                    }
                     out.push(Shape::line(
                         vec![tip + vec2(-5.0, -6.0), tip, tip + vec2(-5.0, 6.0)],
                         Stroke::new(1.8, ink),

@@ -159,4 +159,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Leave and open controller settings", "Вийти й відкрити налаштування контролера"),
     ("Opening controller settings leaves the stream; the game keeps running on the PC.", "Відкриття налаштувань контролера закриває трансляцію; гра працює далі на ПК."),
     ("Forwarding this device needs your password, so it isn’t attached automatically. Press Attach to forward it.", "Для прокидання цього пристрою потрібен ваш пароль, тому він не під’єднується автоматично. Натисніть «Під’єднати», щоб прокинути його."),
+    ("{} is running. Playing this game quits it.", "{} запущено. Запуск цієї гри завершить її."),
+    ("Controller Studio", "Студія контролера"),
+    ("Applies to every game", "Діє для всіх ігор"),
+    ("Stick response", "Відгук стіка"),
+    ("Touchpad input", "Сенсорна панель"),
 ];

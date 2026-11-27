@@ -172,7 +172,7 @@ fn facts_line(ui: &Ui, left: f32, top: f32, width: f32, state: GameState, rest: 
     let middle = top + t::TYPE_BODY_LINE / 2.0;
     let (dot, word) = match state {
         GameState::Running => (Some(*OK), Some(tr("Running"))),
-        GameState::Suspended => (Some(*TERTIARY), Some(tr("Suspended"))),
+        GameState::Suspended => (Some(*WARN), Some(tr("Suspended"))),
         GameState::Idle => (None, None),
     };
     let mut x = left;
@@ -244,12 +244,52 @@ impl Launcher {
         ui.ctx().data_mut(|d| d.insert_temp(placed_id(), at));
     }
 
-    /// The art behind the hero: its cover held to the stage light, its tile's gradient when it has
-    /// none, nothing while its cover is on its way. A cover that arrives while Home shows fades in.
+    /// The art behind the hero: a wide multi-pass blurred directional wash of its cover held to
+    /// the stage light (zero legible cover text), its tile's gradient when it has none, nothing
+    /// while its cover is on its way. A cover that arrives while Home shows fades in.
     fn hero_art(&self, ctx: &egui::Context, view: &View<'_>, hero: &Hero, stage: Rect, window: Rect) -> Vec<Shape> {
         let look = look();
+        let day = look == Look::Day;
+        let host = view.hosts.list.iter().find(|h| h.id == hero.host);
+        let app_i32 = hero.app as i32;
+        let ambient_tex = host.and_then(|h| h.ambient.get(&app_i32));
+        let glow = host.and_then(|h| h.ambient_glow.get(&app_i32).copied());
         let source = match shown_art(view, hero.host, hero.app) {
-            Some(Art::Ready(texture)) => Some(art::Source::Cover(texture.id(), texture.size_vec2())),
+            Some(Art::Ready(texture)) => {
+                let cache_id = Id::unique(("hero-wash", texture.id(), day));
+                let cached: Option<egui::TextureHandle> = ctx.data(|d| d.get_temp(cache_id));
+                let wash = cached.or_else(|| {
+                    let baked = crate::ambient::hero_for(
+                        texture.id(),
+                        ambient_tex.map(|t| t.id()),
+                        glow,
+                        day,
+                    )?;
+                    let handle = ctx.load_texture(
+                        format!("hero-wash-{}-{}-{day}", hero.host, hero.app),
+                        baked,
+                        egui::TextureOptions::LINEAR,
+                    );
+                    ctx.data_mut(|d| d.insert_temp(cache_id, handle.clone()));
+                    Some(handle)
+                });
+                match wash {
+                    Some(handle) => Some(art::Source::Wash(handle.id(), handle.size_vec2())),
+                    None => match ambient_tex.filter(|_| !day) {
+                        Some(amb) => Some(art::Source::Wash(amb.id(), amb.size_vec2())),
+                        None if texture.size_vec2().x <= 16.0 && texture.size_vec2().y <= 16.0 => {
+                            Some(art::Source::Cover(texture.id(), texture.size_vec2()))
+                        }
+                        None => {
+                            let pair = nightjar_policy::tile::tile_pair(
+                                nightjar_policy::tile::title_hash(&hero.title),
+                            );
+                            let (top, bottom) = super::cards::tile_colors(pair);
+                            Some(art::Source::Tile(top, bottom))
+                        }
+                    },
+                }
+            }
             Some(Art::Missing) | None => {
                 let pair = nightjar_policy::tile::tile_pair(nightjar_policy::tile::title_hash(&hero.title));
                 let (top, bottom) = super::cards::tile_colors(pair);

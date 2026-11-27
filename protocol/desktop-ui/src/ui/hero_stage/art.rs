@@ -133,7 +133,10 @@ pub(in crate::ui) fn held(color: Color32, day: bool) -> Color32 {
 
 /// What the art is made of.
 pub(in crate::ui) enum Source {
-    /// A cover's texture, with its size for the crop.
+    /// Pre-blurred and look-graded hero colour wash (`ambient::bake_hero`), ready to paint with
+    /// zero ghost cover typography and zero muddy Day wash.
+    Wash(TextureId, Vec2),
+    /// Fallback held cover texture when a synthetic unit-test texture has no baked wash.
     Cover(TextureId, Vec2),
     /// A game without art: its tile's two colours, top and bottom.
     Tile(Color32, Color32),
@@ -184,11 +187,16 @@ pub(in crate::ui) fn shapes(place: &Place, source: &Source, look: Look, alpha: f
             let fill = crate::ui::glass::gradient(place.rect, 165.0, &[(0.0, top), (1.0, bottom)]);
             vec![Shape::mesh(grid(place, white, &|_| WHITE_UV, &|p, m| fill(p).gamma_multiply(m * alpha)))]
         }
+        Source::Wash(texture, size) => {
+            let uv = cover_uv(*size, place.rect);
+            let oled_dim = if look == Look::Oled { 0.78 } else { 1.0 };
+            vec![Shape::mesh(grid(place, *texture, &uv, &|_, m| {
+                Color32::WHITE.gamma_multiply(m * alpha * oled_dim)
+            }))]
+        }
         Source::Cover(texture, size) => {
             let uv = cover_uv(*size, place.rect);
             if day {
-                // The cover at what the wash leaves of it, then the canvas added on top: together a
-                // blend toward the canvas, under the mask.
                 let wash = day_wash();
                 let keep = Color32::from_gray(((1.0 - wash) * 255.0).round() as u8);
                 let canvas = t::DAY_COLOR_CANVAS;

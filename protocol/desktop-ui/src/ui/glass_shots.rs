@@ -272,7 +272,7 @@ fn cover(ctx: &Context, n: usize) -> (TextureHandle, egui::ColorImage) {
 
 /// Rows of covers filling the window, so glass over them has something to blur.
 fn shelf(screen: Rect, covers: &[TextureHandle]) -> Vec<Shape> {
-    let mut out = vec![Shape::rect_filled(screen, 0.0, Color32::from_rgb(0x14, 0x16, 0x1F))];
+    let mut out = vec![Shape::rect_filled(screen, 0.0, crate::ui::design_tokens::COLOR_CANVAS)];
     let (w, h, gap) = (155.0, 232.0, 16.0);
     let mut n = 0;
     let mut y = 8.0;

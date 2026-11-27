@@ -30,6 +30,9 @@ pub const COVER_POINTS: [f32; 2] = [420.0, 630.0];
 
 /// How long after a failed box-art load before asking the PC again.
 const ART_RETRY_INTERVAL: Duration = Duration::from_secs(30);
+/// Grandfathered `strings/*.rs` key anchor; UI now renders `"{} is running. Playing this game quits it."` from `strings_70`.
+#[doc(hidden)]
+pub const LEGACY_REPLACE_NOTE: &str = en("{} is running. Playing this game closes it.");
 
 /// Notes that the cover `texture` is on screen (or needed off it) in this frame, so it is not one
 /// given up for room.

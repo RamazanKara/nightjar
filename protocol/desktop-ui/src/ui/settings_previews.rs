@@ -15,9 +15,12 @@ use egui::Shape;
 mod edge;
 mod pacing;
 mod screen;
+mod strip;
 mod tone;
 #[cfg(test)]
 mod tests;
+
+pub(in crate::ui) use strip::recommended_strip;
 
 /// The numbers a picture is drawn from; a change of value springs each to its new place.
 pub(in crate::ui) type Pose = [f32; POSE];

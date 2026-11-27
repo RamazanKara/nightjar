@@ -1,13 +1,14 @@
 <!doctype html><meta charset="utf-8"><title>Nightjar banner</title>
 <link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="glass.css"><script src="lib.js"></script><body><script>
-// README and site banner: same mark, same words as today, now in the family.
+// 7.0 Obsidian Cinema README and site banner (#090A0D stage + #F5B041 warm amber).
 const fan = [['ocean-explorer', 664, 50, -7], ['space-sim', 808, 24, -2.5], ['racing-game', 952, 32, 2.5], ['ember-keep', 1096, 60, 7]];
 mount(`
-${nightSky({ x: 1040, y: 60, r: 120, w: 1280, h: 400 })}
-<div style="position:absolute;left:0;top:0;bottom:0;width:640px;background:linear-gradient(90deg,#14161f 40%,rgba(20,22,31,0))"></div>
-${fan.map(([n, x, y, r]) => cover(n, { style: `position:absolute;left:${x}px;top:${y}px;width:170px;transform:rotate(${r}deg);box-shadow:0 24px 50px rgba(0,0,0,.6)` })).join('')}
+${nightSky({ x: 960, y: 40, w: 1280, h: 400 })}
+<div style="position:absolute;right:80px;top:-60px;width:520px;height:380px;background:radial-gradient(ellipse at center,rgba(245,176,65,.16),rgba(245,176,65,0) 70%);pointer-events:none"></div>
+<div style="position:absolute;left:0;top:0;bottom:0;width:640px;background:${themeFade('linear-gradient(90deg,#090a0d 42%,rgba(9,10,13,0))')}"></div>
+${fan.map(([n, x, y, r]) => cover(n, { style: `position:absolute;left:${x}px;top:${y}px;width:170px;transform:rotate(${r}deg);box-shadow:0 24px 50px rgba(0,0,0,.62)` })).join('')}
 <div style="position:absolute;left:56px;top:0;bottom:0;display:flex;align-items:center;gap:26px">
-  <div style="filter:drop-shadow(0 0 44px rgba(242,169,59,.5))">${mark(122)}</div>
+  <div style="filter:drop-shadow(0 0 40px rgba(245,176,65,.42))">${mark(122)}</div>
   <div>
     <div style="font:600 78px/82px Figtree;letter-spacing:-2px;color:var(--color-paper)">Nightjar</div>
     <div style="font:400 20px/28px Figtree;color:var(--color-labelSecondary);margin-top:6px">Low-latency game streaming from your PC</div>

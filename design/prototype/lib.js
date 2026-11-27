@@ -5,13 +5,13 @@ document.documentElement.dataset.tier = TIER;
 if (Q.get('hc') === '1') document.documentElement.dataset.hc = '1';
 if (Q.get('motion') === 'reduce') document.documentElement.dataset.motion = 'reduce';
 const STRESS = Q.get('stress') === '1';
-// High contrast is always black. Desktop has one look, and the stream menu stays night over a game in every theme.
-const NIGHT_ONLY = Q.get('hc') === '1' || /tv-stream|desktop-|banner/.test(location.pathname);
+// High contrast is always black. Desktop and mobile share all four looks (night, day, oled, hc); only the live stream overlay stays night over video.
+const NIGHT_ONLY = Q.get('hc') === '1' || /tv-stream/.test(location.pathname);
 const THEME = NIGHT_ONLY ? 'night' : (Q.get('theme') || 'night');
 const DAY = THEME === 'day';
 document.documentElement.dataset.theme = THEME;
 // What the ambient fades into.
-const FADE_TO = { day: '246,247,251', oled: '0,0,0' }[THEME];
+const FADE_TO = { day: '245,247,250', oled: '0,0,0' }[THEME];
 const themeFade = (f) => (FADE_TO ? f.replace(/rgba\(\d+,\d+,\d+,/g, `rgba(${FADE_TO},`).replace(/#[0-9a-f]{6}/gi, `rgb(${FADE_TO})`) : f);
 
 const ICONS = {
@@ -41,7 +41,7 @@ const ICONS = {
 const icon = (n, s = 24, w = 1.8) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" style="flex:none;display:block">${ICONS[n]}</svg>`;
 // The brand mark, same path as theme.rs and ic_nightjar_foreground.xml.
 const BIRD = 'M 51.75,41.24 C 53.31,40.96 54.50,41.92 54.89,43.31 C 55.16,44.00 55.33,44.55 55.55,44.95 C 58.63,42.95 61.40,40.41 64.45,38.63 C 68.66,39.72 73.12,42.22 78.13,45.72 C 72.88,44.97 68.19,45.36 64.07,46.82 C 60.97,47.94 58.40,49.93 56.11,51.87 L 56.49,56.49 L 59.86,66.49 C 58.86,67.47 57.71,67.97 56.50,68.18 C 55.30,68.39 54.04,68.32 52.77,67.74 L 52.51,57.19 L 51.29,52.72 C 48.47,51.68 45.38,50.70 42.08,50.69 C 37.70,50.73 33.17,51.97 28.50,54.48 C 32.00,49.47 35.34,45.59 38.92,43.13 C 42.40,43.76 45.87,45.20 49.45,46.03 C 49.52,45.58 49.49,45.00 49.51,44.26 C 49.40,42.82 50.19,41.51 51.75,41.24 Z';
-const mark = (s = 32) => `<svg width="${s}" height="${s}" viewBox="27 27 54 54" style="flex:none;display:block"><defs><linearGradient id="mk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC765"/><stop offset="1" stop-color="#EE9F2E"/></linearGradient></defs><circle cx="54" cy="54" r="27" fill="url(#mk)"/><path d="${BIRD}" fill="#14161F"/></svg>`;
+const mark = (s = 32) => `<svg width="${s}" height="${s}" viewBox="27 27 54 54" style="flex:none;display:block"><defs><linearGradient id="mk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC866"/><stop offset="1" stop-color="#E69A28"/></linearGradient></defs><circle cx="54" cy="54" r="27" fill="url(#mk)"/><path d="${BIRD}" fill="#1A1000"/></svg>`;
 
 // When stress=1 every cover is the theme's worst case for glass contrast: white for night, black for day.
 const WHITE = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900"><rect width="600" height="900" fill="${DAY ? '#000' : '#fff'}"/></svg>`);
@@ -73,13 +73,18 @@ const capsuleNav = (active = 0, { h = 52 } = {}) => {
 const pcCapsule = (name = 'Living-room PC', h = 48) => glass('chrome', { style: `border-radius:${h / 2}px;height:${h}px;flex:none` }, `<button class="press" style="height:${h}px;display:flex;align-items:center;gap:9px;padding:0 14px 0 16px;border-radius:999px;font:600 15px/20px Figtree;white-space:nowrap"><span class="dot"></span>${name}${icon('down', 17, 2.2)}</button>`);
 const roundGlass = (ic, h = 48, s = 22) => glass('chrome', { style: `width:${h}px;height:${h}px;border-radius:50%;flex:none` }, `<button class="press" style="width:${h}px;height:${h}px;display:grid;place-items:center;border-radius:50%">${icon(ic, s)}</button>`);
 
-const ambient = (n, { fade, bg } = {}) => `<div class="ambient" style="${bg ? `--bg:${bg}` : ''}"><img src="ambient/${STRESS ? (DAY ? 'black' : 'white') : n}-${innerWidth < innerHeight ? 'p' : 'l'}${DAY ? '-day' : ''}.png" alt="" data-ambient><div class="fade" style="background:${themeFade(fade || 'linear-gradient(180deg,rgba(11,13,18,.28),rgba(11,13,18,.46) 38%,rgba(20,22,31,.94) 74%,#14161f)')}"></div></div>`;
+const ambient = (n, { fade, bg } = {}) => `<div class="ambient" style="${bg ? `--bg:${bg}` : ''}"><img src="ambient/${STRESS ? (DAY ? 'black' : 'white') : n}-${innerWidth < innerHeight ? 'p' : 'l'}${DAY ? '-day' : ''}.png" alt="" data-ambient><div class="fade" style="background:${themeFade(fade || 'linear-gradient(180deg,rgba(9,10,13,.22),rgba(9,10,13,.44) 38%,rgba(9,10,13,.94) 74%,#090a0d)')}"></div></div>`;
 
-// The night backdrop for pages with no art: the banner's moon and orbit rings, lit.
-const nightSky = ({ x = 360, y = 40, r = 74, w = 412, h = 915 } = {}) => {
-  const rng = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
-  let stars = ''; for (let i = 0; i < 26; i++) if (!DAY) stars += `<circle cx="${(rng() * w).toFixed(0)}" cy="${(rng() * 118).toFixed(0)}" r="${(0.4 + rng() * 0.9).toFixed(2)}" fill="#fff" opacity="${(0.12 + rng() * 0.5).toFixed(2)}"/>`;
-  return `<div class="night" data-night><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><radialGradient id="ng" cx="${x}" cy="${y}" r="${r * 6}" gradientUnits="userSpaceOnUse"><stop offset="0" style="stop-color:var(--sky-glow)"/><stop offset=".25" style="stop-color:var(--sky-glow);stop-opacity:.36"/><stop offset="1" style="stop-color:var(--sky-glow);stop-opacity:0"/></radialGradient><linearGradient id="nm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD27A"/><stop offset="1" stop-color="#EE9F2E"/></linearGradient></defs><rect width="${w}" height="${h}" fill="url(#ng)"/>${stars}${[1.7, 2.5, 3.3, 4.1].map((k) => `<circle cx="${x}" cy="${y}" r="${r * k}" fill="none" style="stroke:var(--sky-ring)"/>`).join('')}<circle cx="${x}" cy="${y}" r="${r}" fill="url(#nm)"/></svg></div>`;
+// The 7.0 Obsidian Cinema stage backdrop for pages without cover art: calm matte canvas + soft overhead stage light (no stars or orbit rings).
+const nightSky = ({ x, y, w = 412, h = 915 } = {}) => {
+  const lx = x ?? Math.round(w * 0.5);
+  const ly = y ?? Math.round(-h * 0.12);
+  const rx = Math.round(w * 0.78);
+  const ry = Math.round(h * 0.88);
+  const stage = Q.get('hc') === '1'
+    ? '<rect width="100%" height="100%" fill="#000"/>'
+    : `<defs><linearGradient id="sky-base" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--sky-top)"/><stop offset=".46" style="stop-color:var(--sky-mid)"/><stop offset="1" style="stop-color:var(--sky-bottom)"/></linearGradient><radialGradient id="sky-key" cx="${lx}" cy="${ly}" r="${Math.max(rx, ry)}" gradientUnits="userSpaceOnUse"><stop offset="0" style="stop-color:var(--sky-glow);stop-opacity:.62"/><stop offset=".45" style="stop-color:var(--sky-glow);stop-opacity:.22"/><stop offset="1" style="stop-color:var(--sky-glow);stop-opacity:0"/></radialGradient></defs><rect width="${w}" height="${h}" fill="url(#sky-base)"/><rect width="${w}" height="${h}" fill="url(#sky-key)"/>`;
+  return `<div class="night" data-night><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${stage}</svg></div>`;
 };
 
 const row = (title, { sub = '', val = '', ic = '', right = '', chev = false, cls = '', style = '' } = {}) => `<div class="row press ${ic ? 'ico' : ''} ${cls}" style="${style}">${ic ? `<span class="tile">${icon(ic, 19)}</span>` : ''}<div class="ti"><div class="t-body" style="font-weight:600;font-size:16px">${title}</div>${sub ? `<div class="t-sub sec num">${sub}</div>` : ''}</div>${val || chev ? `<span class="val t-body num">${val}${chev ? icon('right', 16, 2.2) : ''}</span>` : ''}${right}</div>`;
@@ -168,7 +173,7 @@ const hint = (which, label) => { const k = HINTS[INPUT][which]; return `<span cl
 const orbit = (r, { cx, cy, dur = 2.4 } = {}) => `<svg style="position:absolute;left:${cx - r - 12}px;top:${cy - r - 12}px;overflow:visible" width="${2 * r + 24}" height="${2 * r + 24}"><circle cx="${r + 12}" cy="${r + 12}" r="${r}" fill="none" style="stroke:var(--sky-ring)" stroke-width="1.5"/><g class="spin" style="transform-origin:${r + 12}px ${r + 12}px;animation-duration:${dur}s"><circle cx="${r + 12}" cy="12" r="6" fill="var(--color-moon)" style="filter:drop-shadow(0 0 8px var(--color-moon))"/></g></svg>`;
 
 const phoneHomeMarkup = () => `
-${ambient('racing-game', { fade: 'linear-gradient(180deg,rgba(14,14,22,0),rgba(14,14,22,0) 42%,rgba(20,22,31,.94) 63%,#14161f 78%)' })}
+${ambient('racing-game', { fade: 'linear-gradient(180deg,rgba(9,10,13,0),rgba(9,10,13,0) 42%,rgba(9,10,13,.94) 63%,#090a0d 78%)' })}
 ${statusBar()}
 <div style="position:absolute;left:16px;right:16px;top:38px;display:flex;justify-content:space-between;z-index:7">${pcCapsule()}${roundGlass('grid')}</div>
 <!-- Continue carousel -->

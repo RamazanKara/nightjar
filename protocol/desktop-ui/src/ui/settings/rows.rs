@@ -456,7 +456,7 @@ impl Rows<'_> {
     /// menu can make it act, but while the main settings leave it nothing to do it says `reason`.
     pub(super) fn unused(&mut self, applies: bool, reason: impl FnOnce() -> String) {
         if !applies && self.note.is_none() {
-            self.note = Some((reason(), *TERTIARY));
+            self.note = Some((reason(), *ON_SURFACE_VARIANT));
         }
     }
 

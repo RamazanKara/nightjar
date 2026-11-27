@@ -108,7 +108,7 @@ pub(super) fn section_index(name: &str) -> usize {
     SETTINGS_SECTIONS.iter().position(|s| *s == name).unwrap_or(0)
 }
 
-pub(super) fn simple_smoothness_name(value: simple::Smoothness) -> &'static str {
+pub(in crate::ui) fn simple_smoothness_name(value: simple::Smoothness) -> &'static str {
     match value {
         simple::Smoothness::Auto => en("Auto (recommended)"),
         simple::Smoothness::Smoothest => en("Smoothest"),
@@ -125,7 +125,7 @@ pub(super) fn simple_picture_name(value: simple::Picture) -> &'static str {
     }
 }
 
-pub(super) fn simple_hdr_name(value: simple::Hdr) -> &'static str {
+pub(in crate::ui) fn simple_hdr_name(value: simple::Hdr) -> &'static str {
     match value {
         simple::Hdr::Auto => en("Auto (recommended)"),
         simple::Hdr::Off => en("Off"),
