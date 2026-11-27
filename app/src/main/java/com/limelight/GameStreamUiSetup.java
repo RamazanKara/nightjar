@@ -458,7 +458,6 @@ final class GameStreamUiSetup {
         game.controllerHandler.setControllerAddedListener(() -> game.sayControllersOff(1));
         game.controllerHandler.setPresenceListener(game::setPhysicalControllerConnected);
         game.physicalControllerConnected = game.controllerHandler.hasExternalControllers();
-        game.controllerHandler.setModelListener(game::setControllerModels);
         if (DualScreen.isSecond(game.getIntent())) game.controllerHandler.stop();
         game.conn.setControllerPreparation(game.controllerHandler::prepareControllersForLaunch);
         game.videoOutput.updateInputPollingRate();
@@ -492,6 +491,9 @@ final class GameStreamUiSetup {
             ((FrameLayout) game.streamView.getParent()).addView(game.gameTouchControls,
                     new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         }
+        // Which controllers are connected, once the game buttons are in the frame: a controller with its own on-screen
+        // layout may show the controls now, and they must land above the game buttons, as the next line puts them.
+        game.controllerHandler.setModelListener(game::setControllerModels);
         if (game.prefConfig.onscreenController && game.app.getRole() != NvApp.Role.REMOTE_MONITOR) game.showOnscreenController();
         if (game.prefConfig.enableMic && game.app.getRole() != NvApp.Role.REMOTE_MONITOR) {
             game.micButton = new MicButton(game, new MicButton.Host() {

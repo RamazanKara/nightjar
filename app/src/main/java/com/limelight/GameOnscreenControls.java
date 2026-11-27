@@ -175,7 +175,7 @@ final class GameOnscreenControls {
             // just saved for the connected controller brings them back.
             if (!onscreenControlsShown()) game.modernController.hide();
             else if (!game.modernController.isShown() && !game.modernController.isEditing() && !game.isHidingOverlays
-                    && game.conn != null && game.conn.canSendInput()) game.showOnscreenController();
+                    && !game.isFinishing() && game.conn != null && game.conn.canSendInput()) game.showOnscreenController();
         });
         game.modernController.refreshLayout();
         // Editing may build the controls while a gamepad keeps them off the screen; the editor itself still shows.

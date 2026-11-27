@@ -233,11 +233,17 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         externalPresent = hasExternalControllers();
     }
 
-    /** Reports the connected controllers' models now and whenever they change; see {@link ModelListener}. */
-    public synchronized void setModelListener(ModelListener listener) {
-        modelListener = listener;
-        controllerModels = classifier.externalControllerModels();
-        if (listener != null) listener.onControllerModelsChanged(controllerModels);
+    /**
+     * Reports the connected controllers' models now and whenever they change; see {@link ModelListener}. The first
+     * report runs outside this handler's lock, since the listener may build views.
+     */
+    public void setModelListener(ModelListener listener) {
+        java.util.List<String[]> models;
+        synchronized (this) {
+            modelListener = listener;
+            models = controllerModels = classifier.externalControllerModels();
+        }
+        if (listener != null) listener.onControllerModelsChanged(models);
     }
 
     public synchronized boolean hasExternalControllers() { return classifier.hasExternalControllers(); }
