@@ -361,6 +361,9 @@ pub struct Streaming {
     pub settings_after: Option<&'static str>,
     /// The Control Center's Controller settings was chosen once: the second choice leaves the stream.
     pub settings_asked: bool,
+    /// Nightjar closes once this stream ends (a command-line start that quits on exit, an autostream
+    /// run), so the Control Center offers no way to Settings.
+    pub closes_app: bool,
     pub toast: Option<(String, Instant)>,
     /// The route toward the PC is gone: the lost-network notice stays until one returns.
     pub network_lost: bool,

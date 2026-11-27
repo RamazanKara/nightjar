@@ -158,6 +158,8 @@ impl App {
             let wishes = stream::kms_scanout::Wishes { tearing: pacing != stream::present::PacingMode::Vsync, tear_free: settings.vrr_tear_free, vrr: settings.vrr, fps: streaming.facts.fps.max(1) as u32 };
             streaming.kms = stream::kms_scanout::Scanout::open(self.window, &sdl::renderer_name(self.renderer), &settings, wishes);
         }
+        // Leaving for Settings would close Nightjar instead where the stream's end closes it.
+        streaming.closes_app = self.cli.as_ref().is_some_and(|cli| cli.launch.quit_on_exit) || self.autostream.is_some();
         self.streaming = Some((streaming, TimerResolution::begin()));
         self.start_second_screen(&settings);
     }

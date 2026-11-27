@@ -94,6 +94,7 @@ pub(crate) fn show(ctx: &egui::Context, window: *mut SDL_Window, s: &mut Streami
         host_audio: !s.host_audio.switches().is_empty() || s.host_audio.problem().is_some(),
         controller_audio: s.controller_audio_available(),
         usb: s.usb.is_some() || s.usb_refused.is_some(),
+        controller_settings: !s.closes_app,
         guests: s.guests.shown(),
         suspend: s.quick_suspend.tile(),
         dvr: s.dvr_menu().map(|[_, record]| record.op == rubylight_protocol::stream_dvr::Op::StopRecord),

@@ -72,6 +72,9 @@ pub struct Available {
     pub host_audio: bool,
     pub controller_audio: bool,
     pub usb: bool,
+    /// Settings' Controller section can open once the stream is left: false where Nightjar closes
+    /// when the stream ends (a command-line start that quits on exit, an autostream run).
+    pub controller_settings: bool,
     /// This device manages the guests of its game (`session.guests`).
     pub guests: bool,
     /// Quick Suspend, as the host offers it: Some(false) offers Suspend game, Some(true) Resume
@@ -132,7 +135,9 @@ pub fn offers(a: &Available) -> Vec<Offer> {
         offers.push(Offer::action("usb_devices"));
     }
     // Settings' Controller section, the controller editor; opening it leaves the stream.
-    offers.push(Offer::action("controller_settings"));
+    if a.controller_settings {
+        offers.push(Offer::action("controller_settings"));
+    }
     if a.guests {
         offers.push(Offer::action("guests"));
     }

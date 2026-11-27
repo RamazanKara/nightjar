@@ -64,8 +64,16 @@ fn every_choice_for_a_button_is_one_the_desktop_can_draw_and_run() {
 fn everything() -> Available {
     Available {
         mouse: Some(true), overlay: true, shortcuts: true, microphone: Some(false), quality: true, clipboard: true, image_clipboard: true,
-        commands: true, session: true, host_audio: true, controller_audio: true, usb: true, guests: true, suspend: Some(false), dvr: None, exits: vec![HostExit::End, HostExit::CloseGame],
+        commands: true, session: true, host_audio: true, controller_audio: true, usb: true, controller_settings: true, guests: true, suspend: Some(false), dvr: None, exits: vec![HostExit::End, HostExit::CloseGame],
     }
+}
+
+/// The controller editor is offered only where Nightjar stays open after the stream to show it.
+#[test]
+fn controller_settings_needs_an_app_that_stays_open() {
+    let has = |a: &Available| offers(a).iter().any(|offer| offer.id == "controller_settings");
+    assert!(has(&everything()));
+    assert!(!has(&Available { controller_settings: false, ..everything() }));
 }
 
 /// A shortcut file from Android can hold keys the caps lack (F13, the right Ctrl): they get caps of their own,

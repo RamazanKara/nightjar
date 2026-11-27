@@ -282,6 +282,7 @@ impl Streaming {
             export_statistics: false,
             settings_after: None,
             settings_asked: false,
+            closes_app: false,
             statistics: VecDeque::new(),
             menu_visible: false,
             session_page_open: false,
