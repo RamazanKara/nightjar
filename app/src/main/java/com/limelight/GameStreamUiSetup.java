@@ -17,7 +17,6 @@ import android.os.Bundle;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.util.DisplayMetrics;
-import android.view.InputDevice;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -29,6 +28,7 @@ import com.limelight.binding.input.ControllerHandler;
 import com.limelight.binding.input.HeldInputState;
 import com.limelight.binding.input.KeyboardTranslator;
 import com.limelight.binding.input.TouchLayout;
+import com.limelight.binding.input.UnbufferedInputDispatch;
 import com.limelight.binding.input.capture.InputCaptureManager;
 import com.limelight.binding.input.driver.UsbDriverService;
 import com.limelight.binding.video.CrashAccounting;
@@ -200,13 +200,11 @@ final class GameStreamUiSetup {
 
         View backgroundTouchView = game.findViewById(R.id.backgroundTouchView);
         backgroundTouchView.setOnTouchListener(game);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            int mask = InputDevice.SOURCE_CLASS_BUTTON | InputDevice.SOURCE_CLASS_JOYSTICK
-                    | InputDevice.SOURCE_CLASS_POINTER | InputDevice.SOURCE_CLASS_POSITION
-                    | InputDevice.SOURCE_CLASS_TRACKBALL;
-            game.streamView.requestUnbufferedDispatch(mask);
-            backgroundTouchView.requestUnbufferedDispatch(mask);
-        }
+        Window window = game.getWindow();
+        UnbufferedInputDispatch.enable(
+                window != null ? window.getDecorView() : null,
+                game.streamView,
+                backgroundTouchView);
 
         game.notificationOverlayView = game.findViewById(R.id.notificationOverlay);
         game.streamMenuHint = game.findViewById(R.id.streamMenuHint);

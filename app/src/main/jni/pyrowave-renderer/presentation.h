@@ -172,6 +172,27 @@ constexpr int32_t PYRO_DATASPACE_SRGB = 142671872;
 constexpr int32_t PYRO_DATASPACE_BT2020_PQ = 163971072;
 constexpr int32_t PYRO_DATASPACE_BT2020_HLG = 168165376;
 
+// Present modes and swapchain queue depth. Values match VkPresentModeKHR, kept independent of
+// Vulkan headers so the host tests can run it.
+constexpr int32_t PYRO_PRESENT_MODE_IMMEDIATE = 0;
+constexpr int32_t PYRO_PRESENT_MODE_MAILBOX = 1;
+constexpr int32_t PYRO_PRESENT_MODE_FIFO = 2;
+constexpr int32_t PYRO_PRESENT_MODE_FIFO_LATEST_READY = 1000361000;
+
+// Add one spare image only for MAILBOX so a newer frame can replace a queued one without blocking.
+// FIFO, FIFO_LATEST_READY and IMMEDIATE keep minImageCount directly (Android WSI often exposes
+// minImageCount == 3 with FIFO only, where +1 would allocate a 4th queue slot).
+inline uint32_t pyroSwapchainImageCount(uint32_t minImageCount, uint32_t maxImageCount, int32_t presentMode) {
+    uint32_t count = minImageCount;
+    if (presentMode == PYRO_PRESENT_MODE_MAILBOX && minImageCount < UINT32_MAX) {
+        count = minImageCount + 1;
+    }
+    if (maxImageCount > 0) {
+        count = std::min(count, maxImageCount);
+    }
+    return count;
+}
+
 inline int32_t pyroWindowDataspace(bool hdr, bool hlg) {
     if (!hdr) return PYRO_DATASPACE_SRGB;
     return hlg ? PYRO_DATASPACE_BT2020_HLG : PYRO_DATASPACE_BT2020_PQ;

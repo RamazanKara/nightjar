@@ -40,6 +40,7 @@ public:
     void setTransfer(bool hlgTransfer);
     void takeEvents(std::vector<jlong> &completed, std::vector<jlong> &released,
                     std::vector<jlong> &rendered);
+    void applyWindowFrameRate();
 
     std::string driverDescription;
     std::atomic<PyroWaveUpscalingReason> upscalingReason{UPSCALING_DISABLED};

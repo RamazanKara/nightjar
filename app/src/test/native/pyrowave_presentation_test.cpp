@@ -212,8 +212,30 @@ static void dataspaceSymbolLookup() {
     assert(pyroFindSymbol(name, noNativewindow, lookup) == &setter);
 }
 
+static void swapchainImageCounts() {
+    // Android FIFO WSI exposes minImageCount == 3 without MAILBOX: must not add +1 (no 4th queue slot).
+    assert(pyroSwapchainImageCount(3, 0, PYRO_PRESENT_MODE_FIFO) == 3);
+    assert(pyroSwapchainImageCount(3, 8, PYRO_PRESENT_MODE_FIFO) == 3);
+    assert(pyroSwapchainImageCount(2, 0, PYRO_PRESENT_MODE_FIFO) == 2);
+
+    // FIFO_LATEST_READY and IMMEDIATE also use minImageCount directly.
+    assert(pyroSwapchainImageCount(3, 8, PYRO_PRESENT_MODE_FIFO_LATEST_READY) == 3);
+    assert(pyroSwapchainImageCount(2, 8, PYRO_PRESENT_MODE_IMMEDIATE) == 2);
+
+    // MAILBOX adds +1 spare image so a newer frame can replace a queued one without blocking.
+    assert(pyroSwapchainImageCount(2, 0, PYRO_PRESENT_MODE_MAILBOX) == 3);
+    assert(pyroSwapchainImageCount(3, 0, PYRO_PRESENT_MODE_MAILBOX) == 4);
+    assert(pyroSwapchainImageCount(3, 8, PYRO_PRESENT_MODE_MAILBOX) == 4);
+
+    // Clamps to maxImageCount when maxImageCount > 0 (0 means unlimited in VkSurfaceCapabilitiesKHR).
+    assert(pyroSwapchainImageCount(3, 3, PYRO_PRESENT_MODE_MAILBOX) == 3);
+    assert(pyroSwapchainImageCount(4, 3, PYRO_PRESENT_MODE_FIFO) == 3);
+    assert(pyroSwapchainImageCount(UINT32_MAX, 0, PYRO_PRESENT_MODE_MAILBOX) == UINT32_MAX);
+}
+
 int main() {
     swapchainFormatSelection();
+    swapchainImageCounts();
     dataspaceSymbolLookup();
     rotationMapping();
     rotatedFitAndUpscaling();

@@ -103,10 +103,9 @@ bool Renderer::createSwapchain(bool allowEmpty) {
     // The Android 13 and 14 loader lists no HDR colour space; HDR then rides on the window dataspace.
     swapchainColorSpace = hdr && !dataspaceOverride ? static_cast<VkColorSpaceKHR>(pyroHdrColorSpace(hlg)) :
                           VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-    uint32_t imageCount = caps.minImageCount + 1;
-    if (caps.maxImageCount > 0) {
-        imageCount = std::min(imageCount, caps.maxImageCount);
-    }
+    const VkPresentModeKHR activePresentMode = presentMode.load(std::memory_order_relaxed);
+    const uint32_t imageCount = pyroSwapchainImageCount(
+        caps.minImageCount, caps.maxImageCount, static_cast<int32_t>(activePresentMode));
 
     VkSwapchainCreateInfoKHR info = {VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
     info.surface = surface;
@@ -129,7 +128,6 @@ bool Renderer::createSwapchain(bool allowEmpty) {
     info.preTransform = static_cast<VkSurfaceTransformFlagBitsKHR>(transform);
     info.compositeAlpha = (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) ?
         VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR : VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
-    const VkPresentModeKHR activePresentMode = presentMode.load(std::memory_order_relaxed);
     info.presentMode = activePresentMode;
     info.clipped = VK_TRUE;
     info.oldSwapchain = swapchain;
