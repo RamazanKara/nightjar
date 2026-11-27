@@ -21,6 +21,13 @@
 -keepclassmembers interface com.limelight.nvstream.jni.FileTransferBridge$Progress {
     void onProgress(long, long, long);
 }
+# Looked up by name from protocol/android/src/wake_relay.rs; no Java code calls it.
+-keepclassmembers interface com.limelight.nvstream.jni.NightjarJni$WakeRelayListener {
+    void progress(java.lang.String);
+}
+-keepclassmembers class * implements com.limelight.nvstream.jni.NightjarJni$WakeRelayListener {
+    void progress(java.lang.String);
+}
 # Looked up by name from protocol/android/src/http.rs and http_folders.rs.
 -keepclassmembers interface com.limelight.nvstream.jni.NightjarHttpJni$ByteSink {
     void write(byte[], int, int);
