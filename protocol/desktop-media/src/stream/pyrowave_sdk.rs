@@ -45,6 +45,7 @@ mod watchdog;
 // Unix (Linux and macOS) plus tests and test-support so renderer device sharing is tested on every host.
 #[cfg(any(unix, test, feature = "test-support"))]
 pub mod zero_copy;
+pub mod priority;
 pub mod queue;
 
 #[cfg(test)]

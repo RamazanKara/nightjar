@@ -7,10 +7,12 @@ use sdl3_sys::everything::*;
 
 mod gpu_present;
 mod hdr;
+mod latency;
 mod renderer;
 
 pub use gpu_present::*;
 pub use hdr::*;
+pub use latency::*;
 pub use renderer::*;
 
 #[cfg(test)]

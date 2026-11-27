@@ -500,6 +500,9 @@ fn make_renderer(window: *mut SDL_Window, gpu: bool, vulkan: *mut SDL_GPUVulkanO
         if !cfg!(windows) && !renderer.is_null() && renderer_name(renderer) != "gpu" {
             *OUTPUT.lock().unwrap_or_else(|e| e.into_inner()) = Some(Err(crate::handheld::SdrReason::NoGpuRenderer));
         }
+        if !renderer.is_null() {
+            super::latency::apply_d3d11_latency(renderer);
+        }
         SDL_DestroyProperties(props);
         renderer
     }

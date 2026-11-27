@@ -159,12 +159,29 @@ impl OwnVulkan {
                 }
                 let mut chain = Chain::new();
                 chain.enable(features);
-                let priority = [1.0f32];
-                let queues = [vk::DeviceQueueCreateInfo::default().queue_family_index(family as u32).queue_priorities(&priority)];
-                let mut info = vk::DeviceCreateInfo::default().queue_create_infos(&queues);
-                info.p_next = (&raw const chain.pdf2).cast();
-                match instance.create_device(physical_device, &info, None) {
-                    Ok(device) => return Ok((physical_device, family as u32, features, caps.name, device)),
+                let priority_ext = super::priority::global_priority_extension_for(
+                    &extensions,
+                    crate::sdl::gpu_priority_from_env(),
+                );
+                let result = super::priority::create_device_with_priority_fallback(priority_ext, |ext, queue_priority| {
+                    let priority = [1.0f32];
+                    let mut queue_info = vk::DeviceQueueCreateInfo::default()
+                        .queue_family_index(family as u32)
+                        .queue_priorities(&priority);
+                    if let Some(queue_priority) = queue_priority {
+                        queue_info.p_next = (queue_priority as *const vk::DeviceQueueGlobalPriorityCreateInfoKHR<'_>).cast();
+                    }
+                    let queues = [queue_info];
+                    let ext_ptrs = ext.map(|name| [name.as_ptr()]);
+                    let mut info = vk::DeviceCreateInfo::default().queue_create_infos(&queues);
+                    if let Some(names) = &ext_ptrs {
+                        info = info.enabled_extension_names(names);
+                    }
+                    info.p_next = (&raw const chain.pdf2).cast();
+                    instance.create_device(physical_device, &info, None)
+                });
+                match result {
+                    Ok((device, _)) => return Ok((physical_device, family as u32, features, caps.name, device)),
                     Err(e) => refused.push(format!("{} refused a device ({e})", caps.name)),
                 }
             }
