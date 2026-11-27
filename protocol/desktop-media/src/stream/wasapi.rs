@@ -12,14 +12,14 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use rubylight_protocol::audio_ext::{CHANNELS_714, CHANNEL_MASK_714};
-use windows::core::{implement, GUID, PCWSTR};
+use windows::core::{implement, Interface, GUID, PCWSTR};
 use windows::Win32::Foundation::{
     CloseHandle, E_UNEXPECTED, HANDLE, PROPERTYKEY, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows::Win32::Media::Audio::{
-    eConsole, eRender, EDataFlow, ERole, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator,
-    IMMNotificationClient, IMMNotificationClient_Impl, MMDeviceEnumerator, AUDCLNT_SHAREMODE_SHARED,
-    AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+    eConsole, eRender, EDataFlow, ERole, IAudioClient, IAudioClient3, IAudioRenderClient,
+    IMMDeviceEnumerator, IMMNotificationClient, IMMNotificationClient_Impl, MMDeviceEnumerator,
+    AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
     AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, DEVICE_STATE, WAVEFORMATEX, WAVEFORMATEXTENSIBLE,
     WAVEFORMATEXTENSIBLE_0,
 };
@@ -42,6 +42,49 @@ const WAVE_FORMAT_EXTENSIBLE: u16 = 0xFFFE;
 const SUBTYPE_IEEE_FLOAT: GUID = GUID::from_u128(0x00000003_0000_0010_8000_00aa00389b71);
 /// How long the offer's probe of the output is trusted.
 const OFFER_FOR: Duration = Duration::from_secs(2);
+const LOW_PERIOD_ENV: &str = "NIGHTJAR_WASAPI_LOW_PERIOD";
+
+fn low_period_enabled_from(value: Option<&str>) -> bool {
+    value.is_none_or(|v| v.trim() != "0")
+}
+
+fn low_period_enabled() -> bool {
+    low_period_enabled_from(std::env::var(LOW_PERIOD_ENV).ok().as_deref())
+}
+
+fn select_low_period(min_period: u32, default_period: u32) -> Option<u32> {
+    (min_period > 0 && min_period < default_period).then_some(min_period)
+}
+
+/// Returns true when `mix` matches our 48 kHz 12-channel 7.1.4 float format directly, so
+/// `IAudioClient3::InitializeSharedAudioStream` can open without `AUTOCONVERTPCM`.
+///
+/// # Safety
+/// `mix` must be null or point to a readable `WAVEFORMATEX` (and full `WAVEFORMATEXTENSIBLE`
+/// when `wFormatTag == WAVE_FORMAT_EXTENSIBLE` and `cbSize >= 22`).
+unsafe fn mix_matches_714(mix: *const WAVEFORMATEX) -> bool {
+    if mix.is_null() {
+        return false;
+    }
+    // SAFETY: caller guarantees `mix` points to a readable WAVEFORMATEX.
+    let header = unsafe { std::ptr::read_unaligned(mix) };
+    if header.wFormatTag != WAVE_FORMAT_EXTENSIBLE
+        || header.cbSize < 22
+        || header.nChannels != CHANNELS as u16
+        || header.nSamplesPerSec != RATE
+        || header.wBitsPerSample != 32
+        || header.nBlockAlign != (CHANNELS * 4) as u16
+    {
+        return false;
+    }
+    // SAFETY: `wFormatTag == WAVE_FORMAT_EXTENSIBLE` and `cbSize >= 22` verified above.
+    let ext = unsafe { std::ptr::read_unaligned(mix.cast::<WAVEFORMATEXTENSIBLE>()) };
+    // SAFETY: `Samples` union is read as `wValidBitsPerSample` on an extensible PCM/float format.
+    let valid_bits = unsafe { ext.Samples.wValidBitsPerSample };
+    let mask = ext.dwChannelMask;
+    let subformat = ext.SubFormat;
+    valid_bits == 32 && mask == CHANNEL_MASK_714 && subformat == SUBTYPE_IEEE_FLOAT
+}
 
 /// The stream's format: 12 float channels at 48 kHz in 7.1.4's mask. Windows converts it to the
 /// output's own format (`AUTOCONVERTPCM`), as it converts SDL's rate.
@@ -279,26 +322,76 @@ impl Device {
         // Declared before `client` so any `?` after `SetEventHandle` drops `client` first.
         // SAFETY: creating a plain unnamed auto-reset event owned by `Event`.
         let event = Event(unsafe { CreateEventW(None, false, false, PCWSTR::null()) }?);
-        let client = default_client()?;
+        let mut client = default_client()?;
         let format = format();
-        // SAFETY: COM is initialised on this thread; the format outlives the call.
+        let format_ptr = (&raw const format).cast::<WAVEFORMATEX>();
+        // SAFETY: COM is initialised on this thread; `format` outlives the calls and `GetMixFormat`
+        // allocations are freed once.
         unsafe {
+            let mut low_period = None;
+            if low_period_enabled() {
+                let matches_714 = client.GetMixFormat().ok().is_some_and(|mix| {
+                    let ok = mix_matches_714(mix);
+                    CoTaskMemFree(Some(mix.cast_const().cast()));
+                    ok
+                });
+                if matches_714 && let Ok(client3) = client.cast::<IAudioClient3>() {
+                    let (
+                        mut default_period,
+                        mut fundamental_period,
+                        mut min_period,
+                        mut max_period,
+                    ) = (0, 0, 0, 0);
+                    if client3
+                        .GetSharedModeEnginePeriod(
+                            format_ptr,
+                            &mut default_period,
+                            &mut fundamental_period,
+                            &mut min_period,
+                            &mut max_period,
+                        )
+                        .is_ok()
+                        && let Some(selected) = select_low_period(min_period, default_period)
+                    {
+                        let init = client3
+                            .InitializeSharedAudioStream(
+                                AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                                selected,
+                                format_ptr,
+                                None,
+                            )
+                            .and_then(|()| client.SetEventHandle(event.0));
+                        if init.is_ok() {
+                            low_period = Some(selected);
+                        } else {
+                            // COM IAudioClient cannot be Initialized twice after a failed Initialize*.
+                            drop(client3);
+                            client = default_client()?;
+                        }
+                    }
+                }
+            }
             let mut default_period = 0i64;
-            client.GetDevicePeriod(Some(&raw mut default_period), None)?;
-            client.Initialize(
-                AUDCLNT_SHAREMODE_SHARED,
-                AUDCLNT_STREAMFLAGS_EVENTCALLBACK
-                    | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
-                    | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
-                0,
-                0,
-                (&raw const format).cast::<WAVEFORMATEX>(),
-                None,
-            )?;
-            client.SetEventHandle(event.0)?;
+            if low_period.is_none() {
+                client.GetDevicePeriod(Some(&raw mut default_period), None)?;
+                client.Initialize(
+                    AUDCLNT_SHAREMODE_SHARED,
+                    AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+                        | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
+                        | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
+                    0,
+                    0,
+                    format_ptr,
+                    None,
+                )?;
+                client.SetEventHandle(event.0)?;
+            }
             let buffer = client.GetBufferSize()?;
-            let period = compute_period(default_period, buffer)
-                .ok_or_else(|| windows::core::Error::new(E_UNEXPECTED, "WASAPI audio buffer size is zero"))?;
+            let period = match low_period {
+                Some(frames) => (buffer > 0).then(|| frames.clamp(1, buffer)),
+                None => compute_period(default_period, buffer),
+            }
+            .ok_or_else(|| windows::core::Error::new(E_UNEXPECTED, "WASAPI audio buffer size is zero"))?;
             let render = client.GetService::<IAudioRenderClient>()?;
             Ok(Self { render, client, event, period, buffer })
         }
@@ -595,6 +688,50 @@ mod tests {
         let dummy = HANDLE(std::ptr::dangling_mut());
         assert!(run_with_start_error(&wake, dummy).is_err());
         assert!(lock(&wake).0.is_none(), "wake handle must not outlive early error return");
+    }
+
+    #[test]
+    fn low_period_compatibility_and_period_selection() {
+        let exact = format();
+        assert!(unsafe { mix_matches_714((&raw const exact).cast()) });
+        assert!(unsafe { !mix_matches_714(std::ptr::null()) });
+
+        let mut wrong_channels = exact;
+        wrong_channels.Format.nChannels = 8;
+        assert!(unsafe { !mix_matches_714((&raw const wrong_channels).cast()) });
+
+        let mut wrong_rate = exact;
+        wrong_rate.Format.nSamplesPerSec = 44_100;
+        assert!(unsafe { !mix_matches_714((&raw const wrong_rate).cast()) });
+
+        let mut wrong_mask = exact;
+        wrong_mask.dwChannelMask = 0x3F;
+        assert!(unsafe { !mix_matches_714((&raw const wrong_mask).cast()) });
+
+        let mut wrong_subtype = exact;
+        wrong_subtype.SubFormat = GUID::from_u128(0x00000001_0000_0010_8000_00aa00389b71);
+        assert!(unsafe { !mix_matches_714((&raw const wrong_subtype).cast()) });
+
+        let mut wrong_bits = exact;
+        wrong_bits.Samples.wValidBitsPerSample = 24;
+        assert!(unsafe { !mix_matches_714((&raw const wrong_bits).cast()) });
+
+        let mut plain_tag = exact;
+        plain_tag.Format.wFormatTag = 3;
+        plain_tag.Format.cbSize = 0;
+        assert!(unsafe { !mix_matches_714((&raw const plain_tag).cast()) });
+
+        assert_eq!(select_low_period(0, 480), None);
+        assert_eq!(select_low_period(480, 480), None);
+        assert_eq!(select_low_period(960, 480), None);
+        assert_eq!(select_low_period(96, 480), Some(96));
+        assert_eq!(select_low_period(128, 480), Some(128));
+
+        assert!(low_period_enabled_from(None));
+        assert!(low_period_enabled_from(Some("1")));
+        assert!(low_period_enabled_from(Some("")));
+        assert!(!low_period_enabled_from(Some("0")));
+        assert!(!low_period_enabled_from(Some(" 0 ")));
     }
 
     /// Opens this PC's default output with the 7.1.4 format and plays silence for a moment.

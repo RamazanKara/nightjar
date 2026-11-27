@@ -476,3 +476,125 @@ fn a_full_queue_drops_packets() {
         Fed::Dropped
     );
 }
+
+#[test]
+fn sustained_clean_delivery_reduces_lead_to_one_packet_and_trims_surplus() {
+    for device_frames in [0, 128] {
+        let mut playout = Playout::new(AudioDecoder::Pcm { channels: 2 }, 5, device_frames);
+        assert_eq!(
+            playout.lead, 480,
+            "starts at 10 ms lead (device_frames={device_frames})"
+        );
+        assert_eq!(playout.min_lead, 240);
+
+        // Queue sits at 600 samples (12.5 ms): below base_lead + frame (720), so nothing trims
+        // while lead is 10 ms. After CLEAN_REDUCE_MS (800 x 5 ms packets), lead steps down to
+        // 1 packet (240) and TRIM_AFTER_MS (400 x 5 ms packets) trims the surplus smoothly.
+        let mut queued = 0usize;
+        let mut trims = 0usize;
+        for n in 0..1250 {
+            let fed = playout.packet(Some(&pcm_tone(n)), queued);
+            match fed {
+                Fed::Play { lead, underrun } => {
+                    assert!(!underrun);
+                    if n == 0 {
+                        assert_eq!(lead, 480);
+                        queued = 600;
+                    } else {
+                        assert_eq!(lead, 0);
+                    }
+                }
+                Fed::Trimmed => {
+                    assert!(n >= 800, "no trim before CLEAN_REDUCE_MS (trimmed at {n})");
+                    trims += 1;
+                    queued = queued.saturating_sub(240);
+                }
+                other => panic!("unexpected {other:?} at {n}"),
+            }
+            if n == 798 {
+                assert_eq!(playout.lead, 480, "still 10 ms before 4000 ms");
+                assert_eq!(trims, 0);
+            }
+            if n == 799 {
+                assert_eq!(playout.lead, 240, "steps down to 1 packet at 4000 ms");
+            }
+        }
+        assert_eq!(
+            trims, 1,
+            "trims surplus down into [min_lead, min_lead + frame]"
+        );
+        assert_eq!(queued, 360);
+    }
+}
+
+#[test]
+fn single_starve_or_concealment_immediately_restores_base_lead() {
+    let mut playout = Playout::new(AudioDecoder::Pcm { channels: 2 }, 5, 128);
+    assert_eq!(
+        playout.packet(Some(&pcm_tone(0)), 0),
+        Fed::Play {
+            lead: 480,
+            underrun: false
+        }
+    );
+    for n in 1..800 {
+        assert_eq!(
+            playout.packet(Some(&pcm_tone(n)), 300),
+            Fed::Play {
+                lead: 0,
+                underrun: false
+            }
+        );
+    }
+    assert_eq!(playout.lead, 240);
+
+    // A single starve immediately restores the 10 ms base_lead and resets the clean counter.
+    assert!(!playout.starve(128).is_empty());
+    assert_eq!(playout.lead, 480);
+    assert_eq!(playout.clean_samples, 0);
+    assert_eq!(playout.packet(Some(&pcm_tone(800)), 300), Fed::Dropped);
+
+    // Full 4000 ms of clean packets is required again to reduce lead back to 240.
+    for n in 801..1600 {
+        assert_eq!(
+            playout.packet(Some(&pcm_tone(n)), 300),
+            Fed::Play {
+                lead: 0,
+                underrun: false
+            }
+        );
+    }
+    assert_eq!(playout.lead, 480);
+    assert_eq!(
+        playout.packet(Some(&pcm_tone(1600)), 300),
+        Fed::Play {
+            lead: 0,
+            underrun: false
+        }
+    );
+    assert_eq!(playout.lead, 240);
+
+    // A single lost packet concealment also restores base_lead immediately.
+    assert_eq!(
+        playout.packet(None, 300),
+        Fed::Play {
+            lead: 0,
+            underrun: false
+        }
+    );
+    assert_eq!(playout.lead, 480);
+    assert_eq!(playout.clean_samples, 0);
+
+    // Post-outage recovery still leads with 10 ms (480 samples).
+    for _ in 0..30 {
+        let _ = playout.starve(240);
+    }
+    assert_eq!(
+        playout.packet(Some(&pcm_tone(1601)), 0),
+        Fed::Play {
+            lead: 480,
+            underrun: true
+        }
+    );
+    assert_eq!(playout.lead, 480);
+}

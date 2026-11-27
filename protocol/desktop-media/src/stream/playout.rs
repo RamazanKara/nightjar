@@ -15,6 +15,9 @@ use super::pipeline::AudioDecoder;
 /// own buffer when that is longer: enough that the next packet's jitter does not starve the
 /// device again. Concealment keeps this cushion from then on.
 const LEAD_MS: usize = 10;
+/// Clean delivery (zero starves/concealments and no bursts), in ms of packets, after which the
+/// active target lead steps down to one packet (or the device period).
+const CLEAN_REDUCE_MS: usize = 4000;
 /// The longest outage concealed, in ms. Opus fades its concealment out well before this; past it
 /// the device plays silence and the next packet starts again with the lead.
 const CONCEAL_MS: usize = 100;
@@ -53,8 +56,14 @@ pub struct Playout {
     /// Samples per channel in one packet.
     frame: usize,
     max_queued: usize,
-    /// Samples per channel of silence led with on an empty queue.
+    /// Baseline samples per channel of silence led with on startup and post-outage recovery.
+    base_lead: usize,
+    /// Minimum samples per channel of target lead on sustained clean delivery.
+    min_lead: usize,
+    /// Active target lead (samples per channel) for empty-queue silence and drift trimming.
     lead: usize,
+    /// Consecutive samples per channel of clean packet delivery without starves or bursts.
+    clean_samples: usize,
     /// Packets whose time concealment played; they are skipped when they arrive.
     owed: usize,
     /// Samples concealed since a packet last played.
@@ -81,28 +90,32 @@ pub struct Playout {
     trim_head: Vec<f32>,
 }
 
-/// Silence lead and maximum queued samples per channel for `frame` and a device period of
-/// `device_frames` samples per channel (0 when unknown).
-fn cushion(frame: usize, device_frames: usize) -> (usize, usize) {
-    let lead = (48 * LEAD_MS).max(device_frames).min(5760 - frame);
+/// Baseline lead, low-jitter minimum lead, and maximum queued samples per channel for `frame`
+/// and a device period of `device_frames` samples per channel (0 when unknown).
+fn cushion(frame: usize, device_frames: usize) -> (usize, usize, usize) {
+    let base_lead = (48 * LEAD_MS).max(device_frames).min(5760 - frame);
+    let min_lead = frame.max(device_frames).min(base_lead);
     // Above the trim line (`drift`) by the device's own take at least: a queue that sits just
     // over the line peaks a device period higher between its requests.
-    let max_queued = (48 * QUEUE_MS).max(2 * lead + frame) + frame;
-    (lead, max_queued)
+    let max_queued = (48 * QUEUE_MS).max(2 * base_lead + frame) + frame;
+    (base_lead, min_lead, max_queued)
 }
 
 impl Playout {
     /// `device_frames` is how much the device takes at once (0 when unknown).
     pub fn new(decoder: AudioDecoder, packet_ms: u32, device_frames: usize) -> Self {
         let frame = 48 * packet_ms.max(1) as usize;
-        let (lead, max_queued) = cushion(frame, device_frames);
+        let (base_lead, min_lead, max_queued) = cushion(frame, device_frames);
         Self {
             pcm: vec![0.0; 5760 * decoder.channels()],
             decoder,
             len: 0,
             frame,
             max_queued,
-            lead,
+            base_lead,
+            min_lead,
+            lead: base_lead,
+            clean_samples: 0,
             owed: 0,
             run: 0,
             primed: false,
@@ -124,8 +137,14 @@ impl Playout {
     /// Recomputes lead and maximum queue depth after the output reopens with a new period size.
     #[cfg_attr(not(windows), allow(dead_code))]
     pub fn set_device_frames(&mut self, device_frames: usize) {
-        let (lead, max_queued) = cushion(self.frame, device_frames);
-        self.lead = lead;
+        let (base_lead, min_lead, max_queued) = cushion(self.frame, device_frames);
+        self.base_lead = base_lead;
+        self.min_lead = min_lead;
+        self.lead = if self.clean_samples >= 48 * CLEAN_REDUCE_MS {
+            min_lead
+        } else {
+            base_lead
+        };
         self.max_queued = max_queued;
     }
 
@@ -150,11 +169,20 @@ impl Playout {
         }
         if self.owed > 0 {
             self.owed -= 1;
+            self.clean_samples = 0;
             if !self.bursts {
                 return Fed::Dropped;
             }
         }
-        self.dry |= !self.asks && self.primed && queued == 0;
+        if self.owed == 0 && self.bursts && self.since_starved >= 48 * BURSTS_MS {
+            self.bursts = false;
+        }
+        let underrun_now = !self.asks && self.primed && queued == 0;
+        self.dry |= underrun_now;
+        if packet.is_none() || underrun_now || self.bursts {
+            self.clean_samples = 0;
+            self.lead = self.base_lead;
+        }
         let lead = if queued == 0 && (!self.primed || self.dry) {
             self.lead
         } else {
@@ -172,6 +200,12 @@ impl Playout {
         let samples = self.decoder.decode(packet, out);
         if samples <= 0 {
             return Fed::Failed;
+        }
+        if packet.is_some() && !self.dry && !self.bursts {
+            self.clean_samples = self.clean_samples.saturating_add(samples as usize);
+            if self.clean_samples >= 48 * CLEAN_REDUCE_MS {
+                self.lead = self.min_lead;
+            }
         }
         // Decoded all the same: the decoder goes on from it without a gap.
         if packet.is_some() && self.drift(queued) {
@@ -220,6 +254,8 @@ impl Playout {
         if needed == 0 || !self.primed {
             return &[];
         }
+        self.clean_samples = 0;
+        self.lead = self.base_lead;
         let room = (48 * CONCEAL_MS).saturating_sub(self.run) / self.frame;
         let frames = needed.div_ceil(self.frame).min(room);
         if frames == 0 {
@@ -261,6 +297,8 @@ impl Playout {
         self.above = 0;
         self.since_starved = usize::MAX;
         self.bursts = false;
+        self.lead = self.base_lead;
+        self.clean_samples = 0;
         self.trim_head.clear();
     }
 
