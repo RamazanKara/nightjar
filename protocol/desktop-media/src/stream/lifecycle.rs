@@ -320,6 +320,7 @@ impl Streaming {
             first_frame: false,
             unshown: render::Unshown::default(),
             needs_redraw: true,
+            overlay_redraw_at: None,
             hdr_output: hdr_stream.then(|| HdrOutput::new(true)),
             timings: VecDeque::new(),
             frame_warp: warp_presenter,

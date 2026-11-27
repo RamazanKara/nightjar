@@ -97,7 +97,8 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
         s.settle_bitrate_slider(nightjar_desktop_ui::stream_overlay_widgets::take_pending_bitrate_slider(&gui.ctx));
     }
     let curtain = s.curtain_view();
-    if !s.overlay_visible && toast.is_none() && !input_only && !s.menu_visible && curtain.is_none() {
+    if !s.overlay_visible && toast.is_none() && !input_only && !s.menu_visible && curtain.is_none() && !mic_only {
+        s.kms_overlay_hidden();
         return false;
     }
     let mode = s.overlay_mode;
@@ -116,7 +117,11 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     .then(|| compact_with_device_info(s));
     let digest = overlay_digest(s, mode, live, &title, toast.as_deref(), gui.surface(window, renderer), compact_device_line.as_ref());
     if !gui::overlay_must_run(gui.overlay_shown(), digest, live, gui.input_pending(), gui.animating()) {
-        gui.overlay_repaint(renderer);
+        if !s.kms_overlay_keeps_frame() {
+            s.kms_clear_overlay_canvas();
+            gui.overlay_repaint(renderer);
+            s.kms_overlay_drawn(gui.overlay_bounds());
+        }
         return false;
     }
     let output = gui.run(window, renderer, |ui| {
@@ -222,7 +227,9 @@ pub(crate) fn draw_overlay(gui: &mut Gui, window: *mut SDL_Window, renderer: *mu
     if s.menu_visible {
         gui.platform(window, &output.platform_output);
     }
+    s.kms_clear_overlay_canvas();
     gui.overlay_paint(renderer, output, digest);
+    s.kms_overlay_drawn(gui.overlay_bounds());
     shortcuts_changed
 }
 

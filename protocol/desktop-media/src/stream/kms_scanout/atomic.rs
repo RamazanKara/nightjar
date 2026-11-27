@@ -66,7 +66,7 @@ impl Scanout {
             snapshot, layout: layouts[0].clone(), format: (fmt, modifier), generation: Some(generation), pool,
             fbs, retired: Vec::new(), fbs_made: 1, fbs_reused: 0, next_fb, shown_fb: 0, rect, shown_rect: None,
             on_screen: None,
-            overlay: OverlayPlane { plane: 0, buffers: overlay_buffers, front: 0, shown: false, change: None, last_canvas: Vec::new() },
+            overlay: OverlayPlane { plane: 0, buffers: overlay_buffers, front: 0, shown: false, change: None, buffer_dirty: [None, None] },
             background: None, hdr, color, blobs: Vec::new(), restore: Vec::new(), props_dirty: true, vrr_on,
         };
         // The display mode for the stream's rate (or top refresh when VRR is engaged), of the size in use.

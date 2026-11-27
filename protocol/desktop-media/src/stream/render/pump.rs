@@ -174,8 +174,12 @@ impl Streaming {
     pub fn pump(&mut self) {
         // The keyboard hook keeps the shell's keys only while this loop runs.
         system_keys::alive();
-        self.cursor.tick(Instant::now());
-        self.release_shortcut_when_due(Instant::now());
+        let now_instant = Instant::now();
+        self.cursor.tick(now_instant);
+        self.release_shortcut_when_due(now_instant);
+        if take_due_overlay_redraw(self.overlay_visible, now_instant, &mut self.overlay_redraw_at) {
+            self.needs_redraw = true;
+        }
         if self.shared.usb_pending.load(std::sync::atomic::Ordering::Acquire)
             && let Some(native) = lock(&self.shared.usb_native).take()
         {
@@ -329,10 +333,14 @@ impl Streaming {
             }
             None => Wait::For(Duration::from_millis(if self.controller_mouse_active || self.guide_waiting || self.audio_status.0.iter().any(|flags| *flags != 0) { 20 } else if self.overlay_visible { 250 } else { 500 })),
         };
-        // A hide from the PC waiting out its delay, a held shortcut's release and the launch
-        // curtain's quiet watch wake the loop when due.
+        // A hide from the PC waiting out its delay, a held shortcut's release, the launch
+        // curtain's quiet watch and an idle overlay fallback wake the loop when due.
         let now = Instant::now();
-        let wake = [self.cursor.hide_in(now), self.shortcut_release_in(now), self.curtain_wake_in(now)].into_iter().flatten().min();
+        let overlay_wake = self
+            .overlay_redraw_at
+            .filter(|_| self.overlay_visible)
+            .map(|due| due.saturating_duration_since(now));
+        let wake = [self.cursor.hide_in(now), self.shortcut_release_in(now), self.curtain_wake_in(now), overlay_wake].into_iter().flatten().min();
         match (wait, wake) {
             (Wait::For(wait), Some(wake)) => Wait::For(wait.min(wake)),
             (Wait::Precise(wait), Some(wake)) => Wait::Precise(wait.min(wake)),

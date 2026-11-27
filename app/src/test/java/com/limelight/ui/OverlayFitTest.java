@@ -139,4 +139,55 @@ public class OverlayFitTest {
         int firstLine = Integer.parseInt(fit.second.toString().split("\n")[0].substring("Line ".length()));
         assertEquals("starts a section", 0, firstLine % 7);
     }
+
+    @Test public void unchangedSpannedCompactAndStatisticsOverlayShowDoesNotRequestAnotherLayoutPass() {
+        android.content.Context ctx = RuntimeEnvironment.getApplication();
+        android.widget.FrameLayout parent = new android.widget.FrameLayout(ctx);
+        android.widget.ScrollView scroll = new android.widget.ScrollView(ctx);
+        android.widget.LinearLayout row = new android.widget.LinearLayout(ctx);
+        TextView first = view();
+        TextView second = view();
+        row.addView(first);
+        row.addView(second);
+        scroll.addView(row);
+        parent.addView(scroll);
+
+        CharSequence compact1 = com.limelight.binding.video.PerformanceOverlay.compactText(ctx, 120.0f, 120.0f, 4.0f, 0.0f, 2.5f);
+        CharSequence compact2 = com.limelight.binding.video.PerformanceOverlay.compactText(ctx, 120.0f, 120.0f, 4.0f, 0.0f, 2.5f);
+        assertTrue(compact1 instanceof Spanned);
+        OverlayFit.show(first, second, scroll, compact1, 13, false, true);
+        parent.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY));
+        parent.layout(0, 0, 1920, 1080);
+        assertFalse(first.isLayoutRequested());
+
+        // Identical Spanned 1 Hz tick (new HealthSpan instance, same text and color): no relayout!
+        OverlayFit.show(first, second, scroll, compact2, 13, false, true);
+        assertFalse("unchanged Spanned compact text must not requestLayout", first.isLayoutRequested());
+
+        // Changing health color (GOOD -> POOR) with identical glyph/string DOES update spans:
+        CharSequence stats1 = com.limelight.binding.video.PerformanceOverlay.statisticsText(
+                ctx, "1920x1080", 120f, 120f, 30f, 0f, 4f, 1f, 1.5f, -1f, 2.0f, 1.0f, false);
+        CharSequence stats2 = com.limelight.binding.video.PerformanceOverlay.statisticsText(
+                ctx, "1920x1080", 120f, 120f, 30f, 0f, 4f, 1f, 1.5f, -1f, 2.0f, 1.0f, false);
+        OverlayFit.show(first, second, scroll, stats1, 12, true, true);
+        parent.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY));
+        parent.layout(0, 0, 1920, 1080);
+        assertFalse(first.isLayoutRequested());
+        OverlayFit.show(first, second, scroll, stats2, 12, true, true);
+        assertFalse("unchanged Spanned statistics text must not requestLayout", first.isLayoutRequested());
+
+        // Changing span color on identical text updates the TextView spans.
+        SpannableString green = new SpannableString("● 120.0 FPS");
+        green.setSpan(new android.text.style.ForegroundColorSpan(0xFF00FF00), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        SpannableString red = new SpannableString("● 120.0 FPS");
+        red.setSpan(new android.text.style.ForegroundColorSpan(0xFFFF0000), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        assertFalse(OverlayFit.spannedTextEquals(green, red));
+        OverlayFit.show(first, second, scroll, green, 13, false, true);
+        OverlayFit.show(first, second, scroll, red, 13, false, true);
+        assertEquals(0xFFFF0000, ((Spanned) first.getText()).getSpans(0, 1, android.text.style.ForegroundColorSpan.class)[0].getForegroundColor());
+    }
 }

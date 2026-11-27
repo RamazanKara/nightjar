@@ -474,7 +474,7 @@ impl App {
         }
         self.overlay.sync_to_stream(streaming);
         if streaming.update_overlay() && streaming.overlay_visible {
-            streaming.needs_redraw = true;
+            streaming.note_overlay_updated();
         }
         save_stream_settings(&mut self.launcher.settings, &self.store, &mut self.save_failed_told, streaming);
         if let Some((_, at)) = &streaming.toast {

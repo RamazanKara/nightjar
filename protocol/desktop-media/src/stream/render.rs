@@ -601,6 +601,7 @@ impl Streaming {
             return true;
         }
         // A redraw for the menu or the overlay leaves a kept picture to be shown and counted.
+        self.overlay_redraw_at = None;
         if has_picture && self.skipped.shown() { eprintln!("nightjar: pacing: trying no-wait presents again (hold {:?})", self.skipped.hold()); }
         #[cfg(target_os = "linux")]
         if has_picture && !by_kms { self.watch_gamescope_fifo(renderer, flipped.issued_us, flipped.returned_us, dropped); }
@@ -683,13 +684,9 @@ impl Streaming {
         if !self.kms_engaged() {
             return None;
         }
-        // What `draw_overlay` in main.rs draws something for.
-        let meshes = self.overlay_visible || self.toast.is_some() || self.menu_visible;
-        match self.kms.as_mut().and_then(|kms| kms.overlay_renderer().filter(|_| meshes)) {
-            Some(overlay) => {
-                draw_overlay(self, overlay);
-                if let Some(kms) = self.kms.as_mut() { kms.overlay_drawn(); }
-            }
+        let meshes = self.draws_overlay_meshes();
+        match self.kms.as_ref().and_then(kms_scanout::Scanout::overlay_target).filter(|_| meshes) {
+            Some(overlay) => draw_overlay(self, overlay),
             None => {
                 if let Some(kms) = self.kms.as_mut() { kms.overlay_hidden(); }
             }

@@ -515,3 +515,40 @@ fn beam_slices_are_four_or_three_at_4k() {
     assert_eq!(beam_slices(1080), 4);
     assert_eq!(beam_slices(2160), 3);
 }
+
+#[test]
+fn draws_overlay_meshes_covers_curtain_suspend_banner_and_prompt_modes() {
+    assert!(!draws_overlay_meshes(false, false, false, false, false, false, AppRole::Stream));
+    assert!(!draws_overlay_meshes(false, false, false, false, false, false, AppRole::RemoteMonitor));
+    assert!(draws_overlay_meshes(true, false, false, false, false, false, AppRole::Stream));
+    assert!(draws_overlay_meshes(false, true, false, false, false, false, AppRole::Stream));
+    assert!(draws_overlay_meshes(false, false, true, false, false, false, AppRole::Stream), "Quick Suspend banner");
+    assert!(draws_overlay_meshes(false, false, false, true, false, false, AppRole::Stream));
+    assert!(draws_overlay_meshes(false, false, false, false, true, false, AppRole::Stream), "Launch Curtain");
+    assert!(draws_overlay_meshes(false, false, false, false, false, true, AppRole::Stream), "Mic-only prompt");
+    assert!(draws_overlay_meshes(false, false, false, false, false, false, AppRole::InputOnly));
+}
+
+#[test]
+fn passive_overlay_updates_ride_incoming_pictures_with_idle_fallback() {
+    let start = Instant::now();
+    let mut pending = None;
+
+    // Video stream: passive 1 Hz update does not demand an immediate mid-refresh redraw.
+    assert!(!schedule_overlay_redraw(true, false, start, &mut pending));
+    assert_eq!(pending, Some(start + OVERLAY_IDLE_REDRAW));
+    assert!(!take_due_overlay_redraw(true, start + Duration::from_millis(16), &mut pending));
+
+    // When a video frame presents at +16 ms, `present()` clears `pending`; no extra redraw fires at +100 ms.
+    pending = None;
+    assert!(!take_due_overlay_redraw(true, start + OVERLAY_IDLE_REDRAW, &mut pending));
+
+    // Static / stalled stream: if no frame arrives within 100 ms, the fallback redraw fires once.
+    assert!(!schedule_overlay_redraw(true, false, start, &mut pending));
+    assert!(take_due_overlay_redraw(true, start + OVERLAY_IDLE_REDRAW, &mut pending));
+    assert_eq!(pending, None);
+
+    // Input-only / mic-only sessions have no video pictures, so updates redraw immediately.
+    assert!(schedule_overlay_redraw(true, true, start, &mut pending));
+    assert_eq!(pending, None);
+}

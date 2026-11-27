@@ -4,12 +4,16 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.os.Build;
 import android.text.Layout;
+import android.text.NoCopySpan;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.StaticLayout;
 import android.text.TextPaint;
+import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
 import android.text.style.RelativeSizeSpan;
 import android.text.style.ReplacementSpan;
+import android.text.style.StyleSpan;
 import android.util.TypedValue;
 import android.view.View;
 import android.widget.TextView;
@@ -91,20 +95,99 @@ public final class OverlayFit {
         int column = first.getResources().getDimensionPixelSize(R.dimen.stream_overlay_column);
         // Not laid out yet: the next second's update fits it.
         if (!mayBeLong || width <= 0 || height <= 0 || canScroll) {
-            first.setTextSize(textSp);
-            first.setText(text);
-            second.setVisibility(View.GONE);
-            first.setMaxWidth(column);
+            setTextSizeSp(first, textSp);
+            setMaxWidthPx(first, column);
+            setTextIfChanged(first, text);
+            if (second.getVisibility() != View.GONE) {
+                second.setVisibility(View.GONE);
+            }
             return;
         }
         OverlayFit fit = fit(first, text, textSp, width, height, column);
-        first.setTextSize(fit.textSp);
-        first.setMaxWidth(fit.columnWidthPx);
-        first.setText(fit.first);
-        second.setTextSize(fit.textSp);
-        second.setMaxWidth(fit.columnWidthPx);
-        second.setText(fit.second);
-        second.setVisibility(fit.second != null ? View.VISIBLE : View.GONE);
+        setTextSizeSp(first, fit.textSp);
+        setMaxWidthPx(first, fit.columnWidthPx);
+        setTextIfChanged(first, fit.first);
+        setTextSizeSp(second, fit.textSp);
+        setMaxWidthPx(second, fit.columnWidthPx);
+        setTextIfChanged(second, fit.second);
+        int secondVisibility = fit.second != null ? View.VISIBLE : View.GONE;
+        if (second.getVisibility() != secondVisibility) {
+            second.setVisibility(secondVisibility);
+        }
+    }
+
+    private static void setTextSizeSp(TextView view, float sp) {
+        float px = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp, view.getResources().getDisplayMetrics());
+        if (Math.abs(view.getTextSize() - px) > 0.01f) {
+            view.setTextSize(TypedValue.COMPLEX_UNIT_PX, px);
+        }
+    }
+
+    private static void setMaxWidthPx(TextView view, int maxPixels) {
+        if (view.getMaxWidth() != maxPixels) {
+            view.setMaxWidth(maxPixels);
+        }
+    }
+
+    private static void setTextIfChanged(TextView view, CharSequence text) {
+        CharSequence wanted = text != null ? text : "";
+        CharSequence current = view.getText();
+        if (spannedTextEquals(current, wanted)) {
+            return;
+        }
+        view.setText(text);
+    }
+
+    static boolean spannedTextEquals(CharSequence a, CharSequence b) {
+        if (!TextUtils.equals(a, b)) return false;
+        if (!(a instanceof Spanned) && !(b instanceof Spanned)) return true;
+        java.util.List<Object> aSpans = contentSpans(a), bSpans = contentSpans(b);
+        if (aSpans.size() != bSpans.size()) return false;
+        if (aSpans.isEmpty()) return true;
+        Spanned sa = (Spanned) a, sb = (Spanned) b;
+        sortSpans(sa, aSpans);
+        sortSpans(sb, bSpans);
+        for (int i = 0; i < aSpans.size(); i++) {
+            Object s1 = aSpans.get(i), s2 = bSpans.get(i);
+            if (sa.getSpanStart(s1) != sb.getSpanStart(s2) || sa.getSpanEnd(s1) != sb.getSpanEnd(s2)
+                    || sa.getSpanFlags(s1) != sb.getSpanFlags(s2) || s1.getClass() != s2.getClass()
+                    || !spanAttributesEqual(s1, s2)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static java.util.List<Object> contentSpans(CharSequence text) {
+        if (!(text instanceof Spanned)) return java.util.Collections.emptyList();
+        Spanned spanned = (Spanned) text;
+        Object[] raw = spanned.getSpans(0, spanned.length(), Object.class);
+        java.util.ArrayList<Object> out = new java.util.ArrayList<>(raw.length);
+        for (Object span : raw) {
+            if (!(span instanceof NoCopySpan)) out.add(span);
+        }
+        return out;
+    }
+
+    private static void sortSpans(Spanned text, java.util.List<Object> spans) {
+        if (spans.size() <= 1) return;
+        spans.sort((x, y) -> {
+            int cmp = Integer.compare(text.getSpanStart(x), text.getSpanStart(y));
+            if (cmp != 0) return cmp;
+            cmp = Integer.compare(text.getSpanEnd(x), text.getSpanEnd(y));
+            return cmp != 0 ? cmp : x.getClass().getName().compareTo(y.getClass().getName());
+        });
+    }
+
+    private static boolean spanAttributesEqual(Object s1, Object s2) {
+        if (s1 instanceof ForegroundColorSpan) {
+            return ((ForegroundColorSpan) s1).getForegroundColor() == ((ForegroundColorSpan) s2).getForegroundColor();
+        }
+        if (s1 instanceof StyleSpan) return ((StyleSpan) s1).getStyle() == ((StyleSpan) s2).getStyle();
+        if (s1 instanceof RelativeSizeSpan) {
+            return Float.compare(((RelativeSizeSpan) s1).getSizeChange(), ((RelativeSizeSpan) s2).getSizeChange()) == 0;
+        }
+        return (s1 instanceof PacingGraph) || s1.equals(s2);
     }
 
     /** The overlay with low gaps between its sections and its pacing timeline drawn as a short bar graph. */

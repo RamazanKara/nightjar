@@ -228,6 +228,9 @@ final class GameVideoRefresh {
         if (refreshHeartbeat != null) {
             refreshHeartbeat.setRequestedFrameRate(frameRate);
         }
+        if (game.overlays != null) {
+            game.overlays.applyPassiveFrameRateCategory();
+        }
     }
 
     void syncWindowDisplayMode(float targetHz, boolean seamlessOnly) {

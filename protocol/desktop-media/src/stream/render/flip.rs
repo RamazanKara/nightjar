@@ -131,11 +131,12 @@ impl Streaming {
             let planes_direct = unscaled && self.texture.draws_planes_direct();
             // What `draw_overlay` in app/overlay.rs draws: nothing, or egui meshes, which write PQ themselves
             // (`ui_pq`) where a frame could be video only but for them.
-            let meshes = self.overlay_visible || self.toast.is_some() || self.menu_visible;
+            let meshes = self.draws_overlay_meshes();
             let frame = present::VideoOnlyFrame {
                 pq_output,
                 planes_direct,
                 nothing_else: self.facts.role != nightjar_core::http::AppRole::InputOnly
+                    && !self.mic_only()
                     && (!meshes || (pq_output && planes_direct && self.texture.ui_draws_pq(renderer))),
                 read_back: SDL_GetBooleanProperty(props, READ_BACK_PROPERTY.as_ptr(), false),
             };
@@ -196,5 +197,61 @@ impl Streaming {
     pub(super) fn end_pyrowave_unshown(&mut self) {
         eprintln!("nightjar: PyroWave pictures cannot be shown: {}", self.texture.failure.take().as_deref().unwrap_or("GPU reconstruction failed"));
         self.exit = Some(Exit::Ended(Some(tr(PYROWAVE_UNSHOWN).to_owned())));
+    }
+
+    /// Whether `draw_overlay` has HUD, menu, toast, suspend banner, curtain, or prompt meshes to draw.
+    pub fn draws_overlay_meshes(&self) -> bool {
+        draws_overlay_meshes(
+            self.overlay_visible,
+            self.toast.is_some(),
+            self.quick_suspend.banner().is_some(),
+            self.menu_visible,
+            self.curtain_down(),
+            self.mic_only(),
+            self.facts.role,
+        )
+    }
+
+    /// Notes a once-a-second stats update so it rides the next video frame instead of stealing a
+    /// vblank mid-refresh, with a 100 ms fallback when the stream has no incoming pictures.
+    pub fn note_overlay_updated(&mut self) {
+        let immediate = self.facts.role == AppRole::InputOnly || self.plan.mic_only;
+        if schedule_overlay_redraw(self.overlay_visible, immediate, Instant::now(), &mut self.overlay_redraw_at) {
+            self.needs_redraw = true;
+        }
+    }
+
+    /// Whether KMS video planes already hold the current overlay frame on screen.
+    pub fn kms_overlay_keeps_frame(&self) -> bool {
+        #[cfg(target_os = "linux")]
+        return self.kms.as_ref().is_some_and(kms_scanout::Scanout::overlay_keeps_frame);
+        #[cfg(not(target_os = "linux"))]
+        false
+    }
+
+    /// Clears the dirty rectangle of the KMS software overlay canvas before a repaint.
+    pub fn kms_clear_overlay_canvas(&mut self) {
+        #[cfg(target_os = "linux")]
+        if let Some(kms) = self.kms.as_mut() {
+            kms.clear_overlay_canvas();
+        }
+    }
+
+    /// Syncs the newly painted `[x0, y0, x1, y1]` bounds from the KMS overlay canvas to its plane.
+    pub fn kms_overlay_drawn(&mut self, bounds: Option<[i32; 4]>) {
+        #[cfg(target_os = "linux")]
+        if let Some(kms) = self.kms.as_mut() {
+            kms.overlay_drawn(bounds);
+        }
+        #[cfg(not(target_os = "linux"))]
+        let _ = bounds;
+    }
+
+    /// Hides the KMS overlay plane when nothing draws over the picture this frame.
+    pub fn kms_overlay_hidden(&mut self) {
+        #[cfg(target_os = "linux")]
+        if let Some(kms) = self.kms.as_mut() {
+            kms.overlay_hidden();
+        }
     }
 }

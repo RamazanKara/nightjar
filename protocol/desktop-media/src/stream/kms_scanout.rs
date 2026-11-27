@@ -19,6 +19,10 @@ use std::os::fd::RawFd;
 use nightjar_core::control::HdrMetadata;
 use sdl3_sys::everything::*;
 
+use super::kms_overlay::{
+    clear_rect_bytes, overlay_commit_mode, overlay_keeps_frame, sync_overlay_rect, DirtyRect,
+    OverlayBuffers, OverlayCommit,
+};
 use super::pipeline::Decoded;
 use super::present::Pending;
 use crate::kms::drm::{self, Card, DumbBuffer, Framebuffer, ModeInfo, Props};
@@ -146,9 +150,9 @@ struct OverlayPlane {
     shown: bool,
     /// What the next commit does to it: Some(true) shows the other buffer, Some(false) hides it.
     change: Option<bool>,
-    /// Last pixels copied into the overlay dumb buffer, so unchanged frames skip the WC memcpy
-    /// and leave `only_fb = true` for async flips.
-    last_canvas: Vec<u8>,
+    /// Non-transparent rectangle currently written in each dumb buffer, so updates zero only stale
+    /// spans from two updates ago instead of touching the whole 4K write-combined mapping.
+    buffer_dirty: [Option<DirtyRect>; 2],
 }
 
 /// The card's state the stream started from: its planes, connector and CRTC with their values.
@@ -210,6 +214,7 @@ pub struct Scanout {
     /// The software renderer and its canvas the overlay is painted on.
     canvas: *mut SDL_Surface,
     overlay_renderer: *mut SDL_Renderer,
+    canvas_dirty: Option<DirtyRect>,
     engaged: Option<Engaged>,
     off: Option<String>,
 }
@@ -248,6 +253,10 @@ impl Scanout {
                 SDL_DestroySurface(canvas);
                 return Err(format!("no overlay renderer: {}", crate::sdl::error()));
             }
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+            SDL_RenderClear(renderer);
+            SDL_FlushRenderer(renderer);
             (canvas, renderer)
         };
         eprintln!(
@@ -256,7 +265,7 @@ impl Scanout {
             mode.refresh_hz(),
             if async_cap { "available" } else { "unavailable" }
         );
-        Ok(Self { card, output, wishes, async_cap, async_failed: false, commit_times: plan::CommitTimes::default(), commit_sets: Vec::new(), commit_buffers: plan::AtomicBuffers::default(), canvas, overlay_renderer, engaged: None, off: None })
+        Ok(Self { card, output, wishes, async_cap, async_failed: false, commit_times: plan::CommitTimes::default(), commit_sets: Vec::new(), commit_buffers: plan::AtomicBuffers::default(), canvas, overlay_renderer, canvas_dirty: None, engaged: None, off: None })
     }
 
     /// The planes show the stream.
@@ -362,25 +371,37 @@ impl Scanout {
         Ok(Snapshot { planes, connector, crtc, mode, modes })
     }
 
-    /// The software renderer for this frame's overlay, its canvas cleared to transparent; None
-    /// while the planes do not show the stream.
-    pub fn overlay_renderer(&mut self) -> Option<*mut SDL_Renderer> {
-        if !self.engaged() {
-            return None;
-        }
-        // SAFETY: our own live software renderer.
-        unsafe {
-            SDL_SetRenderDrawBlendMode(self.overlay_renderer, SDL_BLENDMODE_NONE);
-            SDL_SetRenderDrawColor(self.overlay_renderer, 0, 0, 0, 0);
-            SDL_RenderClear(self.overlay_renderer);
-        }
-        Some(self.overlay_renderer)
+    /// The software renderer for the overlay plane, without clearing its canvas (`clear_overlay_canvas`
+    /// runs only on frames that actually repaint the overlay); None while planes are not engaged.
+    pub fn overlay_target(&self) -> Option<*mut SDL_Renderer> {
+        self.engaged().then_some(self.overlay_renderer)
     }
 
-    /// The overlay drawn on the canvas: it goes into the buffer not on the screen, which the next
-    /// commit shows, unless the plane is already shown with identical pixels. The canvas is
-    /// premultiplied, as the plane's default blending takes it.
-    pub fn overlay_drawn(&mut self) {
+    /// Whether the overlay plane already shows the last painted frame with no pending flip/hide, so
+    /// an unchanged overlay needs neither canvas clear, software rasterization, nor buffer copy.
+    pub fn overlay_keeps_frame(&self) -> bool {
+        self.engaged
+            .as_ref()
+            .is_some_and(|e| overlay_keeps_frame(self.off.is_none(), e.overlay.shown, e.overlay.change))
+    }
+
+    /// Clears only the rectangle the previous overlay pass painted onto the software canvas.
+    pub fn clear_overlay_canvas(&mut self) {
+        let Some(dirty) = self.canvas_dirty.take() else { return };
+        // SAFETY: our own live software renderer and ARGB8888 surface.
+        unsafe {
+            SDL_FlushRenderer(self.overlay_renderer);
+            let canvas = &*self.canvas;
+            let width = canvas.w.max(0) as u32;
+            let height = canvas.h.max(0) as u32;
+            clear_rect_bytes(canvas.pixels.cast::<u8>(), canvas.pitch.max(0) as usize, width, height, dirty);
+        }
+    }
+
+    /// Syncs the newly painted `bounds` (`[x0, y0, x1, y1]` in pixels) from the software canvas
+    /// into the back dumb buffer, zeroing any stale region left in that buffer from two updates ago.
+    /// `None` hides the overlay plane if it was shown.
+    pub fn overlay_drawn(&mut self, bounds: Option<[i32; 4]>) {
         if self.off.is_some() {
             return;
         }
@@ -388,27 +409,39 @@ impl Scanout {
         let back = 1 - engaged.overlay.front;
         let buffer = &engaged.overlay.buffers[back];
         // SAFETY: our renderer and canvas; the buffer's mapping is `pitch` x `height` bytes and the
-        // canvas `pitch` x `h`; each row copies the narrower width of the two.
-        let changed = unsafe {
+        // canvas `pitch` x `h`; `DirtyRect::clamped` bounds both to the shared `width` x `height`.
+        let next = unsafe {
             SDL_FlushRenderer(self.overlay_renderer);
             let canvas = &*self.canvas;
-            let rows = (canvas.h.max(0) as u32).min(buffer.height) as usize;
-            let bytes = ((canvas.w.max(0) as u32).min(buffer.width) * 4) as usize;
-            let (from, from_pitch) = (canvas.pixels.cast::<u8>(), canvas.pitch.max(0) as usize);
-            sync_overlay_bytes(
-                OverlayPlanes {
-                    src: from,
-                    src_pitch: from_pitch,
-                    dst: buffer.map,
-                    dst_pitch: buffer.pitch as usize,
-                    rows,
-                    row_bytes: bytes,
-                },
-                engaged.overlay.shown,
-                &mut engaged.overlay.last_canvas,
-            )
+            let width = (canvas.w.max(0) as u32).min(buffer.width);
+            let height = (canvas.h.max(0) as u32).min(buffer.height);
+            let next = bounds.and_then(|b| DirtyRect::clamped(b, width, height));
+            if next.is_some() {
+                sync_overlay_rect(
+                    OverlayBuffers {
+                        src: canvas.pixels.cast::<u8>(),
+                        src_pitch: canvas.pitch.max(0) as usize,
+                        dst: buffer.map,
+                        dst_pitch: buffer.pitch as usize,
+                        width,
+                        height,
+                    },
+                    engaged.overlay.buffer_dirty[back],
+                    next,
+                );
+            }
+            next
         };
-        engaged.overlay.change = changed.then_some(true);
+        self.canvas_dirty = next;
+        match next {
+            Some(_) => {
+                engaged.overlay.buffer_dirty[back] = next;
+                engaged.overlay.change = Some(true);
+            }
+            None => {
+                engaged.overlay.change = engaged.overlay.shown.then_some(false);
+            }
+        }
     }
 
     /// Nothing to draw over the picture this frame: the overlay plane goes down if it was up.
@@ -459,31 +492,43 @@ impl Scanout {
         let Some(engaged) = engaged.as_mut() else { return Ok(()) };
         sets.clear();
         let mut only_fb = true;
+        let mut allow_modeset = false;
         if engaged.props_dirty {
             Self::stream_sets(card, engaged, output, wishes, sets)?;
             only_fb = false;
+            allow_modeset = true;
         }
         let video = engaged.layout.video;
         if engaged.shown_rect != Some(engaged.rect) {
             let (fb, rect) = (engaged.next_fb, engaged.rect);
             Self::put_plane(engaged, output, sets, video, fb, Some(rect));
             only_fb = false;
+            allow_modeset = true;
         } else if engaged.next_fb != engaged.shown_fb {
             let fb = engaged.next_fb;
             Self::put(engaged, output, sets, Object::Plane(video), "FB_ID", u64::from(fb));
         }
-        if let Some(show) = engaged.overlay.change {
-            let full = Self::full_rect(engaged);
-            let (plane, fb) = (engaged.overlay.plane, engaged.overlay.buffers[1 - engaged.overlay.front].fb);
-            Self::put_plane(engaged, output, sets, plane, fb, show.then_some(full));
-            only_fb = false;
+        match overlay_commit_mode(engaged.overlay.shown, engaged.overlay.change) {
+            OverlayCommit::None => {}
+            OverlayCommit::FlipFb => {
+                let (plane, fb) = (engaged.overlay.plane, engaged.overlay.buffers[1 - engaged.overlay.front].fb);
+                Self::put(engaged, output, sets, Object::Plane(plane), "FB_ID", u64::from(fb));
+                only_fb = false;
+            }
+            OverlayCommit::FullPlane { show } => {
+                let full = Self::full_rect(engaged);
+                let (plane, fb) = (engaged.overlay.plane, engaged.overlay.buffers[1 - engaged.overlay.front].fb);
+                Self::put_plane(engaged, output, sets, plane, fb, show.then_some(full));
+                only_fb = false;
+                allow_modeset = true;
+            }
         }
         if sets.is_empty() {
             return Ok(());
         }
         let may_tear = plan::may_tear(wishes.tearing, engaged.vrr_on, wishes.tear_free);
         let tear = plan::async_flip(may_tear, *async_cap && !*async_failed, engaged.layout.video_on_primary(engaged.snapshot.planes.iter().map(|(p, _)| p)), only_fb);
-        let flags = if tear { drm::ATOMIC_PAGE_FLIP_ASYNC } else if only_fb { 0 } else { drm::ATOMIC_ALLOW_MODESET };
+        let flags = if tear { drm::ATOMIC_PAGE_FLIP_ASYNC } else if allow_modeset { drm::ATOMIC_ALLOW_MODESET } else { 0 };
         let began = std::time::Instant::now();
         match card.commit_with(commit_buffers, sets, flags) {
             Ok(()) => {}
@@ -577,51 +622,6 @@ impl Drop for Scanout {
             SDL_DestroySurface(self.canvas);
         }
     }
-}
-
-struct OverlayPlanes {
-    src: *const u8,
-    src_pitch: usize,
-    dst: *mut u8,
-    dst_pitch: usize,
-    rows: usize,
-    row_bytes: usize,
-}
-
-/// Copies `rows` x `row_bytes` from `src` (stride `src_pitch`) to `dst` (stride `dst_pitch`) and
-/// updates `cache` only when `!already_shown` or the pixels differ from `cache`.
-///
-/// # Safety
-/// `planes.src` must be valid for `planes.rows` rows of `planes.row_bytes` at stride
-/// `planes.src_pitch`, and `planes.dst` must be valid for `planes.rows` rows of
-/// `planes.row_bytes` at stride `planes.dst_pitch`.
-unsafe fn sync_overlay_bytes(
-    planes: OverlayPlanes,
-    already_shown: bool,
-    cache: &mut Vec<u8>,
-) -> bool {
-    let OverlayPlanes { src, src_pitch, dst, dst_pitch, rows, row_bytes } = planes;
-    let total = rows * row_bytes;
-    // SAFETY: caller guarantees `src` covers `rows` rows of `row_bytes` bytes at `src_pitch`.
-    let unchanged = already_shown
-        && cache.len() == total
-        && (0..rows).all(|row| {
-            let line = unsafe { std::slice::from_raw_parts(src.add(row * src_pitch), row_bytes) };
-            line == &cache[row * row_bytes..(row + 1) * row_bytes]
-        });
-    if unchanged {
-        return false;
-    }
-    cache.resize(total, 0);
-    for row in 0..rows {
-        // SAFETY: caller guarantees `src` and `dst` cover `row_bytes` at their respective pitches.
-        unsafe {
-            let line = std::slice::from_raw_parts(src.add(row * src_pitch), row_bytes);
-            cache[row * row_bytes..(row + 1) * row_bytes].copy_from_slice(line);
-            std::ptr::copy_nonoverlapping(line.as_ptr(), dst.add(row * dst_pitch), row_bytes);
-        }
-    }
-    true
 }
 
 /// Where a picture of `visible` size goes on the CRTC of `mode` (`viewport` is the stream's

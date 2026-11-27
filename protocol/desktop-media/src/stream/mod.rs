@@ -67,6 +67,8 @@ pub mod lfc;
 pub mod scan_sync;
 #[cfg(any(target_os = "linux", test))]
 pub mod drm_vrr;
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub mod kms_overlay;
 #[cfg(target_os = "linux")]
 pub mod kms_scanout;
 // The timing CSV names its flags everywhere; the feedback itself is Wayland's.
@@ -517,6 +519,8 @@ pub struct Streaming {
     unshown: render::Unshown,
     /// Pictures shown at least once since the last overlay redraw.
     pub needs_redraw: bool,
+    /// Fallback deadline for a once-a-second overlay update when no video frame arrives first.
+    overlay_redraw_at: Option<Instant>,
     /// Whether an HDR stream is shown on HDR output, as it settles (`present` follows it); None
     /// for a stream without HDR.
     hdr_output: Option<HdrOutput>,

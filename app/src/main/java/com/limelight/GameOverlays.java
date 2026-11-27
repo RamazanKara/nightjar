@@ -42,6 +42,53 @@ final class GameOverlays {
         hardwareMetrics = null;
         updatePerformanceOverlay();
     };
+    private boolean batteryReceiverRegistered;
+    private String cachedBatteryText;
+    private final android.content.BroadcastReceiver batteryReceiver = new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, android.content.Intent intent) {
+            updateCachedBattery(intent);
+        }
+    };
+
+    /**
+     * Keeps passive 1 Hz HUD views from casting Android 15+ small-view 30/60 Hz frame-rate votes
+     * while the video surface or ARR governs the display refresh rate.
+     */
+    void applyPassiveFrameRateCategory() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            return;
+        }
+        setNoFrameRatePreference(game.performanceOverlayScroll);
+        if (game.performanceOverlayView != null) {
+            setNoFrameRatePreference(game.performanceOverlayView);
+            android.view.View row = game.performanceOverlayView.getParent() instanceof View
+                    ? (View) game.performanceOverlayView.getParent() : null;
+            setNoFrameRatePreference(row);
+            if (row != null) {
+                setNoFrameRatePreference(row.findViewById(R.id.performanceOverlayColumn2));
+            }
+        }
+        setNoFrameRatePreference(game.streamMenuHint);
+        setNoFrameRatePreference(game.notificationOverlayView);
+    }
+
+    private static void setNoFrameRatePreference(View view) {
+        if (view != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            view.setRequestedFrameRate(View.REQUESTED_FRAME_RATE_CATEGORY_NO_PREFERENCE);
+        }
+    }
+
+    void unregisterBatteryReceiver() {
+        if (!batteryReceiverRegistered) {
+            return;
+        }
+        batteryReceiverRegistered = false;
+        try {
+            game.unregisterReceiver(batteryReceiver);
+        } catch (IllegalArgumentException ignored) {
+        }
+    }
 
     void showPerformanceOverlay(String mode) {
         setPerformanceOverlayMode(mode);
@@ -186,36 +233,58 @@ final class GameOverlays {
         }
         text = PerformanceOverlay.withLinkNotice(game, text, game.linkNotice);
         showOverlayText(text, compact ? 13 : isDebugOverlay() ? 11 : 12, !compact);
-        game.performanceOverlayView.setContentDescription(compact ?
-                PerformanceOverlay.describeCompact(game, compactLine, game.linkNotice) : null);
+        CharSequence description = compact
+                ? PerformanceOverlay.describeCompact(game, compactLine, game.linkNotice) : null;
+        if (!TextUtils.equals(game.performanceOverlayView.getContentDescription(), description)) {
+            game.performanceOverlayView.setContentDescription(description);
+        }
     }
 
     private String compactBatteryText() {
-        android.content.Intent battery = game.registerReceiver(null,
-                new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+        if (game.foreground && !game.isFinishing() && !game.isDestroyed()) {
+            if (!batteryReceiverRegistered) {
+                android.content.Intent sticky = game.registerReceiver(batteryReceiver,
+                        new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+                batteryReceiverRegistered = true;
+                updateCachedBattery(sticky);
+            }
+            return cachedBatteryText;
+        }
+        if (!game.isFinishing() && !game.isDestroyed()) {
+            updateCachedBattery(game.registerReceiver(null,
+                    new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)));
+        }
+        return cachedBatteryText;
+    }
+
+    private void updateCachedBattery(android.content.Intent battery) {
         if (battery != null && battery.hasExtra(android.os.BatteryManager.EXTRA_PRESENT)
                 && !battery.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, true)) {
-            return null;
-        }
-        android.os.BatteryManager bm = (android.os.BatteryManager) game.getSystemService(android.content.Context.BATTERY_SERVICE);
-        if (bm != null) {
-            int cap = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
-            if (cap > 0 && cap <= 100) {
-                return cap + "%";
-            }
-            if (cap == 0 && battery != null && battery.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, false)) {
-                return "0%";
-            }
+            cachedBatteryText = null;
+            return;
         }
         if (battery != null && battery.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, false)) {
             int level = battery.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
             int scale = battery.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
             if (level >= 0 && scale > 0) {
                 int pct = Math.max(0, Math.min(100, (level * 100) / scale));
-                return pct + "%";
+                cachedBatteryText = pct + "%";
+                return;
             }
         }
-        return null;
+        android.os.BatteryManager bm = (android.os.BatteryManager) game.getSystemService(android.content.Context.BATTERY_SERVICE);
+        if (bm != null) {
+            int cap = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
+            if (cap > 0 && cap <= 100) {
+                cachedBatteryText = cap + "%";
+                return;
+            }
+            if (cap == 0 && battery != null && battery.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, false)) {
+                cachedBatteryText = "0%";
+                return;
+            }
+        }
+        cachedBatteryText = null;
     }
 
     private String compactClockText() {

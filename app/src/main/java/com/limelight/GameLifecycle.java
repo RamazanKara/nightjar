@@ -266,6 +266,7 @@ final class GameLifecycle {
             game.unregisterReceiver(game.pipReceiver);
             game.pipDisconnectIntent.cancel();
         }
+        game.overlays.unregisterBatteryReceiver();
         game.bitrateHandler.removeCallbacksAndMessages(null);
         game.keyboardPanHandler.removeCallbacks(game.keyboardPan);
         if (game.legacyKeyboard != null) game.legacyKeyboard.stop();
@@ -335,6 +336,7 @@ final class GameLifecycle {
                 || (game.streamRecovery.isRecoveryAttempt() && game.connecting);
         game.streamRecovery.cancelAutomaticRecovery();
         game.overlays.stopHardwareMetricsPolling();
+        game.overlays.unregisterBatteryReceiver();
         game.foregroundGeneration++;
         game.streamMenuAction = null;
         game.windowFocusActions.clear();
@@ -359,6 +361,7 @@ final class GameLifecycle {
     }
 
     void onStopAfterLinkGate() {
+        game.overlays.unregisterBatteryReceiver();
         if (game.adaptiveLayout != null) game.adaptiveLayout.stop();
         game.streamRecovery.rememberStreamForResume(true);
 

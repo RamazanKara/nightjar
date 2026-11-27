@@ -217,6 +217,7 @@ final class GameStreamUiSetup {
         });
         game.performanceOverlayView = game.findViewById(R.id.performanceOverlay);
         game.performanceOverlayScroll = game.findViewById(R.id.performanceOverlayScroll);
+        game.overlays.applyPassiveFrameRateCategory();
         StreamGlass.dressHud(game.performanceOverlayScroll, game.streamMenuHint, game.notificationOverlayView);
         game.performanceOverlayScroll.setOnTouchListener((view, event) ->
                 !game.overlays.isDebugOverlay() && game.touchInput.onOverlayTouch(view, event));

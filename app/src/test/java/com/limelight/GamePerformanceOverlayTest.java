@@ -262,10 +262,17 @@ public class GamePerformanceOverlayTest {
         assertEquals("● 119.9 FPS · 8 ms RTT · 0.1% loss", overlay.getText().toString());
 
         prefs.compactOverlayDeviceInfo = true;
+        // While not yet in foreground (e.g. onCreate / PiP), sticky battery is read without registering a persistent receiver.
         ReflectionHelpers.callInstanceMethod(game.overlays, "updatePerformanceOverlay");
+        assertFalse((Boolean) ReflectionHelpers.getField(game.overlays, "batteryReceiverRegistered"));
         String shown = overlay.getText().toString();
         assertTrue(shown, shown.startsWith("● 119.9 FPS · 8 ms RTT · 0.1% loss · 84% · "));
         assertTrue(overlay.getContentDescription().toString().contains("· 84% · "));
+
+        // Once in foreground, the BroadcastReceiver caches battery updates without per-tick IPC, and pause/destroy unregisters it.
+        ReflectionHelpers.setField(game, "foreground", true);
+        ReflectionHelpers.callInstanceMethod(game.overlays, "updatePerformanceOverlay");
+        assertTrue((Boolean) ReflectionHelpers.getField(game.overlays, "batteryReceiverRegistered"));
 
         // Mains-powered TV with no battery omits the percentage but still shows the clock.
         game.sendStickyBroadcast(new android.content.Intent(android.content.Intent.ACTION_BATTERY_CHANGED)
@@ -275,5 +282,12 @@ public class GamePerformanceOverlayTest {
         String clockOnly = overlay.getText().toString();
         assertFalse(clockOnly, clockOnly.contains("84%"));
         assertTrue(clockOnly, clockOnly.startsWith("● 119.9 FPS · 8 ms RTT · 0.1% loss · "));
+
+        // Pausing into PiP unregisters the receiver, and a subsequent 1 Hz tick while paused does not re-register it.
+        ReflectionHelpers.setField(game, "foreground", false);
+        game.overlays.unregisterBatteryReceiver();
+        assertFalse((Boolean) ReflectionHelpers.getField(game.overlays, "batteryReceiverRegistered"));
+        ReflectionHelpers.callInstanceMethod(game.overlays, "updatePerformanceOverlay");
+        assertFalse((Boolean) ReflectionHelpers.getField(game.overlays, "batteryReceiverRegistered"));
     }
 }

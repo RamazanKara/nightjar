@@ -575,6 +575,59 @@ public class GameWindowRefreshModeTest {
         assertEquals(6000, GameStreamUiSetup.clientRefreshRateX100(12004, 60, 60.0f));
     }
 
+    @Test
+    @Config(sdk = 36, shadows = {GameFrameRateTest.FrameRateSurface.class, RefreshSwitchMonitorTest.FakePanel.class})
+    public void passiveHudOverlaysOptOutOfFrameRateVotingAcrossPinnedAndArrModes() {
+        Display.Mode m60 = RefreshSwitchMonitorTest.mode(1, 60f, 120f);
+        Display.Mode m120 = RefreshSwitchMonitorTest.mode(2, 120f, 60f);
+        RefreshSwitchMonitorTest.FakePanel.set(m120, m60, m120);
+        Game activity = Robolectric.buildActivity(Game.class).get();
+        activity.setContentView(R.layout.activity_game);
+        PreferenceConfiguration prefs = new PreferenceConfiguration();
+        prefs.width = 2400;
+        prefs.height = 1080;
+        prefs.fps = 120;
+        prefs.vrr = true;
+        StreamView view = activity.findViewById(R.id.surfaceView);
+        view.initializeSurface(false);
+        ReflectionHelpers.setField(activity, "prefConfig", prefs);
+        ReflectionHelpers.setField(activity, "panelMaxRefreshRate", 120f);
+        ReflectionHelpers.setField(activity, "streamView", view);
+        ReflectionHelpers.setField(activity, "renderView", view);
+        ReflectionHelpers.setField(activity, "performanceOverlayView", activity.findViewById(R.id.performanceOverlay));
+        ReflectionHelpers.setField(activity, "performanceOverlayScroll", activity.findViewById(R.id.performanceOverlayScroll));
+        ReflectionHelpers.setField(activity, "streamMenuHint", activity.findViewById(R.id.streamMenuHint));
+        ReflectionHelpers.setField(activity, "notificationOverlayView", activity.findViewById(R.id.notificationOverlay));
+
+        SurfaceTexture texture = new SurfaceTexture(0);
+        Surface surface = new Surface(texture);
+        try {
+            // Pinned non-ARR 120 Hz mode: video view votes 120 Hz, passive HUD views vote NO_PREFERENCE.
+            vote(activity, surface);
+            assertEquals(120f, view.getChildAt(0).getRequestedFrameRate(), 0f);
+            assertPassiveOverlaysNoPreference(activity);
+
+            // Android 16 ARR mode: video view resets to DEFAULT while passive HUD views stay NO_PREFERENCE.
+            ReflectionHelpers.setField(activity, "useArr", true);
+            vote(activity, surface);
+            assertEquals(View.REQUESTED_FRAME_RATE_CATEGORY_DEFAULT, view.getChildAt(0).getRequestedFrameRate(), 0f);
+            assertPassiveOverlaysNoPreference(activity);
+        } finally {
+            RefreshSwitchMonitorTest.FakePanel.clear();
+            surface.release();
+            texture.release();
+        }
+    }
+
+    private static void assertPassiveOverlaysNoPreference(Game activity) {
+        float none = View.REQUESTED_FRAME_RATE_CATEGORY_NO_PREFERENCE;
+        assertEquals(none, ((View) activity.findViewById(R.id.performanceOverlayScroll)).getRequestedFrameRate(), 0f);
+        assertEquals(none, ((View) activity.findViewById(R.id.performanceOverlay)).getRequestedFrameRate(), 0f);
+        assertEquals(none, ((View) activity.findViewById(R.id.performanceOverlayColumn2)).getRequestedFrameRate(), 0f);
+        assertEquals(none, ((View) activity.findViewById(R.id.streamMenuHint)).getRequestedFrameRate(), 0f);
+        assertEquals(none, ((View) activity.findViewById(R.id.notificationOverlay)).getRequestedFrameRate(), 0f);
+    }
+
     private static void attachOverlayViews(Game activity, android.widget.FrameLayout holder) {
         android.widget.ScrollView scroll = new android.widget.ScrollView(activity);
         android.widget.LinearLayout row = new android.widget.LinearLayout(activity);

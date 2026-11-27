@@ -311,3 +311,65 @@ impl WindowTargetCount {
 pub(super) fn swapchain_metadata_change<M: Copy + PartialEq>(stream: Option<Option<M>>, sent: Option<Option<M>>) -> Option<Option<M>> {
     stream.or(sent.map(|_| None)).filter(|wanted| sent != Some(*wanted))
 }
+
+/// How long a once-a-second stats update waits to piggyback on the next incoming video frame
+/// before requesting a standalone redraw on a paused or static stream.
+pub(super) const OVERLAY_IDLE_REDRAW: Duration = Duration::from_millis(100);
+
+/// Whether `draw_overlay` in `app/overlay.rs` has egui meshes to draw over the picture this frame.
+pub(super) fn draws_overlay_meshes(
+    overlay_visible: bool,
+    toast: bool,
+    suspend_banner: bool,
+    menu_visible: bool,
+    curtain_down: bool,
+    mic_only: bool,
+    role: AppRole,
+) -> bool {
+    overlay_visible
+        || toast
+        || suspend_banner
+        || menu_visible
+        || curtain_down
+        || mic_only
+        || role == AppRole::InputOnly
+}
+
+/// Schedules a passive once-a-second overlay text update: video streams let the new text ride the
+/// next picture (falling back to a standalone redraw after [`OVERLAY_IDLE_REDRAW`] if no picture
+/// arrives), while pictureless sessions (`InputOnly`, `mic_only`) redraw immediately.
+pub(super) fn schedule_overlay_redraw(
+    overlay_visible: bool,
+    immediate: bool,
+    now: Instant,
+    pending: &mut Option<Instant>,
+) -> bool {
+    if !overlay_visible {
+        *pending = None;
+        return false;
+    }
+    if immediate {
+        *pending = None;
+        return true;
+    }
+    pending.get_or_insert(now + OVERLAY_IDLE_REDRAW);
+    false
+}
+
+/// Promotes a deferred overlay redraw to `needs_redraw` once [`OVERLAY_IDLE_REDRAW`] has elapsed
+/// without a video frame presenting it.
+pub(super) fn take_due_overlay_redraw(
+    overlay_visible: bool,
+    now: Instant,
+    pending: &mut Option<Instant>,
+) -> bool {
+    if !overlay_visible {
+        *pending = None;
+        return false;
+    }
+    if pending.is_some_and(|due| now >= due) {
+        *pending = None;
+        return true;
+    }
+    false
+}

@@ -3,6 +3,7 @@
 //! stream and its overlay share one window and one swap chain.
 
 mod ime;
+mod overlay_bounds;
 mod stage;
 
 use std::collections::HashMap;
@@ -57,6 +58,7 @@ struct OverlayShown {
     digest: Option<u64>,
     primitives: Vec<egui::epaint::ClippedPrimitive>,
     ppp: f32,
+    bounds: Option<[i32; 4]>,
 }
 
 /// Whether an overlay pass runs egui, or repaints the shapes the last pass drew. Egui runs when a
@@ -662,6 +664,11 @@ impl Gui {
         self.overlay.digest
     }
 
+    /// Pixel bounding box `[x0, y0, x1, y1]` of the shapes the last overlay pass drew, if any.
+    pub fn overlay_bounds(&self) -> Option<[i32; 4]> {
+        self.overlay.bounds
+    }
+
     /// Whether input reached egui since its last pass.
     pub fn input_pending(&self) -> bool {
         !self.events.is_empty()
@@ -700,7 +707,8 @@ impl Gui {
         self.on_screen = None;
         let ppp = output.pixels_per_point;
         let primitives = self.ctx.tessellate(std::mem::take(&mut output.shapes), ppp);
-        self.overlay = OverlayShown { digest: Some(digest), primitives, ppp };
+        let bounds = overlay_bounds::primitive_bounds(&primitives, ppp);
+        self.overlay = OverlayShown { digest: Some(digest), primitives, ppp, bounds };
         self.paint_stored_overlay(renderer, output);
     }
 
