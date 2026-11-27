@@ -8,7 +8,7 @@ Nightjar streams from outside the home network over a private VPN such as Tailsc
 
 Long-press a saved PC, choose **PC settings…**, then **Play away from home**. The guide has three steps:
 
-1. **Prepare at home.** Pair on the home network, check that a normal stream works, and keep the PC awake. Waking a sleeping PC from outside usually needs the router or another always-on device on the home network; the guide does not set up remote Wake-on-LAN.
+1. **Prepare at home.** Pair on the home network, check that a normal stream works, and keep the PC awake. Waking a sleeping PC from outside needs an always-on device on the home network, such as a [wake relay](#wake-the-pc-from-away); the guide does not set one up.
 2. **Connect your devices.** **Open Tailscale setup** opens the official installation guide. Install Tailscale on the PC and on this device, sign in to your own account on both, and enable the connection. An existing VPN works as well. If Nightjar does not find the PC on the VPN, save its VPN address with **Add address**.
 3. **Test this PC.** Switch this device to another network, such as mobile data, and run the test. It sends five small HTTPS requests that verify the paired PC's certificate. It does not start a game or a stream, measure bandwidth or change the host, and leaving the screen cancels it.
 
@@ -21,6 +21,17 @@ Long-press a saved PC, choose **PC settings…**, then **Play away from home**. 
 **Settings → Streaming → Play over the internet** (on by default) reaches a PC without a VPN or port forwarding when its host offers it (Rubylight with Play over the internet on). Away from home, Nightjar tries the local network, then the PC's IPv6 address, then a forwarded port, and only then a direct path that both sides punch through their routers, found through a public peer-to-peer directory that holds only encrypted notes ([Privacy](PRIVACY.md)). Connect once on the PC's network first, so the PC can give this device its key. The PC's line names the path in use, and when none works it lists each path and why it failed.
 
 A VPN still works where this cannot: two routers that both change ports per destination can't be punched through. Turn the setting off to never look up or punch a path.
+
+## Wake the PC from away
+
+Wake-on-LAN's magic packets don't cross the internet, so a sleeping PC can't be woken from away on its own. With a Rubylight PC that offers it, a wake relay does it for you: an always-on computer on the PC's network, such as a Linux mini PC, that runs desktop Nightjar's `nightjar wake-relay` ([how to run one](../protocol/desktop/README.md#away-wake-relay)). Set it up once:
+
+1. Pair the relay computer with the PC in Nightjar, on the PC's network.
+2. In the Rubylight console, turn on **Host control** for the relay and **Away wake relay** with Play over the internet ([the PC's side](https://github.com/RamazanKara/Rubylight/blob/main/docs/internet-play.md#away-wake-relay)).
+3. Keep `nightjar wake-relay` running on it.
+4. Connect this device once on the home network, so the PC gives it its wake access.
+
+Away from home, waking the PC on Android asks the relay, through the same direct paths as [Play over the internet](#without-a-vpn), and says how it went: the wake signal sent, then the PC awake, or why not, for example the relay is offline or not on the PC's network, too many wake requests in a short time, a refused request (check this device's clock, or connect once at home to refresh its wake access), or a PC that did not answer within 45 seconds. When the PC offers waking from away but has no relay yet, Nightjar says that it can't be woken from outside the home network and how to set one up.
 
 ## Home network, Tailscale/VPN and Internet
 

@@ -80,7 +80,7 @@ Allow Local Network access when macOS asks. Select a discovered PC or use **Add 
 address. Enter the displayed PIN on the host. If the library loads but launching returns HTTP 401,
 open the host's device permissions and enable **Launch applications** for the paired Mac. Nightjar stores the pairing identity and settings in
 `~/Library/Application Support/Nightjar/`. Microphone forwarding requires microphone access.
-**Control + Option + Shift + Tab** opens the stream menu. **Control + Option + Shift + Q** leaves it.
+**Control + Option + Shift + Tab** opens the Control Center. **Control + Option + Shift + Q** leaves the stream.
 
 FSR1, SGSR1, planar conversion, packed full chroma and PyroWave's Rust decoder use Metal fragment
 shaders. On Apple silicon with macOS 26 or later, PyroWave decodes with its upstream Vulkan SDK through
@@ -175,7 +175,7 @@ Settings, paired PCs, controller layouts, app lists, cover art, logs, screenshot
 
 1. Start Nightjar on the same network as the PC. PCs found on the network appear automatically; otherwise choose **Add PC** and enter the address (`host`, `host:port` or an IPv6 address), or paste the pairing link from a Rubylight PC's QR code to add and pair it in one step.
 2. Select the PC, choose **Pair** and enter the PIN that Nightjar shows in the host's web UI.
-3. Choose a game. **Ctrl+Alt+Shift+Tab**, or **Start+Back** on a controller, opens the stream menu; **Ctrl+Alt+Shift+Q**, or **Start+Select+LB+RB**, leaves the stream.
+3. Choose a game. **Ctrl+Alt+Shift+Tab**, or **Start+Back** on a controller, opens the [Control Center](../../docs/controls.md#the-control-center), a dock at the right edge whose modules the triggers or **Ctrl+Tab** step through; **Ctrl+Alt+Shift+Q**, or **Start+Select+LB+RB**, leaves the stream.
 
 <table>
 <tr>
@@ -190,9 +190,21 @@ Settings, paired PCs, controller layouts, app lists, cover art, logs, screenshot
 | Keyboard shortcuts and controllers | [Controls: Nightjar for Windows and Linux](../../docs/controls.md#nightjar-for-windows-and-linux) |
 | Problems and their fixes | [Troubleshooting: Nightjar for Windows and Linux](../../docs/TROUBLESHOOTING.md#nightjar-for-windows-and-linux) |
 | Clipboard, files, shared folders and USB devices | [Sharing](../../docs/sharing.md) |
-| Home, game pages and the session menu | [Home and the stream menu](../../docs/console.md) |
+| Home, game pages, Quick Suspend and Instant Replay | [Home and the session menu](../../docs/console.md) |
+| Playing away from home | [Play away from home](../../docs/remote-setup.md) |
 
 **Files.** The log is `logs/nightjar.log` in the settings folder, with the previous run in `nightjar.prev.log`; **Settings → App → Logs → Open logs folder** opens it. Every line is redacted with the Android app's problem-report rules: saved PC names and addresses, other IP and MAC addresses, URLs, UUIDs, keys and PINs become marks such as `[PC]` or `[address]`, so the log can be attached to an issue as it is. On Windows, a crash also writes a minidump (threads, stacks and modules, no memory contents) to the logs folder. **F12** saves a screenshot to `screenshots/` (or `NIGHTJAR_SCREENSHOT_DIR`), and **Export statistics (last hour)** in the stream menu writes to `statistics/`.
+
+<a id="away-wake-relay"></a>
+
+**Away wake relay.** An always-on computer on the PC's network, such as a Linux mini PC, can wake the paired PC from sleep when you connect from away; Nightjar for Android asks it ([Play away from home](../../docs/remote-setup.md#wake-the-pc-from-away)).
+
+```text
+nightjar wake-relay [--name <name>] [--enroll]
+nightjar wake-relay --leave
+```
+
+Pair the computer with the PC once in Nightjar's window, on the PC's network; then, in the Rubylight console, turn on **Host control** for it and **Away wake relay** with Play over the internet. `nightjar wake-relay` enrolls with every paired PC that offers a relay and runs without a window until Ctrl-C (or SIGTERM on Linux and macOS), printing a line for each change and each wake; the PCs keep it enrolled when it stops. `--name` is how the PCs list the relay (the computer's own name without it), `--enroll` enrolls again with PCs that refused it before, and `--leave` leaves every PC and deletes the saved keys. It keeps its keys in `wake-relay.json` in the settings folder, readable by its owner only, so a relay started again while the PC sleeps still wakes it, and it sends magic packets only on its own network. On Linux it can run as a systemd user service with `loginctl enable-linger`; Rubylight's [Away wake relay](https://github.com/RamazanKara/Rubylight/blob/main/docs/internet-play.md#away-wake-relay) guide has the unit file and the PC's side.
 
 **Starting from a game frontend** (ES-DE, Pegasus, Playnite and similar):
 
@@ -209,20 +221,22 @@ Everything below works on Windows and Linux unless a platform is named; the [mac
 **PCs and pairing**
 
 - Discovery over mDNS (`_nvstream._tcp`) and manual addresses, including IPv6. Online state, pairing state and the running app are polled every 4 s, and addresses are merged by the host's unique ID.
-- PIN pairing, with the PIN in large type; one-time PIN pairing (PIN and passphrase) on hosts that report device permissions; QR pairing links, also opened from a browser or the host console through the `rubylight:` scheme. A paired device with the permission approves a new one from **Pair another device**. The host certificate is pinned.
+- PIN pairing, with the PIN in large separate digits on one panel, and a failed pairing says why beside **Try again**; the first start shows the search for PCs as a quiet pulse and each PC found as a card with its state, its address and **Pair**; one-time PIN pairing (PIN and passphrase) on hosts that report device permissions; QR pairing links, also opened from a browser or the host console through the `rubylight:` scheme. A paired device with the permission approves a new one from **Pair another device**. The host certificate is pinned.
 - Wake-on-LAN sends a magic packet for every MAC address the PC reports (from serverinfo, and its other adapters from a native `GET /wake`) to ports 7, 9, 47009 and the Moonlight ports, at every address the PC was known by, 255.255.255.255, each local adapter's subnet broadcast, the PC's own subnet broadcasts and `ff02::1`. **Waking <PC>…** resends every 8 s until the PC answers, for up to 90 s, or until cancelled.
 - In the PC's options, where the host offers it and allows it for this device: Sleep PC, Restart PC, Shut down PC and updating the PC's host.
 - The PC's web UI opens from its details, and **Remote access → Test this PC** checks that the paired PC answers over HTTPS from the current network.
+- `nightjar wake-relay` makes this computer an [away wake relay](#away-wake-relay) for its paired PCs.
 
 **Library**
 
 - Library with cached cover art; launch, resume, quit, and quit-and-start another app. Remote Monitor and Input-only entries start in their role where the host publishes them.
-- Home and the game page on hosts with the native API (Rubylight 3.0): games to continue, the library of all PCs merged by title, the PCs and what each knows, recently played games, and a page per game with Play or Resume, the stream settings that will apply, game settings and Close game. The last library of each PC is kept, so Home works while a PC is away. Home can group by collection, and a game can be hidden on this device.
-- While a stream connects, the whole window shows the game's cover, the PC and the current step, with **Cancel**. A start that fails turns into a card that says why, with **Try again**, **Stream settings** and **Test the network**, which asks Moonlight's port-test server whether a firewall blocks the streaming ports.
+- Home and the game page on hosts with the native API (Rubylight 3.0): a stage with the cover of the game to continue, games to continue, the library of all PCs merged by title, the PCs and what each knows, recently played games, and a page per game with Play or Resume, the stream settings that will apply, game settings and Close game. The last library of each PC is kept, so Home works while a PC is away. Home can group by collection, and a game can be hidden on this device.
+- While a stream connects, the whole window shows the game's cover, the PC and the current step, with **Cancel**; with a PC that offers the [launch curtain](../../docs/console.md#the-launch-curtain), the cover stays until the game is in front. A start that fails turns into a card that says why, with **Try again**, **Stream settings** and **Test the network**, which asks Moonlight's port-test server whether a firewall blocks the streaming ports.
 - **Continue here** moves a game another device is playing to this one; **Stream here too** streams beside it.
 - **When Nightjar opens** shows Home (the default) or the PCs, continues the last game or starts a chosen game, and **Start Nightjar when I sign in** starts it with the desktop session (also in the Flatpak).
 - **Co-op sessions** join or start a Nucleus Co-op session on hosts that offer it, and **Microphone only** sends just this device's microphone.
-- The session and graphics page in the stream menu (Rubylight 3.0): Resume, Disconnect, End session and Close game with confirmation, the connection facts, and the Radeon panel.
+- The [Control Center](../../docs/controls.md#the-control-center) over a stream: a dock at the right edge with a rail of modules (Quick, Picture, Audio, Clips, PC, Controller, Guests and Power), and Return to stream, Disconnect and Quit game under every page. Its PC page has the session and graphics page (Rubylight 3.0): Resume, Disconnect, End session and Close game with confirmation, the connection facts, and the Radeon panel.
+- **Suspend game** and **Resume game** with a PC that has Quick Suspend on, and Instant Replay's **Save clip** and **Start recording** with a PC that offers Stream DVR (see [Quick Suspend](../../docs/console.md#quick-suspend) and [Instant Replay](../../docs/console.md#instant-replay)).
 - **Quick resume**, per-game quit on leave, and **Input-only on any PC**.
 
 **Picture**
@@ -231,21 +245,22 @@ Everything below works on Windows and Linux unless a platform is named; the [mac
 - PyroWave decodes on the GPU or the CPU, with a bandwidth test and a frame-pace calibration per network, and skips to the newest frame when the decoder falls behind.
 - HDR: HDR10 and HLG, plus Dolby Vision profiles 8.1 and 10.1 on Windows from hosts that send them. On Linux, HDR streams present as HDR10 PQ where the compositor offers it, else scRGB. **Less color banding** (10-bit SDR) and **Sharper colored text** (YUV 4:4:4, native or packed full chroma) where the host and decoder support them; Windows decodes HEVC 4:4:4 in hardware on GPUs whose decoder has it.
 - Upscaling with bilinear, FSR 1, SGSR 1 or AI enhancement (the GPU vendor's video super resolution).
+- **Frame Warp** with a PC that offers it (Rubylight 7.0 or newer), in every presenter ([Frame Warp](../../docs/video-and-latency.md#frame-warp)).
 - Variable refresh rate with frames shown at the PC's frame times, frame pacing modes and V-Sync without VRR, fractional refresh rates, virtual displays and the PC's display arrangement.
 - **Dual screen mode**: with a second monitor and a host that supports it, a second stream of the same game opens full screen on it.
 
 **Sound**
 
-- Opus in stereo, 5.1 and 7.1; 7.1.4 on Windows. Uncompressed PCM passthrough from hosts that offer it. Microphone with echo cancellation, noise suppression and automatic gain. The PC's night mode and headphone surround from the stream menu.
+- Opus in stereo, 5.1 and 7.1; 7.1.4 on Windows. Uncompressed PCM passthrough from hosts that offer it. Microphone with echo cancellation, noise suppression and automatic gain. The PC's night mode and headphone surround from the Control Center's Audio page.
 
 **Input**
 
 - Keyboard with system-key capture (optionally only in full screen), captured and desktop-pointer mouse modes with a locally drawn cursor, high-resolution scrolling, native touch and pen, touchpad gestures.
-- Controllers through SDL: rumble, trigger rumble, LEDs, motion, touchpad and battery; DualSense adaptive triggers, and USB DualSense audio and waveform haptics. Controller mouse mode, button mapping, stick dead zones, and saved keyboard shortcuts that import and export in the Android app's format. Stream hotkeys can be changed.
+- Controllers through SDL: rumble, trigger rumble, LEDs, motion, touchpad and battery; DualSense adaptive triggers, and USB DualSense audio and waveform haptics, which also play a Bluetooth DualSense's speaker and haptics, and speaker sound from hosts that send it in Nonary's format, such as Vibepollo ([DualSense audio and haptics](../../docs/dualsense-haptics.md#bluetooth-on-windows-and-linux)). **Settings → Controller** holds every controller setting in one place. Controller mouse mode, button mapping, stick dead zones, and saved keyboard shortcuts that import and export in the Android app's format. Stream hotkeys can be changed.
 
 **Sharing**
 
-- Clipboard sync, file transfer, shared folders and USB forwarding on hosts that offer them (see [sharing](../../docs/sharing.md)).
+- Clipboard sync, file transfer, shared folders and USB forwarding on hosts that offer them (see [sharing](../../docs/sharing.md)). On Windows, **Forward with usbipd-win** forwards a device another driver holds while Windows keeps its driver; on Linux, a device your user may not open goes through Linux's own USB/IP server after a password prompt. A controller forwarded to the PC is not also read as a gamepad here.
 
 **Network and quality**
 
@@ -254,7 +269,8 @@ Everything below works on Windows and Linux unless a platform is named; the [mac
 
 **Diagnostics and interface**
 
-- Performance overlay in Compact, Statistics and Debug modes, with the host's CPU and GPU readings and pipeline frame rates where offered; the stream health report (**Why did my stream stutter?**) with the reversible bitrate trial; statistics export.
+- Performance overlay in Compact, Statistics and Debug modes, with the host's CPU and GPU readings and pipeline frame rates where offered; the [Stream Doctor](../../docs/stream-health.md) (**Why did my stream stutter?**), which names the cause with the number behind it and offers fixes for this stream with undo; statistics export.
+- Settings presets, including Smooth TV and Wi-Fi / Away; a stream profile kept for each screen (**Profile for this screen**).
 - 15 languages ([translations](../../docs/TRANSLATIONS.md#desktop)); settings search (Ctrl+F); UI zoom, high contrast, reduced motion, and screen readers through UI Automation on Windows and AT-SPI on Linux. PIN lock. On Windows and in the AppImage, an update check once per launch and a one-click update (a portable Windows copy links to the release page).
 - Beam racing and early decode for PyroWave on wired links, off by default (see [beam racing](../../docs/beam-racing.md) and [early decode](../../docs/early-decode.md)).
 
@@ -262,7 +278,6 @@ Everything below works on Windows and Linux unless a platform is named; the [mac
 
 Not available on the desktop:
 
-- Settings presets.
 - On-screen controls and the touch modes (trackpad, direct, multi-touch); the desktop sends native touch.
 - A problem-report export; the logs folder serves that purpose.
 - The latency benchmark, the decoder benchmark, and the network path and delay test of the connection test.
