@@ -30,11 +30,26 @@ unimplemented = "warn"
 [profile.release]
 panic = "abort"
 opt-level = 3
-lto = true
+lto = "thin"
 codegen-units = 1
 
+# Fast local debug APK profile (-PrustProfile=android-dev): optimized enough for smooth streaming
+# without thin-LTO / single-CGU link times. Release APKs stay on [profile.release].
+[profile.android-dev]
+inherits = "release"
+opt-level = 2
+lto = false
+codegen-units = 16
+debug = false
+
+# Match root Cargo.toml: line tables keep file:line in panics for workspace crates while
+# skipping full DWARF debug info for dependencies (shrinks client target dirs ~70% and speeds linking).
 [profile.dev]
 panic = "abort"
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
 
 # RSA key generation (client identities, test hosts) takes minutes unoptimized.
 [profile.dev.package.num-bigint-dig]

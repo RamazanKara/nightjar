@@ -85,7 +85,7 @@ android {
 
         externalNativeBuild {
             ndkBuild {
-                arguments "-j2"
+                arguments "-j${Math.max(2, Math.min(8, Runtime.runtime.availableProcessors().intdiv(2)))}"
             }
         }
 
@@ -314,6 +314,9 @@ abstract class CargoAndroidBuild extends DefaultTask {
     @Input
     abstract Property<String> getNdkPath()
 
+    @Input
+    abstract Property<String> getCargoProfile()
+
     @Internal
     abstract DirectoryProperty getProtocolDir()
 
@@ -322,6 +325,27 @@ abstract class CargoAndroidBuild extends DefaultTask {
 
     @javax.inject.Inject
     abstract org.gradle.process.ExecOperations getExecOperations()
+
+    static Map<String, String> sccacheEnv(boolean windows) {
+        if (System.getenv('RUBYLIGHT_NO_SCCACHE') == '1') return [:]
+        if (System.getenv('RUSTC_WRAPPER') || System.getenv('CARGO_BUILD_RUSTC_WRAPPER')) return [:]
+        String exeName = windows ? 'sccache.exe' : 'sccache'
+        File homeBin = new File(System.getProperty('user.home'), ".cargo/bin/$exeName")
+        String wrapper = homeBin.isFile() ? homeBin.absolutePath : null
+        if (!wrapper) {
+            String path = System.getenv('PATH') ?: ''
+            for (String entry : path.split(java.util.regex.Pattern.quote(File.pathSeparator))) {
+                if (entry && new File(entry, exeName).isFile()) {
+                    wrapper = new File(entry, exeName).absolutePath
+                    break
+                }
+            }
+        }
+        if (!wrapper) return [:]
+        Map<String, String> out = ['RUSTC_WRAPPER': wrapper]
+        if (!System.getenv('CARGO_INCREMENTAL')) out['CARGO_INCREMENTAL'] = '0'
+        return out
+    }
 
     @TaskAction
     void build() {
@@ -336,6 +360,13 @@ abstract class CargoAndroidBuild extends DefaultTask {
         if (!System.getenv('CARGO') && homeCargo.exists()) cargo = homeCargo.absolutePath
         def protocol = protocolDir.get().asFile
         if (windows) checkMsys(cargo, protocol)
+        def profileName = cargoProfile.get()
+        def profileArgs = profileName == 'release' ? ['--release'] : ['--profile', profileName]
+        def cacheEnv = sccacheEnv(windows)
+        String targetDirRaw = System.getenv('CARGO_TARGET_DIR')?.trim()
+        File targetRoot = targetDirRaw ?
+                (new File(targetDirRaw).isAbsolute() ? new File(targetDirRaw) : new File(protocol, targetDirRaw)) :
+                new File(protocol, 'target')
         def out = outputDir.get().asFile
         out.deleteDir()
         abis.get().each { abi ->
@@ -348,13 +379,14 @@ abstract class CargoAndroidBuild extends DefaultTask {
                     ("CC_$lower".toString())                      : clang,
                     ("CFLAGS_$lower".toString())                  : "--target=$clangTarget".toString(),
                     ("AR_$lower".toString())                      : ar,
-            ]
+            ] + cacheEnv
             execOperations.exec {
                 workingDir protocol
                 environment env
-                commandLine cargo, 'build', '--release', '--locked', '-p', 'nightjar-android', '--target', triple
+                commandLine([cargo, 'build', *profileArgs, '--locked', '-p', 'nightjar-android', '--target', triple])
             }
-            def lib = new File(protocol, "target/$triple/release/libnightjar_core.so")
+            def profileDir = (profileName in ['dev', 'test']) ? 'debug' : (profileName == 'bench' ? 'release' : profileName)
+            def lib = new File(targetRoot, "$triple/$profileDir/libnightjar_core.so")
             checkPageAlignment(lib)
             def dir = new File(out, abi)
             dir.mkdirs()
@@ -414,6 +446,7 @@ abstract class CargoAndroidBuild extends DefaultTask {
 def rustAbis = project.hasProperty('abiFilters') ?
         project.property('abiFilters').toString().split(',').collect { it.trim() }.findAll { CargoAndroidBuild.TARGETS.containsKey(it) } :
         CargoAndroidBuild.TARGETS.keySet().toList()
+def rustProfile = project.findProperty('rustProfile')?.toString()?.trim() ?: 'release'
 def protocolRoot = rootProject.file('protocol')
 def toolchainFile = rootProject.file('../rust-toolchain.toml')
 def buildRustEngine = tasks.register('buildRustEngine', CargoAndroidBuild) {
@@ -427,6 +460,7 @@ def buildRustEngine = tasks.register('buildRustEngine', CargoAndroidBuild) {
     }
     abis.set(rustAbis)
     ndkPath.set(androidComponents.sdkComponents.ndkDirectory.map { it.asFile.absolutePath })
+    cargoProfile.set(rustProfile)
     protocolDir.set(protocolRoot)
     outputDir.set(layout.buildDirectory.dir('rustJniLibs'))
 }
@@ -518,6 +552,7 @@ abstract class CargoHostBuild extends DefaultTask {
             }
         }
 
+        extraEnv.putAll(CargoAndroidBuild.sccacheEnv(windows))
         execOperations.exec {
             workingDir protocol
             if (extraEnv) environment(extraEnv)
