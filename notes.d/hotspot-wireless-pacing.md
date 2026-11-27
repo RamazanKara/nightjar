@@ -1,2 +1,0 @@
-## en
-- Tell Rubylight hosts when the stream runs over the device's own mobile hotspot, so packet pacing treats it as a wireless link even without mobile data enabled.
