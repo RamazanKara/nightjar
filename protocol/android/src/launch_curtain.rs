@@ -1,5 +1,5 @@
 //! Android's launch curtain: the stream's [`Curtain`] (`nightjar_policy::launch_curtain`, the
-//! rules desktop Nightjar follows too) lives here from `CurtainBridge.begin` until `end`. The
+//! rules desktop Nightjar follows too) lives here from `CurtainBridge.begin` until `end`, through `NightjarSessionJni`. The
 //! listener hands it the DESCRIBE's offer and the host's states (0x5548), the video renderer the
 //! first picture; each change calls `MoonBridge.bridgeClLaunchCurtain`, and the app reads the
 //! state ([`state_json`]) and calls `CurtainBridge.tick` when its `due_ms` comes, so the watchdog
@@ -147,7 +147,7 @@ fn answer(env: &JNIEnv, f: impl FnOnce(&mut Curtain, Instant)) -> jstring {
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_limelight_nvstream_jni_CurtainBridge_nativeBegin(
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarSessionJni_launchCurtainBegin(
     _: JNIEnv,
     _: JClass,
     asked: jboolean,
@@ -156,7 +156,7 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_CurtainBridge_nativeBegin
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_limelight_nvstream_jni_CurtainBridge_nativeEnd(
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarSessionJni_launchCurtainEnd(
     _: JNIEnv,
     _: JClass,
 ) {
@@ -164,7 +164,7 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_CurtainBridge_nativeEnd(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_limelight_nvstream_jni_CurtainBridge_nativeState(
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarSessionJni_launchCurtainState(
     env: JNIEnv,
     _: JClass,
 ) -> jstring {
@@ -172,7 +172,7 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_CurtainBridge_nativeState
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_limelight_nvstream_jni_CurtainBridge_nativeTick(
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarSessionJni_launchCurtainTick(
     env: JNIEnv,
     _: JClass,
 ) -> jstring {
@@ -182,7 +182,7 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_CurtainBridge_nativeTick(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_limelight_nvstream_jni_CurtainBridge_nativeDismiss(
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarSessionJni_launchCurtainDismiss(
     env: JNIEnv,
     _: JClass,
 ) -> jstring {

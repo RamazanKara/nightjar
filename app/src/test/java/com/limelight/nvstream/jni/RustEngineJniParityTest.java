@@ -248,6 +248,7 @@ public class RustEngineJniParityTest {
                 "com/limelight/nvstream/jni/RustBridge",
                 "com/limelight/nvstream/jni/NativeApiBridge",
                 "com/limelight/nvstream/jni/FileTransferBridge",
+                "com/limelight/nvstream/jni/CurtainBridge",
                 "com/limelight/nvstream/jni/NightjarPolicyJni",
                 "com/limelight/nvstream/jni/NightjarInputJni",
                 "com/limelight/nvstream/jni/NightjarPinJni",

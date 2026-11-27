@@ -45,6 +45,5 @@ public final class NightjarAndroidConfigurer extends AndroidConfigurer {
         builder.doNotAcquireClass(NightjarSessionJni.NegotiationCallback.class.getName());
         builder.doNotAcquireClass(NightjarSessionJni.LinkProbe.class.getName());
         builder.doNotAcquireClass(NightjarSessionJni.HostCallback.class.getName());
-        builder.doNotAcquireClass(CurtainBridge.class.getName());
     }
 }

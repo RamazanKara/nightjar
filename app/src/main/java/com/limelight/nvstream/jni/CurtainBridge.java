@@ -9,8 +9,8 @@
  * the host speaks first, or null; and once it lifted {@code lift} ({@code how}, the
  * {@code notice} key or null, the host's {@code reason} for a failed start or null).
  *
- * <p>Pure-JDK ({@code java.*} only), so Robolectric keeps it beside {@link NightjarJni} on the
- * application classloader ({@code NightjarAndroidConfigurer}) and its natives resolve.
+ * <p>Its natives live in {@link NightjarSessionJni}, the session's JNI holder; this only checks
+ * that the engine is loaded.
  */
 package com.limelight.nvstream.jni;
 
@@ -19,31 +19,25 @@ public final class CurtainBridge {
 
     /** A stream starts; {@code asked} when its launch asked the host for the curtain. */
     public static void begin(boolean asked) {
-        if (NightjarJni.isAvailable()) nativeBegin(asked);
+        if (NightjarJni.isAvailable()) NightjarSessionJni.launchCurtainBegin(asked);
     }
 
     /** The stream ended: its curtain goes with it. */
     public static void end() {
-        if (NightjarJni.isAvailable()) nativeEnd();
+        if (NightjarJni.isAvailable()) NightjarSessionJni.launchCurtainEnd();
     }
 
     public static String state() {
-        return NightjarJni.isAvailable() ? nativeState() : null;
+        return NightjarJni.isAvailable() ? NightjarSessionJni.launchCurtainState() : null;
     }
 
     /** Lifts the curtain when its watchdog is due, and returns the state. */
     public static String tick() {
-        return NightjarJni.isAvailable() ? nativeTick() : null;
+        return NightjarJni.isAvailable() ? NightjarSessionJni.launchCurtainTick() : null;
     }
 
     /** Show PC screen: lifts the curtain here at once, and returns the state. */
     public static String dismiss() {
-        return NightjarJni.isAvailable() ? nativeDismiss() : null;
+        return NightjarJni.isAvailable() ? NightjarSessionJni.launchCurtainDismiss() : null;
     }
-
-    private static native void nativeBegin(boolean asked);
-    private static native void nativeEnd();
-    private static native String nativeState();
-    private static native String nativeTick();
-    private static native String nativeDismiss();
 }

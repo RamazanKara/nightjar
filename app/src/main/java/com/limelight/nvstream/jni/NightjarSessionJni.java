@@ -1,6 +1,7 @@
 /**
  * Pure-JDK JNI bridge to Rust connection orchestration ({@code nightjar_core::connect::*})
- * and connection/session policy ({@code nightjar_policy::{connect_text, mic_route, permissions}}).
+ * and connection/session policy ({@code nightjar_policy::{connect_text, mic_route, permissions}}),
+ * and the stream's launch curtain ({@code nightjar_policy::launch_curtain}, through {@link CurtainBridge}).
  */
 package com.limelight.nvstream.jni;
 
@@ -231,6 +232,18 @@ public final class NightjarSessionJni {
             long handle, boolean showing, boolean movedKnown, boolean moved, boolean owns);
 
     public static native void moveWatchDestroy(long handle);
+
+    // --- Launch curtain (protocol/android launch_curtain.rs; callers go through CurtainBridge) ---
+
+    public static native void launchCurtainBegin(boolean asked);
+
+    public static native void launchCurtainEnd();
+
+    public static native String launchCurtainState();
+
+    public static native String launchCurtainTick();
+
+    public static native String launchCurtainDismiss();
 
     public static native void sessionResetForTests();
 }
