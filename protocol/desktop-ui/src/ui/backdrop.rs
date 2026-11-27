@@ -103,8 +103,8 @@ pub(super) struct Ambient {
     shown_at: Option<f64>,
     tiles: HashMap<(String, bool), (TextureHandle, Color32)>,
     tile_order: VecDeque<(String, bool)>,
-    day_art: HashMap<String, TextureHandle>,
-    day_art_order: VecDeque<String>,
+    day_art: HashMap<(String, TextureId), TextureHandle>,
+    day_art_order: VecDeque<(String, TextureId)>,
     last_want: LastWant,
     /// The stage, baked once for the look it shows in.
     stage: Option<(Look, TextureHandle)>,
@@ -169,11 +169,12 @@ impl Ambient {
 
     /// A new renderer (Linux's switch to the GPU renderer): the bakes went with the old one and are
     /// made again as they are asked for; what the page wants shows again on the next frame.
-    pub(super) fn renderer_changed(&mut self) {
+    pub(super) fn renderer_changed(&mut self, ctx: &Context) {
         self.tiles.clear();
         self.tile_order.clear();
         self.day_art.clear();
         self.day_art_order.clear();
+        ambient::clear_covers(ctx);
         self.last_want = LastWant::None;
         self.stage = None;
         self.fade = glass::CrossFade::default();
@@ -200,10 +201,11 @@ impl Ambient {
         night: &TextureHandle,
         glow: Color32,
     ) -> Option<TextureHandle> {
-        if let Some(cached) = self.day_art.get(key) {
+        let cache_key = (key.to_owned(), night.id());
+        if let Some(cached) = self.day_art.get(&cache_key) {
             return Some(cached.clone());
         }
-        let baked = ambient::day_for(night.id(), glow)?;
+        let baked = ambient::day_for(ctx, night.id(), glow)?;
         while self.day_art.len() >= TILES_KEPT {
             let Some(old) = self.day_art_order.pop_front() else {
                 self.day_art.clear();
@@ -216,8 +218,8 @@ impl Ambient {
             baked,
             TextureOptions::LINEAR,
         );
-        self.day_art_order.push_back(key.to_owned());
-        self.day_art.insert(key.to_owned(), handle.clone());
+        self.day_art_order.push_back(cache_key.clone());
+        self.day_art.insert(cache_key, handle.clone());
         Some(handle)
     }
 
@@ -253,6 +255,7 @@ impl Ambient {
 
     fn show_art(&mut self, ctx: &Context, key: String, night: TextureHandle, glow: Color32) {
         let is_day = look() == Look::Day;
+        let night_id = night.id();
         self.last_want = LastWant::Art {
             key: key.clone(),
             texture: night.clone(),
@@ -260,18 +263,24 @@ impl Ambient {
         };
         if is_day {
             if let Some(day_tex) = self.day_art_texture(ctx, &key, &night, glow) {
-                self.show(ctx, hash_of(("art-day", &key)), day_tex, Shows::Art, glow);
+                self.show(
+                    ctx,
+                    hash_of(("art-day", &key, night_id)),
+                    day_tex,
+                    Shows::Art,
+                    glow,
+                );
             } else {
                 self.show(
                     ctx,
-                    hash_of(("art-unbaked-day", &key)),
+                    hash_of(("art-unbaked-day", &key, night_id)),
                     night,
                     Shows::UnbakedDayArt,
                     glow,
                 );
             }
         } else {
-            self.show(ctx, hash_of(("art", &key)), night, Shows::Art, glow);
+            self.show(ctx, hash_of(("art", &key, night_id)), night, Shows::Art, glow);
         }
     }
 

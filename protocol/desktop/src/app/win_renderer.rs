@@ -85,13 +85,13 @@ impl App {
         self.renderer = made;
         self.gui.renderer_changed();
         self.hosts.renderer_changed();
+        self.launcher.renderer_changed(&self.gui.ctx);
         #[cfg(feature = "demo-library")]
         {
             let mut hosts_view = self.hosts.ui_view();
             ui::demo::covers(&mut hosts_view, &self.gui.ctx);
             self.hosts.apply_ui_demo(hosts_view);
         }
-        self.launcher.renderer_changed(&self.gui.ctx);
         self.launcher.gpu_device = renderer_gpu_device(made).map(|d| d.0 as usize);
         self.launcher.tearing_supported = media::swapchain_allows_tearing(sdl::renderer_pointer(
             made,

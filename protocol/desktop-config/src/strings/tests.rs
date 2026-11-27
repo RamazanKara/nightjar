@@ -519,8 +519,9 @@ const TEXT_CALLS: [(&str, usize); 32] = [
 const STREAM_CALLS: [(&str, usize); 1] = [("show_toast(", 0)];
 
 /// Literals that are the same in every language: names, key chords, codec names.
-const SAME_EVERYWHERE: [&str; 9] = [
+const SAME_EVERYWHERE: [&str; 10] = [
     "Nightjar",
+    "Steam Deck",
     "CTRL + ALT + DELETE",
     "H.264",
     "HEVC",

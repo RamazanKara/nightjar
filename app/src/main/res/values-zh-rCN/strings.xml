@@ -620,4 +620,8 @@
     <string name="controller_editor_summary">摇杆、扳机、体感、振动和按键</string>
     <string name="controller_settings_menu">手柄设置</string>
     <string name="controller_settings_stream_leaves">打开手柄设置会离开串流；游戏继续在电脑上运行。</string>
+    <string name="controller_studio_gyro">陀螺仪</string>
+    <string name="controller_studio_touchpad">触控板</string>
+    <string name="controller_studio_deadzone_readout">%1$d%% · 扳机 %2$d%%</string>
+    <string name="controller_studio_a11y_summary">手柄工作室：%1$s 按键布局，摇杆死区 %2$d%%，扳机死区 %3$d%%</string>
 </resources>

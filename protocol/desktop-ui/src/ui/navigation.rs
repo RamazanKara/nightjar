@@ -403,7 +403,7 @@ impl Launcher {
         {
             self.demo_video = None;
         }
-        self.ambient.renderer_changed();
+        self.ambient.renderer_changed(ctx);
         glass::forget_soft(ctx);
     }
 

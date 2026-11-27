@@ -231,7 +231,7 @@ pub fn covers(hosts: &mut Hosts, ctx: &egui::Context) {
             image.clone(),
             egui::TextureOptions::LINEAR,
         );
-        crate::ambient::register_cover(Some(art_tex.id()), Some(ambient_tex.id()), &image);
+        crate::ambient::register_cover(ctx, Some(art_tex.id()), Some(ambient_tex.id()), &image);
         Arc::make_mut(&mut pc.ambient).insert(app, ambient_tex);
         Arc::make_mut(&mut pc.art).insert(app, Art::Ready(art_tex));
     }

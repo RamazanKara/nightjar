@@ -6,8 +6,10 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.os.Build;
 import android.preference.PreferenceManager;
 import android.text.TextPaint;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.View;
 
@@ -17,19 +19,17 @@ import androidx.core.graphics.ColorUtils;
 import com.google.android.material.color.MaterialColors;
 import com.limelight.R;
 
-import java.util.Locale;
-
 /**
  * Visual Controller Studio header card for the Controller and Controls settings screens,
  * pairing a vector controller hardware diagram (sticks, triggers, face button order, gyro
  * and touchpad badges) with a live stick/trigger deadzone response curve preview.
  */
 public final class ControllerStudioCardView extends View {
-    private static final String PREF_STICK_DZ = "seekbar_deadzone";
-    private static final String PREF_TRIGGER_DZ = "seekbar_trigger_deadzone";
-    private static final String PREF_SWAP_FACE = "checkbox_swap_face_buttons";
-    private static final String PREF_MOTION = "checkbox_enable_motion";
-    private static final String PREF_TOUCHPAD_MOUSE = "checkbox_gamepad_touchpad_as_mouse";
+    static final String PREF_STICK_DZ = "seekbar_deadzone";
+    static final String PREF_TRIGGER_DZ = "seekbar_trigger_deadzone";
+    static final String PREF_SWAP_FACE = "checkbox_flip_face_buttons";
+    static final String PREF_MOTION = "checkbox_gamepad_motion_sensors";
+    static final String PREF_TOUCHPAD_MOUSE = "checkbox_gamepad_touchpad_as_mouse";
 
     private final float dp;
     private final float sp;
@@ -45,7 +45,7 @@ public final class ControllerStudioCardView extends View {
     private final RectF pillRect = new RectF();
 
     private int stickDeadzonePercent = 7;
-    private int triggerDeadzonePercent = 13;
+    private int triggerDeadzonePercent = 2;
     private boolean swapFaceButtons;
     private boolean motionEnabled;
     private boolean touchpadAsMouse;
@@ -70,12 +70,14 @@ public final class ControllerStudioCardView extends View {
     /** Synchronizes diagram highlights and response curve with the current controller preferences. */
     public void syncFromPreferences(SharedPreferences prefs) {
         if (prefs == null) return;
-        stickDeadzonePercent = clamp(prefs.getInt(PREF_STICK_DZ, 7), 1, 40);
-        triggerDeadzonePercent = clamp(prefs.getInt(PREF_TRIGGER_DZ, 13), 1, 40);
+        stickDeadzonePercent = clamp(prefs.getInt(PREF_STICK_DZ, 7), -20, 20);
+        triggerDeadzonePercent = clamp(prefs.getInt(PREF_TRIGGER_DZ, 2), 0, 30);
         swapFaceButtons = prefs.getBoolean(PREF_SWAP_FACE, false);
-        motionEnabled = prefs.getBoolean(PREF_MOTION, false);
+        motionEnabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                && prefs.getBoolean(PREF_MOTION, Build.VERSION.SDK_INT != Build.VERSION_CODES.S);
         touchpadAsMouse = prefs.getBoolean(PREF_TOUCHPAD_MOUSE, false);
         updateAccessibilitySummary();
+        requestLayout();
         invalidate();
     }
 
@@ -91,10 +93,44 @@ public final class ControllerStudioCardView extends View {
         return swapFaceButtons;
     }
 
+    public boolean motionEnabled() {
+        return motionEnabled;
+    }
+
+    /**
+     * Piecewise stick magnitude response matching {@code nightjar_policy::controller::deadzone::apply_stick_deadzone}:
+     * positive {@code deadzonePercent} drops {@code <= r} to 0 and passes outer deflections raw;
+     * zero or negative anti-deadzone drops {@code <= 0.01} to 0 and remaps {@code [0.01, 1]} to {@code [|r|, 1]}.
+     */
+    static float stickOutput(float input, int deadzonePercent) {
+        float x = Math.max(0f, Math.min(1f, input));
+        float r = deadzonePercent / 100f;
+        if (r > 0f) {
+            return x <= r ? 0f : x;
+        }
+        if (x <= 0.01f) {
+            return 0f;
+        }
+        float anti = -r;
+        return Math.min(1f, anti + x * (1f - anti));
+    }
+
+    static int resolvePrimaryButtonInk(int candidateOnPrimary, int moonFill) {
+        int opaqueFill = ColorUtils.setAlphaComponent(moonFill, 0xFF);
+        int opaqueCandidate = ColorUtils.setAlphaComponent(candidateOnPrimary, 0xFF);
+        if (ColorUtils.calculateContrast(opaqueCandidate, opaqueFill) >= 4.5) {
+            return opaqueCandidate;
+        }
+        return ColorUtils.calculateContrast(0xFFFFFFFF, opaqueFill)
+                >= ColorUtils.calculateContrast(0xFF111318, opaqueFill)
+                ? 0xFFFFFFFF
+                : 0xFF111318;
+    }
+
     private void updateAccessibilitySummary() {
         String faces = swapFaceButtons ? "B A Y X" : "A B X Y";
-        setContentDescription(String.format(Locale.US,
-                "Controller Studio: %s face layout, %d%% stick deadzone, %d%% trigger deadzone",
+        setContentDescription(getResources().getString(
+                R.string.controller_studio_a11y_summary,
                 faces, stickDeadzonePercent, triggerDeadzonePercent));
     }
 
@@ -105,8 +141,8 @@ public final class ControllerStudioCardView extends View {
             setMeasuredDimension(width, 0);
             return;
         }
-        boolean wide = width >= Math.round(460 * dp);
-        int desiredHeight = Math.round((wide ? 172 : 258) * dp);
+        boolean wide = width >= Math.round(520 * dp);
+        int desiredHeight = Math.round((wide ? 196 : 284) * dp);
         setMeasuredDimension(width, resolveSize(desiredHeight, heightMeasureSpec));
     }
 
@@ -120,6 +156,9 @@ public final class ControllerStudioCardView extends View {
         int muted = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFFB8C0CC);
         int moon = MaterialColors.getColor(this, androidx.appcompat.R.attr.colorPrimary,
                 ContextCompat.getColor(ctx, R.color.nj_color_moon));
+        int onMoon = resolvePrimaryButtonInk(
+                MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnPrimary, 0xFF111318),
+                moon);
         int surface = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurfaceContainerHigh, 0xFF171B24);
         int rim = MaterialColors.getColor(this, R.attr.glassGroupRim, ColorUtils.setAlphaComponent(ink, 0x24));
         int cardFill = AppTheme.isHighContrast(ctx) ? 0xFF000000 : ColorUtils.setAlphaComponent(surface, 0xEB);
@@ -137,7 +176,7 @@ public final class ControllerStudioCardView extends View {
         canvas.drawRoundRect(cardRect, radius, radius, strokePaint);
 
         float innerPad = 14 * dp;
-        boolean wide = cardRect.width() >= 440 * dp;
+        boolean wide = cardRect.width() >= 500 * dp;
         if (wide) {
             float split = cardRect.left + cardRect.width() * 0.54f;
             padRect.set(cardRect.left + innerPad, cardRect.top + innerPad, split - 8 * dp, cardRect.bottom - innerPad);
@@ -154,13 +193,41 @@ public final class ControllerStudioCardView extends View {
             canvas.drawLine(cardRect.left + innerPad, midY, cardRect.right - innerPad, midY, strokePaint);
         }
 
-        drawControllerDiagram(canvas, padRect, ink, muted, moon);
+        drawControllerDiagram(canvas, padRect, ink, muted, moon, onMoon);
         drawDeadzoneCurve(canvas, chartRect, ink, muted, moon);
     }
 
-    private void drawControllerDiagram(Canvas canvas, RectF area, int ink, int muted, int moon) {
+    private void drawControllerDiagram(Canvas canvas, RectF area, int ink, int muted, int moon, int onMoon) {
         float badgeH = 20 * dp;
-        float diagramBottom = area.bottom - badgeH - 6 * dp;
+        float badgeGap = 6 * dp;
+        float rowGap = 4 * dp;
+        String[] badgeLabels = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                ? new String[] {
+                        swapFaceButtons ? "B·A·Y·X" : "A·B·X·Y",
+                        getResources().getString(R.string.controller_studio_gyro),
+                        getResources().getString(R.string.controller_studio_touchpad),
+                }
+                : new String[] {
+                        swapFaceButtons ? "B·A·Y·X" : "A·B·X·Y",
+                        getResources().getString(R.string.controller_studio_touchpad),
+                };
+        boolean[] badgeStates = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                ? new boolean[] {swapFaceButtons, motionEnabled, touchpadAsMouse}
+                : new boolean[] {swapFaceButtons, touchpadAsMouse};
+
+        textPaint.setTextSize(10.5f * sp);
+        int badgeRows = 1;
+        float probeX = area.left;
+        for (String label : badgeLabels) {
+            float w = Math.min(area.width(), textPaint.measureText(label) + 14 * dp);
+            if (probeX > area.left && probeX + w > area.right) {
+                badgeRows++;
+                probeX = area.left;
+            }
+            probeX += w + badgeGap;
+        }
+        float badgeBlockH = badgeRows * badgeH + (badgeRows - 1) * rowGap;
+        float diagramBottom = area.bottom - badgeBlockH - 6 * dp;
         float cx = area.centerX();
         float cy = (area.top + diagramBottom) * 0.52f;
         float hw = Math.min(area.width() * 0.44f, (diagramBottom - area.top) * 0.86f);
@@ -211,7 +278,7 @@ public final class ControllerStudioCardView extends View {
 
         // Left stick (upper-left) & Right stick (lower-right) with live deadzone ring.
         float stickR = hh * 0.28f;
-        float dzShare = Math.max(0.18f, Math.min(0.82f, stickDeadzonePercent / 45f));
+        float dzShare = Math.max(0.14f, Math.min(0.82f, Math.abs(stickDeadzonePercent) / 30f));
         drawStickWell(canvas, cx - hw * 0.52f, cy - hh * 0.22f, stickR, dzShare, ink, moon);
         drawStickWell(canvas, cx + hw * 0.26f, cy + hh * 0.08f, stickR * 0.92f, dzShare, ink, moon);
 
@@ -239,17 +306,26 @@ public final class ControllerStudioCardView extends View {
             boolean primary = i == 2;
             fillPaint.setColor(primary ? moon : ColorUtils.setAlphaComponent(ink, 0x22));
             canvas.drawCircle(bx, by, btnR, fillPaint);
-            textPaint.setColor(primary ? 0xFF111318 : ink);
+            textPaint.setColor(primary ? onMoon : ink);
             float ty = by - (textPaint.ascent() + textPaint.descent()) * 0.5f;
             canvas.drawText(glyphs[i], bx, ty, textPaint);
         }
 
-        // Studio capability pills along the bottom of the diagram pane.
-        float py = area.bottom - badgeH;
+        // Studio capability pills along the bottom of the diagram pane (wrapping cleanly when needed).
+        float py = area.bottom - badgeBlockH;
         float px = area.left;
-        px = drawBadge(canvas, px, py, badgeH, swapFaceButtons ? "B·A·Y·X" : "A·B·X·Y", swapFaceButtons, ink, muted, moon);
-        px = drawBadge(canvas, px + 6 * dp, py, badgeH, "Gyro", motionEnabled, ink, muted, moon);
-        drawBadge(canvas, px + 6 * dp, py, badgeH, "Touchpad", touchpadAsMouse, ink, muted, moon);
+        for (int i = 0; i < badgeLabels.length; i++) {
+            textPaint.setTextSize(10.5f * sp);
+            float maxPillW = area.width();
+            String fitted = TextUtils.ellipsize(
+                    badgeLabels[i], textPaint, Math.max(0f, maxPillW - 14 * dp), TextUtils.TruncateAt.END).toString();
+            float w = Math.min(maxPillW, textPaint.measureText(fitted) + 14 * dp);
+            if (px > area.left && px + w > area.right) {
+                px = area.left;
+                py += badgeH + rowGap;
+            }
+            px = drawBadge(canvas, px, py, w, badgeH, fitted, badgeStates[i], ink, muted, moon) + badgeGap;
+        }
     }
 
     private void drawStickWell(Canvas canvas, float cx, float cy, float r, float dzShare, int ink, int moon) {
@@ -266,13 +342,10 @@ public final class ControllerStudioCardView extends View {
         canvas.drawCircle(cx, cy, dzR, strokePaint);
     }
 
-    private float drawBadge(Canvas canvas, float x, float y, float h, String label, boolean active,
+    private float drawBadge(Canvas canvas, float x, float y, float w, float h, String label, boolean active,
                             int ink, int muted, int moon) {
         textPaint.setTextAlign(Paint.Align.LEFT);
         textPaint.setTextSize(10.5f * sp);
-        float tw = textPaint.measureText(label);
-        float w = tw + 14 * dp;
-        if (x + w > padRect.right) return x;
         pillRect.set(x, y, x + w, y + h);
         fillPaint.setColor(active ? ColorUtils.setAlphaComponent(moon, 0x28) : ColorUtils.setAlphaComponent(ink, 0x10));
         canvas.drawRoundRect(pillRect, h / 2f, h / 2f, fillPaint);
@@ -286,24 +359,53 @@ public final class ControllerStudioCardView extends View {
     }
 
     private void drawDeadzoneCurve(Canvas canvas, RectF area, int ink, int muted, int moon) {
-        textPaint.setTextAlign(Paint.Align.LEFT);
-        textPaint.setTextSize(12f * sp);
-        textPaint.setColor(ink);
-        float headerBaseline = area.top - textPaint.ascent();
-        canvas.drawText(getResources().getString(R.string.title_seekbar_deadzone), area.left, headerBaseline, textPaint);
-
-        String readout = String.format(Locale.getDefault(), "%d%% · Trig %d%%",
+        String title = getResources().getString(R.string.title_seekbar_deadzone);
+        String readout = getResources().getString(
+                R.string.controller_studio_deadzone_readout,
                 stickDeadzonePercent, triggerDeadzonePercent);
-        textPaint.setTextAlign(Paint.Align.RIGHT);
-        textPaint.setTextSize(11f * sp);
-        textPaint.setColor(moon);
-        canvas.drawText(readout, area.right, headerBaseline, textPaint);
 
-        float plotTop = headerBaseline + textPaint.descent() + 8 * dp;
+        textPaint.setTextSize(12f * sp);
+        float titleW = textPaint.measureText(title);
+        float titleAscent = textPaint.ascent();
+        float titleDescent = textPaint.descent();
+
+        textPaint.setTextSize(11f * sp);
+        float readoutW = textPaint.measureText(readout);
+
+        float headerBaseline = area.top - titleAscent;
+        float plotTop;
+        if (titleW + readoutW + 8 * dp <= area.width()) {
+            textPaint.setTextAlign(Paint.Align.LEFT);
+            textPaint.setTextSize(12f * sp);
+            textPaint.setColor(ink);
+            canvas.drawText(title, area.left, headerBaseline, textPaint);
+
+            textPaint.setTextAlign(Paint.Align.RIGHT);
+            textPaint.setTextSize(11f * sp);
+            textPaint.setColor(moon);
+            canvas.drawText(readout, area.right, headerBaseline, textPaint);
+            plotTop = headerBaseline + titleDescent + 8 * dp;
+        } else {
+            textPaint.setTextAlign(Paint.Align.LEFT);
+            textPaint.setTextSize(12f * sp);
+            textPaint.setColor(ink);
+            String fittedTitle = TextUtils.ellipsize(title, textPaint, area.width(), TextUtils.TruncateAt.END).toString();
+            canvas.drawText(fittedTitle, area.left, headerBaseline, textPaint);
+
+            textPaint.setTextSize(11f * sp);
+            textPaint.setColor(moon);
+            float readoutBaseline = headerBaseline + titleDescent - textPaint.ascent() + 2 * dp;
+            String fittedReadout = TextUtils.ellipsize(readout, textPaint, area.width(), TextUtils.TruncateAt.END).toString();
+            canvas.drawText(fittedReadout, area.left, readoutBaseline, textPaint);
+            plotTop = readoutBaseline + textPaint.descent() + 6 * dp;
+        }
+
         float plotBottom = area.bottom - 2 * dp;
         float plotLeft = area.left;
         float plotRight = area.right;
-        if (plotBottom - plotTop < 24 * dp || plotRight - plotLeft < 40 * dp) return;
+        float plotW = plotRight - plotLeft;
+        float plotH = plotBottom - plotTop;
+        if (plotH < 24 * dp || plotW < 40 * dp) return;
 
         pillRect.set(plotLeft, plotTop, plotRight, plotBottom);
         fillPaint.setColor(ColorUtils.setAlphaComponent(ink, 0x0A));
@@ -312,23 +414,23 @@ public final class ControllerStudioCardView extends View {
         strokePaint.setStrokeWidth(dp);
         strokePaint.setColor(ColorUtils.setAlphaComponent(ink, 0x14));
         for (int i = 1; i <= 3; i++) {
-            float gx = plotLeft + (plotRight - plotLeft) * (i / 4f);
-            float gy = plotTop + (plotBottom - plotTop) * (i / 4f);
+            float gx = plotLeft + plotW * (i / 4f);
+            float gy = plotTop + plotH * (i / 4f);
             canvas.drawLine(gx, plotTop, gx, plotBottom, strokePaint);
             canvas.drawLine(plotLeft, gy, plotRight, gy, strokePaint);
         }
 
-        float dz = stickDeadzonePercent / 100f;
-        float kneeX = plotLeft + (plotRight - plotLeft) * dz;
+        float threshold = stickDeadzonePercent > 0 ? stickDeadzonePercent / 100f : 0.01f;
+        float kneeX = plotLeft + plotW * threshold;
+        float kneeY = plotBottom - plotH * stickOutput(Math.min(1f, threshold + 0.001f), stickDeadzonePercent);
 
-        // Deadzone floor region [0 .. dz].
         pillRect.set(plotLeft, plotTop, kneeX, plotBottom);
         fillPaint.setColor(ColorUtils.setAlphaComponent(muted, 0x18));
         canvas.drawRect(pillRect, fillPaint);
 
-        // Response curve area + crisp stroke from (0,0) -> (kneeX,0) -> (1,1).
         curveAreaPath.reset();
         curveAreaPath.moveTo(kneeX, plotBottom);
+        curveAreaPath.lineTo(kneeX, kneeY);
         curveAreaPath.lineTo(plotRight, plotTop);
         curveAreaPath.lineTo(plotRight, plotBottom);
         curveAreaPath.close();
@@ -338,13 +440,14 @@ public final class ControllerStudioCardView extends View {
         curvePath.reset();
         curvePath.moveTo(plotLeft, plotBottom);
         curvePath.lineTo(kneeX, plotBottom);
+        curvePath.lineTo(kneeX, kneeY);
         curvePath.lineTo(plotRight, plotTop);
         strokePaint.setStrokeWidth(2f * dp);
         strokePaint.setColor(moon);
         canvas.drawPath(curvePath, strokePaint);
 
         fillPaint.setColor(moon);
-        canvas.drawCircle(kneeX, plotBottom, 3.2f * dp, fillPaint);
+        canvas.drawCircle(kneeX, kneeY, 3.2f * dp, fillPaint);
     }
 
     private static int clamp(int v, int lo, int hi) {

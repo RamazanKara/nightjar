@@ -620,4 +620,8 @@
     <string name="controller_editor_summary">搖桿、扳機、體感、震動和按鍵</string>
     <string name="controller_settings_menu">控制器設定</string>
     <string name="controller_settings_stream_leaves">開啟控制器設定會離開串流；遊戲會繼續在電腦上執行。</string>
+    <string name="controller_studio_gyro">陀螺儀</string>
+    <string name="controller_studio_touchpad">觸控板</string>
+    <string name="controller_studio_deadzone_readout">%1$d%% · 扳機 %2$d%%</string>
+    <string name="controller_studio_a11y_summary">控制器工作室：%1$s 按鍵配置，搖桿死區 %2$d%%，扳機死區 %3$d%%</string>
 </resources>

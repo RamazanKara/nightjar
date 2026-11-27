@@ -233,7 +233,7 @@ pub(super) fn demo_art(ctx: &egui::Context, n: usize) -> Art {
     let size = [image.width() as usize, image.height() as usize];
     let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &image);
     let tex = ctx.load_texture(format!("demo-art-{n}"), color_image.clone(), egui::TextureOptions::LINEAR);
-    crate::ambient::register_cover(Some(tex.id()), None, &color_image);
+    crate::ambient::register_cover(ctx, Some(tex.id()), None, &color_image);
     Art::Ready(tex)
 }
 

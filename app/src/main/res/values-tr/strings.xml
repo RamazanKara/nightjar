@@ -620,4 +620,8 @@
     <string name="controller_editor_summary">Çubuklar, tetikler, hareket, titreşim ve düğmeler</string>
     <string name="controller_settings_menu">Kumanda ayarları</string>
     <string name="controller_settings_stream_leaves">Kumanda ayarlarını açmak yayından çıkar; oyun bilgisayarda çalışmaya devam eder.</string>
+    <string name="controller_studio_gyro">Jiroskop</string>
+    <string name="controller_studio_touchpad">Dokunmatik yüzey</string>
+    <string name="controller_studio_deadzone_readout">%1$d%% · Tetik %2$d%%</string>
+    <string name="controller_studio_a11y_summary">Kumanda Stüdyosu: %1$s tuş düzeni, çubuk ölü bölgesi %2$d%%, tetik ölü bölgesi %3$d%%</string>
 </resources>

@@ -72,16 +72,20 @@ impl StudioLayout {
         }) {
             return Self::SteamDeck;
         }
-        if swapped {
-            return Self::Nintendo;
-        }
         match pads.pads.first().map(|p| p.brand) {
             Some(PadBrand::PlayStation) => Self::PlayStation,
             Some(PadBrand::Nintendo) => Self::Nintendo,
-            Some(PadBrand::Xbox) => Self::Xbox,
+            Some(PadBrand::Xbox) => {
+                if swapped {
+                    Self::Nintendo
+                } else {
+                    Self::Xbox
+                }
+            }
             None => match style {
                 Style::PlayStation => Self::PlayStation,
                 Style::Nintendo => Self::Nintendo,
+                Style::Xbox if swapped => Self::Nintendo,
                 Style::Xbox => Self::Xbox,
             },
         }
@@ -110,8 +114,34 @@ pub(in crate::ui) fn show(
         .unwrap_or_else(|| StudioLayout::detect(pads, style, s.swap_face_buttons));
 
     let avail = ui.available_width().clamp(200.0, crate::ui::SETTINGS_W);
+    let inner_w = (avail - CARD_PAD * 2.0).max(1.0);
+    let title_w = ui
+        .painter()
+        .layout_no_wrap(labels.title.to_owned(), semibold(text::LABEL), *ON_SURFACE)
+        .size()
+        .x;
+    let scope_w = if layered {
+        0.0
+    } else {
+        19.0 + ui
+            .painter()
+            .layout_no_wrap(labels.scope.to_owned(), regular(text::CAPTION), *ON_SURFACE_VARIANT)
+            .size()
+            .x
+    };
+    let pills_w: f32 = StudioLayout::ALL
+        .into_iter()
+        .map(|l| {
+            ui.painter()
+                .layout_no_wrap(l.label().to_owned(), semibold(text::CAPTION), *ON_SURFACE)
+                .size()
+                .x
+                + 16.0
+        })
+        .sum::<f32>()
+        + 6.0 * (StudioLayout::ALL.len().saturating_sub(1) as f32);
     let side_by_side = avail >= 560.0;
-    let header_stacked = avail < 520.0;
+    let header_stacked = avail < 520.0 || title_w + scope_w + 12.0 + pills_w > inner_w;
     let header_h = if header_stacked { 52.0 } else { 28.0 };
     let body_h = if side_by_side { PANEL_H } else { PANEL_H * 2.0 + space::M };
     let card_h = CARD_PAD * 2.0 + header_h + space::S + body_h;
@@ -162,42 +192,51 @@ fn paint_header(
     let title_pos = pos2(inner.left(), inner.top() + 4.0);
     painter.galley(title_pos, title.clone(), *ON_SURFACE);
 
+    let pill_y = if stacked { inner.top() + 26.0 } else { inner.top() + 2.0 };
+    let pills: Vec<_> = StudioLayout::ALL
+        .into_iter()
+        .map(|layout| {
+            let words = layout.label();
+            let g = ui.painter().layout_no_wrap(words.to_owned(), semibold(text::CAPTION), *ON_SURFACE);
+            let w = g.size().x + 16.0;
+            (layout, words, g, w)
+        })
+        .collect();
+    let total_w: f32 = pills.iter().map(|(_, _, _, w)| *w).sum::<f32>()
+        + 6.0 * (pills.len().saturating_sub(1) as f32);
+    let pills_left = if stacked {
+        inner.left()
+    } else {
+        (inner.right() - total_w).max(inner.left())
+    };
+
     if !layered {
-        let scope = painter.layout_no_wrap(labels.scope.to_owned(), regular(text::CAPTION), *ON_SURFACE_VARIANT);
+        let scope = ui
+            .painter()
+            .layout_no_wrap(labels.scope.to_owned(), regular(text::CAPTION), *ON_SURFACE_VARIANT);
         let sx = title_pos.x + title.size().x + 10.0;
-        if sx + scope.size().x <= inner.right() {
-            painter.circle_filled(pos2(sx + 3.0, title_pos.y + title.size().y / 2.0), 2.5, *MOON);
-            painter.galley(pos2(sx + 9.0, title_pos.y + (title.size().y - scope.size().y) / 2.0), scope, *ON_SURFACE_VARIANT);
+        let limit_x = if stacked { inner.right() } else { pills_left - 8.0 };
+        if sx + 9.0 + scope.size().x <= limit_x {
+            ui.painter()
+                .circle_filled(pos2(sx + 3.0, title_pos.y + title.size().y / 2.0), 2.5, *MOON);
+            ui.painter().galley(
+                pos2(sx + 9.0, title_pos.y + (title.size().y - scope.size().y) / 2.0),
+                scope,
+                *ON_SURFACE_VARIANT,
+            );
         }
     }
 
-    let pill_y = if stacked { inner.top() + 26.0 } else { inner.top() + 2.0 };
-    let mut x = if stacked { inner.left() } else { inner.right() };
-    let order = if stacked {
-        StudioLayout::ALL
-    } else {
-        [StudioLayout::SteamDeck, StudioLayout::Nintendo, StudioLayout::PlayStation, StudioLayout::Xbox]
-    };
+    let mut x = pills_left;
 
-    for layout in order {
-        let words = layout.label();
-        let g = ui.painter().layout_no_wrap(words.to_owned(), semibold(text::CAPTION), *ON_SURFACE);
-        let w = g.size().x + 16.0;
-        let rect = if stacked {
-            let r = Rect::from_min_size(pos2(x, pill_y), vec2(w, 24.0));
-            x += w + 6.0;
-            r
-        } else {
-            x -= w;
-            let r = Rect::from_min_size(pos2(x, pill_y), vec2(w, 24.0));
-            x -= 6.0;
-            r
-        };
+    for (layout, words, g, w) in pills {
+        let rect = Rect::from_min_size(pos2(x, pill_y), vec2(w, 24.0));
+        x += w + 6.0;
         if rect.left() < inner.left() - 1.0 || rect.right() > inner.right() + 1.0 {
             continue;
         }
         let selected = layout == active;
-        let resp = ui.interact(rect, pick_id.with(words), Sense::click());
+        let resp = ui.interact(rect, pick_id.with(layout as u8), Sense::click());
         resp.widget_info(move || egui::WidgetInfo::selected(egui::Role::Button, true, selected, words));
         if resp.clicked() {
             ui.data_mut(|d| d.insert_temp(pick_id, layout));
@@ -207,11 +246,12 @@ fn paint_header(
             let f = if high_contrast() { Color32::TRANSPARENT } else { MOON.gamma_multiply(0.18) };
             (f, Stroke::new(1.3, *MOON), *MOON)
         } else {
-            let f = if resp.hovered() { *SURFACE_HIGH } else { *SURFACE };
+            let f = if resp.hovered() || resp.has_focus() { *SURFACE_HIGH } else { *SURFACE };
             (f, Stroke::new(1.0, *OUTLINE_VARIANT), *ON_SURFACE_VARIANT)
         };
         ui.painter().rect(rect, round, fill, stroke, StrokeKind::Inside);
         ui.painter().galley(pos2(rect.center().x - g.size().x / 2.0, rect.center().y - g.size().y / 2.0), g, ink);
+        crate::ui::focus_ring(ui, rect, &resp, 12);
     }
 }
 
@@ -430,5 +470,59 @@ mod tests {
         assert_eq!(stick_response(0.15, 15), 0.0);
         assert!((stick_response(0.575, 15) - 0.5).abs() < 1e-4);
         assert!((stick_response(1.0, 15) - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn layout_pills_tab_left_to_right_in_wide_and_stacked_headers() {
+        crate::theme::own_palette();
+        let labels = Labels {
+            title: "Controller Studio",
+            scope: "Applies to every game",
+            stick_response: "Stick response",
+            stick_deadzone: "Stick dead zone",
+            trigger_deadzone: "Trigger dead zone",
+            motion: "Motion controls",
+            touchpad: "Touchpad input",
+            vibration: "Vibration",
+        };
+        let settings = Settings::default();
+        let pads = PadsView::default();
+        for width in [680.0_f32, 420.0_f32] {
+            let ctx = egui::Context::default();
+            let pick_id = Id::unique("controller-studio-layout");
+            let ids: Vec<Id> = StudioLayout::ALL
+                .into_iter()
+                .map(|l| pick_id.with(l as u8))
+                .collect();
+            let run_frame = |events: Vec<egui::Event>| {
+                let mut raw = egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(width, 600.0))),
+                    events,
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(raw.take(), |ui| {
+                    show(ui, &settings, Style::Xbox, &pads, false, &labels);
+                });
+                out.textures_delta.clear();
+            };
+            run_frame(Vec::new());
+            ctx.memory_mut(|m| m.request_focus(ids[0]));
+            run_frame(Vec::new());
+            assert_eq!(ctx.memory(|m| m.focused()), Some(ids[0]), "width={width}: starts on Xbox");
+            for expected in &ids[1..] {
+                run_frame(vec![egui::Event::Key {
+                    key: egui::Key::Tab,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }]);
+                assert_eq!(
+                    ctx.memory(|m| m.focused()),
+                    Some(*expected),
+                    "width={width}: Tab advances left-to-right"
+                );
+            }
+        }
     }
 }

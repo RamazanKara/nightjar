@@ -4,10 +4,10 @@
 //! ghost cover typography. Pure CPU work on small images; `hosts/covers.rs` runs [`bake`] off
 //! the UI thread beside the cover's decode.
 
-use std::collections::VecDeque;
-use std::sync::{Mutex, OnceLock};
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
 
-use egui::{Color32, ColorImage, TextureId};
+use egui::{Color32, ColorImage, Context, Id, TextureHandle, TextureId, TextureOptions};
 
 use crate::theme::shade;
 use crate::ui::design_tokens as t;
@@ -28,38 +28,33 @@ pub const HERO_SIZE: [usize; 2] = [96, 144];
 /// Separable Gaussian sigma per pass on [`HERO_SIZE`] (two passes give effective sigma ~22.6 px,
 /// kernel support radius 48 px per pass, dissolving cover lettering completely).
 const HERO_BLUR_SIGMA: f32 = 16.0;
-const MAX_CACHED_COVERS: usize = 256;
+/// Bounded GPU texture ring for hero directional washes per [`Context`].
+const HERO_WASHES_KEPT: usize = 32;
 
-struct CachedCover {
-    hash: u64,
-    art_ids: Vec<TextureId>,
-    ambient_ids: Vec<TextureId>,
-    glow: Color32,
-    /// Squashed `HERO_SIZE` sRGB thumbnail, from which Day ambient and Night/Day hero washes bake.
-    thumb: Vec<[u8; 3]>,
+#[derive(Default)]
+struct CoverThumbs {
+    /// Squashed `HERO_SIZE` sRGB thumbnail indexed by uploaded cover `TextureId` (`Art::Ready`).
+    by_art: HashMap<TextureId, Arc<[[u8; 3]]>>,
+    /// Squashed `HERO_SIZE` sRGB thumbnail indexed by uploaded Night ambient `TextureId` (`Host::ambient`).
+    by_ambient: HashMap<TextureId, Arc<[[u8; 3]]>>,
+    /// Bounded FIFO cache of uploaded `HERO_SIZE` hero wash GPU textures keyed by `(source_id, day)`.
+    hero_washes: HashMap<(TextureId, bool), TextureHandle>,
+    hero_wash_order: VecDeque<(TextureId, bool)>,
 }
 
-fn cover_cache() -> &'static Mutex<VecDeque<CachedCover>> {
-    static CACHE: OnceLock<Mutex<VecDeque<CachedCover>>> = OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(VecDeque::new()))
+fn cover_cache(ctx: &Context) -> Arc<Mutex<CoverThumbs>> {
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<Arc<Mutex<CoverThumbs>>>(Id::unique("nj-cover-thumbs"))
+            .clone()
+    })
 }
 
-fn thumb_hash(thumb: &[[u8; 3]]) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for &[r, g, b] in thumb {
-        for byte in [r, g, b] {
-            h ^= u64::from(byte);
-            h = h.wrapping_mul(0x0100_0000_01b3);
-        }
-    }
-    h
-}
-
-fn thumb_bytes(cover: &ColorImage) -> Vec<[u8; 3]> {
-    squash_to(cover, HERO_SIZE)
+fn thumb_bytes(cover: &ColorImage) -> Arc<[[u8; 3]]> {
+    let vec: Vec<[u8; 3]> = squash_to(cover, HERO_SIZE)
         .into_iter()
         .map(|c| c.map(|v| (v * 255.0 + 0.5).clamp(0.0, 255.0) as u8))
-        .collect()
+        .collect();
+    vec.into()
 }
 
 fn thumb_image(thumb: &[[u8; 3]]) -> ColorImage {
@@ -73,101 +68,114 @@ fn thumb_image(thumb: &[[u8; 3]]) -> ColorImage {
     }
 }
 
-fn push_id(list: &mut Vec<TextureId>, id: Option<TextureId>) {
-    if let Some(id) = id
-        && !list.contains(&id)
-    {
-        if list.len() >= 16 {
-            list.remove(0);
-        }
-        list.push(id);
-    }
-}
-
-fn cache_store(
-    art_id: Option<TextureId>,
-    ambient_id: Option<TextureId>,
-    glow: Option<Color32>,
-    thumb: Vec<[u8; 3]>,
-) {
-    let hash = thumb_hash(&thumb);
-    let mut guard = cover_cache().lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(pos) = guard.iter().rposition(|entry| entry.hash == hash) {
-        let mut entry = guard.remove(pos).expect("entry at pos");
-        push_id(&mut entry.art_ids, art_id);
-        push_id(&mut entry.ambient_ids, ambient_id);
-        if let Some(g) = glow {
-            entry.glow = g;
-        }
-        guard.push_back(entry);
-        return;
-    }
-    let resolved_glow = glow.unwrap_or_else(|| {
-        let small = squash(&thumb_image(&thumb));
-        let soft = gaussian(&small, SIZE, SIZE[0] as f32 / 8.0);
-        let graded: Vec<[f32; 3]> = soft.into_iter().map(grade).collect();
-        glow_of(&finish(&graded, SIZE))
-    });
-    let mut art_ids = Vec::new();
-    let mut ambient_ids = Vec::new();
-    push_id(&mut art_ids, art_id);
-    push_id(&mut ambient_ids, ambient_id);
-    while guard.len() >= MAX_CACHED_COVERS {
-        guard.pop_front();
-    }
-    guard.push_back(CachedCover {
-        hash,
-        art_ids,
-        ambient_ids,
-        glow: resolved_glow,
-        thumb,
-    });
-}
-
-/// Associates uploaded cover/ambient texture IDs with a source `cover` so Day ambient and
-/// hero directional washes resolve immediately by texture ID in MRU order.
+/// Associates uploaded cover and/or Night ambient texture IDs with their source `cover` inside
+/// `ctx` so Day ambient and Night/Day hero washes resolve deterministically per `egui::Context`
+/// without cross-context `Managed(n)` collisions, `glow` collisions, or 256-entry FIFO eviction.
 pub fn register_cover(
+    ctx: &Context,
     art_id: Option<TextureId>,
     ambient_id: Option<TextureId>,
     cover: &ColorImage,
 ) {
-    cache_store(art_id, ambient_id, None, thumb_bytes(cover));
+    if art_id.is_none() && ambient_id.is_none() {
+        return;
+    }
+    let thumb = thumb_bytes(cover);
+    let cache = cover_cache(ctx);
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(id) = art_id {
+        guard.by_art.insert(id, Arc::clone(&thumb));
+    }
+    if let Some(id) = ambient_id {
+        guard.by_ambient.insert(id, thumb);
+    }
 }
 
-/// Lazily bakes a Day-mode ambient (`SIZE`) for a cover previously passed to [`bake`] or [`register_cover`].
-pub fn day_for(ambient_id: TextureId, glow: Color32) -> Option<ColorImage> {
+/// Retains only registered cover/ambient thumbnails and cached hero washes in `ctx` whose
+/// `TextureId` satisfies `keep`.
+pub fn retain_covers(ctx: &Context, mut keep: impl FnMut(TextureId) -> bool) {
+    let cache = cover_cache(ctx);
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    let CoverThumbs {
+        by_art,
+        by_ambient,
+        hero_washes,
+        hero_wash_order,
+    } = &mut *guard;
+    by_art.retain(|&id, _| keep(id));
+    by_ambient.retain(|&id, _| keep(id));
+    hero_washes.retain(|&(id, _), _| keep(id));
+    hero_wash_order.retain(|key| hero_washes.contains_key(key));
+}
+
+/// Clears all registered cover thumbnails and cached hero wash textures in `ctx` (e.g. on renderer swap).
+pub fn clear_covers(ctx: &Context) {
+    let cache = cover_cache(ctx);
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = CoverThumbs::default();
+}
+
+/// Lazily bakes a Day-mode ambient (`SIZE`) for a cover registered under `ambient_id` in `ctx`.
+pub fn day_for(ctx: &Context, ambient_id: TextureId, _glow: Color32) -> Option<ColorImage> {
+    let cache = cover_cache(ctx);
     let thumb = {
-        let guard = cover_cache().lock().unwrap_or_else(|e| e.into_inner());
-        guard
-            .iter()
-            .rev()
-            .find(|e| e.ambient_ids.contains(&ambient_id))
-            .or_else(|| guard.iter().rev().find(|e| e.glow == glow))
-            .map(|e| e.thumb.clone())?
+        let guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+        guard.by_ambient.get(&ambient_id).cloned()?
     };
     Some(bake_day(&thumb_image(&thumb)))
 }
 
-/// Lazily bakes a blurred hero directional wash (`HERO_SIZE`) for a cover in Night or Day look.
+/// Lazily bakes a blurred hero directional wash (`HERO_SIZE`) for a cover registered under
+/// `art_id` or `ambient_id` in `ctx`.
 pub fn hero_for(
+    ctx: &Context,
     art_id: TextureId,
+    ambient_id: Option<TextureId>,
+    _glow: Option<Color32>,
+    day: bool,
+) -> Option<ColorImage> {
+    let cache = cover_cache(ctx);
+    let thumb = {
+        let guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+        guard
+            .by_art
+            .get(&art_id)
+            .or_else(|| ambient_id.and_then(|id| guard.by_ambient.get(&id)))
+            .cloned()?
+    };
+    Some(bake_hero(&thumb_image(&thumb), day))
+}
+
+/// Returns a bounded-FIFO GPU `TextureHandle` for the blurred hero directional wash in `ctx`.
+pub fn hero_wash_texture(
+    ctx: &Context,
+    name: &str,
+    source_id: TextureId,
     ambient_id: Option<TextureId>,
     glow: Option<Color32>,
     day: bool,
-) -> Option<ColorImage> {
-    let thumb = {
-        let guard = cover_cache().lock().unwrap_or_else(|e| e.into_inner());
-        guard
-            .iter()
-            .rev()
-            .find(|e| e.art_ids.contains(&art_id))
-            .or_else(|| {
-                ambient_id.and_then(|id| guard.iter().rev().find(|e| e.ambient_ids.contains(&id)))
-            })
-            .or_else(|| glow.and_then(|g| guard.iter().rev().find(|e| e.glow == g)))
-            .map(|e| e.thumb.clone())?
-    };
-    Some(bake_hero(&thumb_image(&thumb), day))
+) -> Option<TextureHandle> {
+    let key = (source_id, day);
+    let cache = cover_cache(ctx);
+    {
+        let guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(found) = guard.hero_washes.get(&key) {
+            return Some(found.clone());
+        }
+    }
+    let baked = hero_for(ctx, source_id, ambient_id, glow, day)?;
+    let handle = ctx.load_texture(name, baked, TextureOptions::LINEAR);
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    while guard.hero_washes.len() >= HERO_WASHES_KEPT {
+        let Some(old) = guard.hero_wash_order.pop_front() else {
+            guard.hero_washes.clear();
+            break;
+        };
+        guard.hero_washes.remove(&old);
+    }
+    guard.hero_wash_order.push_back(key);
+    guard.hero_washes.insert(key, handle.clone());
+    Some(handle)
 }
 
 fn to_linear(c: f32) -> f32 {
@@ -330,16 +338,12 @@ fn finish(pixels: &[[f32; 3]], size: [usize; 2]) -> ColorImage {
     image
 }
 
-/// The Night ambient of a cover: one call per cover, off the UI thread. Also records a small
-/// squashed thumbnail so Day ambient and hero directional washes materialize on demand.
+/// The Night ambient of a cover: one call per cover, off the UI thread.
 pub fn bake(cover: &ColorImage) -> ColorImage {
     let small = squash(cover);
     let soft = gaussian(&small, SIZE, SIZE[0] as f32 / 8.0);
     let graded: Vec<[f32; 3]> = soft.into_iter().map(grade).collect();
-    let out = finish(&graded, SIZE);
-    let glow = glow_of(&out);
-    cache_store(None, None, Some(glow), thumb_bytes(cover));
-    out
+    finish(&graded, SIZE)
 }
 
 /// The Day-mode ambient of a cover: lifted pastel Alabaster luminance (`>= 0.56`) with `1.3x`
@@ -658,5 +662,64 @@ mod tests {
                 assert!(luma(dp) >= t::DAY_AMBIENT_TEXT_ZONE_MIN_LUMA - 0.01, "{dp:?}");
             }
         }
+    }
+
+    #[test]
+    fn dark_covers_and_large_libraries_resolve_by_texture_id_without_collision_or_eviction() {
+        let ctx = Context::default();
+        let other_ctx = Context::default();
+        // Two dark/monochrome covers with identical `glow == TRANSPARENT` but distinct top/bottom luminance
+        // and >300 registered covers never cross-contaminate or evict live entries, nor leak across Contexts.
+        let mut cover_a = ColorImage::filled([120, 180], Color32::BLACK);
+        for p in &mut cover_a.pixels[..120 * 60] {
+            *p = Color32::from_rgb(38, 38, 38);
+        }
+        let mut cover_b = ColorImage::filled([120, 180], Color32::BLACK);
+        for p in &mut cover_b.pixels[120 * 120..] {
+            *p = Color32::from_rgb(220, 40, 40);
+        }
+        let art_a = TextureId::Managed(0);
+        let amb_a = TextureId::Managed(1);
+        let art_b = TextureId::Managed(2);
+        let amb_b = TextureId::Managed(3);
+        register_cover(&ctx, Some(art_a), Some(amb_a), &cover_a);
+        for idx in 0..300u64 {
+            let filler = ColorImage::filled([24, 36], Color32::from_rgb((idx % 200) as u8, 10, 20));
+            register_cover(
+                &ctx,
+                Some(TextureId::User(910_000 + idx * 2)),
+                Some(TextureId::User(910_001 + idx * 2)),
+                &filler,
+            );
+        }
+        register_cover(&ctx, Some(art_b), Some(amb_b), &cover_b);
+
+        // Separate `egui::Context` never sees `ctx`'s `Managed(0..1)` entries.
+        assert!(day_for(&other_ctx, amb_a, Color32::TRANSPARENT).is_none());
+        assert!(day_for(&ctx, TextureId::User(999_999), Color32::TRANSPARENT).is_none());
+        assert!(hero_for(&ctx, TextureId::User(999_998), None, Some(Color32::TRANSPARENT), false).is_none());
+
+        // `cover_a` survives >256 later registrations and keeps its neutral top-lit wash (not `cover_b`'s red bottom).
+        let hero_a = hero_for(&ctx, art_a, Some(amb_a), Some(Color32::TRANSPARENT), false).expect("hero_a");
+        let hero_b = hero_for(&ctx, art_b, Some(amb_b), Some(Color32::TRANSPARENT), false).expect("hero_b");
+        let bottom_idx = HERO_SIZE[0] * (HERO_SIZE[1] - 8) + HERO_SIZE[0] / 2;
+        assert!(
+            hero_b.pixels[bottom_idx].r() > hero_b.pixels[bottom_idx].b() + 15,
+            "cover_b keeps red bottom: {:?}",
+            hero_b.pixels[bottom_idx]
+        );
+        assert!(
+            (i32::from(hero_a.pixels[bottom_idx].r()) - i32::from(hero_a.pixels[bottom_idx].b())).abs() <= 2,
+            "cover_a stays neutral rather than colliding with cover_b: {:?}",
+            hero_a.pixels[bottom_idx]
+        );
+        assert!(day_for(&ctx, amb_a, Color32::TRANSPARENT).is_some(), "day_for survives >256 covers");
+
+        // Even if `art_a` is dropped (`Art::Dropped`), `amb_a` still resolves `hero_for`.
+        retain_covers(&ctx, |id| id == amb_a || id == art_b || id == amb_b);
+        assert!(
+            hero_for(&ctx, TextureId::User(888_888), Some(amb_a), None, true).is_some(),
+            "retained ambient_id still resolves Day hero wash after cover texture drop"
+        );
     }
 }

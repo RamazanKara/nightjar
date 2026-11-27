@@ -44,7 +44,7 @@ pub(in crate::ui) fn recommended_strip(
     };
 
     let hdr_mode = if custom {
-        tr(if s.hdr { "On" } else { "Off" })
+        if s.hdr { tr("On") } else { tr("Off") }
     } else {
         tr(simple_hdr_name(choices.hdr))
     };

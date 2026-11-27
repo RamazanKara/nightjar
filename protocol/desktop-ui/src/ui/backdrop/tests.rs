@@ -329,7 +329,7 @@ fn by_day_the_wash_lies_over_art_and_never_over_the_stage() {
     let night_baked = crate::ambient::bake(&cover);
     let glow = crate::ambient::glow_of(&night_baked);
     let night_tex = ctx.load_texture("baked-night", night_baked, TextureOptions::LINEAR);
-    crate::ambient::register_cover(None, Some(night_tex.id()), &cover);
+    crate::ambient::register_cover(&ctx, None, Some(night_tex.id()), &cover);
     let mut day_ambient = Ambient::default();
     let day_shapes = frame(
         &ctx,

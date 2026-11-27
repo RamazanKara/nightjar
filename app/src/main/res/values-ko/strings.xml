@@ -620,4 +620,8 @@
     <string name="controller_editor_summary">스틱, 트리거, 모션, 진동, 버튼</string>
     <string name="controller_settings_menu">컨트롤러 설정</string>
     <string name="controller_settings_stream_leaves">컨트롤러 설정을 열면 스트림을 나갑니다. 게임은 PC에서 계속 실행됩니다.</string>
+    <string name="controller_studio_gyro">자이로</string>
+    <string name="controller_studio_touchpad">터치패드</string>
+    <string name="controller_studio_deadzone_readout">%1$d%% · 트리거 %2$d%%</string>
+    <string name="controller_studio_a11y_summary">컨트롤러 스튜디오: 버튼 배열 %1$s, 스틱 데드존 %2$d%%, 트리거 데드존 %3$d%%</string>
 </resources>

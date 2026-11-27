@@ -620,4 +620,8 @@
     <string name="controller_editor_summary">Sticks, Trigger, Bewegung, Vibration und Tasten</string>
     <string name="controller_settings_menu">Controller-Einstellungen</string>
     <string name="controller_settings_stream_leaves">Zum Öffnen der Controller-Einstellungen wird der Stream verlassen; das Spiel läuft auf dem PC weiter.</string>
+    <string name="controller_studio_gyro">Gyroskop</string>
+    <string name="controller_studio_touchpad">Touchpad</string>
+    <string name="controller_studio_deadzone_readout">%1$d%% · Trigger %2$d%%</string>
+    <string name="controller_studio_a11y_summary">Controller-Studio: Tastenlayout %1$s, Stick-Totzone %2$d%%, Trigger-Totzone %3$d%%</string>
 </resources>

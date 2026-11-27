@@ -166,10 +166,13 @@ impl Hosts {
                     if !matches!(host.art.get(&app), Some(Art::Ready(_))) {
                         continue;
                     }
+                    let amb_id = host.ambient.get(&app).map(egui::TextureHandle::id);
                     let Some(Art::Ready(texture)) = Arc::make_mut(&mut host.art).get_mut(&app) else {
                         unreachable!()
                     };
-                    *texture = ctx.load_texture(format!("art-{id}-{app}"), image, egui::TextureOptions::LINEAR);
+                    let sharp = ctx.load_texture(format!("art-{id}-{app}"), image.clone(), egui::TextureOptions::LINEAR);
+                    crate::ambient::register_cover(ctx, Some(sharp.id()), amb_id, &image);
+                    *texture = sharp;
                     match sized {
                         Some(sized) => {
                             Arc::make_mut(&mut host.art_sized).insert(app, sized);
@@ -189,19 +192,24 @@ impl Hosts {
                     // SteamGridDB cover for a gap the PC left).
                     let keeps = |h: &Host| image.is_none() && matches!(h.art.get(&app), Some(Art::Ready(_)));
                     if let Some(host) = self.get_mut(id).filter(|h| h.art_versions.get(&app) == Some(&version) && !keeps(h)) {
-                        match ambient {
+                        let amb_id = match ambient {
                             Some(ambient) => {
                                 Arc::make_mut(&mut host.ambient_glow).insert(app, crate::ambient::glow_of(&ambient));
-                                Arc::make_mut(&mut host.ambient).insert(app, ctx.load_texture(format!("ambient-{id}-{app}"), ambient, egui::TextureOptions::LINEAR));
+                                let handle = ctx.load_texture(format!("ambient-{id}-{app}"), ambient, egui::TextureOptions::LINEAR);
+                                let tex_id = handle.id();
+                                Arc::make_mut(&mut host.ambient).insert(app, handle);
+                                Some(tex_id)
                             }
                             None => {
                                 Arc::make_mut(&mut host.ambient_glow).remove(&app);
                                 Arc::make_mut(&mut host.ambient).remove(&app);
+                                None
                             }
-                        }
+                        };
                         let art = match image {
                             Some(image) => {
-                                let texture = ctx.load_texture(format!("art-{id}-{app}"), image, egui::TextureOptions::LINEAR);
+                                let texture = ctx.load_texture(format!("art-{id}-{app}"), image.clone(), egui::TextureOptions::LINEAR);
+                                crate::ambient::register_cover(ctx, Some(texture.id()), amb_id, &image);
                                 landed = Some(texture.id());
                                 Art::Ready(texture)
                             }

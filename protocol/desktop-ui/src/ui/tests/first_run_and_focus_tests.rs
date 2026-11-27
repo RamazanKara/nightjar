@@ -163,7 +163,7 @@ fn glass_page_screenshots() {
             Arc::make_mut(&mut pc.ambient_glow).insert(app.id, crate::ambient::glow_of(&ambient_img));
             let ambient_tex = f.ctx.load_texture(format!("ambient-{n}"), ambient_img, egui::TextureOptions::LINEAR);
             let cover_tex = f.ctx.load_texture(format!("cover-{n}"), image.clone(), egui::TextureOptions::LINEAR);
-            crate::ambient::register_cover(Some(cover_tex.id()), Some(ambient_tex.id()), &image);
+            crate::ambient::register_cover(&f.ctx, Some(cover_tex.id()), Some(ambient_tex.id()), &image);
             Arc::make_mut(&mut pc.ambient).insert(app.id, ambient_tex);
             Arc::make_mut(&mut pc.art).insert(app.id, Art::Ready(cover_tex));
         }
@@ -358,7 +358,7 @@ fn polish_screenshots() {
                 Arc::make_mut(&mut pc.ambient_glow).insert(app.id, crate::ambient::glow_of(&amb));
                 let amb_tex = f.ctx.load_texture(format!("polish-amb-{n}"), amb, egui::TextureOptions::LINEAR);
                 let art_tex = f.ctx.load_texture(format!("polish-art-{n}"), img.clone(), egui::TextureOptions::LINEAR);
-                crate::ambient::register_cover(Some(art_tex.id()), Some(amb_tex.id()), &img);
+                crate::ambient::register_cover(&f.ctx, Some(art_tex.id()), Some(amb_tex.id()), &img);
                 Arc::make_mut(&mut pc.ambient).insert(app.id, amb_tex);
                 Arc::make_mut(&mut pc.art).insert(app.id, Art::Ready(art_tex));
             }

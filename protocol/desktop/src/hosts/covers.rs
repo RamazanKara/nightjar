@@ -146,6 +146,18 @@ impl Hosts {
         }
         if std::mem::take(&mut self.art_landed) {
             self.drop_covers(COVER_BUDGET);
+            let mut live = std::collections::HashSet::new();
+            for host in &self.list {
+                for handle in host.ambient.values() {
+                    live.insert(handle.id());
+                }
+                for art in host.art.values() {
+                    if let Art::Ready(texture) = art {
+                        live.insert(texture.id());
+                    }
+                }
+            }
+            crate::ambient::retain_covers(ctx, |id| live.contains(&id));
         }
     }
 

@@ -620,4 +620,8 @@
     <string name="controller_editor_summary">Cần analog, cò, chuyển động, rung và nút</string>
     <string name="controller_settings_menu">Cài đặt tay cầm</string>
     <string name="controller_settings_stream_leaves">Mở cài đặt tay cầm sẽ rời khỏi luồng; trò chơi vẫn chạy trên PC.</string>
+    <string name="controller_studio_gyro">Con quay</string>
+    <string name="controller_studio_touchpad">Bàn di</string>
+    <string name="controller_studio_deadzone_readout">%1$d%% · Cò %2$d%%</string>
+    <string name="controller_studio_a11y_summary">Studio tay cầm: bố cục nút %1$s, vùng chết cần gạt %2$d%%, vùng chết cò %3$d%%</string>
 </resources>

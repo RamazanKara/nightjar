@@ -256,23 +256,15 @@ impl Launcher {
         let glow = host.and_then(|h| h.ambient_glow.get(&app_i32).copied());
         let source = match shown_art(view, hero.host, hero.app) {
             Some(Art::Ready(texture)) => {
-                let cache_id = Id::unique(("hero-wash", texture.id(), day));
-                let cached: Option<egui::TextureHandle> = ctx.data(|d| d.get_temp(cache_id));
-                let wash = cached.or_else(|| {
-                    let baked = crate::ambient::hero_for(
-                        texture.id(),
-                        ambient_tex.map(|t| t.id()),
-                        glow,
-                        day,
-                    )?;
-                    let handle = ctx.load_texture(
-                        format!("hero-wash-{}-{}-{day}", hero.host, hero.app),
-                        baked,
-                        egui::TextureOptions::LINEAR,
-                    );
-                    ctx.data_mut(|d| d.insert_temp(cache_id, handle.clone()));
-                    Some(handle)
-                });
+                let name = format!("hero-wash-{}-{}-{day}", hero.host, hero.app);
+                let wash = crate::ambient::hero_wash_texture(
+                    ctx,
+                    &name,
+                    texture.id(),
+                    ambient_tex.map(|t| t.id()),
+                    glow,
+                    day,
+                );
                 match wash {
                     Some(handle) => Some(art::Source::Wash(handle.id(), handle.size_vec2())),
                     None => match ambient_tex.filter(|_| !day) {
@@ -295,7 +287,20 @@ impl Launcher {
                 let (top, bottom) = super::cards::tile_colors(pair);
                 Some(art::Source::Tile(top, bottom))
             }
-            Some(Art::Loading | Art::Dropped) => None,
+            Some(Art::Dropped) => ambient_tex.and_then(|amb| {
+                let name = format!("hero-wash-{}-{}-{day}", hero.host, hero.app);
+                let wash = crate::ambient::hero_wash_texture(
+                    ctx,
+                    &name,
+                    amb.id(),
+                    Some(amb.id()),
+                    glow,
+                    day,
+                );
+                wash.map(|h| art::Source::Wash(h.id(), h.size_vec2()))
+                    .or_else(|| (!day).then(|| art::Source::Wash(amb.id(), amb.size_vec2())))
+            }),
+            Some(Art::Loading) => None,
         };
         let seconds = if spring::motion(ctx) { t::MOTION_AMBIENT_MS as f32 / 1000.0 } else { 0.0 };
         let shown = ctx.animate_bool_with_time(Id::unique(("hero-art", hero.host, hero.app)), source.is_some(), seconds);
