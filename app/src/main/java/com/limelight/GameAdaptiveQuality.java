@@ -94,7 +94,8 @@ final class GameAdaptiveQuality {
         // Automatic quality needs it for this session only; the saved choice stays the user's own. Never keeps the
         // bitrate: automatic quality then steps only the resolution and frame rate.
         if (GameAdaptation.qualityTakesBitrate(adaptation.bitrateHeld(), adaptation.supportsAdaptiveBitrate(),
-                adaptation.isAdaptiveBitrateEnabled(), adaptation.isRateChangeBitrateOn(), game.sessionManualBitrate)) {
+                adaptation.isAdaptiveBitrateEnabled(), adaptation.isRateChangeBitrateOn(), game.sessionManualBitrate,
+                MoonBridge.hostSupportsControlMessage(MoonBridge.CONTROL_MESSAGE_LINK_NOTICE))) {
             adaptation.setAdaptiveBitrateEnabled(true, false);
             game.qualityAutoBitrate = true;
         }

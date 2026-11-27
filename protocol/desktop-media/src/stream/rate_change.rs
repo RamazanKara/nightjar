@@ -465,9 +465,22 @@ impl RateChange {
 }
 
 /// Whether the stream starts a bitrate controller of this device (the busy-network one, also for
-/// automatic quality): never under Never or after a bitrate the player chose.
-pub fn own_lowering_at_start(manual_bitrate: bool, keep_bitrate: bool, adaptive_bitrate: bool, automatic_quality: bool) -> bool {
-    !manual_bitrate && !keep_bitrate && (adaptive_bitrate || automatic_quality)
+/// automatic quality on a PC without `0x5538` link notices): never under Never or after a bitrate
+/// the player chose.
+pub fn own_lowering_at_start(
+    manual_bitrate: bool,
+    keep_bitrate: bool,
+    adaptive_bitrate: bool,
+    automatic_quality: bool,
+    host_link_notice: bool,
+) -> bool {
+    nightjar_policy::quality::own_lowering_at_start(
+        manual_bitrate,
+        keep_bitrate,
+        adaptive_bitrate,
+        automatic_quality,
+        host_link_notice,
+    )
 }
 
 /// Whether a stream sends the takeover once its video runs: Never is chosen, or a reconnect starts

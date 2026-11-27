@@ -187,6 +187,46 @@ public class GameRateChangeBitratePolicyTest {
         // Automatic quality then steps only the resolution and frame rate.
         assertFalse(GameAdaptation.qualityTakesBitrate(true, true, false, false, 0));
         assertTrue(GameAdaptation.qualityTakesBitrate(false, true, false, false, 0));
+        assertFalse("on a 0x5538 host The PC decides leaves bitrate to the PC",
+                GameAdaptation.qualityTakesBitrate(false, true, false, false, 0, true));
+    }
+
+    @Test
+    public void onA0x5538HostThePcDecidesSteersLinkRoomAndResetsAcrossReconnects() {
+        h.startStream(h.recording());
+        assertFalse("non-0x5538 host claims no host link room",
+                h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(false));
+        assertTrue("before any 0x5538 notice (Full), the PC still has bitrate room",
+                h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
+
+        // Limited above 65% of ceiling (40 Mbps / 50 Mbps) keeps room; 65% or below (32.5 Mbps) yields to quality.
+        h.game.linkNotice(1, 50_000, 40_000);
+        ShadowLooper.idleMainLooper();
+        assertTrue(h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
+        h.game.linkNotice(1, 50_000, 32_500);
+        ShadowLooper.idleMainLooper();
+        assertFalse(h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
+
+        // Floor never has room even if ceiling started near the floor; Full (0) restores room.
+        h.game.linkNotice(2, 3_000, 2_500);
+        ShadowLooper.idleMainLooper();
+        assertFalse(h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
+        h.game.linkNotice(0, 50_000, 50_000);
+        ShadowLooper.idleMainLooper();
+        assertTrue(h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
+
+        // A Floor notice from the stream before is cleared when the next stream / reconnect starts.
+        h.game.linkNotice(2, 50_000, 5_000);
+        ShadowLooper.idleMainLooper();
+        assertFalse(h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
+        h.startStream(h.recording());
+        assertNull(h.game.linkNotice);
+        assertTrue(h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
+
+        // Keep my bitrate, manual bitrate, or Lower it sooner disables host link room.
+        keepSwitch(h.openDialog()).setChecked(true);
+        ShadowLooper.idleMainLooper();
+        assertFalse(h.game.adaptation.hostLinkHasRoomBeforeQualityReduction(true));
     }
 
     @Test

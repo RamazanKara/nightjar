@@ -263,6 +263,7 @@ final class GameRateChangeControl {
     void startStreamBitrate(StreamRateChanges changes) {
         game.rateChanges = changes;
         game.bitrateKept = false;
+        game.linkNotice = null;
         // After an automatic reconnect the player's own rate is the one this stream started at.
         game.playerBitrateKbps = game.sessionManualBitrate;
         game.streamStartBitrateKbps = game.currentBitrate == 0 ? game.prefConfig.bitrate : game.currentBitrate;

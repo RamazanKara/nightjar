@@ -278,6 +278,68 @@ pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_quality
     QUALITY_SLAB.with(handle, |e| e.ctrl.suspend());
 }
 
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_qualityTakesBitrate(
+    _: JNIEnv,
+    _: JClass,
+    held: jboolean,
+    supported: jboolean,
+    busy_on: jboolean,
+    hint_on: jboolean,
+    manual_bitrate: jboolean,
+    host_link_notice: jboolean,
+) -> jboolean {
+    jbool(quality::quality_takes_bitrate(
+        held != JNI_FALSE,
+        supported != JNI_FALSE,
+        busy_on != JNI_FALSE,
+        hint_on != JNI_FALSE,
+        manual_bitrate != JNI_FALSE,
+        host_link_notice != JNI_FALSE,
+    ))
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_qualityHostSteersLinkBitrate(
+    _: JNIEnv,
+    _: JClass,
+    host_link_notice: jboolean,
+    pc_decides: jboolean,
+    kept: jboolean,
+    manual_bitrate: jboolean,
+    busy_on: jboolean,
+    hint_on: jboolean,
+) -> jboolean {
+    jbool(quality::host_steers_link_bitrate(
+        host_link_notice != JNI_FALSE,
+        pc_decides != JNI_FALSE,
+        kept != JNI_FALSE,
+        manual_bitrate != JNI_FALSE,
+        busy_on != JNI_FALSE,
+        hint_on != JNI_FALSE,
+    ))
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_limelight_nvstream_jni_NightjarPolicyJni_qualityHostLinkHasRoom(
+    _: JNIEnv,
+    _: JClass,
+    link_state_wire: jint,
+    current_kbps: jint,
+    ceiling_kbps: jint,
+) -> jboolean {
+    let state = match link_state_wire {
+        1 => quality::LinkState::Limited,
+        2 => quality::LinkState::Floor,
+        _ => quality::LinkState::Full,
+    };
+    jbool(quality::host_link_has_room(
+        state,
+        non_neg_u32(current_kbps),
+        non_neg_u32(ceiling_kbps),
+    ))
+}
+
 // --- FoundationAbr ---
 
 #[unsafe(no_mangle)]

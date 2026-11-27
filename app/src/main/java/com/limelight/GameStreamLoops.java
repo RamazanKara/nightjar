@@ -128,7 +128,8 @@ final class GameStreamLoops {
                     rtt == -1 ? -1 : (float) (rtt & 0xffffffffL), game.decoderRenderer.getQueueDelayMs(),
                     game.adaptation.adaptationThermalLevel(),
                     (game.adaptiveBitrate != null && game.adaptiveBitrate.hasRoomBeforeQualityReduction())
-                            || (game.rateChanges != null && game.rateChanges.hasRoomBeforeQualityReduction()),
+                            || (game.rateChanges != null && game.rateChanges.hasRoomBeforeQualityReduction())
+                            || game.adaptation.hostLinkHasRoomBeforeQualityReduction(),
                     game.decoderRenderer.takeDecodeTiming(game.streamFps));
             if (target != null && !game.adaptation.applyAdaptiveQuality(target, now)) return;
         }

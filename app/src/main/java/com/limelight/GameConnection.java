@@ -266,6 +266,8 @@ final class GameConnection {
         game.bitrateHandler.removeCallbacks(game.expireRateChanges);
         if (game.rateChanges != null) game.rateChanges.stopAutomatic();
         game.rateChanges = null;
+        game.linkNotice = null;
+        game.linkLoweredTold = false;
         game.bitrateHandler.removeCallbacks(game.checkReconfigure);
         game.bitrateHandler.removeCallbacks(game.updateQuality);
         game.videoOutput.clearDecoderActions();

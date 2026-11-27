@@ -490,11 +490,13 @@ impl Streaming {
                 }
             }
         }
+        let host_link_room = self.quality_policy.is_some() && self.host_link_has_room();
         let quality_target = if let Some(policy) = &mut self.quality_policy {
             if self.menu_visible || !self.focused || self.pending_mode.is_some() { policy.suspend(); None }
             else {
                 let has_room = self.bitrate_busy || self.bitrate_policy.as_ref().is_some_and(|p| p.has_room())
-                    || self.rate_change.as_ref().is_some_and(|rates| rates.hint_has_room());
+                    || self.rate_change.as_ref().is_some_and(|rates| rates.hint_has_room())
+                    || host_link_room;
                 policy.sample(&tick, has_room, decode_timing.as_ref())
             }
         } else { None };

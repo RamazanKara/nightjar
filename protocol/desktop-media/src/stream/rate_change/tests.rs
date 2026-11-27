@@ -273,9 +273,12 @@ fn the_takeover_goes_out_with_the_first_tick_that_saw_video_and_the_start_rules_
     assert_eq!(rates.takeover_on_tick(true, 1000).map(|r| r.bitrate_kbps), Some(25_000));
     assert_eq!(rates.takeover_on_tick(true, 2000), None);
     // Under Never, or after a bitrate the player chose, the stream starts no controller of its own.
-    assert!(!own_lowering_at_start(false, true, true, true));
-    assert!(!own_lowering_at_start(true, false, true, false));
-    assert!(own_lowering_at_start(false, false, true, false) && own_lowering_at_start(false, false, false, true));
+    assert!(!own_lowering_at_start(false, true, true, true, false));
+    assert!(!own_lowering_at_start(true, false, true, false, false));
+    assert!(own_lowering_at_start(false, false, true, false, false) && own_lowering_at_start(false, false, false, true, false));
+    // On a PC that offers 0x5538 link notices, The PC decides leaves bitrate lowering to the PC even under automatic quality.
+    assert!(!own_lowering_at_start(false, false, false, true, true));
+    assert!(own_lowering_at_start(false, false, true, true, true));
     // A reconnect sends the takeover again for Never and for a bitrate the player chose.
     assert!(takeover_at_start(true, false, false));
     assert!(takeover_at_start(false, true, false));

@@ -245,6 +245,26 @@ public class AdaptiveQualityControllerTest {
         assertNotNull(quality.sample(57000, true, true, 10, 2, 0, 50, 0, false));
     }
 
+    @Test public void hostLinkNoticeRoomCoordinatesWithQualityReductionAcrossJni() {
+        assertTrue(com.limelight.nvstream.jni.NightjarPolicyJni.qualityHostLinkHasRoom(0, 0, 0));
+        assertTrue(com.limelight.nvstream.jni.NightjarPolicyJni.qualityHostLinkHasRoom(1, 32_501, 50_000));
+        assertFalse(com.limelight.nvstream.jni.NightjarPolicyJni.qualityHostLinkHasRoom(1, 32_500, 50_000));
+        assertFalse(com.limelight.nvstream.jni.NightjarPolicyJni.qualityHostLinkHasRoom(2, 2_500, 3_000));
+        assertFalse(com.limelight.nvstream.jni.NightjarPolicyJni.qualityTakesBitrate(false, true, false, false, false, true));
+        assertTrue(com.limelight.nvstream.jni.NightjarPolicyJni.qualityTakesBitrate(false, true, false, false, false, false));
+
+        AdaptiveQualityController quality = controller(AdaptiveQualityController.Mode.MOTION);
+        boolean limitedWithRoom = com.limelight.nvstream.jni.NightjarPolicyJni.qualityHostLinkHasRoom(1, 40_000, 50_000);
+        for (int i = 0; i < 15; i++) {
+            assertNull(quality.sample(15000 + i * 1000L, true, true, 10, 2, 0, 50, 0, limitedWithRoom));
+        }
+        boolean limitedExhausted = com.limelight.nvstream.jni.NightjarPolicyJni.qualityHostLinkHasRoom(1, 30_000, 50_000);
+        for (int i = 0; i < 7; i++) {
+            assertNull(quality.sample(30000 + i * 1000L, true, true, 10, 2, 0, 50, 0, limitedExhausted));
+        }
+        assertNotNull(quality.sample(37000, true, true, 10, 2, 0, 50, 0, limitedExhausted));
+    }
+
     @Test public void slowDecoderReducesWorkEvenBeforeBitrateHitsItsFloor() {
         AdaptiveQualityController quality = controller(AdaptiveQualityController.Mode.MOTION);
         for (int i = 0; i < 3; i++) assertNull(quality.sample(20000 + i * 1000L, true, false, 0, 20, 0, 0, 0, true));

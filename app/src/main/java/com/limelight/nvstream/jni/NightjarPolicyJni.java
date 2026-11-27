@@ -84,6 +84,15 @@ public final class NightjarPolicyJni {
                                              int timingSamples, int timingLateFrames);
     public static native void qualityApplied(long handle, int width, int height, int fps, long nowMs);
     public static native void qualitySuspend(long handle);
+    public static native boolean qualityTakesBitrate(boolean held, boolean supported,
+                                                     boolean busyOn, boolean hintOn,
+                                                     boolean manualBitrate, boolean hostLinkNotice);
+    public static native boolean qualityHostSteersLinkBitrate(boolean hostLinkNotice,
+                                                              boolean pcDecides, boolean kept,
+                                                              boolean manualBitrate, boolean busyOn,
+                                                              boolean hintOn);
+    public static native boolean qualityHostLinkHasRoom(int linkStateWire, int currentKbps,
+                                                        int ceilingKbps);
 
     // FoundationAbr
     public static native long foundationAbrCreate(int initialKbps, int streamKbps, long nowMs);

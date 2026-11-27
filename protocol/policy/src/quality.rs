@@ -7,6 +7,7 @@
 
 use std::fmt;
 
+pub use rubylight_protocol::control::LinkState;
 use serde_json::Value;
 
 use crate::stats::{known, Stats};
@@ -103,6 +104,66 @@ pub struct DecodeTiming {
 /// Input-to-output latency includes pipeline depth, not just work on a single frame.
 pub fn decode_budget_ms(fps: u32) -> f64 {
     2000.0 / f64::from(fps.max(1))
+}
+
+/// Whether Automatic quality turns on this device's HTTP `/bitrate` controller for its session:
+/// only when no bitrate lock (`held`), manual rate (`manual_bitrate`) or other bitrate controller
+/// (`busy_on`, `hint_on`) holds the stream, runtime bitrate is `supported`, and the PC does not
+/// already steer and report network bitrate over `0x5538` (`host_link_notice`).
+pub fn quality_takes_bitrate(
+    held: bool,
+    supported: bool,
+    busy_on: bool,
+    hint_on: bool,
+    manual_bitrate: bool,
+    host_link_notice: bool,
+) -> bool {
+    !held && supported && !busy_on && !hint_on && !manual_bitrate && !host_link_notice
+}
+
+/// Whether a stream starts this device's HTTP `/bitrate` controller at launch: for Lower it
+/// sooner (`adaptive_bitrate`), or for Automatic quality on a PC that does not advertise `0x5538`
+/// (`!host_link_notice`), and never under Never (`keep_bitrate`) or after a bitrate the player
+/// chose (`manual_bitrate`).
+pub fn own_lowering_at_start(
+    manual_bitrate: bool,
+    keep_bitrate: bool,
+    adaptive_bitrate: bool,
+    automatic_quality: bool,
+    host_link_notice: bool,
+) -> bool {
+    !manual_bitrate
+        && !keep_bitrate
+        && (adaptive_bitrate || (automatic_quality && !host_link_notice))
+}
+
+/// Whether the PC's own `0x5538` link-rate and congestion controllers steer this stream's
+/// bitrate: the host offered `0x5538` (`host_link_notice`), Lower bitrate is `"pc"`
+/// (`pc_decides`), neither Keep my bitrate (`kept`) nor a manual bitrate (`manual_bitrate`)
+/// locked the rate, and no client bitrate controller (`busy_on`, `hint_on`) is running.
+pub fn host_steers_link_bitrate(
+    host_link_notice: bool,
+    pc_decides: bool,
+    kept: bool,
+    manual_bitrate: bool,
+    busy_on: bool,
+    hint_on: bool,
+) -> bool {
+    host_link_notice && pc_decides && !kept && !manual_bitrate && !busy_on && !hint_on
+}
+
+/// Whether a PC's own `0x5538` link-rate / congestion controller still has bitrate headroom to
+/// spend before [`AdaptiveQualityController`] lowers resolution or frame rate: `true` before any
+/// notice (`Full`) and while `Limited` above 65% of `ceiling_kbps`, and `false` once at `Floor`
+/// or cut to 65% of `ceiling_kbps` or below.
+pub fn host_link_has_room(state: LinkState, current_kbps: u32, ceiling_kbps: u32) -> bool {
+    match state {
+        LinkState::Full => true,
+        LinkState::Limited => {
+            ceiling_kbps > 0 && u64::from(current_kbps) > u64::from(ceiling_kbps) * 65 / 100
+        }
+        LinkState::Floor => false,
+    }
 }
 
 /// The user's floors and the decoder's size alignment.
@@ -624,144 +685,4 @@ impl Subject for Traced {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_stored_floor_reads_as_the_nearest_choice() {
-        assert!(MIN_SHORT_EDGE_CHOICES.contains(&DEFAULT_MIN_SHORT_EDGE) && MIN_FPS_CHOICES.contains(&DEFAULT_MIN_FPS));
-        // Desktop's old steppers (256-2160 px, 15-240 fps) and Android's lists.
-        assert_eq!(nearest_floor(&MIN_SHORT_EDGE_CHOICES, 256), 360);
-        assert_eq!(nearest_floor(&MIN_SHORT_EDGE_CHOICES, 480), 540);
-        assert_eq!(nearest_floor(&MIN_SHORT_EDGE_CHOICES, 630), 540, "a tie takes the lower floor");
-        assert_eq!(nearest_floor(&MIN_SHORT_EDGE_CHOICES, 2160), 1440);
-        assert_eq!(nearest_floor(&MIN_FPS_CHOICES, 15), 30);
-        assert_eq!(nearest_floor(&MIN_FPS_CHOICES, 50), 45);
-        assert_eq!(nearest_floor(&MIN_FPS_CHOICES, 75), 60);
-        assert_eq!(nearest_floor(&MIN_FPS_CHOICES, 240), 120);
-        for choices in [&MIN_SHORT_EDGE_CHOICES[..], &MIN_FPS_CHOICES[..]] {
-            for &c in choices {
-                assert_eq!(nearest_floor(choices, c), c);
-            }
-        }
-    }
-
-    const BOUNDS: Bounds = Bounds {
-        min_short_edge: 720,
-        min_fps: 30,
-        align_width: 2,
-        align_height: 2,
-    };
-
-    fn hot(quality: &mut AdaptiveQualityController, now_ms: u64) -> Option<Target> {
-        (0..4)
-            .map(|i| {
-                let stats = Stats {
-                    now_ms: now_ms + i * 1000,
-                    recent_video: true,
-                    decode_ms: Some(2.0),
-                    thermal_level: 2,
-                    ..Stats::default()
-                };
-                quality.sample(&stats, true)
-            })
-            .last()
-            .flatten()
-    }
-
-    /// An automatic reconnect returns to the step the stream before had reached, once.
-    #[test]
-    fn a_resumed_ladder_returns_to_its_step_once() {
-        let mut quality =
-            AdaptiveQualityController::new(Mode::Motion, 1920, 1080, 120, BOUNDS, 0).unwrap();
-        let step = hot(&mut quality, 15_000).unwrap();
-        let mut resumed =
-            AdaptiveQualityController::new(Mode::Motion, 1920, 1080, 120, BOUNDS, 0).unwrap();
-        resumed.resume_at(step);
-        let tick = Stats { now_ms: 1000, recent_video: true, ..Stats::default() };
-        assert_eq!(resumed.sample(&tick, true), Some(step));
-        resumed.applied(step, 1000).unwrap();
-        assert_eq!(resumed.current(), step);
-        assert_eq!(resumed.ceiling(), quality.ceiling(), "the same ceiling to climb back to");
-        assert_eq!(resumed.sample(&Stats { now_ms: 2000, ..tick }, true), None, "once");
-        let mut top =
-            AdaptiveQualityController::new(Mode::Motion, 1920, 1080, 120, BOUNDS, 0).unwrap();
-        top.resume_at(top.ceiling());
-        assert_eq!(top.sample(&tick, true), None, "the top is no step down");
-    }
-
-    #[test]
-    fn a_tick_with_nothing_measured_never_recovers() {
-        let mut quality =
-            AdaptiveQualityController::new(Mode::Motion, 1920, 1080, 120, BOUNDS, 0).unwrap();
-        let lower = hot(&mut quality, 15_000).unwrap();
-        quality.applied(lower, 18_000).unwrap();
-        let tick = |second: u64| Stats {
-            now_ms: second * 1000,
-            recent_video: true,
-            ..Stats::default()
-        };
-        assert!((19..120).all(|second| quality.sample(&tick(second), true).is_none()));
-        // Measured health recovers within the same time.
-        let healthy = |second: u64| Stats {
-            loss_percent: Some(0.0),
-            decode_ms: Some(2.0),
-            jitter_ms: Some(1.0),
-            queue_ms: Some(0.0),
-            ..tick(second)
-        };
-        let recovered = (120..240).find_map(|second| quality.sample(&healthy(second), true));
-        assert_eq!(recovered, Some(quality.ceiling()));
-    }
-
-    #[test]
-    fn invalid_streams_are_refused() {
-        for (width, height, fps) in [(0, 1080, 60), (1920, 0, 60), (1920, 1080, 0)] {
-            let result =
-                AdaptiveQualityController::new(Mode::Motion, width, height, fps, BOUNDS, 0);
-            assert_eq!(result.err(), Some(QualityError::InvalidStream));
-        }
-        let mut quality =
-            AdaptiveQualityController::new(Mode::Motion, 1920, 1080, 120, BOUNDS, 0).unwrap();
-        let lower = hot(&mut quality, 15_000).unwrap();
-        quality.applied(lower, 18_000).unwrap();
-        // A refused resize leaves the ladder and the level alone.
-        assert_eq!(
-            quality.resize_ceiling(0, 904, 120, 20_000),
-            Err(QualityError::InvalidStream)
-        );
-        assert_eq!(quality.current(), lower);
-        assert!(quality.ceiling().matches(1920, 1080, 120));
-    }
-
-    #[test]
-    fn targets_off_the_ladder_are_refused() {
-        let mut quality =
-            AdaptiveQualityController::new(Mode::Motion, 1920, 1080, 120, BOUNDS, 0).unwrap();
-        let foreign = Target {
-            width: 1000,
-            height: 1000,
-            fps: 120,
-        };
-        assert_eq!(
-            quality.applied(foreign, 1000),
-            Err(QualityError::ForeignTarget)
-        );
-        assert!(quality.current().matches(1920, 1080, 120));
-    }
-
-    #[test]
-    fn requests_use_millihertz_and_modes_round_trip() {
-        let target = Target {
-            width: 1280,
-            height: 720,
-            fps: 60,
-        };
-        assert_eq!(target.request(), [1280, 720, 60_000]);
-        assert_eq!(parse_target(&target.to_string()), Some(target));
-        for mode in [Mode::Off, Mode::Motion, Mode::Detail, Mode::Battery] {
-            assert_eq!(Mode::parse(Some(mode.preference())), mode);
-        }
-        assert_eq!(Mode::parse(None), Mode::Off);
-    }
-}
+mod tests;

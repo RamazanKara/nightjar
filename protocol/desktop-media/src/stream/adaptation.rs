@@ -19,8 +19,34 @@ impl Streaming {
                     return;
                 }
             }
-            if !self.adaptive_bitrate && !self.bitrate_busy && !self.settings.lower_bitrate.keeps() { self.enable_adaptive_bitrate(true); }
+            if self.quality_takes_bitrate() { self.enable_adaptive_bitrate(true); }
         }
+    }
+
+    pub(super) fn quality_takes_bitrate(&self) -> bool {
+        nightjar_policy::quality::quality_takes_bitrate(
+            self.settings.lower_bitrate.keeps()
+                || self.rate_change.as_ref().is_some_and(|rates| rates.kept()),
+            self.facts.role == AppRole::Stream,
+            self.adaptive_bitrate || self.bitrate_busy || self.host_abr_start.is_some(),
+            self.client_hint_active(),
+            self.plan.bitrate_before_manual.is_some(),
+            self.facts.link_notice,
+        )
+    }
+
+    /// Whether the PC's own `0x5538` link-rate / congestion controllers steer this stream's
+    /// bitrate and still have bitrate headroom before automatic quality lowers resolution or FPS.
+    pub(super) fn host_link_has_room(&self) -> bool {
+        host_link_room_for_stream(
+            self.facts.link_notice,
+            self.settings.lower_bitrate,
+            self.rate_change.as_ref().is_some_and(|rates| rates.kept()),
+            self.plan.bitrate_before_manual.is_some(),
+            self.adaptive_bitrate || self.host_abr_start.is_some(),
+            self.client_hint_active(),
+            self.link_notice.as_ref(),
+        )
     }
 
     /// Asks the PC for `request`; false when it could not be sent (a toast says why).
@@ -481,9 +507,33 @@ fn disable_abr_state(
     host_abr_start.take().is_some_and(|start| start.end())
 }
 
+fn host_link_room_for_stream(
+    host_link_notice: bool,
+    lower_bitrate: nightjar_policy::choices::LowerBitrate,
+    kept: bool,
+    manual_bitrate: bool,
+    busy_on: bool,
+    hint_on: bool,
+    notice: Option<&LinkNotice>,
+) -> bool {
+    nightjar_policy::quality::host_steers_link_bitrate(
+        host_link_notice,
+        lower_bitrate == nightjar_policy::choices::LowerBitrate::Off,
+        kept,
+        manual_bitrate,
+        busy_on,
+        hint_on,
+    ) && match notice {
+        Some(n) => nightjar_policy::quality::host_link_has_room(n.state, n.current_kbps, n.ceiling_kbps),
+        None => nightjar_policy::quality::host_link_has_room(LinkState::Full, 0, 0),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nightjar_policy::choices::LowerBitrate;
+    use rubylight_protocol::control::LinkReason;
 
     /// Disabling adaptive bitrate (including from `set_bitrate_kept(true)`) must succeed even
     /// while a start request is still in flight (`bitrate_busy == true`).
@@ -527,5 +577,38 @@ mod tests {
         let mut host_start = Some(active);
         assert!(disable_abr_state(&mut policy, &mut adaptive, &mut host_abr, &mut host_start));
         assert!(host_start.is_none());
+    }
+
+    #[test]
+    fn host_link_notice_steers_room_only_under_pc_decides_without_client_takeover() {
+        let limited_above = LinkNotice {
+            state: LinkState::Limited,
+            reason: LinkReason::Network,
+            ceiling_kbps: 50_000,
+            current_kbps: 40_000,
+        };
+        let limited_cut = LinkNotice {
+            current_kbps: 32_500,
+            ..limited_above
+        };
+        let floor = LinkNotice {
+            state: LinkState::Floor,
+            current_kbps: 5_000,
+            ..limited_above
+        };
+
+        assert!(host_link_room_for_stream(true, LowerBitrate::Off, false, false, false, false, None));
+        assert!(host_link_room_for_stream(true, LowerBitrate::Off, false, false, false, false, Some(&limited_above)));
+        assert!(!host_link_room_for_stream(true, LowerBitrate::Off, false, false, false, false, Some(&limited_cut)));
+        assert!(!host_link_room_for_stream(true, LowerBitrate::Off, false, false, false, false, Some(&floor)));
+
+        // Non-0x5538 hosts, "sooner", "keep", Keep my bitrate, manual bitrate, or active client ABR never claim host link room.
+        assert!(!host_link_room_for_stream(false, LowerBitrate::Off, false, false, false, false, None));
+        assert!(!host_link_room_for_stream(true, LowerBitrate::WhenFramesLost, false, false, false, false, None));
+        assert!(!host_link_room_for_stream(true, LowerBitrate::Keep, false, false, false, false, None));
+        assert!(!host_link_room_for_stream(true, LowerBitrate::Off, true, false, false, false, None));
+        assert!(!host_link_room_for_stream(true, LowerBitrate::Off, false, true, false, false, None));
+        assert!(!host_link_room_for_stream(true, LowerBitrate::Off, false, false, true, false, None));
+        assert!(!host_link_room_for_stream(true, LowerBitrate::Off, false, false, false, true, None));
     }
 }

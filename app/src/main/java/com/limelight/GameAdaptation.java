@@ -179,11 +179,43 @@ final class GameAdaptation {
 
     /**
      * Whether automatic quality turns on the busy-network controller for its session: not under Never or while the PC
-     * keeps the bitrate (it then steps only the resolution and frame rate), nor after a bitrate the player set or with
-     * another controller already running.
+     * keeps the bitrate (it then steps only the resolution and frame rate), nor on a PC that already steers and reports
+     * link bitrate over 0x5538, nor after a bitrate the player set or with another controller already running.
      */
     static boolean qualityTakesBitrate(boolean held, boolean supported, boolean busyOn, boolean hintOn, int manualKbps) {
-        return !held && supported && !busyOn && !hintOn && manualKbps == 0;
+        return qualityTakesBitrate(held, supported, busyOn, hintOn, manualKbps, false);
+    }
+
+    static boolean qualityTakesBitrate(boolean held, boolean supported, boolean busyOn, boolean hintOn,
+                                       int manualKbps, boolean hostLinkNotice) {
+        return com.limelight.nvstream.jni.NightjarPolicyJni.qualityTakesBitrate(
+                held, supported, busyOn, hintOn, manualKbps != 0, hostLinkNotice);
+    }
+
+    static boolean hostLinkHasRoom(LinkNoticeStatus status) {
+        if (status == null) {
+            return com.limelight.nvstream.jni.NightjarPolicyJni.qualityHostLinkHasRoom(0, 0, 0);
+        }
+        return com.limelight.nvstream.jni.NightjarPolicyJni.qualityHostLinkHasRoom(
+                status.state, status.currentKbps, status.ceilingKbps);
+    }
+
+    boolean hostLinkHasRoomBeforeQualityReduction() {
+        return hostLinkHasRoomBeforeQualityReduction(
+                MoonBridge.hostSupportsControlMessage(MoonBridge.CONTROL_MESSAGE_LINK_NOTICE));
+    }
+
+    boolean hostLinkHasRoomBeforeQualityReduction(boolean hostLinkNotice) {
+        String pcUuid = game.getIntent() == null ? null : game.getIntent().getStringExtra(Game.EXTRA_PC_UUID);
+        boolean pcDecides = !bitrateHeld()
+                && (game.prefConfig == null || (!game.prefConfig.autoBitrate && !game.prefConfig.rateChangeBitrate))
+                && !AutoBitrateChoice.isOn(game, pcUuid);
+        if (!com.limelight.nvstream.jni.NightjarPolicyJni.qualityHostSteersLinkBitrate(
+                hostLinkNotice, pcDecides, game.bitrateKept, game.sessionManualBitrate != 0,
+                isAdaptiveBitrateEnabled(), isRateChangeBitrateOn())) {
+            return false;
+        }
+        return hostLinkHasRoom(game.linkNotice);
     }
 
     void toggleAdaptiveBitrateFromMenu() {
