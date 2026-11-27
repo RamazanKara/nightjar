@@ -1,8 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="260" height="52" viewBox="0 0 260 52" role="img" aria-label="Download Nightjar for Android, Windows and Linux">
-  <rect width="260" height="52" rx="9" fill="#f2a93b"/>
-  <g fill="none" stroke="#14161f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M27 15v16m-6-6 6 6 6-6M19 33v5h16v-5"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="60" viewBox="0 0 300 60" role="img" aria-label="Download Nightjar — Android · Android TV · Windows · Linux · macOS">
+  <defs>
+    <linearGradient id="amberCapsule" x1="0" y1="0" x2="0" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC662"/>
+      <stop offset="0.48" stop-color="#F5B041"/>
+      <stop offset="1" stop-color="#DF9528"/>
+    </linearGradient>
+    <radialGradient id="amberSheen" cx="90" cy="0" r="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="0.6" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="0.5" y="0.5" width="299" height="59" rx="14" fill="url(#amberCapsule)" stroke="#B57212"/>
+  <rect x="1" y="1" width="298" height="58" rx="13.5" fill="url(#amberSheen)"/>
+  <path d="M15 1.5H285" stroke="#FFFFFF" stroke-opacity="0.46" stroke-width="1" stroke-linecap="round"/>
+
+  <!-- Dark 7.0 Obsidian Cinema Icon Badge -->
+  <rect x="11" y="11" width="38" height="38" rx="10" fill="#111319" stroke="#2B3140"/>
+  <g fill="none" stroke="#F5B041" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M30 19v13.5m-5.2-5 5.2 5.2 5.2-5.2M22.5 36.5h15"/>
   </g>
-  <text x="50" y="24" fill="#14161f" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700">Download Nightjar</text>
-  <text x="50" y="40" fill="#14161f" font-family="Segoe UI,Arial,sans-serif" font-size="11">ANDROID · WINDOWS · LINUX · MACOS</text>
+
+  <text x="59" y="27.5" fill="#1A1000" font-family="Figtree, Segoe UI Variable Text, Segoe UI, system-ui, sans-serif" font-size="18" font-weight="700" letter-spacing="-0.2">Download Nightjar</text>
+  <text x="59" y="44.5" fill="#1A1000" fill-opacity="0.88" font-family="Figtree, Segoe UI Variable Text, Segoe UI, system-ui, sans-serif" font-size="10.2" font-weight="600" letter-spacing="0.05">Android · Android TV · Windows · Linux · macOS</text>
 </svg>
