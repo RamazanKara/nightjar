@@ -153,4 +153,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Show PC screen", "显示电脑屏幕"),
     ("Showing PC screen. The game is still starting.", "正在显示电脑屏幕。游戏仍在启动。"),
     ("The game didn’t start on the PC.", "游戏未能在电脑上启动。"),
+    ("Every controller setting in one place: sticks, triggers, motion, vibration and buttons.", "所有手柄设置集中在一处：摇杆、扳机、体感、振动和按键。"),
+    ("Sticks, triggers, motion, vibration and buttons", "摇杆、扳机、体感、振动和按键"),
+    ("Controller settings", "手柄设置"),
+    ("Leave and open controller settings", "离开并打开手柄设置"),
+    ("Opening controller settings leaves the stream; the game keeps running on the PC.", "打开手柄设置会离开串流；游戏继续在电脑上运行。"),
 ];

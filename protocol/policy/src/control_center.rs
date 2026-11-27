@@ -85,7 +85,9 @@ pub fn module_of(tile: &str) -> Option<Module> {
         // The PC's night mode and headphone surround are sound, beside the microphone.
         "microphone" | "mic_button" | "night_mode" | "headphone_surround" | "controller_audio" => Module::Audio,
         "native_page" | "server_commands" | "host_menu" | "files" | "host_web_ui" | "host_status" => Module::Pc,
-        "onscreen_controls" | "controls_layout" | "menu_button" | "game_controls" | "usb_devices" => Module::Controller,
+        "onscreen_controls" | "controls_layout" | "menu_button" | "game_controls" | "usb_devices" | "controller_settings" => {
+            Module::Controller
+        }
         "guests" => Module::Guests,
         // Quick Suspend: the host offers one of the two, as its game runs or waits paused.
         "suspend_game" | "resume_game" | "reconnect" | "end_host_session" | "end_session" => Module::Power,

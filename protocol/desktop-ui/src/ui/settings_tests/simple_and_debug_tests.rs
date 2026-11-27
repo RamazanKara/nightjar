@@ -10,7 +10,7 @@ fn display_arrangement_holds_virtual_display_and_a_pick_writes_both_keys() {
     let saved = Settings { host_display: HostDisplay::Physical, virtual_display: true, ..Settings::default() };
     let mut f = settings_with(saved.clone());
     f.l.settings_view.section = "Display & image";
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     f.settle();
     assert_eq!(row_words(&f, row), ["Physical display", "Reset"], "Reset puts both keys back");
     assert!(!shows(&f, "PC render resolution"), "Physical display has no virtual display: {:?}", f.drawn);
@@ -44,7 +44,7 @@ fn a_pc_without_display_modes_offers_only_the_virtual_display_switch() {
     f.size = vec2(1280.0, 12000.0);
     f.l.settings = Settings { host_display: HostDisplay::Exclusive, virtual_display: false, ..Settings::default() };
     f.l.settings_view.section = "Display & image";
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     let id = f.hosts.list[0].id;
     f.l.open_host_settings(id, &f.hosts.list[0]);
     f.settle();
@@ -70,7 +70,7 @@ fn a_layer_holding_one_key_of_a_row_keeps_it_alone_until_a_value_is_chosen() {
     f.size = vec2(1280.0, 12000.0);
     f.l.settings = Settings { host_display: HostDisplay::Exclusive, ..Settings::default() };
     f.l.settings_view.section = "Display & image";
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     let id = f.hosts.list[0].id;
     f.l.open_host_settings(id, &f.hosts.list[0]);
     f.settle();
@@ -94,7 +94,7 @@ fn an_arrangement_picked_on_a_pcs_page_leaves_its_virtual_display_switch_to_the_
     let mut f = Frames::new(record("PC", true, false), Reach::Online);
     f.size = vec2(1280.0, 12000.0);
     f.l.settings_view.section = "Display & image";
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     let id = f.hosts.list[0].id;
     f.l.open_host_settings(id, &f.hosts.list[0]);
     f.settle();
@@ -416,11 +416,11 @@ fn row_counts_at_defaults() {
 /// "Group incoming video packets" and none of Linux' renderer, display output, video planes and
 /// GPU power rows; Windows has rows of its own in their place.
 const ROWS_AT_DEFAULTS: usize = if cfg!(windows) {
-    100
+    101
 } else if cfg!(target_os = "macos") {
-    97
+    98
 } else {
-    102
+    103
 };
 
 /// Debug is listed only with "Show debug settings", while one of its settings is changed, while it
@@ -576,10 +576,10 @@ fn vibration_is_one_choice_over_the_two_stored_fields() {
     set_vibration_choice(&mut s, Vibration::Feel(RumbleFeel::Subtle));
     assert!(!s.disable_rumble);
     assert_eq!(VIBRATION_CHOICES.map(vibration_name), ["Off", "Subtle", "Standard", "Strong"]);
-    // One row for both keys, in Controls, and the old rows are gone.
+    // One row for both keys, in the controller editor, and the old rows are gone.
     let mut f = settings_with(Settings::default());
     open_folds(&mut f);
-    in_section(&mut f, "Controls");
+    in_section(&mut f, "Controller");
     assert!(shows(&f, "Vibration") && !shows(&f, "Turn off vibration") && !shows(&f, "Rumble feel"), "{:?}", f.drawn);
 }
 

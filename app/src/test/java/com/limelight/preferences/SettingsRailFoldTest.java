@@ -40,7 +40,7 @@ public class SettingsRailFoldTest {
     private static final List<String> SIMPLE = Arrays.asList("simple", "input", "audio", "app", "more_sections");
     /** The list unfolded at the defaults: Debug only on request (Show debug settings, SettingsHideTest). */
     private static final List<String> ALL = Arrays.asList("simple", "input", "audio", "app", "more_sections",
-            "stream_presets", "stream_profiles", "video", "display", "streaming", "advanced");
+            "stream_presets", "stream_profiles", "video", "display", "controller", "streaming", "advanced");
 
     private static void settle(StreamSettings screen) {
         ShadowLooper.idleMainLooper(300, TimeUnit.MILLISECONDS);

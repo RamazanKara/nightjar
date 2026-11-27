@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">Thiết bị chuyển tiếp đánh thức (%1$s) không cùng mạng với %2$s nên không thể đánh thức nó.</string>
     <string name="wake_relay_network">Nightjar không thể mở kết nối trên mạng này. Hãy kiểm tra kết nối internet rồi thử lại.</string>
     <string name="wake_relay_none">Chưa thể đánh thức %1$s từ bên ngoài mạng gia đình. Để đánh thức từ xa, hãy thiết lập Nightjar cho máy tính trên một máy tính luôn bật ở nhà làm thiết bị chuyển tiếp đánh thức.</string>
+    <string name="settings_section_controller">Tay cầm</string>
+    <string name="controller_editor_summary">Cần analog, cò, chuyển động, rung và nút</string>
+    <string name="controller_settings_menu">Cài đặt tay cầm</string>
+    <string name="controller_settings_stream_leaves">Mở cài đặt tay cầm sẽ rời khỏi luồng; trò chơi vẫn chạy trên PC.</string>
 </resources>

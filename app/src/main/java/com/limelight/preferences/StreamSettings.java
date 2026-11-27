@@ -92,9 +92,12 @@ public class StreamSettings extends NightjarActivity {
         SECTIONS.put("video", new String[] {"category_video_main", "category_more_video", "category_basic_settings"});
         SECTIONS.put("display", new String[] {"category_display_main", "category_more_display", "category_display_refresh",
                 "category_upscaling", "category_host_display"});
-        SECTIONS.put("input", new String[] {"category_input_main", "category_more_input", "category_gamepad_settings",
-                "category_stream_menu", "category_input_settings", "category_keyboard_shortcuts", "category_onscreen_controls",
-                "category_usb_controllers"});
+        SECTIONS.put("input", new String[] {"category_input_main", "category_more_input", "category_input_settings",
+                "category_keyboard_shortcuts"});
+        // The controller editor: every controller setting in one place, opened from Controls, a game page and the
+        // Control Center's Controller module (CONTROLLER_SECTION).
+        SECTIONS.put("controller", new String[] {"category_controller_main", "category_more_controller",
+                "category_gamepad_settings", "category_stream_menu", "category_onscreen_controls", "category_usb_controllers"});
         SECTIONS.put("audio", new String[] {"category_audio_main", "category_more_audio", "category_audio_settings"});
         SECTIONS.put("streaming", new String[] {"category_streaming_main", "category_more_streaming",
                 "category_streaming_connection", "category_streaming"});
@@ -120,10 +123,12 @@ public class StreamSettings extends NightjarActivity {
     static final String RAIL = "rail";
     /** The overview's rows behind {@link #RAIL_MORE_KEY}, in their order: the presets, Profiles and the sections of detail. */
     static final List<String> RAIL_FOLDED = Arrays.asList(
-            "stream_presets", "stream_profiles", "video", "display", "streaming", "advanced", "debug");
+            "stream_presets", "stream_profiles", "video", "display", "controller", "streaming", "advanced", "debug");
     /** The sections in the overview's order, which the phone's chips follow: the ones that always show, then the folded ones. */
     static final List<String> RAIL_SECTIONS = Arrays.asList(
-            "simple", "input", "audio", "app", "video", "display", "streaming", "advanced", "debug");
+            "simple", "input", "audio", "app", "video", "display", "controller", "streaming", "advanced", "debug");
+    /** The controller editor's section: Controls' Controller row, a game page and the Control Center open it. */
+    public static final String CONTROLLER_SECTION = "controller";
     /** The overview's Profiles row, under the presets: profiles hold values from every section. */
     static final String PROFILES_KEY = "stream_profiles";
 
@@ -182,6 +187,7 @@ public class StreamSettings extends NightjarActivity {
             case "video": tier = R.array.settings_tier_video; break;
             case "display": tier = R.array.settings_tier_display; break;
             case "input": tier = R.array.settings_tier_input; break;
+            case CONTROLLER_SECTION: tier = R.array.settings_tier_controller; break;
             case "audio": tier = R.array.settings_tier_audio; break;
             case "streaming": tier = R.array.settings_tier_streaming; break;
             case "app": tier = R.array.settings_tier_app; break;
@@ -351,6 +357,7 @@ public class StreamSettings extends NightjarActivity {
             case "video": return R.string.settings_section_video;
             case "display": return R.string.settings_section_display;
             case "input": return R.string.settings_section_input;
+            case CONTROLLER_SECTION: return R.string.settings_section_controller;
             case "audio": return R.string.settings_section_audio;
             case "streaming": return R.string.settings_section_streaming;
             case "advanced": return R.string.settings_section_advanced;

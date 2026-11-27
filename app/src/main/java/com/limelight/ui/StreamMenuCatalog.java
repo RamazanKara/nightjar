@@ -183,6 +183,8 @@ final class StreamMenuCatalog {
         if (o.role != NvApp.Role.REMOTE_MONITOR && o.usbForwarding) {
             entries.add(action(Section.HOST, Item.USB_DEVICES, R.string.stream_usb_devices, R.drawable.ic_usb));
         }
+        // The controller editor, Settings' Controller section: opening it leaves the stream, as Files does.
+        entries.add(action(Section.INPUT, Item.CONTROLLER_SETTINGS, R.string.controller_settings_menu, R.drawable.ic_settings));
         // Only the device playing (or one with Host control) manages who joined its game.
         if (o.role == NvApp.Role.STREAM && o.sessionGuests) {
             entries.add(action(Section.HOST, Item.GUESTS, R.string.guests_title, R.drawable.ic_guests));

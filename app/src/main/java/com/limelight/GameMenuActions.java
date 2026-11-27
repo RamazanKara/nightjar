@@ -313,6 +313,7 @@ final class GameMenuActions {
             case CLIPBOARD_SEND: action = () -> transferClipboard(true); break;
             case CLIPBOARD_RECEIVE: action = () -> transferClipboard(false); break;
             case USB_DEVICES: action = hostActions::showUsbDevices; break;
+            case CONTROLLER_SETTINGS: action = hostActions::showControllerSettings; break;
             case GUESTS: action = () -> { if (game.streamGuests != null) game.streamGuests.showGuests(); }; break;
             case IMAGE_CLIPBOARD_SEND: action = () -> transferClipboardImage(true); break;
             case IMAGE_CLIPBOARD_RECEIVE: action = () -> transferClipboardImage(false); break;

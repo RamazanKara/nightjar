@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">깨우기 릴레이(%1$s)가 %2$s과(와) 같은 네트워크에 있지 않아 깨울 수 없었습니다.</string>
     <string name="wake_relay_network">Nightjar가 이 네트워크에서 연결을 열 수 없습니다. 인터넷 연결을 확인한 후 다시 시도하세요.</string>
     <string name="wake_relay_none">%1$s은(는) 아직 홈 네트워크 밖에서 깨울 수 없습니다. 외부에서 깨우려면 집에 항상 켜져 있는 컴퓨터의 데스크톱용 Nightjar를 깨우기 릴레이로 설정하세요.</string>
+    <string name="settings_section_controller">컨트롤러</string>
+    <string name="controller_editor_summary">스틱, 트리거, 모션, 진동, 버튼</string>
+    <string name="controller_settings_menu">컨트롤러 설정</string>
+    <string name="controller_settings_stream_leaves">컨트롤러 설정을 열면 스트림을 나갑니다. 게임은 PC에서 계속 실행됩니다.</string>
 </resources>

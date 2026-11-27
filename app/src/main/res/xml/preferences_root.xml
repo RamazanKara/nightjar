@@ -20,6 +20,9 @@
         android:summary="@string/profiles_summary_none" />
     <Preference android:key="video" android:title="@string/settings_section_video" />
     <Preference android:key="display" android:title="@string/settings_section_display" />
+    <!-- The controller editor; Controls' Controller row, a game page and the Control Center open it too. -->
+    <Preference android:key="controller" android:title="@string/settings_section_controller"
+        android:summary="@string/controller_editor_summary" />
     <Preference android:key="streaming" android:title="@string/settings_section_streaming"
         android:summary="@string/settings_section_streaming_summary" />
     <Preference android:key="advanced" android:title="@string/settings_section_advanced"

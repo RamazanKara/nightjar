@@ -140,6 +140,7 @@ pub const TILES: &[Tile] = &[
     more("image_clipboard_receive"),
     more("host_menu"),
     more("usb_devices"),
+    more("controller_settings"),
     more("guests"),
     more("controller_audio"),
     more("files"),

@@ -80,7 +80,7 @@ public class SwitchPairChoiceTest {
     @Test
     public void theRowsPickerWritesBothSwitches() {
         try (ActivityController<StreamSettings> controller = Robolectric.buildActivity(StreamSettings.class).setup()) {
-            StreamSettings.SettingsFragment input = SettingsStructureTest.open(controller.get(), "input");
+            StreamSettings.SettingsFragment input = SettingsStructureTest.open(controller.get(), StreamSettings.CONTROLLER_SECTION);
             Preference back = input.findPreference(SwitchPairChoice.BACK_BUTTON.key);
             assertNotNull(back);
             assertTrue(back.getOnPreferenceClickListener().onPreferenceClick(back));

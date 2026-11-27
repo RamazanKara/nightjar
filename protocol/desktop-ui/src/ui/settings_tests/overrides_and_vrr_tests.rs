@@ -278,7 +278,7 @@ fn a_pcs_own_value_on_a_hidden_row_comes_back_with_its_row() {
     let mut f = Frames::new(record("PC", true, false), Reach::Online);
     f.size = vec2(1280.0, 4000.0);
     f.ctx.enable_accesskit();
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     f.hosts.list[0].record.settings = Some(serde_json::from_str(r#"{"codec":"PyroWave","prefer_yuv444":true}"#).unwrap());
     let id = f.hosts.list[0].id;
     f.l.open_host_settings(id, &f.hosts.list[0]);
@@ -411,13 +411,20 @@ fn bitrate_on_mobile_data_is_the_profiles_cap() {
     assert!(!shows(&f, "Bitrate on mobile data"), "{:?}", f.drawn);
 }
 
-/// Controls opens the Controller buttons page from two rows, the test from its own; Controllers
-/// is one choice, and with it off the controller rows have nothing to set.
+/// Controls' Controller row opens the controller editor, the Controller section; it opens the
+/// Controller buttons page from one row, the test from its own; Controllers is one choice, and
+/// with it off the controller rows have nothing to set.
 #[test]
 fn the_controller_rows_open_their_page_and_controllers_is_one_choice() {
     let mut f = settings_with(Settings::default());
     f.l.settings_view.section = "Controls";
     f.settle();
+    assert!(shows(&f, "Controller") && !shows(&f, "Stick dead zone"), "{:?}", f.drawn);
+    let open = f.placed.iter().filter(|(t, ..)| t == "Open").map(|p| p.1).next().expect("the Controller row's button");
+    f.click_at(open.center(), egui::PointerButton::Primary);
+    f.settle();
+    assert_eq!(f.l.settings_view.section, "Controller", "the row opens the controller editor");
+    assert!(shows(&f, "Stick dead zone") && shows(&f, "Vibration"), "its main rows: {:?}", f.drawn);
     for (button, test) in [("Controller buttons", false), ("Test", true)] {
         f.l.controller_test = !test;
         // The button, right of the row's label.
@@ -436,7 +443,30 @@ fn the_controller_rows_open_their_page_and_controllers_is_one_choice() {
     click_value(&mut f, "Controllers", "One player");
     click_last(&mut f, "Off");
     assert!(!f.l.settings.controllers, "Off sends none");
-    assert!(!shows(&f, "Nintendo button layout") && !shows(&f, "Stick dead zone") && shows(&f, "Send system keys"), "{:?}", f.drawn);
+    assert!(!shows(&f, "Nintendo button layout") && !shows(&f, "Stick dead zone") && shows(&f, "Controllers"), "{:?}", f.drawn);
+}
+
+/// The controller editor shows today's controller settings under their own keys with their own
+/// defaults: gathering them in one section changes nothing the PC receives.
+#[test]
+fn the_controller_editor_keeps_every_key_and_default() {
+    let at = SETTINGS_SECTIONS.iter().position(|s| *s == "Controller").expect("the section");
+    let keys: Vec<&str> = SECTION_KEYS[at].iter().flat_map(|row| row.iter().copied()).collect();
+    assert_eq!(keys, ["controllers", "multi_controller", "deadzone", "trigger_deadzone", "controller_motion", "disable_rumble",
+        "rumble_feel", "swap_face_buttons", "gamepad_quit_combo", "controller_mouse", "analog_scrolling", "mouse_fixed_step",
+        "gamepad_touchpad_as_mouse", "background_controllers", "guide_hold_ms", "back_opens_menu", "back_as_guide",
+        "stream_menu_buttons", "controller_audio", "usb_forwarding"]);
+    let d = Settings::default();
+    assert!(d.controllers && d.multi_controller && d.controller_motion && d.controller_mouse);
+    assert_eq!((d.deadzone, d.trigger_deadzone, d.guide_hold_ms), (0, 0, 1000));
+    assert!(!d.disable_rumble && !d.swap_face_buttons && !d.mouse_fixed_step && !d.gamepad_touchpad_as_mouse);
+    assert!(!d.background_controllers && !d.back_opens_menu && !d.back_as_guide && !d.controller_audio && !d.usb_forwarding);
+    assert_eq!(d.rumble_feel, nightjar_policy::rumble::RumbleFeel::Standard);
+    assert_eq!(d.gamepad_quit_combo, crate::config::GamepadQuitCombo::StartSelectLbRb);
+    assert_eq!(d.analog_scrolling, crate::config::AnalogScrolling::Right);
+    assert!(d.stream_menu_buttons.is_empty());
+    // Controls keeps the mouse, touch and keyboard rows and leads to the editor with one main row.
+    assert!(main_row("controller_editor") && main_row("deadzone") && main_row("controllers") && !main_row("swap_face_buttons"));
 }
 
 /// When Nightjar opens is one choice for Home and the start screen; A chosen game is listed once a

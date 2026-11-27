@@ -4,7 +4,7 @@
 use std::ops::RangeInclusive;
 
 /// Total Android settings rows documented in `settings.toml`.
-pub const ANDROID_SETTING_COUNT: usize = 194;
+pub const ANDROID_SETTING_COUNT: usize = 196;
 /// Total Desktop `Settings` fields declared in `settings.toml`.
 pub const DESKTOP_SETTING_COUNT: usize = 148;
 
@@ -301,25 +301,25 @@ pub const SHARED_SETTINGS: &[SharedSetting] = &[
     SharedSetting {
         android_key: "seekbar_deadzone",
         desktop_key: "deadzone",
-        tier: "more",
+        tier: "main",
         scope: "global",
     },
     SharedSetting {
         android_key: "seekbar_trigger_deadzone",
         desktop_key: "trigger_deadzone",
-        tier: "more",
+        tier: "main",
         scope: "global",
     },
     SharedSetting {
         android_key: "checkbox_gamepad_motion_sensors",
         desktop_key: "controller_motion",
-        tier: "more",
+        tier: "main",
         scope: "global",
     },
     SharedSetting {
         android_key: "list_rumble_feel",
         desktop_key: "rumble_feel",
-        tier: "more",
+        tier: "main",
         scope: "global",
     },
     SharedSetting {

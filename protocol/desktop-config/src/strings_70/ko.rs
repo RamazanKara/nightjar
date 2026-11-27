@@ -153,4 +153,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Show PC screen", "PC 화면 표시"),
     ("Showing PC screen. The game is still starting.", "PC 화면을 표시합니다. 게임이 아직 시작 중입니다."),
     ("The game didn’t start on the PC.", "PC에서 게임이 시작되지 않았습니다."),
+    ("Every controller setting in one place: sticks, triggers, motion, vibration and buttons.", "모든 컨트롤러 설정을 한곳에서: 스틱, 트리거, 모션, 진동, 버튼."),
+    ("Sticks, triggers, motion, vibration and buttons", "스틱, 트리거, 모션, 진동, 버튼"),
+    ("Controller settings", "컨트롤러 설정"),
+    ("Leave and open controller settings", "나가서 컨트롤러 설정 열기"),
+    ("Opening controller settings leaves the stream; the game keeps running on the PC.", "컨트롤러 설정을 열면 스트림을 나갑니다. 게임은 PC에서 계속 실행됩니다."),
 ];

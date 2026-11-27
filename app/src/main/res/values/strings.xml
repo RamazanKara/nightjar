@@ -661,4 +661,8 @@
     <string name="wake_relay_elsewhere">Your wake relay (%1$s) is not on the same network as %2$s, so it could not wake it.</string>
     <string name="wake_relay_network">Nightjar could not open a connection on this network. Check your internet connection and try again.</string>
     <string name="wake_relay_none">%1$s can\'t be woken from outside your home network yet. To wake it from away, set up desktop Nightjar on an always-on computer at home as a wake relay.</string>
+    <string name="settings_section_controller">Controller</string>
+    <string name="controller_editor_summary">Sticks, triggers, motion, vibration and buttons</string>
+    <string name="controller_settings_menu">Controller settings</string>
+    <string name="controller_settings_stream_leaves">Opening controller settings leaves the stream; the game keeps running on the PC.</string>
 </resources>

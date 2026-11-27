@@ -134,7 +134,7 @@ public class TvSettingsFocusTest {
         }
         // Debug only on request (Show debug settings).
         assertEquals(Arrays.asList("simple", "input", "audio", "app", "more_sections", "stream_presets", "stream_profiles", "video", "display",
-                "streaming", "advanced"), visited);
+                "controller", "streaming", "advanced"), visited);
         for (int i = list.getCount() - 2; i >= 0; i--) {
             press(screen, KeyEvent.KEYCODE_DPAD_UP);
             assertEquals("Up moves one row", i, list.getSelectedItemPosition());
@@ -165,8 +165,8 @@ public class TvSettingsFocusTest {
         assertTrue(list.hasFocus());
 
         press(screen, KeyEvent.KEYCODE_DPAD_CENTER);
-        // The presets, Profiles and four sections; Debug only on request.
-        assertEquals(11, list.getCount());
+        // The presets, Profiles and five sections (Controller among them); Debug only on request.
+        assertEquals(12, list.getCount());
         assertTrue("focus stays in the rail", list.hasFocus());
         assertEquals("and on the row that was pressed", StreamSettings.RAIL_MORE_KEY, keyAt(list, list.getSelectedItemPosition()));
         press(screen, KeyEvent.KEYCODE_DPAD_DOWN);

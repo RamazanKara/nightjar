@@ -153,4 +153,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Show PC screen", "Mostrar pantalla del PC"),
     ("Showing PC screen. The game is still starting.", "Mostrando la pantalla del PC. El juego aún se está iniciando."),
     ("The game didn’t start on the PC.", "El juego no se inició en el PC."),
+    ("Every controller setting in one place: sticks, triggers, motion, vibration and buttons.", "Todos los ajustes del mando en un solo lugar: sticks, gatillos, movimiento, vibración y botones."),
+    ("Sticks, triggers, motion, vibration and buttons", "Sticks, gatillos, movimiento, vibración y botones"),
+    ("Controller settings", "Ajustes del mando"),
+    ("Leave and open controller settings", "Salir y abrir los ajustes del mando"),
+    ("Opening controller settings leaves the stream; the game keeps running on the PC.", "Abrir los ajustes del mando sale de la transmisión; el juego sigue en el PC."),
 ];

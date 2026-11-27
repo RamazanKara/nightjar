@@ -100,7 +100,7 @@ fn every_desktop_offer_is_a_tile_the_model_knows_with_a_label() {
     }
     assert_eq!(layout.grid[layout.grid.len() - 2..], [Cell::Shortcut(0), Cell::Add]);
     assert_eq!(layout.footer, ["close", "disconnect", "close_game"]);
-    assert_eq!(layout.more, ["picture", "night_mode", "image_clipboard_send", "image_clipboard_receive", "usb_devices",
+    assert_eq!(layout.more, ["picture", "night_mode", "image_clipboard_send", "image_clipboard_receive", "usb_devices", "controller_settings",
         "guests", "controller_audio", "export_statistics", "help", "reconnect", "end_host_session"]);
     for built_in in format::BUILT_INS {
         assert!(!built_in_label(built_in.id).is_empty());

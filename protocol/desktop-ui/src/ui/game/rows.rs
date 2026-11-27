@@ -243,6 +243,16 @@ impl Launcher {
                 },
             });
         }
+        // Last, after what is this game's own: every controller setting in one place; they hold for every game, so the editor opens in Settings.
+        rows.push(ArtRow {
+            key: "controller-editor".into(),
+            label: tr("Controller").to_owned(),
+            sub: Some((tr("Sticks, triggers, motion, vibration and buttons").to_owned(), *ON_SURFACE_VARIANT)),
+            said: None,
+            wrap: false,
+            enabled: true,
+            act: RowAct::ControllerEditor,
+        });
         rows
     }
 
@@ -458,6 +468,7 @@ impl Launcher {
                             });
                         }
                     }
+                    RowAct::ControllerEditor => self.open_settings_section(en("Controller")),
                     RowAct::Nothing => {}
                 }
             }

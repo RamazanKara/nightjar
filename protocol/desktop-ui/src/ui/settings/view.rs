@@ -12,9 +12,9 @@ pub(in crate::ui) struct SettingsView {
     /// The search the rows showed last frame: another one starts its results at the top.
     pub(super) shown_query: String,
     /// The rows the search found last frame, per section.
-    pub(in crate::ui) found: [usize; 9],
+    pub(in crate::ui) found: [usize; SECTION_COUNT],
     /// Each section's fold is open (its "More … settings" chosen), until Nightjar closes.
-    pub(in crate::ui) more: [bool; 9],
+    pub(in crate::ui) more: [bool; SECTION_COUNT],
     /// The list's own fold is open ("More settings" chosen): Profiles and the sections of detail
     /// show under the simple ones. Only the user's own choice sets it, and it is kept in
     /// settings.json (`settings_more_open`) for the next start; a link or a search that shows a

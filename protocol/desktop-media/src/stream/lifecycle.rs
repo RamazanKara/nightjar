@@ -280,6 +280,8 @@ impl Streaming {
             plan: connecting.plan,
             controllers_off: Default::default(),
             export_statistics: false,
+            settings_after: None,
+            settings_asked: false,
             statistics: VecDeque::new(),
             menu_visible: false,
             session_page_open: false,

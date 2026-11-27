@@ -2029,7 +2029,7 @@ advice = "Captured by default, for game mouse look. Desktop pointer moves the PC
 
 [[android_setting]]
 key = "controllers"
-category = "category_input_main"
+category = "category_controller_main"
 tier = "main"
 kind = "action"
 scope = "global"
@@ -2039,7 +2039,7 @@ advice = "A player each by default: each controller is its own player and the PC
 
 [[android_setting]]
 key = "controller_button_mapping"
-category = "category_input_main"
+category = "category_controller_main"
 tier = "main"
 kind = "action"
 scope = "global"
@@ -2047,7 +2047,7 @@ advice = "Open Controller buttons, press a digital button and choose its output 
 
 [[android_setting]]
 key = "controller_test"
-category = "category_input_main"
+category = "category_controller_main"
 tier = "main"
 kind = "action"
 scope = "global"
@@ -2083,12 +2083,28 @@ desktop_key = "clipboard_sync"
 advice = "Off by default. Turn on to share copied text both ways while streaming. Android lets the app read the clipboard only while the stream is in front, so copies made in other apps go when you return. Needs a host that offers clipboard sync and lets this device read and write its clipboard. It carries text only: copy a PC image from the stream menu, and send large copies with Send clipboard to host."
 
 [[android_setting]]
+key = "controller_editor"
+category = "category_input_main"
+tier = "main"
+kind = "action"
+scope = "global"
+advice = "Opens the Controller section, the controller editor: every controller setting in one place, from dead zones, motion and vibration to the menu buttons, the on-screen controls and USB controllers. A game page and the Control Center's Controller module open it too."
+
+[[android_setting]]
 key = "more_input"
 category = "category_more_input"
 tier = "main"
 kind = "action"
 scope = "global"
-advice = "Shows or hides the Controls rows that are not main, such as dead zones, mouse emulation, USB controllers, trackpad and keyboard settings. Settings search and links find them while it is closed."
+advice = "Shows or hides the Controls rows that are not main, such as trackpad, mouse and keyboard settings. Settings search and links find them while it is closed."
+
+[[android_setting]]
+key = "more_controller"
+category = "category_more_controller"
+tier = "main"
+kind = "action"
+scope = "global"
+advice = "Shows or hides the Controller rows that are not main, such as the Nintendo layout, controller mouse, menu buttons, on-screen controls and USB controllers. Settings search and links find them while it is closed."
 
 [[android_setting]]
 key = "checkbox_flip_face_buttons"
@@ -2112,8 +2128,8 @@ advice = "Off by default: Start+Select+LB+RB opens the stream menu, where Discon
 
 [[android_setting]]
 key = "seekbar_deadzone"
-category = "category_gamepad_settings"
-tier = "more"
+category = "category_controller_main"
+tier = "main"
 kind = "int"
 xml_default = "7"
 scope = "global"
@@ -2122,8 +2138,8 @@ advice = "Raise to suppress stick drift; lower for small movements. Games can ad
 
 [[android_setting]]
 key = "seekbar_trigger_deadzone"
-category = "category_gamepad_settings"
-tier = "more"
+category = "category_controller_main"
+tier = "main"
 kind = "int"
 xml_default = "2"
 scope = "global"
@@ -2132,8 +2148,8 @@ advice = "Raise if a resting trigger presses by itself; lower so light presses r
 
 [[android_setting]]
 key = "checkbox_gamepad_motion_sensors"
-category = "category_gamepad_settings"
-tier = "more"
+category = "category_controller_main"
+tier = "main"
 kind = "bool"
 xml_default = "true"
 scope = "global"
@@ -2159,8 +2175,8 @@ advice = "Standard by default for every controller. Pick a connected controller 
 
 [[android_setting]]
 key = "list_rumble_feel"
-category = "category_gamepad_settings"
-tier = "more"
+category = "category_controller_main"
+tier = "main"
 kind = "list"
 xml_default = "standard"
 scope = "global"
@@ -2306,7 +2322,7 @@ advice = "Default runs Overlay. See Y in the stream menu."
 
 [[android_setting]]
 key = "keyboard_shortcuts_editor"
-category = "category_stream_menu"
+category = "category_keyboard_shortcuts"
 tier = "more"
 kind = "action"
 scope = "global"

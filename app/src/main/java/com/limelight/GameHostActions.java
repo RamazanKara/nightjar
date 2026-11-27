@@ -291,6 +291,17 @@ final class GameHostActions {
                 .create());
     }
 
+    /** The controller editor is Settings' Controller section: it opens over the launcher and leaves the stream. */
+    void showControllerSettings() {
+        menu.showStreamDialog(new NavigationDialogBuilder(game).setTitle(R.string.controller_settings_menu)
+                .setMessage(R.string.controller_settings_stream_leaves)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.files_open, (prompt, which) -> game.streamMenuAction = () ->
+                        com.limelight.preferences.StreamSettings.open(game,
+                                com.limelight.preferences.StreamSettings.CONTROLLER_SECTION, null))
+                .create());
+    }
+
     // The microphone settings ask for processing this device lacks: say so in the stream, once per difference.
     // A microphone that failed and was muted is said every time, since each unmute tries again.
     void showMicrophoneNotice() {

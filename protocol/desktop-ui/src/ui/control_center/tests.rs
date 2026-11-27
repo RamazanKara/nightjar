@@ -251,12 +251,12 @@ fn the_rail_lists_only_modules_with_something() {
         assert_eq!(ctx.read_response(rail_id(module)).is_some(), dock.page(module).is_some(), "{module:?}");
     }
     assert!(dock.page(Module::Clips).is_none(), "no gate is open: Clips has nothing");
-    // A plain stream: no microphone, PC page, controller extras or guests.
+    // A plain stream: no microphone, PC page, controller extras or guests; the controller editor always opens.
     let (ctx, mut plain) = (context(), Demo::new());
     plain.available = Available { overlay: true, quality: true, ..Default::default() };
     plain.settle(&ctx);
     let shown: Vec<Module> = Module::ALL.into_iter().filter(|module| ctx.read_response(rail_id(*module)).is_some()).collect();
-    assert_eq!(shown, [Module::Quick, Module::Picture, Module::Power]);
+    assert_eq!(shown, [Module::Quick, Module::Picture, Module::Controller, Module::Power]);
 }
 
 #[test]

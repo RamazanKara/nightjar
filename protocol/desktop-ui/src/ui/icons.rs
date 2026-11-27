@@ -12,6 +12,7 @@ pub enum Icon {
     Search,
     Down,
     Gamepad,
+    Keyboard,
     StarOn,
     Play,
     Grid,
@@ -110,6 +111,16 @@ pub fn shapes(icon: Icon, rect: Rect, color: Color32) -> Vec<Shape> {
             line(vec![p(8.3, 10.6), p(8.3, 14.4)]);
             dot(15.4, 14.0, 1.1);
             dot(18.0, 11.2, 1.1);
+        }
+        // Android's ic_keyboard: a board, two rows of keys and the space bar.
+        Icon::Keyboard => {
+            closed(vec![p(3.0, 5.0), p(21.0, 5.0), p(21.0, 19.0), p(3.0, 19.0)]);
+            for y in [8.0, 11.0] {
+                for x in [5.0, 9.0, 13.0, 17.0] {
+                    line(vec![p(x, y), p(x + 2.0, y)]);
+                }
+            }
+            line(vec![p(7.0, 15.0), p(17.0, 15.0)]);
         }
         Icon::StarOn => {
             // Five kites from the middle: a star is not convex.

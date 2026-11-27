@@ -36,7 +36,7 @@ import static org.junit.Assert.assertTrue;
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public class SettingsSectionsPreviewTest {
     private static final int W = 822, H = 8000;
-    private static final String[] SECTIONS = {"simple", "video", "display", "input", "audio", "streaming", "app", "advanced", "debug"};
+    private static final String[] SECTIONS = {"simple", "video", "display", "input", "controller", "audio", "streaming", "app", "advanced", "debug"};
 
     @Test
     public void everySectionOpen() throws IOException {

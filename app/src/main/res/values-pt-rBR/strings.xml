@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">Seu relé de despertar (%1$s) não está na mesma rede que %2$s, então não conseguiu despertá-lo.</string>
     <string name="wake_relay_network">O Nightjar não conseguiu abrir uma conexão nesta rede. Verifique sua conexão com a internet e tente de novo.</string>
     <string name="wake_relay_none">Ainda não é possível despertar %1$s fora da sua rede doméstica. Para despertá-lo à distância, configure o Nightjar para desktop em um computador sempre ligado em casa como relé de despertar.</string>
+    <string name="settings_section_controller">Controle</string>
+    <string name="controller_editor_summary">Analógicos, gatilhos, movimento, vibração e botões</string>
+    <string name="controller_settings_menu">Configurações do controle</string>
+    <string name="controller_settings_stream_leaves">Abrir as configurações do controle sai da transmissão; o jogo continua no PC.</string>
 </resources>

@@ -364,15 +364,15 @@ fn settings_sections_follow_androids_order() {
     f.settle();
     // The list beside the rows names the sections as Android's does, the simple ones first and the
     // rest in Android's order, then the open one heads the rows.
-    let listed: [&str; 9] = ["Recommended", "Controls", "Audio", "App", "Video", "Display & image", "Streaming", "Advanced", "Debug"];
+    let listed: [&str; 10] = ["Recommended", "Controls", "Audio", "App", "Video", "Display & image", "Controller", "Streaming", "Advanced", "Debug"];
     let titles: Vec<&str> = f.drawn.iter().map(String::as_str).filter(|t| SETTINGS_SECTIONS.contains(t)).collect();
-    assert_eq!(titles[..9], listed, "the list names the sections in order");
-    assert_eq!(titles[9..], ["Video"], "and the chosen one is open");
+    assert_eq!(titles[..10], listed, "the list names the sections in order");
+    assert_eq!(titles[10..], ["Video"], "and the chosen one is open");
     // A narrow window lists them as chips above the rows, in the same order.
     f.size = vec2(800.0, 12000.0);
     f.settle();
     let titles: Vec<&str> = f.drawn.iter().map(String::as_str).filter(|t| SETTINGS_SECTIONS.contains(t)).collect();
-    assert_eq!(titles[..9], listed, "the chips name the sections in order");
+    assert_eq!(titles[..10], listed, "the chips name the sections in order");
 }
 
 /// Every button, switch, list and field on the main screens has a name for a screen reader.
@@ -382,7 +382,7 @@ fn screen_readers_hear_a_name_for_everything_on_the_main_screens() {
     f.ctx.enable_accesskit();
     f.size = vec2(1280.0, 12000.0);
     // Every row of the settings, each section's fold open.
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     let id = f.hosts.list[0].id;
     let mut screens = vec![("PCs", Screen::Hosts), ("Home", Screen::Home), ("library", Screen::Apps(id)), ("details", Screen::HostDetails(id)), ("PC settings", Screen::HostSettings(id))];
     screens.push(("settings", Screen::Settings));
@@ -469,7 +469,7 @@ fn settings_show_a_sections_main_rows_then_a_counted_fold() {
         for section in SETTINGS_SECTIONS {
             if screen != Screen::Settings && (section == "App" || section == "Recommended") { continue; }
             f.l.settings_view.section = section;
-            f.l.settings_view.more = [false; 9];
+            f.l.settings_view.more = [false; crate::ui::settings::SECTION_COUNT];
             f.settle();
             let closed = f.l.settings_view.drawn.clone();
             assert!(!closed.is_empty(), "{section} draws rows");
@@ -477,7 +477,7 @@ fn settings_show_a_sections_main_rows_then_a_counted_fold() {
             assert!(!any_main || closed.iter().all(|(key, folded)| main_row(key) && !folded),
                 "{screen:?} {section}: only main rows while closed: {closed:?}");
             let more = fold(&f);
-            f.l.settings_view.more = [true; 9];
+            f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
             f.settle();
             let open = f.l.settings_view.drawn.clone();
             let folded = open.iter().filter(|(_, folded)| *folded).count();
@@ -561,7 +561,7 @@ fn the_pc_render_resolution_is_named_and_ranged_as_on_android() {
     let mut f = Frames::new(record("PC", true, false), Reach::Online);
     f.size = vec2(1280.0, 12000.0);
     f.l.settings_view.section = "Display & image";
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     f.l.go(Screen::Settings);
     f.settle();
     assert!(!shows(&f, "PC render resolution"), "with the virtual display off it has nothing to set: {:?}", f.drawn);
@@ -604,7 +604,7 @@ fn a_pcs_own_display_scaling_is_offered_only_by_hosts_that_read_it() {
         let mut f = Frames::with(record("PC", true, false), Reach::Online, Some(info(&extra)), Vec::new());
         f.size = vec2(1280.0, 12000.0);
         f.l.settings_view.section = "Display & image";
-        f.l.settings_view.more = [true; 9];
+        f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
         let id = f.hosts.list[0].id;
         f.l.go(Screen::HostSettings(id));
         f.settle();

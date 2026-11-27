@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">Il tuo relay di riattivazione (%1$s) non è sulla stessa rete di %2$s, quindi non ha potuto riattivarlo.</string>
     <string name="wake_relay_network">Nightjar non è riuscito ad aprire una connessione su questa rete. Controlla la connessione a Internet e riprova.</string>
     <string name="wake_relay_none">%1$s non può ancora essere riattivato da fuori della rete di casa. Per riattivarlo a distanza, configura Nightjar per desktop su un computer di casa sempre acceso come relay di riattivazione.</string>
+    <string name="settings_section_controller">Controller</string>
+    <string name="controller_editor_summary">Levette, grilletti, movimento, vibrazione e tasti</string>
+    <string name="controller_settings_menu">Impostazioni del controller</string>
+    <string name="controller_settings_stream_leaves">Aprire le impostazioni del controller chiude lo stream; il gioco continua sul PC.</string>
 </resources>

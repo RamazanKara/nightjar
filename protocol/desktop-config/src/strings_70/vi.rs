@@ -153,4 +153,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Show PC screen", "Hiện màn hình PC"),
     ("Showing PC screen. The game is still starting.", "Đang hiện màn hình PC. Trò chơi vẫn đang khởi động."),
     ("The game didn’t start on the PC.", "Trò chơi chưa khởi động được trên PC."),
+    ("Every controller setting in one place: sticks, triggers, motion, vibration and buttons.", "Mọi cài đặt tay cầm ở một nơi: cần analog, cò, chuyển động, rung và nút."),
+    ("Sticks, triggers, motion, vibration and buttons", "Cần analog, cò, chuyển động, rung và nút"),
+    ("Controller settings", "Cài đặt tay cầm"),
+    ("Leave and open controller settings", "Rời đi và mở cài đặt tay cầm"),
+    ("Opening controller settings leaves the stream; the game keeps running on the PC.", "Mở cài đặt tay cầm sẽ rời khỏi luồng; trò chơi vẫn chạy trên PC."),
 ];

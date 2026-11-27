@@ -443,7 +443,7 @@ fn the_side_list_stays_below_the_chrome_while_the_rows_scroll() {
     // Tall enough for the whole list, More settings open: a shorter window's list goes with the page.
     let mut f = demo_frames(vec2(1600.0, 860.0));
     // Every row: a section long enough to scroll.
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     let top_of = |f: &Frames, text: &str| f.placed.iter().find(|(t, ..)| t == text).map(|p| p.1.top()).unwrap_or_else(|| panic!("{text} is drawn"));
     demo_page(&mut f, Page::Settings);
     f.l.settings_view.section = "Video";

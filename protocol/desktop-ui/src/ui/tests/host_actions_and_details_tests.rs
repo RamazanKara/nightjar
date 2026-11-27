@@ -629,3 +629,34 @@ fn multiple_copies_on_same_or_other_pc_get_distinct_click_targets_and_labels() {
     f.click_at(targets[1], egui::PointerButton::Primary);
     assert_eq!(f.l.screen, Screen::Game { host: pc1, app: 202 });
 }
+
+/// The controller editor is reachable from a game's page: its Controller row opens Settings at the Controller section.
+#[test]
+fn a_games_page_opens_the_controller_editor() {
+    use rubylight_native_api::library::{Artwork, Game, Library};
+    let mut f = home_with_games(1);
+    let pc = f.hosts.list[0].id;
+    f.hosts.list[0].native.library = Some(std::sync::Arc::new(Library {
+        revision: "r1".into(),
+        games: vec![Game {
+            install_id: "install-100".into(),
+            app_id: 100,
+            title: "Game A".into(),
+            game_id: None,
+            store: None,
+            installed: Some(true),
+            running: false,
+            artwork: Artwork { cover: None, version: String::new() },
+            last_played: None,
+            playtime_minutes: None,
+            collections: Vec::new(),
+        }],
+    }));
+    f.l.go(Screen::Game { host: pc, app: 100 });
+    f.settle();
+    assert!(shows(&f, "Sticks, triggers, motion, vibration and buttons"), "{:?}", f.drawn);
+    click_text(&mut f, "Controller");
+    f.settle();
+    assert_eq!(f.l.screen, Screen::Settings);
+    assert_eq!(f.l.settings_view.section, "Controller");
+}

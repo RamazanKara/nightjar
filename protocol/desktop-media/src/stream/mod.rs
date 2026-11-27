@@ -357,6 +357,10 @@ pub struct Streaming {
     /// The host's latest pipeline frame rates; `None` until it sends them.
     pipeline_rates: Option<PipelineRatesReport>,
     pub exit: Option<Exit>,
+    /// The Settings section to open once the stream has ended, as the Control Center's Controller settings asks.
+    pub settings_after: Option<&'static str>,
+    /// The Control Center's Controller settings was chosen once: the second choice leaves the stream.
+    pub settings_asked: bool,
     pub toast: Option<(String, Instant)>,
     /// The route toward the PC is gone: the lost-network notice stays until one returns.
     pub network_lost: bool,

@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">Uyandırma röleniz (%1$s), %2$s ile aynı ağda olmadığı için onu uyandıramadı.</string>
     <string name="wake_relay_network">Nightjar bu ağda bağlantı açamadı. İnternet bağlantınızı kontrol edip yeniden deneyin.</string>
     <string name="wake_relay_none">%1$s henüz ev ağınızın dışından uyandırılamıyor. Uzaktan uyandırmak için evde sürekli açık bir bilgisayardaki masaüstü Nightjar\'ı uyandırma rölesi olarak ayarlayın.</string>
+    <string name="settings_section_controller">Kumanda</string>
+    <string name="controller_editor_summary">Çubuklar, tetikler, hareket, titreşim ve düğmeler</string>
+    <string name="controller_settings_menu">Kumanda ayarları</string>
+    <string name="controller_settings_stream_leaves">Kumanda ayarlarını açmak yayından çıkar; oyun bilgisayarda çalışmaya devam eder.</string>
 </resources>

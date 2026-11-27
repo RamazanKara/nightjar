@@ -197,11 +197,12 @@ pub(in crate::ui) fn value_text(key: &str, s: &Settings, display: &Display, styl
 
 /// The main rows of each section, as `client/app/src/main/res/values/settings_tiers.xml` lists them
 /// by Android preference key, in `SETTINGS_SECTIONS` order. A test keeps the two equal.
-pub(in crate::ui) const MAIN_KEYS: [(&str, &[&str]); 9] = [
+pub(in crate::ui) const MAIN_KEYS: [(&str, &[&str]); SECTION_COUNT] = [
     ("simple", &["simple_smoothness", "simple_picture", "simple_screen", "simple_hdr", "checkbox_console_home", "simple_back_to_recommended"]),
     ("video", &["list_resolution", "list_fps", "automatic_bitrate", "seekbar_bitrate_kbps", "lower_bitrate", "list_mobile_bitrate_kbps", "video_format", "checkbox_enable_hdr"]),
     ("display", &["video_scaling", "stream_orientation", "checkbox_vrr", "frame_pacing"]),
-    ("input", &["touch_mode", "checkbox_absolute_mouse_mode", "controllers", "controller_button_mapping", "controller_test", "checkbox_show_onscreen_controls", "checkbox_keyboard_follows_text_fields", "checkbox_clipboard_sync"]),
+    ("input", &["touch_mode", "checkbox_absolute_mouse_mode", "controller_editor", "checkbox_show_onscreen_controls", "checkbox_keyboard_follows_text_fields", "checkbox_clipboard_sync"]),
+    ("controller", &["controllers", "controller_button_mapping", "controller_test", "seekbar_deadzone", "seekbar_trigger_deadzone", "checkbox_gamepad_motion_sensors", "list_rumble_feel"]),
     ("audio", &["list_audio_config", "checkbox_host_audio", "checkbox_enable_mic", "checkbox_mic_button"]),
     ("streaming", &["checkbox_enable_perf_overlay", "performance_overlay_position", "checkbox_auto_reconnect", "network_tests"]),
     ("app", &["theme", "list_languages", "list_open_on_start", "checkbox_quick_resume", "pin_lock", "help", "report_problem", "check_updates_now"]),
@@ -232,8 +233,11 @@ pub(in crate::ui) const ANDROID_KEYS: &[(&str, &str)] = &[
     ("virtual_display_scale", "seekbar_virtual_display_scale"), ("virtual_display_dpi", "list_virtual_display_dpi"),
     ("host_display", "host_display_location"),
     // Controls
-    ("mouse_mode", "checkbox_absolute_mouse_mode"), ("controllers", "controllers"), ("controller_buttons", "controller_button_mapping"),
-    ("controller_test", "controller_test"), ("keyboard_follows_text_fields", "checkbox_keyboard_follows_text_fields"), ("clipboard_sync", "checkbox_clipboard_sync"), ("swap_face_buttons", "checkbox_flip_face_buttons"),
+    ("mouse_mode", "checkbox_absolute_mouse_mode"), ("controller_editor", "controller_editor"),
+    ("keyboard_follows_text_fields", "checkbox_keyboard_follows_text_fields"), ("clipboard_sync", "checkbox_clipboard_sync"),
+    // Controller
+    ("controllers", "controllers"), ("controller_buttons", "controller_button_mapping"),
+    ("controller_test", "controller_test"), ("swap_face_buttons", "checkbox_flip_face_buttons"),
     ("gamepad_quit_combo", "list_gamepad_quit_combo"), ("deadzone", "seekbar_deadzone"), ("trigger_deadzone", "seekbar_trigger_deadzone"),
     ("controller_motion", "checkbox_gamepad_motion_sensors"), ("disable_rumble", "list_rumble_feel"), ("rumble_feel", "list_rumble_feel"),
     ("controller_mouse", "checkbox_mouse_emulation"), ("analog_scrolling", "analog_scrolling"),
@@ -280,7 +284,7 @@ pub(in crate::ui) const DESKTOP_MAIN: [&str; 3] = ["window_mode", "graphics_card
 
 /// The action rows: they open a page or run a test and store nothing, so no setting key names them.
 #[cfg_attr(not(test), allow(dead_code))]
-pub(in crate::ui) const ACTION_ROWS: [&str; 23] = ["mobile_bitrate", "controller_buttons", "controller_test", "keyboard_shortcuts", "stream_hotkeys",
+pub(in crate::ui) const ACTION_ROWS: [&str; 24] = ["mobile_bitrate", "controller_editor", "controller_buttons", "controller_test", "keyboard_shortcuts", "stream_hotkeys",
     "connection_test", "pin_lock", "help", "report_problem", "check_updates_now", "sign_in", "about_app", "logs", "reset_all", "pyrowave_pace",
     "latency_benchmark", "export_latency_csv", "steamgriddb_key", "igdb_client_id", "igdb_client_secret",
     "simple_console", "simple_screen", "simple_back"];
@@ -309,12 +313,12 @@ pub(in crate::ui) struct Rows<'a> {
     /// (true), a group's title (empty: a gap only).
     pub(super) heading: Option<(bool, &'static str)>,
     /// Rows drawn, per section.
-    pub(super) found: [usize; 9],
+    pub(super) found: [usize; SECTION_COUNT],
     /// Whether the rows that follow are drawn: a setting they depend on or this device can rule
     /// them out (`when`).
     pub(super) shown: bool,
     /// Each section's fold is open.
-    pub(super) more: [bool; 9],
+    pub(super) more: [bool; SECTION_COUNT],
     /// The section's main rows and folded rows its gates show so far, and whether its first
     /// folded row came.
     pub(super) mains: usize,

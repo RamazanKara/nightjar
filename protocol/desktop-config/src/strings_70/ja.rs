@@ -153,4 +153,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Show PC screen", "PC の画面を表示"),
     ("Showing PC screen. The game is still starting.", "PC の画面を表示しています。ゲームはまだ起動中です。"),
     ("The game didn’t start on the PC.", "PC でゲームが起動しませんでした。"),
+    ("Every controller setting in one place: sticks, triggers, motion, vibration and buttons.", "コントローラーの設定をひとまとめに: スティック、トリガー、モーション、振動、ボタン。"),
+    ("Sticks, triggers, motion, vibration and buttons", "スティック、トリガー、モーション、振動、ボタン"),
+    ("Controller settings", "コントローラー設定"),
+    ("Leave and open controller settings", "終了してコントローラー設定を開く"),
+    ("Opening controller settings leaves the stream; the game keeps running on the PC.", "コントローラー設定を開くとストリームを終了します。ゲームは PC で動き続けます。"),
 ];

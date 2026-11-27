@@ -35,12 +35,19 @@
     <string-array name="settings_tier_input" translatable="false">
         <item>touch_mode</item>
         <item>checkbox_absolute_mouse_mode</item>
-        <item>controllers</item>
-        <item>controller_button_mapping</item>
-        <item>controller_test</item>
+        <item>controller_editor</item>
         <item>checkbox_show_onscreen_controls</item>
         <item>checkbox_keyboard_follows_text_fields</item>
         <item>checkbox_clipboard_sync</item>
+    </string-array>
+    <string-array name="settings_tier_controller" translatable="false">
+        <item>controllers</item>
+        <item>controller_button_mapping</item>
+        <item>controller_test</item>
+        <item>seekbar_deadzone</item>
+        <item>seekbar_trigger_deadzone</item>
+        <item>checkbox_gamepad_motion_sensors</item>
+        <item>list_rumble_feel</item>
     </string-array>
     <string-array name="settings_tier_audio" translatable="false">
         <item>list_audio_config</item>

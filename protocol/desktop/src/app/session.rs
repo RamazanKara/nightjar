@@ -262,6 +262,8 @@ impl App {
         let Some((mut streaming, _timer)) = self.streaming.take() else {
             return;
         };
+        // Left for the controller editor: Settings opens at its section, and the game keeps running.
+        let settings_after = streaming.settings_after.take();
         let host = streaming.host_id;
         // The launcher didn't see the window move while the stream had it.
         self.gui.set_refresh(display_of(self.window).refresh_hz);
@@ -291,7 +293,10 @@ impl App {
         // Quit on leave: only a leave the player asked for quits the game; a stream that is still
         // up when it ends that way was connected. The second screen's leave never does: the
         // game is the first screen's too.
-        if matches!(exit, Exit::User) && !second_screen::this_process() {
+        if let Some(section) = settings_after {
+            self.launcher.open_settings_section(section);
+        }
+        if matches!(exit, Exit::User) && settings_after.is_none() && !second_screen::this_process() {
             let app = streaming.app();
             // Quit game confirmed in the stream menu, or the launch's own choice to quit on leaving.
             // moonlight-qt's --quit-after or --no-quit-after on the command line stands for the game's own choice.

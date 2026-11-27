@@ -153,4 +153,9 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Show PC screen", "Bilgisayar ekranını göster"),
     ("Showing PC screen. The game is still starting.", "Bilgisayar ekranı gösteriliyor. Oyun hâlâ başlıyor."),
     ("The game didn’t start on the PC.", "Oyun bilgisayarda başlamadı."),
+    ("Every controller setting in one place: sticks, triggers, motion, vibration and buttons.", "Tüm kumanda ayarları tek yerde: çubuklar, tetikler, hareket, titreşim ve düğmeler."),
+    ("Sticks, triggers, motion, vibration and buttons", "Çubuklar, tetikler, hareket, titreşim ve düğmeler"),
+    ("Controller settings", "Kumanda ayarları"),
+    ("Leave and open controller settings", "Çık ve kumanda ayarlarını aç"),
+    ("Opening controller settings leaves the stream; the game keeps running on the PC.", "Kumanda ayarlarını açmak yayından çıkar; oyun bilgisayarda çalışmaya devam eder."),
 ];

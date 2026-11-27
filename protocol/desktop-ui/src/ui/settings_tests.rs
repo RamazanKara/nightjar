@@ -46,7 +46,7 @@ fn rail_entries(f: &Frames) -> Vec<&str> {
 const RAIL_SIMPLE: [&str; 5] = ["Recommended", "Controls", "Audio", "App", "More settings"];
 /// The list unfolded at the defaults: Debug is listed only on request
 /// (`debug_is_listed_on_request_or_while_a_debug_setting_is_changed`).
-const RAIL_ALL: [&str; 10] = ["Recommended", "Controls", "Audio", "App", "More settings", "Profiles", "Video", "Display & image", "Streaming", "Advanced"];
+const RAIL_ALL: [&str; 11] = ["Recommended", "Controls", "Audio", "App", "More settings", "Profiles", "Video", "Display & image", "Controller", "Streaming", "Advanced"];
 
 /// Simple first: a first visit opens Recommended and lists the four sections most people need;
 /// More settings unfolds Profiles and the sections of detail under them, and folds them again.
@@ -169,12 +169,12 @@ fn a_pcs_settings_list_every_section_without_a_fold() {
     f.l.open_host_settings(id, &f.hosts.list[0]);
     f.settle();
     // Debug by the same rule as Settings (`a_pcs_settings_list_debug_by_the_same_rule`).
-    assert_eq!(rail_entries(&f), ["Video", "Display & image", "Controls", "Audio", "Streaming", "Advanced"]);
+    assert_eq!(rail_entries(&f), ["Video", "Display & image", "Controls", "Controller", "Audio", "Streaming", "Advanced"]);
 }
 
 /// Opens every section's fold, as its "More … settings" row does.
 fn open_folds(f: &mut Frames) {
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     f.settle();
 }
 
@@ -243,7 +243,7 @@ fn the_d_pad_scrolls_each_row_it_reaches_into_view() {
     let mut f = Frames::new(record("PC", true, false), Reach::Online);
     f.size = vec2(1280.0, 600.0);
     f.l.settings = Settings { adaptive_quality: crate::config::QualityMode::Motion, ..Settings::default() };
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     let id = f.hosts.list[0].id;
     for page in [Screen::Settings, Screen::HostSettings(id)] {
         if page == Screen::Settings { f.l.go(page) } else { f.l.open_host_settings(id, &f.hosts.list[0]) }
@@ -356,7 +356,7 @@ fn a_section_opens_from_its_entry_by_mouse_and_by_controller() {
 fn a_sections_fold_counts_its_rows_and_opens_and_closes() {
     let mut f = settings_with(Settings::default());
     let video = SETTINGS_SECTIONS.iter().position(|s| *s == "Video").unwrap();
-    assert_eq!(f.l.settings_view.more, [false; 9]);
+    assert_eq!(f.l.settings_view.more, [false; crate::ui::settings::SECTION_COUNT]);
     assert!(f.l.settings_view.drawn.iter().all(|(_, folded)| !folded), "only main rows: {:?}", f.l.settings_view.drawn);
     assert!(!shows(&f, "Sharper colored text"), "{:?}", f.drawn);
     let more = fold_words(&f).expect("Video has a fold");

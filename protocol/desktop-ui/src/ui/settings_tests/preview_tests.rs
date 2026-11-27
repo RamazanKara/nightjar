@@ -272,7 +272,7 @@ fn settings_preview_screenshots() {
         f.l.settings.vrr = false;
         set(&mut f.l.settings);
         f.l.settings_view.rail_more = true;
-        f.l.settings_view.more = [true; 9];
+        f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
         f.l.settings_view.section = "Display & image";
         f.l.go(Screen::Settings);
         f.settle();

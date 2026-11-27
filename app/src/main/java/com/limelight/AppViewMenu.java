@@ -99,6 +99,7 @@ final class AppViewMenu {
             addGameSettingsAction(sheet, selectedApp);
             addNeuralAction(sheet, selectedApp);
         }
+        addControllerEditorAction(sheet);
         if (selectedApp.app.getRole() != NvApp.Role.REMOTE_MONITOR) {
             sheet.addAction(R.drawable.ic_touch_controls, view.getString(R.string.library_import_controls),
                     view.getString(R.string.library_import_controls_note)).setOnClickListener(v -> {
@@ -235,6 +236,16 @@ final class AppViewMenu {
             sheet.dismiss();
             HostStreamSettings.showGame(view, view.uuidString, view.getIntent().getStringExtra(AppView.NAME_EXTRA), appUuid, appId,
                     app.app.getAppName());
+        });
+    }
+
+    /** Settings' Controller section, the controller editor: its settings hold for every game. */
+    private void addControllerEditorAction(ActionSheet sheet) {
+        sheet.addAction(R.drawable.ic_gamepad, view.getString(R.string.settings_section_controller),
+                view.getString(R.string.controller_editor_summary)).setOnClickListener(v -> {
+            sheet.dismiss();
+            com.limelight.preferences.StreamSettings.open(view,
+                    com.limelight.preferences.StreamSettings.CONTROLLER_SECTION, null);
         });
     }
 

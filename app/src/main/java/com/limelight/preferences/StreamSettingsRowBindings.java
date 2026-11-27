@@ -567,6 +567,11 @@ final class StreamSettingsRowBindings {
             fragment.startActivity(new Intent(fragment.getActivity(), ControllerMappingActivity.class));
             return true;
         });
+        // Controls' Controller row opens the controller editor's section, as its row in the list of sections does.
+        fragment.findPreference("controller_editor").setOnPreferenceClickListener(preference -> {
+            ((StreamSettings) fragment.getActivity()).nav.activateSection(StreamSettings.CONTROLLER_SECTION, true);
+            return true;
+        });
         fragment.findPreference("controller_test").setOnPreferenceClickListener(preference -> {
             fragment.startActivity(new Intent(fragment.getActivity(), ControllerTestActivity.class));
             return true;

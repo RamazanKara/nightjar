@@ -131,6 +131,8 @@ pub fn offers(a: &Available) -> Vec<Offer> {
     if a.usb {
         offers.push(Offer::action("usb_devices"));
     }
+    // Settings' Controller section, the controller editor; opening it leaves the stream.
+    offers.push(Offer::action("controller_settings"));
     if a.guests {
         offers.push(Offer::action("guests"));
     }

@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">Dein Aufweck-Relay (%1$s) ist nicht im selben Netzwerk wie %2$s und konnte ihn daher nicht wecken.</string>
     <string name="wake_relay_network">Nightjar konnte in diesem Netzwerk keine Verbindung öffnen. Prüfe deine Internetverbindung und versuche es erneut.</string>
     <string name="wake_relay_none">%1$s kann noch nicht von außerhalb deines Heimnetzes geweckt werden. Richte dafür Nightjar für den Desktop auf einem ständig eingeschalteten Computer zu Hause als Aufweck-Relay ein.</string>
+    <string name="settings_section_controller">Controller</string>
+    <string name="controller_editor_summary">Sticks, Trigger, Bewegung, Vibration und Tasten</string>
+    <string name="controller_settings_menu">Controller-Einstellungen</string>
+    <string name="controller_settings_stream_leaves">Zum Öffnen der Controller-Einstellungen wird der Stream verlassen; das Spiel läuft auf dem PC weiter.</string>
 </resources>

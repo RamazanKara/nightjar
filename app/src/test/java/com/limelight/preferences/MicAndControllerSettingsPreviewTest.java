@@ -70,7 +70,7 @@ public class MicAndControllerSettingsPreviewTest {
         int width = Math.round(screen.getResources().getConfiguration().screenWidthDp * screen.getResources().getDisplayMetrics().density);
         int height = Math.round(screen.getResources().getConfiguration().screenHeightDp * screen.getResources().getDisplayMetrics().density);
 
-        StreamSettings.SettingsFragment input = SettingsStructureTest.open(screen, "input");
+        StreamSettings.SettingsFragment input = SettingsStructureTest.open(screen, StreamSettings.CONTROLLER_SECTION);
         scrollTo(screen, input, PreferenceConfiguration.OSC_STICK_MODE_PREF_STRING, width, height);
         write(screen.getWindow().getDecorView(), width, height, new File(directory, name + "-1-input.png"));
 

@@ -258,7 +258,7 @@ fn dialogs_put_the_primary_action_right_and_cancel_left_and_escape_cancels() {
 fn settings_scroll_beside_their_column_on_a_wide_window() {
     let mut f = Frames::new(record("Desk", true, true), Reach::Online);
     f.size = vec2(1920.0, 640.0);
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     video_settings(&mut f);
     let top = |f: &Frames| f.placed.iter().find(|(t, ..)| t == "Video codec").map(|p| p.1.top()).expect("the Video codec row");
     let before = top(&f);

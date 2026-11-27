@@ -140,11 +140,11 @@ public class SettingsStructureTest {
             PreferenceScreen root = ((StreamSettings.RootFragment) shown(screen)).getPreferenceScreen();
             // Debug only on request (Show debug settings) or while one of its settings is changed.
             assertEquals(Arrays.asList("simple", "input", "audio", "app", "more_sections", "stream_presets", "stream_profiles", "video", "display",
-                "streaming", "advanced"), keys(root));
+                "controller", "streaming", "advanced"), keys(root));
             prefs().edit().putBoolean(SettingRules.SHOW_DEBUG, true).commit();
             settle(screen);
             assertEquals(Arrays.asList("simple", "input", "audio", "app", "more_sections", "stream_presets", "stream_profiles", "video", "display",
-                "streaming", "advanced", "debug"), keys(root));
+                "controller", "streaming", "advanced", "debug"), keys(root));
             assertEquals(screen.getString(R.string.settings_section_display), root.findPreference("display").getTitle());
             assertNotNull(root.findPreference("display").getSummary());
             assertNotNull(root.findPreference("audio").getSummary());
@@ -203,33 +203,43 @@ public class SettingsStructureTest {
     }
 
     @Test
-    public void usbControllersAreControlsAndColourIsDisplay() {
+    public void controllerRowsAreTheControllerSectionAndColourIsDisplay() {
         shadowOf(RuntimeEnvironment.getApplication().getPackageManager())
                 .setSystemFeature(PackageManager.FEATURE_USB_HOST, true);
         touchscreen();
-        try (ActivityController<StreamSettings> controller = Robolectric.buildActivity(StreamSettings.class).setup()) {
-            StreamSettings screen = controller.get();
+        try (ActivityController<StreamSettings> activity = Robolectric.buildActivity(StreamSettings.class).setup()) {
+            StreamSettings screen = activity.get();
             PreferenceScreen controls = open(screen, "input").getPreferenceScreen();
             // The main rows in an untitled first group, then the More row (open here), then the groups behind it.
             assertEquals(Arrays.asList("category_input_main", "category_more_input"), keys(controls).subList(0, 2));
-            assertEquals(Arrays.asList("touch_mode", "checkbox_absolute_mouse_mode",
-                    StreamSettings.CONTROLLERS_KEY, "controller_button_mapping", "controller_test",
+            assertEquals(Arrays.asList("touch_mode", "checkbox_absolute_mouse_mode", "controller_editor",
                     "checkbox_show_onscreen_controls", "checkbox_keyboard_follows_text_fields", "checkbox_clipboard_sync"),
                     keys((PreferenceGroup) controls.getPreference(0)));
-            assertEquals(Arrays.asList("category_input_main", "category_more_input", "category_gamepad_settings",
-                    "category_stream_menu", "category_input_settings", "category_keyboard_shortcuts",
-                    "category_onscreen_controls", "category_usb_controllers"), Arrays.asList(StreamSettings.SECTIONS.get("input")));
-            // How the menu opens and what it holds, in one place.
-            PreferenceGroup menu = (PreferenceGroup) open(screen, "input").findPreference("category_stream_menu");
+            assertEquals(Arrays.asList("category_input_main", "category_more_input", "category_input_settings",
+                    "category_keyboard_shortcuts"), Arrays.asList(StreamSettings.SECTIONS.get("input")));
+            // The controller editor: every controller setting in one place, its main rows first.
+            PreferenceScreen controller = open(screen, StreamSettings.CONTROLLER_SECTION).getPreferenceScreen();
+            assertEquals(Arrays.asList("category_controller_main", "category_more_controller"), keys(controller).subList(0, 2));
+            // Motion shows from Android 12, where controllers report it; this test runs an older SDK.
+            assertEquals(Arrays.asList(StreamSettings.CONTROLLERS_KEY, "controller_button_mapping", "controller_test",
+                    "seekbar_deadzone", "seekbar_trigger_deadzone", "list_rumble_feel"),
+                    keys((PreferenceGroup) controller.getPreference(0)));
+            assertEquals(Arrays.asList("category_controller_main", "category_more_controller", "category_gamepad_settings",
+                    "category_stream_menu", "category_onscreen_controls", "category_usb_controllers"),
+                    Arrays.asList(StreamSettings.SECTIONS.get(StreamSettings.CONTROLLER_SECTION)));
+            // How the menu opens and what it holds, in one place; the keyboard's shortcuts sit with the keyboard.
+            PreferenceGroup menu = (PreferenceGroup) open(screen, "controller").findPreference("category_stream_menu");
             assertEquals(Arrays.asList("list_guide_menu_hold", "back_button",
                     "checkbox_floating_menu_button", "list_stream_menu_button_y", "list_stream_menu_button_x",
-                    "list_stream_menu_button_lb", "list_stream_menu_button_rb", "keyboard_shortcuts_editor"), keys(menu));
-            PreferenceGroup usb = (PreferenceGroup) open(screen, "input").findPreference("category_usb_controllers");
+                    "list_stream_menu_button_lb", "list_stream_menu_button_rb"), keys(menu));
+            PreferenceGroup keyboard = (PreferenceGroup) open(screen, "input").findPreference("category_keyboard_shortcuts");
+            assertEquals("keyboard_shortcuts_editor", keys(keyboard).get(keys(keyboard).size() - 1));
+            PreferenceGroup usb = (PreferenceGroup) open(screen, "controller").findPreference("category_usb_controllers");
             assertEquals(Arrays.asList("checkbox_usb_driver", "checkbox_usb_bind_all", "checkbox_usb_dualsense",
                     "checkbox_usb_switch_pro", "checkbox_usb_forwarding"), keys(usb));
             // DualSense haptics shows under the DualSense switch while that is on.
             prefs().edit().putBoolean("checkbox_usb_dualsense", true).commit();
-            usb = (PreferenceGroup) open(screen, "input").findPreference("category_usb_controllers");
+            usb = (PreferenceGroup) open(screen, "controller").findPreference("category_usb_controllers");
             assertEquals(Arrays.asList("checkbox_usb_driver", "checkbox_usb_bind_all", "checkbox_usb_dualsense",
                     "checkbox_usb_dualsense_haptics", "checkbox_usb_switch_pro", "checkbox_usb_forwarding"), keys(usb));
             // Sharper colored text is Video's one row for 4:4:4, native or packed.
@@ -377,7 +387,7 @@ public class SettingsStructureTest {
                 .setSystemFeature(PackageManager.FEATURE_USB_HOST, true);
         touchscreen();
         try (ActivityController<StreamSettings> controller = Robolectric.buildActivity(StreamSettings.class).setup()) {
-            PreferenceScreen controls = open(controller.get(), "input").getPreferenceScreen();
+            PreferenceScreen controls = open(controller.get(), StreamSettings.CONTROLLER_SECTION).getPreferenceScreen();
             SwitchPreference forwarding = (SwitchPreference) controls.findPreference("checkbox_usb_forwarding");
             assertFalse(forwarding.isChecked());
             assertEquals("Forward USB devices", String.valueOf(forwarding.getTitle()));

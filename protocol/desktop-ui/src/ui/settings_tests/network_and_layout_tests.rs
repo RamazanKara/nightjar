@@ -54,7 +54,7 @@ fn settings_screenshots() {
             // Every section: its main rows, then its fold open, top and end.
             for (at, section) in SETTINGS_SECTIONS.iter().enumerate() {
                 f.l.settings_view.section = section;
-                f.l.settings_view.more = [false; 9];
+                f.l.settings_view.more = [false; crate::ui::settings::SECTION_COUNT];
                 f.l.settings_view.to_top = true;
                 shoot(&mut f, &format!("settings-section-{at}"));
                 f.l.settings_view.more[at] = true;
@@ -63,7 +63,7 @@ fn settings_screenshots() {
                 f.scroll_to_end();
                 shoot(&mut f, &format!("settings-section-{at}-more-end"));
             }
-            f.l.settings_view.more = [true; 9];
+            f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
             // Dual screen mode on: Second screen resolution can be changed.
             f.l.settings.dual_screen = true;
             f.l.settings_view.section = "Streaming";
@@ -109,7 +109,7 @@ fn settings_screenshots() {
             // The microphone's rows, and Frame pacing's PC's frame times (V-Sync's row gives way).
             f.l.settings.microphone = true;
             f.l.settings.host_frame_times = true;
-            f.l.settings_view.more = [true; 9];
+            f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
             f.l.settings_view.section = "Audio";
             f.l.settings_view.to_top = true;
             shoot(&mut f, "settings-microphone");
@@ -142,7 +142,7 @@ fn settings_screenshots() {
                     f.hosts.list[0].record.pace = Some(crate::config::PaceCalibration { pace_mbps: 180, client_link_mbps: 1000, host_link_mbps: 2500, wifi: false, ssid: None, qualified: true });
                 }
                 f.l.go(Screen::Settings);
-                f.l.settings_view.more = [true; 9];
+                f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
                 f.l.settings_view.section = "Streaming";
                 f.l.settings_view.to_top = true;
                 shoot(&mut f, &format!("settings-connection-test-{count}"));

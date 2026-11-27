@@ -48,7 +48,7 @@ public class StreamMenuTest {
         assertEquals(Arrays.asList(StreamMenu.Section.QUICK, StreamMenu.Section.SESSION, StreamMenu.Section.INPUT,
                 StreamMenu.Section.DISPLAY, StreamMenu.Section.QUALITY, StreamMenu.Section.HOST), new ArrayList<>(menu.keySet()));
         assertEquals(Arrays.asList(KEYBOARD, PC_KEYBOARD, OVERLAY), menu.get(StreamMenu.Section.QUICK));
-        assertEquals(Arrays.asList(TOUCH_MODE, ONSCREEN_CONTROLS, KEYBOARD_KEYS), menu.get(StreamMenu.Section.INPUT));
+        assertEquals(Arrays.asList(TOUCH_MODE, ONSCREEN_CONTROLS, KEYBOARD_KEYS, CONTROLLER_SETTINGS), menu.get(StreamMenu.Section.INPUT));
         assertEquals(Arrays.asList(ZOOM, OVERLAY_PAGE), menu.get(StreamMenu.Section.DISPLAY));
         // Resolution and frame rate (automatic quality) are Quality, not "Bitrate".
         assertEquals(Arrays.asList(BITRATE, AUTOMATIC_QUALITY, AUTOMATIC_BITRATE), menu.get(StreamMenu.Section.QUALITY));
@@ -366,7 +366,7 @@ public class StreamMenuTest {
         StreamMenu.Options options = options("rubylight-serverinfo.xml", NvApp.Role.STREAM);
         assertFalse("No controller, no switch", items(StreamMenu.mainPage(options)).contains(CONTROLLER_MOUSE));
         options.controllerMouseAvailable = true;
-        assertEquals(Arrays.asList(TOUCH_MODE, CONTROLLER_MOUSE, ONSCREEN_CONTROLS, KEYBOARD_KEYS),
+        assertEquals(Arrays.asList(TOUCH_MODE, CONTROLLER_MOUSE, ONSCREEN_CONTROLS, KEYBOARD_KEYS, CONTROLLER_SETTINGS),
                 sections(StreamMenu.mainPage(options)).get(StreamMenu.Section.INPUT));
         assertEquals(Boolean.FALSE, entry(StreamMenu.mainPage(options), CONTROLLER_MOUSE).checked);
         options.controllerMouseOn = true;
@@ -387,7 +387,7 @@ public class StreamMenuTest {
         options.pictureInPicture = true;
         options.externalDisplays = true;
         Map<StreamMenu.Section, List<StreamMenu.Item>> menu = sections(StreamMenu.mainPage(options));
-        assertEquals(Arrays.asList(TOUCH_MODE, MOUSE_CURSOR, ONSCREEN_CONTROLS, CONTROLS_LAYOUT, GAME_CONTROLS, KEYBOARD_KEYS),
+        assertEquals(Arrays.asList(TOUCH_MODE, MOUSE_CURSOR, ONSCREEN_CONTROLS, CONTROLS_LAYOUT, GAME_CONTROLS, KEYBOARD_KEYS, CONTROLLER_SETTINGS),
                 menu.get(StreamMenu.Section.INPUT));
         assertEquals(Arrays.asList(VIDEO_SCALING, ZOOM, ZOOM_RESET, OVERLAY_PAGE, PICTURE_IN_PICTURE, VIDEO_OUTPUT),
                 menu.get(StreamMenu.Section.DISPLAY));

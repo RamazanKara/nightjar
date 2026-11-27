@@ -76,7 +76,7 @@ public class SettingsKeysTest {
             StreamSettings.AUTOMATIC_BITRATE_KEY,
             "back_button",
             "more_video", "more_display", "more_input", "more_audio", "more_streaming", "more_app", "more_advanced",
-            "more_debug"));
+            "more_debug", "more_controller", "controller_editor"));
     // Stored settings that a picker or a dialog writes without a row of their own.
     private static final Set<String> WRITTEN_BY_PICKERS = new HashSet<>(Arrays.asList(
             "checkbox_unlock_fps",

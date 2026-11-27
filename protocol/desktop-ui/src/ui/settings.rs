@@ -17,7 +17,9 @@ use nightjar_policy::stream_menu::{Hotkey, NO_TILE};
 
 /// The settings sections in the order Android lists them (App only on the main settings). Recommended is
 /// the simple layer (SimpleProfile): three plain choices over the settings the other sections hold.
-pub(super) const SETTINGS_SECTIONS: [&str; 9] = [en("Recommended"), en("Video"), en("Display & image"), en("Controls"), en("Audio"), en("Streaming"), en("App"), en("Advanced"), en("Debug")];
+pub(super) const SETTINGS_SECTIONS: [&str; SECTION_COUNT] = [en("Recommended"), en("Video"), en("Display & image"), en("Controls"), en("Controller"), en("Audio"), en("Streaming"), en("App"), en("Advanced"), en("Debug")];
+/// How many sections there are; Controller is the controller editor, every controller setting in one place.
+pub(super) const SECTION_COUNT: usize = 10;
 
 /// The sections the list always shows, simple first; "More settings" unfolds Profiles and the
 /// other sections under them, as Android's overview does (`StreamSettings.RAIL_FOLDED`). A PC's,
@@ -49,7 +51,7 @@ pub(super) fn debug_listed(s: &Settings, layer: Option<&Overrides>) -> bool {
 /// Bitrate, the controller mouse's options) share their keys or are listed where they show. Action
 /// rows (a page, a test) store nothing and are not listed. A test keeps this equal to what the
 /// page draws.
-pub(super) const SECTION_KEYS: [&[&[&str]]; 9] = [
+pub(super) const SECTION_KEYS: [&[&[&str]]; SECTION_COUNT] = [
     &[&["simple_smoothness"], &["simple_picture"], &["simple_hdr"]],
     &[&["width", "height", "native_scale"], &["fps"], &["bitrate_kbps"], &["lower_bitrate"], &["codec"], &["hdr"], &["hdr_format"],
         &["prefer_yuv444", "experimental_packed_444"], &["sdr_10bit"], &["frame_warp"], &["adaptive_quality"], &["quality_min_short_edge"], &["quality_min_fps"],
@@ -58,12 +60,14 @@ pub(super) const SECTION_KEYS: [&[&[&str]]; 9] = [
         &["frame_pacing", "drop_late_frames", "host_frame_times"], &["vsync", "fractional_vsync"],
         &["upscaling"], &["upscale_sharpness"], &["align_video_top"], &["full_range"],
         &["host_display", "virtual_display"], &["virtual_display_scale"], &["virtual_display_dpi"]],
-    &[&["mouse_mode"], &["controllers", "multi_controller"], &["keyboard_follows_text_fields"], &["clipboard_sync"],
-        &["swap_face_buttons"], &["gamepad_quit_combo"], &["deadzone"], &["trigger_deadzone"], &["controller_motion"], &["disable_rumble", "rumble_feel"],
+    &[&["mouse_mode"], &["keyboard_follows_text_fields"], &["clipboard_sync"],
+        &["mouse_speed"], &["mouse_nav_buttons"], &["native_touchpad"],
+        &["capture_system_keys", "system_keys_fullscreen_only"], &["right_alt_as_meta"]],
+    // Controller, the controller editor: its main rows, then Controllers, Stream menu and USB.
+    &[&["controllers", "multi_controller"], &["deadzone"], &["trigger_deadzone"], &["controller_motion"], &["disable_rumble", "rumble_feel"],
+        &["swap_face_buttons"], &["gamepad_quit_combo"],
         &["controller_mouse"], &["analog_scrolling"], &["mouse_fixed_step"], &["gamepad_touchpad_as_mouse"], &["background_controllers"],
         &["guide_hold_ms"], &["back_opens_menu", "back_as_guide"], &["stream_menu_buttons"],
-        &["mouse_speed"], &["mouse_nav_buttons"], &["native_touchpad"],
-        &["capture_system_keys", "system_keys_fullscreen_only"], &["right_alt_as_meta"],
         &["controller_audio"], &["usb_forwarding"]],
     &[&["audio"], &["play_audio_on_host"], &["microphone"], &["mic_echo_cancel"], &["mic_noise_suppression"], &["mic_auto_gain"], &["mic_gain"],
         &["mute_audio"], &["audio_passthrough"]],
@@ -114,6 +118,7 @@ const TEST_PC_W: f32 = 150.0;
 
 mod advanced_sections;
 mod choices;
+mod controller_section;
 mod controls_sections;
 mod rows;
 mod view;
@@ -192,6 +197,8 @@ pub(super) struct SectionsCtx<'a, 'h> {
     pub(super) open_controllers: Option<bool>,
     pub(super) open_help: bool,
     pub(super) open_page: Option<Screen>,
+    /// A section a row opens on this page: Controls' Controller row opens the controller editor.
+    pub(super) open_section: Option<&'static str>,
     pub(super) probe_device: usize,
     pub(super) gpu_mode: bool,
     pub(super) ten_bit: bool,
@@ -539,7 +546,7 @@ impl Launcher {
             section: "",
             group: "",
             heading: None,
-            found: [0; 9],
+            found: [0; SECTION_COUNT],
             shown: true,
             more: self.settings_view.more,
             mains: 0,
@@ -591,6 +598,7 @@ impl Launcher {
         // latency benchmark.
         let (mut open_controllers, mut open_help) = (None, false);
         let mut open_page: Option<Screen> = None;
+        let mut open_section: Option<&'static str> = None;
         {
             if searching {
                 ui.label(RichText::new(trf("Results for “{}”", &[&self.settings_view.query.trim()])).font(semibold(text::SECTION)).color(PAPER));
@@ -636,6 +644,7 @@ impl Launcher {
                 open_controllers,
                 open_help,
                 open_page,
+                open_section,
                 probe_device,
                 gpu_mode,
                 ten_bit,
@@ -657,6 +666,7 @@ impl Launcher {
             open_controllers = ctx.open_controllers;
             open_help = ctx.open_help;
             open_page = ctx.open_page;
+            open_section = ctx.open_section;
             self.hdr_display = ctx.hdr_display;
             self.settings_view.hdr_probed = ctx.hdr_probed;
             rows.finish(ui);
@@ -720,6 +730,18 @@ impl Launcher {
             commands.push(Command::SaveSettings);
             self.open(page);
         }
+        if let Some(section) = open_section {
+            // As its entry in the list beside the rows would, focus included.
+            self.settings_view.open(section);
+            self.settings_view.focus_rows = true;
+        }
+    }
+
+    /// Settings at one of its sections with the focus on its rows: a game's page opens the controller editor so.
+    pub fn open_settings_section(&mut self, section: &'static str) {
+        self.open_settings();
+        self.settings_view.open(section);
+        self.settings_view.focus_rows = true;
     }
 }
 

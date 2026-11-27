@@ -31,7 +31,8 @@ final class SettingsRail implements ViewTreeObserver.OnPreDrawListener {
             case "simple": return R.drawable.ic_star;
             case "video": return R.drawable.ic_video;
             case "display": return R.drawable.ic_monitor;
-            case "input": return R.drawable.ic_gamepad;
+            case "input": return R.drawable.ic_keyboard;
+            case StreamSettings.CONTROLLER_SECTION: return R.drawable.ic_gamepad;
             case "audio": return R.drawable.ic_speaker;
             case "streaming": return R.drawable.ic_network;
             case "app": return R.drawable.ic_app;

@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">Ретранслятор пробудження (%1$s) не в тій самій мережі, що %2$s, тому не зміг його розбудити.</string>
     <string name="wake_relay_network">Nightjar не вдалося відкрити з’єднання в цій мережі. Перевірте підключення до інтернету й спробуйте ще раз.</string>
     <string name="wake_relay_none">%1$s поки не можна розбудити з-поза домашньої мережі. Щоб будити його віддалено, налаштуйте Nightjar для комп’ютера на постійно увімкненому комп’ютері вдома як ретранслятор пробудження.</string>
+    <string name="settings_section_controller">Контролер</string>
+    <string name="controller_editor_summary">Стіки, курки, рух, вібрація та кнопки</string>
+    <string name="controller_settings_menu">Налаштування контролера</string>
+    <string name="controller_settings_stream_leaves">Відкриття налаштувань контролера закриває трансляцію; гра працює далі на ПК.</string>
 </resources>

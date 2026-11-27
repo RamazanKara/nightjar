@@ -187,7 +187,7 @@ public class SettingsRailTest {
         PreferenceManager.getDefaultSharedPreferences(RuntimeEnvironment.getApplication()).edit().putBoolean(SettingRules.SHOW_DEBUG, true).commit();
         StreamSettings screen = open(Motion.FULL);
         ListView list = sections(screen);
-        for (String key : new String[] {"simple", "input", "stream_profiles", "video", "display", "audio", "streaming", "app", "advanced", "debug"}) {
+        for (String key : new String[] {"simple", "input", "stream_profiles", "video", "display", "controller", "audio", "streaming", "app", "advanced", "debug"}) {
             reveal(screen, key);
             View row = list.getChildAt(StreamSettings.RootFragment.positionOf(list, key) - list.getFirstVisiblePosition());
             assertNotNull(key, row);

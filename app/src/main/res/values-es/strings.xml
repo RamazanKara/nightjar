@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">Tu relé de activación (%1$s) no está en la misma red que %2$s, así que no pudo activarlo.</string>
     <string name="wake_relay_network">Nightjar no pudo abrir una conexión en esta red. Comprueba tu conexión a internet y vuelve a intentarlo.</string>
     <string name="wake_relay_none">Aún no se puede activar %1$s desde fuera de tu red doméstica. Para activarlo a distancia, configura Nightjar para escritorio en un ordenador de casa siempre encendido como relé de activación.</string>
+    <string name="settings_section_controller">Mando</string>
+    <string name="controller_editor_summary">Sticks, gatillos, movimiento, vibración y botones</string>
+    <string name="controller_settings_menu">Ajustes del mando</string>
+    <string name="controller_settings_stream_leaves">Abrir los ajustes del mando sale de la transmisión; el juego sigue en el PC.</string>
 </resources>

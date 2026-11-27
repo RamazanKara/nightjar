@@ -105,6 +105,8 @@ enum RowAct {
         on: bool,
         accepted: bool,
     },
+    /// Settings' Controller section, the controller editor every game shares.
+    ControllerEditor,
     Nothing,
 }
 

@@ -403,6 +403,19 @@ impl Host<'_> {
                     nightjar_desktop_ui::stream_overlay_widgets::usb_show_refusal(ui, why);
                 }
             }
+            // The controller editor is Settings' Controller section, which the launcher shows: the first choice
+            // says that the stream ends and the game keeps running, the second leaves for it.
+            "controller_settings" => {
+                if s.settings_asked {
+                    menu_style::note(ui, tr("Opening controller settings leaves the stream; the game keeps running on the PC."));
+                    if menu_style::action(ui, Icon::Controller, tr("Leave and open controller settings"), None).clicked() {
+                        s.settings_after = Some(strings::en("Controller"));
+                        s.exit = Some(Exit::User);
+                    }
+                } else if menu_style::action(ui, Icon::Controller, tr("Controller settings"), None).clicked() {
+                    s.settings_asked = true;
+                }
+            }
             // The page is theirs alone: who waits to join and the guests show without a fold to open.
             "guests" => show_guests_section(ui, s),
             "export_statistics" => if menu_style::action(ui, Icon::Download, tr("Export statistics (last hour)"), None).clicked() { s.export_statistics = true; },

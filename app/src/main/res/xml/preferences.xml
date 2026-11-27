@@ -293,17 +293,9 @@
         <!-- Captured or Desktop pointer: the switch checkbox_absolute_mouse_mode, drawn as the two-value choice. -->
         <Preference android:key="checkbox_absolute_mouse_mode" android:title="@string/title_checkbox_absolute_mouse_mode"
             android:dialogMessage="@string/summary_checkbox_absolute_mouse_mode" android:persistent="false" />
-        <!-- Off, One player or A player each: writes checkbox_send_controllers and checkbox_multi_controller (ControllersChoice). -->
-        <Preference android:key="controllers" android:title="@string/title_controllers"
-            android:dialogMessage="@string/summary_controllers" android:persistent="false" />
-        <Preference
-            android:key="controller_button_mapping"
-            android:title="@string/controller_mapping_title"
-            android:summary="@string/controller_mapping_summary" />
-        <Preference
-            android:key="controller_test"
-            android:title="@string/controller_test_title"
-            android:summary="@string/controller_test_summary" />
+        <!-- Opens the Controller section, every controller setting in one place (StreamSettings.SECTIONS "controller"). -->
+        <Preference android:key="controller_editor" android:title="@string/settings_section_controller"
+            android:summary="@string/controller_editor_summary" android:persistent="false" />
         <com.limelight.preferences.MaterialSwitchPreference
             android:key="checkbox_show_onscreen_controls"
             android:title="@string/title_checkbox_show_onscreen_controls"
@@ -323,151 +315,6 @@
     </PreferenceCategory>
     <PreferenceCategory android:key="category_more_input">
         <Preference android:key="more_input" android:title="@string/settings_more" android:persistent="false" />
-    </PreferenceCategory>
-    <PreferenceCategory android:key="category_gamepad_settings" android:title="@string/category_gamepad_settings">
-        <com.limelight.preferences.MaterialSwitchPreference
-            android:key="checkbox_flip_face_buttons"
-            android:title="@string/title_checkbox_flip_face_buttons"
-            android:dialogMessage="@string/summary_checkbox_flip_face_buttons"
-            android:defaultValue="false" />
-        <com.limelight.preferences.MaterialListPreference
-            android:key="list_gamepad_quit_combo"
-            android:title="@string/title_list_gamepad_quit_combo"
-            android:dialogMessage="@string/summary_list_gamepad_quit_combo"
-            android:entries="@array/gamepad_quit_combo_names"
-            android:entryValues="@array/gamepad_quit_combo_values"
-            android:defaultValue="off" />
-        <com.limelight.preferences.SeekBarPreference
-            android:key="seekbar_deadzone"
-            android:defaultValue="7"
-            android:max="20"
-            seekbar:min="-20"
-            android:dialogMessage="@string/summary_seekbar_deadzone"
-            android:text="@string/suffix_seekbar_deadzone"
-            android:title="@string/title_seekbar_deadzone"/>
-        <com.limelight.preferences.SeekBarPreference
-            android:key="seekbar_trigger_deadzone"
-            android:defaultValue="2"
-            android:max="30"
-            seekbar:min="0"
-            android:dialogMessage="@string/summary_seekbar_trigger_deadzone"
-            android:text="@string/suffix_seekbar_deadzone"
-            android:title="@string/title_seekbar_trigger_deadzone"/>
-        <com.limelight.preferences.MaterialSwitchPreference
-            android:key="checkbox_gamepad_motion_sensors"
-            android:title="@string/title_checkbox_gamepad_motion_sensors"
-            android:dialogMessage="@string/summary_checkbox_gamepad_motion_sensors"
-            android:defaultValue="true" />
-        <com.limelight.preferences.MaterialSwitchPreference
-            android:key="checkbox_gamepad_motion_fallback"
-            android:title="@string/title_checkbox_gamepad_motion_fallback"
-            android:dialogMessage="@string/summary_checkbox_gamepad_motion_fallback"
-            android:defaultValue="false" />
-        <!-- Opens each connected controller's gyroscope mapping (GyroProfileEditor); stores nothing here. -->
-        <Preference
-            android:key="gyro_mapping_profiles"
-            android:title="@string/title_gyro_mapping"
-            android:summary="@string/summary_gyro_mapping"
-            android:persistent="false" />
-        <com.limelight.preferences.MaterialListPreference
-            android:key="list_rumble_feel"
-            android:title="@string/title_list_rumble_feel"
-            android:dialogMessage="@string/summary_list_rumble_feel"
-            android:entries="@array/rumble_feel_names"
-            android:entryValues="@array/rumble_feel_values"
-            android:defaultValue="standard" />
-        <com.limelight.preferences.MaterialSwitchPreference
-            android:key="checkbox_vibrate_fallback"
-            android:title="@string/title_checkbox_vibrate_fallback"
-            android:dialogMessage="@string/summary_checkbox_vibrate_fallback"
-            android:defaultValue="false" />
-        <com.limelight.preferences.SeekBarPreference
-            android:key="seekbar_vibrate_fallback_strength"
-            android:defaultValue="100"
-            android:max="200"
-            android:dialogMessage="@string/summary_seekbar_vibrate_fallback_strength"
-            android:text="@string/suffix_seekbar_vibrate_fallback_strength"
-            android:title="@string/title_seekbar_vibrate_fallback_strength"/>
-        <com.limelight.preferences.MaterialSwitchPreference
-            android:key="checkbox_mouse_emulation"
-            android:title="@string/title_checkbox_mouse_emulation"
-            android:dialogMessage="@string/summary_checkbox_mouse_emulation"
-            android:defaultValue="true" />
-        <com.limelight.preferences.MaterialListPreference
-            android:key="analog_scrolling"
-            android:title="@string/title_analog_scrolling"
-            android:dialogMessage="@string/summary_analog_scrolling"
-            android:entries="@array/analog_scrolling_names"
-            android:entryValues="@array/analog_scrolling_values"
-            android:defaultValue="right" />
-        <com.limelight.preferences.MaterialSwitchPreference
-            android:key="checkbox_mouse_emulation_fixed_step"
-            android:title="@string/title_checkbox_mouse_emulation_fixed_step"
-            android:dialogMessage="@string/summary_checkbox_mouse_emulation_fixed_step"
-            android:defaultValue="false" />
-        <com.limelight.preferences.SeekBarPreference
-            android:key="seekbar_mouse_emulation_sensitivity"
-            android:title="@string/title_seekbar_mouse_emulation_sensitivity"
-            android:dialogMessage="@string/summary_seekbar_mouse_emulation_sensitivity"
-            seekbar:min="25"
-            seekbar:step="5"
-            seekbar:keyStep="5"
-            android:max="200"
-            android:defaultValue="100"
-            android:text="%" />
-        <com.limelight.preferences.MaterialSwitchPreference
-            android:key="checkbox_gamepad_touchpad_as_mouse"
-            android:title="@string/title_checkbox_gamepad_touchpad_as_mouse"
-            android:dialogMessage="@string/summary_checkbox_gamepad_touchpad_as_mouse"
-            android:defaultValue="false" />
-    </PreferenceCategory>
-    <PreferenceCategory android:key="category_stream_menu" android:title="@string/stream_menu_settings">
-        <com.limelight.preferences.MaterialListPreference
-            android:key="list_guide_menu_hold"
-            android:title="@string/title_list_guide_menu_hold"
-            android:dialogMessage="@string/summary_list_guide_menu_hold"
-            android:entries="@array/guide_menu_hold_names"
-            android:entryValues="@array/guide_menu_hold_values"
-            android:defaultValue="1000" />
-        <!-- Back, Stream menu or Guide: writes checkbox_back_opens_menu and checkbox_back_as_guide (SwitchPairChoice). -->
-        <Preference android:key="back_button" android:title="@string/title_back_button"
-            android:dialogMessage="@string/summary_back_button" android:persistent="false" />
-        <com.limelight.preferences.MaterialSwitchPreference
-            android:key="checkbox_floating_menu_button"
-            android:title="@string/title_floating_menu_button"
-            android:dialogMessage="@string/summary_floating_menu_button"
-            android:defaultValue="false" />
-        <com.limelight.preferences.MaterialListPreference
-            android:key="list_stream_menu_button_y"
-            android:title="@string/title_stream_menu_button_y"
-            android:dialogMessage="@string/summary_stream_menu_button"
-            android:entries="@array/stream_menu_button_names"
-            android:entryValues="@array/stream_menu_button_values"
-            android:defaultValue="default" />
-        <com.limelight.preferences.MaterialListPreference
-            android:key="list_stream_menu_button_x"
-            android:title="@string/title_stream_menu_button_x"
-            android:dialogMessage="@string/summary_stream_menu_button"
-            android:entries="@array/stream_menu_button_names"
-            android:entryValues="@array/stream_menu_button_values"
-            android:defaultValue="default" />
-        <com.limelight.preferences.MaterialListPreference
-            android:key="list_stream_menu_button_lb"
-            android:title="@string/title_stream_menu_button_lb"
-            android:dialogMessage="@string/summary_stream_menu_button"
-            android:entries="@array/stream_menu_button_names"
-            android:entryValues="@array/stream_menu_button_values"
-            android:defaultValue="default" />
-        <com.limelight.preferences.MaterialListPreference
-            android:key="list_stream_menu_button_rb"
-            android:title="@string/title_stream_menu_button_rb"
-            android:dialogMessage="@string/summary_stream_menu_button"
-            android:entries="@array/stream_menu_button_names"
-            android:entryValues="@array/stream_menu_button_values"
-            android:defaultValue="default" />
-        <Preference android:key="keyboard_shortcuts_editor"
-            android:title="@string/keyboard_shortcuts_title"
-            android:summary="@string/keyboard_shortcuts_summary" />
     </PreferenceCategory>
     <PreferenceCategory android:key="category_input_settings" android:title="@string/settings_category_touch_mouse">
         <com.limelight.preferences.SeekBarPreference
@@ -625,6 +472,168 @@
             android:max="100"
             seekbar:step="5"
             android:text="%" />
+        <Preference android:key="keyboard_shortcuts_editor"
+            android:title="@string/keyboard_shortcuts_title"
+            android:summary="@string/keyboard_shortcuts_summary" />
+    </PreferenceCategory>
+    <!-- Controller: the controller editor, every controller setting in one place. -->
+    <PreferenceCategory android:key="category_controller_main">
+        <!-- Off, One player or A player each: writes checkbox_send_controllers and checkbox_multi_controller (ControllersChoice). -->
+        <Preference android:key="controllers" android:title="@string/title_controllers"
+            android:dialogMessage="@string/summary_controllers" android:persistent="false" />
+        <Preference
+            android:key="controller_button_mapping"
+            android:title="@string/controller_mapping_title"
+            android:summary="@string/controller_mapping_summary" />
+        <Preference
+            android:key="controller_test"
+            android:title="@string/controller_test_title"
+            android:summary="@string/controller_test_summary" />
+        <com.limelight.preferences.SeekBarPreference
+            android:key="seekbar_deadzone"
+            android:defaultValue="7"
+            android:max="20"
+            seekbar:min="-20"
+            android:dialogMessage="@string/summary_seekbar_deadzone"
+            android:text="@string/suffix_seekbar_deadzone"
+            android:title="@string/title_seekbar_deadzone"/>
+        <com.limelight.preferences.SeekBarPreference
+            android:key="seekbar_trigger_deadzone"
+            android:defaultValue="2"
+            android:max="30"
+            seekbar:min="0"
+            android:dialogMessage="@string/summary_seekbar_trigger_deadzone"
+            android:text="@string/suffix_seekbar_deadzone"
+            android:title="@string/title_seekbar_trigger_deadzone"/>
+        <com.limelight.preferences.MaterialSwitchPreference
+            android:key="checkbox_gamepad_motion_sensors"
+            android:title="@string/title_checkbox_gamepad_motion_sensors"
+            android:dialogMessage="@string/summary_checkbox_gamepad_motion_sensors"
+            android:defaultValue="true" />
+        <com.limelight.preferences.MaterialListPreference
+            android:key="list_rumble_feel"
+            android:title="@string/title_list_rumble_feel"
+            android:dialogMessage="@string/summary_list_rumble_feel"
+            android:entries="@array/rumble_feel_names"
+            android:entryValues="@array/rumble_feel_values"
+            android:defaultValue="standard" />
+    </PreferenceCategory>
+    <PreferenceCategory android:key="category_more_controller">
+        <Preference android:key="more_controller" android:title="@string/settings_more" android:persistent="false" />
+    </PreferenceCategory>
+    <PreferenceCategory android:key="category_gamepad_settings" android:title="@string/category_gamepad_settings">
+        <com.limelight.preferences.MaterialSwitchPreference
+            android:key="checkbox_flip_face_buttons"
+            android:title="@string/title_checkbox_flip_face_buttons"
+            android:dialogMessage="@string/summary_checkbox_flip_face_buttons"
+            android:defaultValue="false" />
+        <com.limelight.preferences.MaterialListPreference
+            android:key="list_gamepad_quit_combo"
+            android:title="@string/title_list_gamepad_quit_combo"
+            android:dialogMessage="@string/summary_list_gamepad_quit_combo"
+            android:entries="@array/gamepad_quit_combo_names"
+            android:entryValues="@array/gamepad_quit_combo_values"
+            android:defaultValue="off" />
+        <com.limelight.preferences.MaterialSwitchPreference
+            android:key="checkbox_gamepad_motion_fallback"
+            android:title="@string/title_checkbox_gamepad_motion_fallback"
+            android:dialogMessage="@string/summary_checkbox_gamepad_motion_fallback"
+            android:defaultValue="false" />
+        <!-- Opens each connected controller's gyroscope mapping (GyroProfileEditor); stores nothing here. -->
+        <Preference
+            android:key="gyro_mapping_profiles"
+            android:title="@string/title_gyro_mapping"
+            android:summary="@string/summary_gyro_mapping"
+            android:persistent="false" />
+        <com.limelight.preferences.MaterialSwitchPreference
+            android:key="checkbox_vibrate_fallback"
+            android:title="@string/title_checkbox_vibrate_fallback"
+            android:dialogMessage="@string/summary_checkbox_vibrate_fallback"
+            android:defaultValue="false" />
+        <com.limelight.preferences.SeekBarPreference
+            android:key="seekbar_vibrate_fallback_strength"
+            android:defaultValue="100"
+            android:max="200"
+            android:dialogMessage="@string/summary_seekbar_vibrate_fallback_strength"
+            android:text="@string/suffix_seekbar_vibrate_fallback_strength"
+            android:title="@string/title_seekbar_vibrate_fallback_strength"/>
+        <com.limelight.preferences.MaterialSwitchPreference
+            android:key="checkbox_mouse_emulation"
+            android:title="@string/title_checkbox_mouse_emulation"
+            android:dialogMessage="@string/summary_checkbox_mouse_emulation"
+            android:defaultValue="true" />
+        <com.limelight.preferences.MaterialListPreference
+            android:key="analog_scrolling"
+            android:title="@string/title_analog_scrolling"
+            android:dialogMessage="@string/summary_analog_scrolling"
+            android:entries="@array/analog_scrolling_names"
+            android:entryValues="@array/analog_scrolling_values"
+            android:defaultValue="right" />
+        <com.limelight.preferences.MaterialSwitchPreference
+            android:key="checkbox_mouse_emulation_fixed_step"
+            android:title="@string/title_checkbox_mouse_emulation_fixed_step"
+            android:dialogMessage="@string/summary_checkbox_mouse_emulation_fixed_step"
+            android:defaultValue="false" />
+        <com.limelight.preferences.SeekBarPreference
+            android:key="seekbar_mouse_emulation_sensitivity"
+            android:title="@string/title_seekbar_mouse_emulation_sensitivity"
+            android:dialogMessage="@string/summary_seekbar_mouse_emulation_sensitivity"
+            seekbar:min="25"
+            seekbar:step="5"
+            seekbar:keyStep="5"
+            android:max="200"
+            android:defaultValue="100"
+            android:text="%" />
+        <com.limelight.preferences.MaterialSwitchPreference
+            android:key="checkbox_gamepad_touchpad_as_mouse"
+            android:title="@string/title_checkbox_gamepad_touchpad_as_mouse"
+            android:dialogMessage="@string/summary_checkbox_gamepad_touchpad_as_mouse"
+            android:defaultValue="false" />
+    </PreferenceCategory>
+    <PreferenceCategory android:key="category_stream_menu" android:title="@string/stream_menu_settings">
+        <com.limelight.preferences.MaterialListPreference
+            android:key="list_guide_menu_hold"
+            android:title="@string/title_list_guide_menu_hold"
+            android:dialogMessage="@string/summary_list_guide_menu_hold"
+            android:entries="@array/guide_menu_hold_names"
+            android:entryValues="@array/guide_menu_hold_values"
+            android:defaultValue="1000" />
+        <!-- Back, Stream menu or Guide: writes checkbox_back_opens_menu and checkbox_back_as_guide (SwitchPairChoice). -->
+        <Preference android:key="back_button" android:title="@string/title_back_button"
+            android:dialogMessage="@string/summary_back_button" android:persistent="false" />
+        <com.limelight.preferences.MaterialSwitchPreference
+            android:key="checkbox_floating_menu_button"
+            android:title="@string/title_floating_menu_button"
+            android:dialogMessage="@string/summary_floating_menu_button"
+            android:defaultValue="false" />
+        <com.limelight.preferences.MaterialListPreference
+            android:key="list_stream_menu_button_y"
+            android:title="@string/title_stream_menu_button_y"
+            android:dialogMessage="@string/summary_stream_menu_button"
+            android:entries="@array/stream_menu_button_names"
+            android:entryValues="@array/stream_menu_button_values"
+            android:defaultValue="default" />
+        <com.limelight.preferences.MaterialListPreference
+            android:key="list_stream_menu_button_x"
+            android:title="@string/title_stream_menu_button_x"
+            android:dialogMessage="@string/summary_stream_menu_button"
+            android:entries="@array/stream_menu_button_names"
+            android:entryValues="@array/stream_menu_button_values"
+            android:defaultValue="default" />
+        <com.limelight.preferences.MaterialListPreference
+            android:key="list_stream_menu_button_lb"
+            android:title="@string/title_stream_menu_button_lb"
+            android:dialogMessage="@string/summary_stream_menu_button"
+            android:entries="@array/stream_menu_button_names"
+            android:entryValues="@array/stream_menu_button_values"
+            android:defaultValue="default" />
+        <com.limelight.preferences.MaterialListPreference
+            android:key="list_stream_menu_button_rb"
+            android:title="@string/title_stream_menu_button_rb"
+            android:dialogMessage="@string/summary_stream_menu_button"
+            android:entries="@array/stream_menu_button_names"
+            android:entryValues="@array/stream_menu_button_values"
+            android:defaultValue="default" />
     </PreferenceCategory>
     <PreferenceCategory android:key="category_onscreen_controls" android:title="@string/category_on_screen_controls_settings">
         <com.limelight.preferences.MaterialListPreference

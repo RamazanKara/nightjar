@@ -269,7 +269,7 @@ public class DemoModeTest {
         try {
             StreamSettings screen = controller.get();
             // Robolectric's device has neither an Adreno GPU nor USB host support: the release checks hide both rows.
-            for (String[] row : new String[][] {{"input", "category_usb_controllers"}, {"advanced", "gpu_driver"}}) {
+            for (String[] row : new String[][] {{"controller", "category_usb_controllers"}, {"advanced", "gpu_driver"}}) {
                 ReflectionHelpers.callInstanceMethod(screen, "showSection", ReflectionHelpers.ClassParameter.from(String.class, row[0]));
                 ShadowLooper.idleMainLooper(150, TimeUnit.MILLISECONDS);
                 screen.getFragmentManager().executePendingTransactions();

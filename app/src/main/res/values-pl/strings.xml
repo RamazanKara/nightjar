@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">Przekaźnik wybudzania (%1$s) nie jest w tej samej sieci co %2$s, więc nie mógł go wybudzić.</string>
     <string name="wake_relay_network">Nightjar nie może otworzyć połączenia w tej sieci. Sprawdź połączenie z internetem i spróbuj ponownie.</string>
     <string name="wake_relay_none">Nie można jeszcze wybudzić %1$s spoza sieci domowej. Aby wybudzać go zdalnie, skonfiguruj Nightjar na komputery na stale włączonym komputerze w domu jako przekaźnik wybudzania.</string>
+    <string name="settings_section_controller">Kontroler</string>
+    <string name="controller_editor_summary">Gałki, spusty, ruch, wibracje i przyciski</string>
+    <string name="controller_settings_menu">Ustawienia kontrolera</string>
+    <string name="controller_settings_stream_leaves">Otwarcie ustawień kontrolera kończy stream; gra działa dalej na PC.</string>
 </resources>

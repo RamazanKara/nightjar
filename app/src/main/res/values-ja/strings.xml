@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">ウェイクリレー (%1$s) は %2$s と同じネットワークにないため、ウェイクできませんでした。</string>
     <string name="wake_relay_network">Nightjar はこのネットワークで接続を開けませんでした。インターネット接続を確認して、もう一度お試しください。</string>
     <string name="wake_relay_none">%1$s はまだホームネットワークの外からウェイクできません。外出先からウェイクするには、自宅の常時オンのコンピューターでデスクトップ版 Nightjar をウェイクリレーとして設定してください。</string>
+    <string name="settings_section_controller">コントローラー</string>
+    <string name="controller_editor_summary">スティック、トリガー、モーション、振動、ボタン</string>
+    <string name="controller_settings_menu">コントローラー設定</string>
+    <string name="controller_settings_stream_leaves">コントローラー設定を開くとストリームを終了します。ゲームは PC で動き続けます。</string>
 </resources>

@@ -273,7 +273,7 @@ fn at_150_percent_in_german_every_settings_page_fits_the_width() {
     let mut f = Frames::new(record("PC", true, false), Reach::Online);
     fit_150(&mut f);
     // Every row of every section.
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     let id = f.hosts.list[0].id;
     for screen in [Screen::Home, Screen::Settings, Screen::HostSettings(id), Screen::Profiles, Screen::Controllers, Screen::Shortcuts] {
         f.l.go(screen);
@@ -319,7 +319,7 @@ fn at_150_percent_in_german_the_roaming_row_fits_with_each_choice() {
     // without scrolling to them.
     f.size.y = 8000.0;
     f.l.settings_view.section = "Streaming";
-    f.l.settings_view.more = [true; 9];
+    f.l.settings_view.more = [true; crate::ui::settings::SECTION_COUNT];
     let shown = |f: &Frames, text: &str| f.placed.iter().any(|(t, _, _)| t.contains(text));
     let id = f.hosts.list[0].id;
     for screen in [Screen::Settings, Screen::HostSettings(id)] {

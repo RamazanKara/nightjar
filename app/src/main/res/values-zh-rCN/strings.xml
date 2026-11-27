@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">唤醒中继（%1$s）与 %2$s 不在同一网络中，因此无法唤醒它。</string>
     <string name="wake_relay_network">Nightjar 无法在此网络上建立连接。请检查你的互联网连接，然后重试。</string>
     <string name="wake_relay_none">目前还无法从家庭网络外唤醒 %1$s。要在外部唤醒它，请在家中一台始终开机的电脑上将桌面版 Nightjar 设置为唤醒中继。</string>
+    <string name="settings_section_controller">手柄</string>
+    <string name="controller_editor_summary">摇杆、扳机、体感、振动和按键</string>
+    <string name="controller_settings_menu">手柄设置</string>
+    <string name="controller_settings_stream_leaves">打开手柄设置会离开串流；游戏继续在电脑上运行。</string>
 </resources>

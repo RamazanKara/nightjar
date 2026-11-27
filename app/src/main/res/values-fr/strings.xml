@@ -616,4 +616,8 @@
     <string name="wake_relay_elsewhere">Votre relais de réveil (%1$s) n’est pas sur le même réseau que %2$s, il n’a donc pas pu le réveiller.</string>
     <string name="wake_relay_network">Nightjar n’a pas pu ouvrir de connexion sur ce réseau. Vérifiez votre connexion Internet et réessayez.</string>
     <string name="wake_relay_none">%1$s ne peut pas encore être réveillé depuis l’extérieur de votre réseau domestique. Pour le réveiller à distance, configurez Nightjar pour ordinateur sur un ordinateur toujours allumé chez vous comme relais de réveil.</string>
+    <string name="settings_section_controller">Manette</string>
+    <string name="controller_editor_summary">Sticks, gâchettes, mouvement, vibration et boutons</string>
+    <string name="controller_settings_menu">Réglages de la manette</string>
+    <string name="controller_settings_stream_leaves">Ouvrir les réglages de la manette quitte le stream ; le jeu continue sur le PC.</string>
 </resources>
