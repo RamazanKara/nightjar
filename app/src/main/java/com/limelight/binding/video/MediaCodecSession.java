@@ -83,6 +83,14 @@ final class MediaCodecSession {
         format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, Math.max(requested, requiredInputBufferSize));
     }
 
+    int streamMaxInputSize() {
+        int bitrateKbps = Math.max(r.prefs.bitrate, r.streamBitrateKbps);
+        int fps = r.refreshRate > 0 ? r.refreshRate : r.prefs.fps;
+        int width = r.adaptivePlayback ? Math.max(r.initialWidth, r.maxDecodeWidth) : r.initialWidth;
+        int height = r.adaptivePlayback ? Math.max(r.initialHeight, r.maxDecodeHeight) : r.initialHeight;
+        return NightjarPolicyJni.videoMaxInputSize(bitrateKbps, fps, width, height);
+    }
+
     MediaFormat createBaseMediaFormat(String mimeType) {
         MediaFormat videoFormat = MediaFormat.createVideoFormat(mimeType, r.initialWidth, r.initialHeight);
         if (r.videoFormat == MoonBridge.VIDEO_FORMAT_H264_HIGH8_444) {
@@ -98,7 +106,7 @@ final class MediaCodecSession {
         // Avoid setting KEY_FRAME_RATE on Lollipop and earlier to reduce compatibility risk
         videoFormat.setInteger(MediaFormat.KEY_FRAME_RATE, r.refreshRate);
 
-        int maxInputSize = NightjarPolicyJni.videoMaxInputSize(r.prefs.bitrate, r.prefs.fps, r.initialWidth, r.initialHeight);
+        int maxInputSize = streamMaxInputSize();
         if (maxInputSize > 0) {
             videoFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, maxInputSize);
         }
@@ -118,7 +126,7 @@ final class MediaCodecSession {
     }
 
     boolean configureAndStartDecoder(MediaFormat format) {
-        applyRequiredInputSize(format, r.requiredInputBufferSize);
+        applyRequiredInputSize(format, Math.max(streamMaxInputSize(), r.requiredInputBufferSize));
         // A stream handed back from Vulkan draws on the standard renderer from here
         if (!r.vulkanHelper.handOverFromVulkan()) {
             return false;

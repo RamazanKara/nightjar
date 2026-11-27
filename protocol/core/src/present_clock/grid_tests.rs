@@ -280,6 +280,29 @@ fn a_late_frame_reports_how_late() {
 }
 
 #[test]
+fn brief_keyframe_spikes_do_not_lift_the_grids_delay() {
+    let mut clock = PresentClock::default();
+    let mut noise = Lcg(29);
+    let mut host = 0;
+    let g = grid(8_333, 0);
+    for _ in 0..300 {
+        host += 8_333;
+        clock.schedule_on_grid(rtp(host), (host + 20_000 + noise.next(500) + 9_000_000) as u64, g);
+    }
+    let settled = clock.delay_us().unwrap();
+    for _ in 0..2 {
+        host += 8_333;
+        let spike = clock.schedule_on_grid(rtp(host), (host + 35_000 + 9_000_000) as u64, g);
+        assert!(spike.late);
+    }
+    let after_spikes = clock.delay_us().unwrap();
+    assert!(
+        (after_spikes - settled).abs() <= 100,
+        "128-sample p75 ignores 2-frame keyframe spikes: {settled} -> {after_spikes}"
+    );
+}
+
+#[test]
 fn a_moving_anchor_does_not_make_false_collisions() {
     // The same grid reported from different vsyncs and with noise gives one frame per vsync.
     let mut clock = PresentClock::default();

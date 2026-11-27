@@ -165,17 +165,26 @@ fn video_renderer_choice_lazy_probe_and_all_cases() {
 
 #[test]
 fn max_input_size_and_grown_input_size_match_exact_arithmetic() {
-    assert_eq!(max_input_size(80_000, 60, 1920, 1080), 0);
-    assert_eq!(max_input_size(250_000, 120, 1920, 1080), 0);
+    let mib = 1024 * 1024;
     assert_eq!(max_input_size(0, 60, 3840, 2160), 0);
     assert_eq!(max_input_size(500_000, 0, 3840, 2160), 0);
-    // Exact integer division order: (1_000_000 * 1000 / 8 / 60) * 4 = 2083333 * 4 = 8333332
+    assert_eq!(max_input_size(80_000, 60, 0, 1080), 0);
+    assert_eq!(max_input_size(80_000, 60, 1920, 0), 0);
+    // 720p at moderate bitrate gets 2 MiB (4 FEC blocks + parameter sets); 100+ Mbps gets 4 MiB.
+    assert_eq!(max_input_size(20_000, 60, 1280, 720), 2 * mib);
+    assert_eq!(max_input_size(150_000, 120, 1280, 720), 4 * mib);
+    // 1080p and 1440p get at least 4 MiB so ~1.4 MiB 4-FEC-block IDRs and ~2-4 MiB wired IDRs fit
+    // without a mid-stream MediaCodec teardown.
+    assert_eq!(max_input_size(80_000, 60, 1920, 1080), 4 * mib);
+    assert_eq!(max_input_size(250_000, 120, 1920, 1080), 4 * mib);
+    assert_eq!(max_input_size(80_000, 60, 2560, 1440), 4 * mib);
+    // Exact integer division order at 60 fps and preserved at 120 fps:
+    // (1_000_000 * 1000 / 8 / 60) * 4 = 2083333 * 4 = 8333332
     assert_eq!(max_input_size(1_000_000, 60, 1920, 1080), 8_333_332);
+    assert_eq!(max_input_size(1_000_000, 120, 1920, 1080), 8_333_332);
     assert_eq!(max_input_size(158_988, 60, 3840, 2160), 3840 * 2160);
-    assert_eq!(max_input_size(80_000, 60, 2560, 1440), 2560 * 1440);
-    assert_eq!(max_input_size(2_000_000, 24, 3840, 2160), 32 * 1024 * 1024);
+    assert_eq!(max_input_size(2_000_000, 24, 3840, 2160), 32 * mib);
 
-    let mib = 1024 * 1024;
     assert_eq!(grown_input_size(3 * i64::from(mib), 2 * mib, 0), 4 * mib);
     assert_eq!(grown_input_size(5 * i64::from(mib), 2 * mib, 0), 5 * mib);
     assert_eq!(grown_input_size(2 * i64::from(mib), 2 * mib, 0), 0);

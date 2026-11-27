@@ -17,139 +17,25 @@
 //! the link instead of one percentile. Its floor is the knee of the recent lateness: the
 //! point from which waiting [`KNEE_REACH_US`] longer would bring in no more than
 //! [`KNEE_SHARE_PERCENT`] of the frames, so a link whose frames all come within a few
-//! milliseconds is covered whole and a long tail is not waited for. A frame later than the
-//! delay raises it to its own lateness at once and it falls back within a few frames
-//! ([`RELEASE_TAU_US`]): late frames come in bursts, and a frame shown late followed by one
-//! shown on time would be two uneven intervals where this is one. Nothing is held more than
-//! `max_spread_us` beyond the typical frame.
+//! milliseconds is covered whole and a long tail is not waited for. Once two or more frames in
+//! the recent [`ADAPTIVE_OUTLIER_WINDOW`] arrive later than the delay, a late frame raises it up
+//! to the second-highest recent lateness at once and it falls back within a few frames
+//! ([`RELEASE_TAU_US`]): link jitter comes in bursts, while an isolated late keyframe is shown
+//! when ready without jerking later frames back. Nothing is held more than `max_spread_us` beyond
+//! the typical frame.
 //!
 //! Scheduling needs no shared clock: the delay is measured against the frames' own
 //! timestamps, so any offset between the two clocks cancels and slow drift is followed
 //! by the window. [`ClockOffset`] (fed by clock sync, control message 0x5537) adds the
 //! absolute numbers, the host present to client present latency, for statistics.
 
-use crate::control::ClockSyncReply;
-
 pub mod content_rate;
+mod offset;
 use content_rate::ContentRate;
+pub use offset::ClockOffset;
 
-/// Clock sync samples kept, about 8 s at four probes a second.
-const SYNC_SAMPLES: usize = 32;
 /// Most frames the lateness window holds.
 pub const MAX_WINDOW: usize = 512;
-
-#[derive(Clone, Copy, Debug, Default)]
-struct SyncSample {
-    local_us: i64,
-    offset_us: i64,
-    rtt_us: i64,
-}
-
-/// The offset from the host's video clock to the client's clock (`client = host + offset`),
-/// from NTP-style clock sync exchanges.
-#[derive(Clone, Debug, Default)]
-pub struct ClockOffset {
-    samples: [SyncSample; SYNC_SAMPLES],
-    len: usize,
-    next: usize,
-}
-
-impl ClockOffset {
-    /// Adds the exchange `reply` answered, received at `client_receive_us`. Returns its round
-    /// trip, or `None` for an exchange that cannot be right. An offset more than a second
-    /// away from the current one means the host restarted its video clock: the older
-    /// samples are dropped.
-    pub fn add(&mut self, reply: &ClockSyncReply, client_receive_us: u64) -> Option<i64> {
-        let (Ok(t1), Ok(t2), Ok(t3), Ok(t4)) = (
-            i64::try_from(reply.client_us),
-            i64::try_from(reply.host_receive_us),
-            i64::try_from(reply.host_send_us),
-            i64::try_from(client_receive_us),
-        ) else {
-            return None;
-        };
-        if t4 < t1 {
-            return None;
-        }
-        // Compute in i128 without 128-bit division (32-bit Android runtime has no __divti3).
-        let rtt128 = (i128::from(t4) - i128::from(t1)) - (i128::from(t3) - i128::from(t2));
-        if !(0..=1_000_000).contains(&rtt128) {
-            return None;
-        }
-        let rtt = rtt128 as i64;
-        let sum = (i128::from(t1) - i128::from(t2)) + (i128::from(t4) - i128::from(t3));
-        let offset128 = (sum + if sum < 0 { sum & 1 } else { 0 }) >> 1;
-        let Ok(offset) = i64::try_from(offset128) else {
-            return None;
-        };
-        if self
-            .offset_at(t4)
-            .is_some_and(|current| offset.abs_diff(current) > 1_000_000)
-        {
-            self.clear();
-        }
-        let local_sum = i128::from(t1) + i128::from(t4);
-        let local_us = ((local_sum + if local_sum < 0 { local_sum & 1 } else { 0 }) >> 1) as i64;
-        self.samples[self.next] = SyncSample {
-            local_us,
-            offset_us: offset,
-            rtt_us: rtt,
-        };
-        self.next = (self.next + 1) % SYNC_SAMPLES;
-        self.len = (self.len + 1).min(SYNC_SAMPLES);
-        Some(rtt)
-    }
-
-    pub fn clear(&mut self) {
-        self.len = 0;
-        self.next = 0;
-    }
-
-    fn live(&self) -> &[SyncSample] {
-        &self.samples[..self.len]
-    }
-
-    fn best(samples: impl Iterator<Item = SyncSample>) -> Option<SyncSample> {
-        samples.min_by_key(|s| s.rtt_us)
-    }
-
-    /// The round trip of the exchange the offset comes from.
-    pub fn rtt_us(&self) -> Option<i64> {
-        Self::best(self.live().iter().copied()).map(|s| s.rtt_us)
-    }
-
-    /// The offset at client time `local_us`: the exchange with the shortest round trip
-    /// (whose error is at most half of it), carried forward by the drift between the best
-    /// exchanges of the older and the newer half of the samples.
-    pub fn offset_at(&self, local_us: i64) -> Option<i64> {
-        let live = self.live();
-        let best = Self::best(live.iter().copied())?;
-        let (oldest, newest) = live.iter().fold((i64::MAX, i64::MIN), |(lo, hi), s| {
-            (lo.min(s.local_us), hi.max(s.local_us))
-        });
-        let middle = oldest.saturating_add(newest.saturating_sub(oldest) / 2);
-        let older = Self::best(live.iter().copied().filter(|s| s.local_us < middle));
-        let newer = Self::best(live.iter().copied().filter(|s| s.local_us >= middle));
-        // Parts per billion, at most 1000 ppm; quartz is within 100 ppm. No i128: 32-bit
-        // Android has no 128-bit division in its runtime. The offsets differ by under a
-        // second (a larger jump clears the samples), so the products fit in an i64.
-        let drift_ppb = match (older, newer) {
-            (Some(a), Some(b)) if b.local_us.saturating_sub(a.local_us) >= 2_000_000 => {
-                let dt = b.local_us.saturating_sub(a.local_us);
-                (b.offset_us.saturating_sub(a.offset_us).clamp(-1_000_000, 1_000_000)
-                    * 1_000_000_000
-                    / dt)
-                    .clamp(-1_000_000, 1_000_000)
-            }
-            _ => 0,
-        };
-        // A day either way keeps the product within an i64.
-        let elapsed = local_us
-            .saturating_sub(best.local_us)
-            .clamp(-86_400_000_000, 86_400_000_000);
-        Some(best.offset_us.saturating_add(elapsed * drift_ppb / 1_000_000_000))
-    }
-}
 
 /// How [`PresentClock`] trades latency for even frame times.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -220,6 +106,10 @@ pub const KNEE_SHARE_PERCENT: usize = 7;
 /// time (11 to 17% of all frames were), back to the average three frames on; 50 ms gave the
 /// burst away too early and 200 ms held 0.3 ms longer for 0.7 points fewer frames off.
 pub const RELEASE_TAU_US: i64 = 100_000;
+/// Recent frames checked before a late frame raises [`Settings::adaptive`]'s delay: one isolated
+/// outlier (such as a periodic keyframe) is ignored while two or more late frames in this window
+/// raise the delay at once.
+pub const ADAPTIVE_OUTLIER_WINDOW: usize = 32;
 
 impl Settings {
     /// The defaults for a display that refreshes when a frame comes, whose shortest refresh
@@ -701,15 +591,38 @@ impl PresentClock {
         delay.min(self.quantile(50) + spread)
     }
 
+    /// Second-highest lateness in the last [`ADAPTIVE_OUTLIER_WINDOW`] frames of the window
+    /// (or `lateness` before two frames are in it), so one isolated late keyframe does not
+    /// jerk [`Self::follow_link`]'s delay up while two or more late frames still raise it at once.
+    fn second_recent_lateness(&self, lateness: i64) -> i64 {
+        let window = self.settings.window.clamp(1, MAX_WINDOW);
+        let recent = self.len.min(ADAPTIVE_OUTLIER_WINDOW);
+        if recent < 2 {
+            return lateness;
+        }
+        let (mut highest, mut second) = (i64::MIN, i64::MIN);
+        for k in 0..recent {
+            let v = self.window[(self.next + window - 1 - k) % window];
+            if v >= highest {
+                second = highest;
+                highest = v;
+            } else if v > second {
+                second = v;
+            }
+        }
+        second
+    }
+
     /// The delay for a display that refreshes when a frame comes, for the frame `lateness` late
     /// (it is in the window already), and how far that frame itself raised it.
     ///
     /// The floor is the knee of the window ([`knee`]) plus the margin, at most `ceiling` above
     /// the median. A delay above the floor falls towards it by a share of the gap for each step
-    /// of host time ([`RELEASE_TAU_US`]). A frame later than the delay raises it to the frame's
-    /// own lateness, at most to the ceiling: the frame is shown when it is ready either way, and
-    /// the frames after it keep their intervals to it instead of the next one coming a
-    /// lateness early.
+    /// of host time ([`RELEASE_TAU_US`]). Once two or more frames in the recent
+    /// [`ADAPTIVE_OUTLIER_WINDOW`] are late, a frame later than the delay raises it up to the
+    /// second-highest recent lateness (at most to the ceiling): an isolated late keyframe is
+    /// shown when ready without stepping the delay up for the frames after it, while genuine link
+    /// jitter bursts keep their cadence.
     fn follow_link(&self, lateness: i64, step: i64, ceiling: i64) -> (i64, i64) {
         let mut sorted = [0i64; MAX_WINDOW];
         let values = &mut sorted[..self.len];
@@ -725,7 +638,8 @@ impl PresentClock {
             }
             _ => floor,
         };
-        let raised = (lateness.min(top) - delay).max(0);
+        let burst = lateness.min(self.second_recent_lateness(lateness));
+        let raised = (burst.min(top) - delay).max(0);
         (delay + raised, raised)
     }
 

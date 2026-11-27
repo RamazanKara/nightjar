@@ -1,4 +1,5 @@
 use super::*;
+use crate::control::ClockSyncReply;
 use alloc::vec::Vec;
 
 /// Deterministic noise in `0..range`.
@@ -513,6 +514,80 @@ fn a_stall_raises_the_delay_no_further_than_the_ceiling_and_is_forgotten_in_half
     assert!(delays[605..].iter().all(|d| *d <= 150 + ADAPTIVE_SPREAD_US + 500 + 100), "{:?}", delays[605..].iter().max());
     assert!((delays[661] - delays[599]).abs() <= 150, "{} against {}", delays[661], delays[599]);
     assert_eq!(shown[605..].iter().filter(|s| s.2).count(), 0);
+}
+
+#[test]
+fn an_isolated_late_keyframe_does_not_spike_adaptive_delay_while_jitter_adapts() {
+    let mut clock = adaptive();
+    let mut noise = Lcg(17);
+    let mut host = 0;
+
+    // Settle on steady 120 fps P-frames with <= 0.3 ms arrival jitter.
+    for _ in 0..300 {
+        host += 8_333;
+        clock.schedule(rtp(host), (host + BASE_US + noise.next(300)) as u64);
+    }
+    let baseline = clock.delay_us().unwrap();
+
+    // Periodic isolated IDR keyframes (+5 ms and +8 ms late, >= 32 frames apart) are shown
+    // immediately when ready without jerking `delay_us` up for the P-frames that follow.
+    for (gap, spike_us) in [(60, 5_000), (60, 8_000), (35, 5_500)] {
+        for _ in 0..gap {
+            host += 8_333;
+            clock.schedule(rtp(host), (host + BASE_US + noise.next(300)) as u64);
+        }
+        let before = clock.delay_us().unwrap();
+        host += 8_333;
+        let idr = clock.schedule(rtp(host), (host + BASE_US + spike_us) as u64);
+        assert!(idr.late, "the late keyframe itself is marked late");
+        assert_eq!(idr.hold_us, 0, "the late keyframe is presented as soon as it is ready");
+        let on_idr = clock.delay_us().unwrap();
+        assert!(
+            (on_idr - before).abs() <= 50,
+            "1 late keyframe ({spike_us} us) spiked adaptive delay: {before} -> {on_idr}"
+        );
+        host += 8_333;
+        let next_p = clock.schedule(rtp(host), (host + BASE_US + 150) as u64);
+        assert!(
+            next_p.hold_us <= 1_000,
+            "P-frame after isolated keyframe held {} us",
+            next_p.hold_us
+        );
+    }
+
+    // Genuine link jitter (>= 2 late frames within the 32-frame window, consecutive or spaced)
+    // raises `delay_us` immediately on the second late frame and decays back over RELEASE_TAU_US.
+    for _ in 0..40 {
+        host += 8_333;
+        clock.schedule(rtp(host), (host + BASE_US + noise.next(300)) as u64);
+    }
+    host += 8_333;
+    clock.schedule(rtp(host), (host + BASE_US + 5_000) as u64);
+    assert!(
+        (clock.delay_us().unwrap() - baseline).abs() <= 100,
+        "first late frame stays outlier-filtered"
+    );
+    // A few normal frames in between, then a second +5 ms late frame inside the 32-frame window.
+    for _ in 0..3 {
+        host += 8_333;
+        clock.schedule(rtp(host), (host + BASE_US + 150) as u64);
+    }
+    host += 8_333;
+    clock.schedule(rtp(host), (host + BASE_US + 5_000) as u64);
+    let adapted = clock.delay_us().unwrap();
+    assert!(
+        adapted >= BASE_US + 4_800,
+        "second late frame in window adapts immediately: {}",
+        adapted - BASE_US
+    );
+    assert!(adapted <= BASE_US + 300 + ADAPTIVE_SPREAD_US + 500);
+
+    // Once the link calms down, the burst hold decays back to baseline.
+    for _ in 0..80 {
+        host += 8_333;
+        clock.schedule(rtp(host), (host + BASE_US + noise.next(300)) as u64);
+    }
+    assert!((clock.delay_us().unwrap() - baseline).abs() <= 100);
 }
 
 #[test]

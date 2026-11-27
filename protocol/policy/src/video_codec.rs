@@ -119,19 +119,34 @@ const PYROWAVE_PRIORITY: [u32; 4] = [
     VIDEO_FORMAT_PYROWAVE,
 ];
 
-/// Input buffer size hint for MediaCodec above 2 MiB, matching `MediaCodecDecoderRenderer.maxInputSize`.
-/// Preserves the exact integer division order `((bitrate * 1000 / 8) / fps) * 4`.
+/// Input buffer size hint for MediaCodec (`KEY_MAX_INPUT_SIZE`), matching
+/// `MediaCodecDecoderRenderer.maxInputSize`.
+///
+/// Android's Codec2/OMX HEVC and AV1 decoders default to ~368 KiB at 720p and ~768 KiB–1 MiB at
+/// 1080p (`minCompressionRatio = 4`), so omitting `KEY_MAX_INPUT_SIZE` below 2 MiB forced a
+/// mid-stream codec teardown/restart (`requestInputBufferGrowth`) on the first ~1.4 MiB
+/// 4-FEC-block IDR or ~2–4 MiB wired keyframe.
+///
+/// Preserves the exact integer division order `((bitrate * 1000 / 8) / min(fps, 60)) * 4` so
+/// 90/120/240 fps streams keep 60 fps keyframe headroom, takes at least `width * height`
+/// (8.3 MB at 4K), and enforces a 2 MiB floor on sub-1080p streams and a 4 MiB floor at 1080p+
+/// or 100 Mbps+, capped at 32 MiB.
 pub fn max_input_size(bitrate_kbps: i32, fps: i32, width: i32, height: i32) -> i32 {
-    if bitrate_kbps <= 0 || fps <= 0 {
+    if bitrate_kbps <= 0 || fps <= 0 || width <= 0 || height <= 0 {
         return 0;
     }
-    let four_frames = (i64::from(bitrate_kbps) * 1000 / 8 / i64::from(fps)) * 4;
-    let one_byte_per_pixel = i64::from(width.max(0)) * i64::from(height.max(0));
-    let bytes = four_frames.max(one_byte_per_pixel);
-    if bytes <= 2 * 1024 * 1024 {
-        return 0;
-    }
-    bytes.min(32 * 1024 * 1024) as i32
+    let effective_fps = i64::from(fps.min(60));
+    let four_frames = (i64::from(bitrate_kbps) * 1000 / 8 / effective_fps) * 4;
+    let one_byte_per_pixel = i64::from(width) * i64::from(height);
+    let floor = if one_byte_per_pixel >= 1920 * 1080 || bitrate_kbps >= 100_000 {
+        4 * 1024 * 1024
+    } else {
+        2 * 1024 * 1024
+    };
+    four_frames
+        .max(one_byte_per_pixel)
+        .max(floor)
+        .min(32 * 1024 * 1024) as i32
 }
 
 /// Grown input buffer size when `required_bytes` overflows `capacity`, or 0 when growing cannot help.

@@ -14,6 +14,7 @@ import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.util.ReflectionHelpers;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
@@ -24,17 +25,32 @@ import static org.junit.Assert.assertTrue;
 @Config(sdk = 29, application = Application.class)
 public class MediaCodecInputSizeTest {
     @Test
-    public void ordinaryBitratesKeepTheDecodersOwnSize() {
-        assertEquals(0, MediaCodecDecoderRenderer.maxInputSize(80000, 60, 1920, 1080));
-        assertEquals(0, MediaCodecDecoderRenderer.maxInputSize(250000, 120, 1920, 1080));
+    public void invalidStreamParametersOmitMaxInputSize() {
         assertEquals(0, MediaCodecDecoderRenderer.maxInputSize(0, 60, 3840, 2160));
         assertEquals(0, MediaCodecDecoderRenderer.maxInputSize(500000, 0, 3840, 2160));
+        assertEquals(0, MediaCodecDecoderRenderer.maxInputSize(80000, 60, 0, 1080));
+        assertEquals(0, MediaCodecDecoderRenderer.maxInputSize(80000, 60, 1920, 0));
     }
 
     @Test
-    public void highBitratesFitFourAverageFrames() {
-        // 1 Gbps at 60 FPS averages 2083333 bytes a frame.
+    public void hdAndHighBitrateStreamsFitRealisticKeyframesUpFront() {
+        int mib = 1024 * 1024;
+        // 720p gets 2 MiB (fits a ~1.4 MiB 4-FEC-block IDR where HEVC/AV1 defaults to ~368 KiB),
+        // and 4 MiB once bitrate reaches 100+ Mbps on wired links.
+        assertEquals(2 * mib, MediaCodecDecoderRenderer.maxInputSize(20000, 60, 1280, 720));
+        assertEquals(4 * mib, MediaCodecDecoderRenderer.maxInputSize(150000, 120, 1280, 720));
+        // 1080p and 1440p get at least 4 MiB so ~1.4 MiB 4-FEC-block IDRs and ~2-4 MiB wired IDRs
+        // do not trigger a mid-stream MediaCodec teardown.
+        assertEquals(4 * mib, MediaCodecDecoderRenderer.maxInputSize(80000, 60, 1920, 1080));
+        assertEquals(4 * mib, MediaCodecDecoderRenderer.maxInputSize(250000, 120, 1920, 1080));
+        assertEquals(4 * mib, MediaCodecDecoderRenderer.maxInputSize(80000, 60, 2560, 1440));
+    }
+
+    @Test
+    public void highBitratesFitFourAverageFramesWithoutHighFpsShrinkage() {
+        // 1 Gbps at 60 FPS averages 2083333 bytes a frame; 120 FPS keeps the same keyframe budget.
         assertEquals(8333332, MediaCodecDecoderRenderer.maxInputSize(1000000, 60, 1920, 1080));
+        assertEquals(8333332, MediaCodecDecoderRenderer.maxInputSize(1000000, 120, 1920, 1080));
     }
 
     @Test
@@ -43,7 +59,6 @@ public class MediaCodecInputSizeTest {
         // the buffer grew by restarting the decoder mid-stream.
         assertEquals(3840 * 2160, MediaCodecDecoderRenderer.maxInputSize(158988, 60, 3840, 2160));
         assertTrue(MediaCodecDecoderRenderer.maxInputSize(158988, 60, 3840, 2160) > 4462353);
-        assertEquals(2560 * 1440, MediaCodecDecoderRenderer.maxInputSize(80000, 60, 2560, 1440));
     }
 
     @Test
@@ -104,6 +119,44 @@ public class MediaCodecInputSizeTest {
             ReflectionHelpers.setField(renderer, "codecRecoveryAttempts", 9);
             assertTrue(renderer.requestInputBufferGrowth(6000000, 4000000));
             assertEquals(8000000, (int) ReflectionHelpers.getField(renderer, "requiredInputBufferSize"));
+        }
+    }
+
+    @Test
+    public void sessionFormatSizes1080pBufferForLargeKeyframesWithoutMidStreamReset() {
+        int mib = 1024 * 1024;
+        ReflectionHelpers.setStaticField(MediaCodecHelper.class, "initialized", true);
+        try (ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).create()) {
+            PreferenceConfiguration prefs = new PreferenceConfiguration();
+            prefs.bitrate = 80000;
+            prefs.fps = 60;
+            MediaCodecDecoderRenderer renderer = new MediaCodecDecoderRenderer(activity.get(),
+                    prefs, null, 0, false, false, "", null);
+            renderer.initialWidth = 1920;
+            renderer.initialHeight = 1080;
+            renderer.maxDecodeWidth = 1920;
+            renderer.maxDecodeHeight = 1080;
+            renderer.refreshRate = 60;
+
+            MediaFormat format = renderer.session.createBaseMediaFormat("video/hevc");
+            int configuredMax = format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE);
+            assertEquals(4 * mib, configuredMax);
+
+            // Both a ~1.4 MiB 4-FEC-block IDR and a 3.8 MiB wired IDR fit without codec recovery.
+            renderer.decodeLoop.nextInputBuffer = ByteBuffer.allocate(configuredMax);
+            AtomicInteger recovery = ReflectionHelpers.getField(renderer, "codecRecoveryType");
+            int none = ReflectionHelpers.getStaticField(MediaCodecDecoderRenderer.class, "CR_RECOVERY_TYPE_NONE");
+            assertTrue(renderer.decodeLoop.ensureInputCapacity(1500 * 1024));
+            assertTrue(renderer.decodeLoop.ensureInputCapacity(3800 * 1024));
+            assertEquals(none, recovery.get());
+            assertEquals(0, renderer.requiredInputBufferSize);
+
+            // Adaptive playback covering 4K raises KEY_MAX_INPUT_SIZE to the covering size up front.
+            renderer.adaptivePlayback = true;
+            renderer.maxDecodeWidth = 3840;
+            renderer.maxDecodeHeight = 2160;
+            MediaFormat adaptive = renderer.session.createBaseMediaFormat("video/hevc");
+            assertEquals(3840 * 2160, adaptive.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE));
         }
     }
 }
