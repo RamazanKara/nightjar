@@ -2,7 +2,8 @@
 
 use sdl3_sys::everything::*;
 
-/// Overrides DXGI's maximum frame latency (`1..=16`, or `0` to leave DXGI's default unchanged).
+/// Overrides DXGI's maximum frame latency (`1..=16`, or `0` to reset DXGI's device latency to
+/// its 3-frame default instead of SDL's 1-frame cap).
 pub const D3D11_MAX_LATENCY_ENV: &str = "NIGHTJAR_D3D11_MAX_LATENCY";
 /// Set to `0` to skip requesting elevated GPU thread / Vulkan queue priority.
 pub const GPU_PRIORITY_ENV: &str = "NIGHTJAR_GPU_PRIORITY";
@@ -13,16 +14,17 @@ pub const MAX_D3D11_MAX_LATENCY: u32 = 16;
 /// `IDXGIDevice1::SetGPUThreadPriority` maximum normal-app priority (`-7..=7`).
 pub const D3D11_GPU_THREAD_PRIORITY: i32 = 7;
 
-/// Parses `NIGHTJAR_D3D11_MAX_LATENCY`: `0` skips setting latency (`None`), positive integers are
-/// clamped to `1..=16`, and unset/invalid values fall back to `Some(1)`.
-pub fn parse_d3d11_max_latency(value: Option<&str>) -> Option<u32> {
+/// Parses `NIGHTJAR_D3D11_MAX_LATENCY`: `0` returns `0` (passed to
+/// `IDXGIDevice1::SetMaximumFrameLatency(0)` to restore DXGI's 3-frame default), positive integers
+/// are clamped to `1..=16`, and unset/invalid values fall back to `1`.
+pub fn parse_d3d11_max_latency(value: Option<&str>) -> u32 {
     let Some(raw) = value.map(str::trim).filter(|s| !s.is_empty()) else {
-        return Some(DEFAULT_D3D11_MAX_LATENCY);
+        return DEFAULT_D3D11_MAX_LATENCY;
     };
     match raw.parse::<u32>() {
-        Ok(0) => None,
-        Ok(n) => Some(n.clamp(MIN_D3D11_MAX_LATENCY, MAX_D3D11_MAX_LATENCY)),
-        Err(_) => Some(DEFAULT_D3D11_MAX_LATENCY),
+        Ok(0) => 0,
+        Ok(n) => n.clamp(MIN_D3D11_MAX_LATENCY, MAX_D3D11_MAX_LATENCY),
+        Err(_) => DEFAULT_D3D11_MAX_LATENCY,
     }
 }
 
@@ -32,7 +34,7 @@ pub fn parse_gpu_priority(value: Option<&str>) -> bool {
 }
 
 /// Reads `NIGHTJAR_D3D11_MAX_LATENCY` from the process environment.
-pub fn d3d11_max_latency_from_env() -> Option<u32> {
+pub fn d3d11_max_latency_from_env() -> u32 {
     parse_d3d11_max_latency(std::env::var(D3D11_MAX_LATENCY_ENV).ok().as_deref())
 }
 
@@ -75,16 +77,17 @@ fn apply_d3d11_latency_win(renderer: *mut SDL_Renderer) {
         return;
     };
 
-    if let Some(max_latency) = d3d11_max_latency_from_env() {
-        // SAFETY: `dxgi_device` is a live `IDXGIDevice1` COM interface.
-        if let Err(err) = unsafe { dxgi_device.SetMaximumFrameLatency(max_latency) } {
-            static LOGGED_DEVICE_LATENCY: Once = Once::new();
-            LOGGED_DEVICE_LATENCY.call_once(|| {
-                eprintln!(
-                    "nightjar: IDXGIDevice1::SetMaximumFrameLatency({max_latency}) failed: {err}"
-                );
-            });
-        }
+    let max_latency = d3d11_max_latency_from_env();
+    // SAFETY: `dxgi_device` is a live `IDXGIDevice1` COM interface (`0` resets to DXGI's default 3).
+    if let Err(err) = unsafe { dxgi_device.SetMaximumFrameLatency(max_latency) } {
+        static LOGGED_DEVICE_LATENCY: Once = Once::new();
+        LOGGED_DEVICE_LATENCY.call_once(|| {
+            eprintln!(
+                "nightjar: IDXGIDevice1::SetMaximumFrameLatency({max_latency}) failed: {err}"
+            );
+        });
+    }
+    if max_latency > 0 {
         let swapchain =
             super::renderer_pointer(renderer, SDL_PROP_RENDERER_D3D11_SWAPCHAIN_POINTER);
         if !swapchain.is_null() {
@@ -131,19 +134,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn max_latency_defaults_skips_zero_and_clamps_valid_values() {
-        assert_eq!(parse_d3d11_max_latency(None), Some(1));
-        assert_eq!(parse_d3d11_max_latency(Some("")), Some(1));
-        assert_eq!(parse_d3d11_max_latency(Some("   ")), Some(1));
-        assert_eq!(parse_d3d11_max_latency(Some("0")), None);
-        assert_eq!(parse_d3d11_max_latency(Some(" 0 ")), None);
-        assert_eq!(parse_d3d11_max_latency(Some("1")), Some(1));
-        assert_eq!(parse_d3d11_max_latency(Some("3")), Some(3));
-        assert_eq!(parse_d3d11_max_latency(Some("16")), Some(16));
-        assert_eq!(parse_d3d11_max_latency(Some("17")), Some(16));
-        assert_eq!(parse_d3d11_max_latency(Some("999")), Some(16));
-        assert_eq!(parse_d3d11_max_latency(Some("-1")), Some(1));
-        assert_eq!(parse_d3d11_max_latency(Some("invalid")), Some(1));
+    fn max_latency_defaults_resets_on_zero_and_clamps_valid_values() {
+        assert_eq!(parse_d3d11_max_latency(None), 1);
+        assert_eq!(parse_d3d11_max_latency(Some("")), 1);
+        assert_eq!(parse_d3d11_max_latency(Some("   ")), 1);
+        assert_eq!(parse_d3d11_max_latency(Some("0")), 0);
+        assert_eq!(parse_d3d11_max_latency(Some(" 0 ")), 0);
+        assert_eq!(parse_d3d11_max_latency(Some("1")), 1);
+        assert_eq!(parse_d3d11_max_latency(Some("3")), 3);
+        assert_eq!(parse_d3d11_max_latency(Some("16")), 16);
+        assert_eq!(parse_d3d11_max_latency(Some("17")), 16);
+        assert_eq!(parse_d3d11_max_latency(Some("999")), 16);
+        assert_eq!(parse_d3d11_max_latency(Some("-1")), 1);
+        assert_eq!(parse_d3d11_max_latency(Some("invalid")), 1);
     }
 
     #[test]

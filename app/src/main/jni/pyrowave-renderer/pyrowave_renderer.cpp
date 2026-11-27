@@ -34,32 +34,6 @@ static_assert(PYRO_PRESENT_MODE_IMMEDIATE == VK_PRESENT_MODE_IMMEDIATE_KHR &&
               PYRO_PRESENT_MODE_FIFO_LATEST_READY == VK_PRESENT_MODE_FIFO_LATEST_READY_EXT,
               "present mode constants in presentation.h must match Vulkan");
 
-namespace pyrowave_renderer {
-
-void Renderer::applyWindowFrameRate() {
-    if (window == nullptr || frameRateHz <= 0) return;
-    using SetFrameRate = int32_t (*)(ANativeWindow *, float, int8_t);
-    static const SetFrameRate setFrameRate = []() -> SetFrameRate {
-        for (const char *lib : {"libandroid.so", "libnativewindow.so"}) {
-            if (void *handle = dlopen(lib, RTLD_NOW | RTLD_LOCAL)) {
-                if (void *sym = dlsym(handle, "ANativeWindow_setFrameRate")) {
-                    return reinterpret_cast<SetFrameRate>(sym);
-                }
-            }
-        }
-        return nullptr;
-    }();
-    if (setFrameRate != nullptr) {
-        // ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT = 0 (API 30+; no-op on older Android).
-        const int32_t rc = setFrameRate(window, static_cast<float>(frameRateHz), 0);
-        if (rc != 0) {
-            LOGW("ANativeWindow_setFrameRate(%d) returned %d", frameRateHz, rc);
-        }
-    }
-}
-
-}  // namespace pyrowave_renderer
-
 using namespace pyrowave_renderer;
 
 extern "C" {
@@ -120,7 +94,6 @@ Java_com_limelight_binding_video_PyroWaveDecoderRenderer_nativeCreate(JNIEnv *en
                           upscale, edgeSharpness, preacquire)) {
         return 0;  // The renderer releases the window.
     }
-    renderer->applyWindowFrameRate();
     LOGI("PyroWave renderer ready for %dx%d %s", width, height, chroma444 ? "4:4:4" : "4:2:0");
     return reinterpret_cast<jlong>(renderer.release());
 }
