@@ -31,7 +31,7 @@ public final class DemoFixtures {
     // Living-room PC's host: a Rubylight with every permission, so the stream menu and the PC settings
     // show their full layouts. It has no PyroWave, and nothing here is ever sent to or read from a host.
     private static final String HOST = "{\"v\":1,\"gameStream\":false,\"sunshineVersion\":true,\"paired\":true," +
-            "\"rustHostVersion\":\"2.2.21\",\"permission\":4294967295,\"serverCommands\":1,\"frameLimiter\":true," +
+            "\"rustHostVersion\":\"6.4.5\",\"permission\":4294967295,\"serverCommands\":1,\"frameLimiter\":true," +
             "\"virtualDisplayCapable\":true,\"pyroWaveFields\":false,\"pyroWaveProbeBytes\":0,\"pyroWaveCodecs\":0," +
             "\"encoderBitrate\":true,\"hardwareMetricsVersion\":1,\"networkPathVersion\":0," +
             "\"controllerPreparation\":true,\"currentGameUuid\":true}";

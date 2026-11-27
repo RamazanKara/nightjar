@@ -204,7 +204,7 @@ final class DemoConsole {
     }
 
     private static String capabilities() {
-        return "{\"ok\":{\"api_version\":1,\"host\":{\"name\":\"Living-room PC\",\"version\":\"3.0.0\",\"unique_id\":\"U\"},"
+        return "{\"ok\":{\"api_version\":1,\"host\":{\"name\":\"Living-room PC\",\"version\":\"6.4.5\",\"unique_id\":\"U\"},"
                 + "\"features\":[\"library\",\"session.close_game\",\"library.unadded\""
                 + (hostAdds ? ",\"library.add\"" : "") + "],\"permissions\":{\"list\":true,\"view\":true,"
                 + "\"launch\":true,\"host_control\":" + hostControl + "}}}";

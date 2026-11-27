@@ -127,7 +127,7 @@ public class DemoModeTest {
         try {
             MaterialToolbar toolbar = page.get().findViewById(R.id.host_profile_toolbar);
             assertEquals("Living-room PC", toolbar.getTitle().toString());
-            assertEquals("Rubylight 2.2.21", toolbar.getSubtitle().toString());
+            assertEquals("Rubylight 6.4.5", toolbar.getSubtitle().toString());
             PreferenceFragment fragment = (PreferenceFragment) page.get().getFragmentManager()
                     .findFragmentById(R.id.host_profile_settings);
             List<String> groups = new ArrayList<>();

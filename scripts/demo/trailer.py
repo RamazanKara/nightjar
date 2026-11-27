@@ -576,7 +576,7 @@ class TvHome(Scene):
         old, new = swap_alpha(lt, self.swap_at)
         self.headline(cv, lt, ["One library.", "Every PC."], tx, ty, accent_last=True,
                       sub="Games from every store, with covers, on every paired PC.",
-                      small="Store libraries with a Rubylight 3.0 PC.", swap=old, maxw=maxw)
+                      small="Store libraries with a Rubylight PC.", swap=old, maxw=maxw)
         if new > 0:
             self.headline(cv, lt, ["A page for", "every game."], tx, ty, accent_last=True, t_in=self.swap_at,
                           sub="Play, resume or wake a sleeping PC, right from the couch.", swap=new, maxw=maxw)
@@ -722,7 +722,7 @@ class FeatureWall(Scene):
             blit(cv, e, x + 32, y + 30 + dy * 1.6, a)
             t = block_img(label, 42 if not c.V else 44, CREAM, tw - 64, bold=True, leading=1.14)
             blit(cv, t, x + 32, y + 78 + dy * 1.6, a)
-        small = ("HDR10+, Dolby Vision, HLG, 7.1.4, passthrough, sharing and co-op with a Rubylight 3.0 PC. "
+        small = ("HDR10+, Dolby Vision, HLG, 7.1.4, passthrough, sharing and co-op with a Rubylight PC. "
                  "Features follow what each PC and device supports.")
         img = block_img(small, 26, DIM, (cols * tw + (cols - 1) * gx) if not c.V else c.W - 2 * c.margin)
         a, dy = envelope(lt, self.dur, 1.4)
