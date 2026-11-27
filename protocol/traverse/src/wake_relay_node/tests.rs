@@ -238,3 +238,50 @@ fn a_relay_on_several_networks_sends_each_datagram_from_one_address_only() {
         assert_eq!(*source, expected, "{destination}");
     }
 }
+
+/// A path's key depends only on the relay's session and the device's, so a path built again for
+/// the same device session must not count from where the last one started.
+#[test]
+fn a_path_built_again_for_a_device_session_never_repeats_a_sequence_number() {
+    let lan = Arc::new(FakeLan::default());
+    let peer = relay(lan.clone());
+    let relay_address = peer.local_addr().unwrap();
+    let probe = UdpSocket::bind(loopback()).unwrap();
+    probe
+        .set_read_timeout(Some(Duration::from_millis(600)))
+        .unwrap();
+    let session = [5; 16];
+    let keys = Keys::new(enrollment().device_secret(&device())).path(&peer.session(), &session);
+    let sealer = Sealer::new(&keys.client_to_host, keys.tag, session);
+    let mut buffer = [0u8; 2048];
+    let mut answers = Vec::new();
+    for _ in 0..3 {
+        probe
+            .send_to(
+                &sealer.seal(Kind::Punch, 0, &wire::punch_stamp(unix_now())),
+                relay_address,
+            )
+            .unwrap();
+        // Everything the relay sends on the path (its own punches too) is under the same key;
+        // a fresh opener per datagram, as a listener that kept none would.
+        loop {
+            let (length, _) = probe.recv_from(&mut buffer).unwrap();
+            let mut opener = Opener::new(&keys.host_to_client, keys.tag);
+            let kind = opener.open(&buffer[..length]).unwrap().kind;
+            answers.push(u64::from_be_bytes(buffer[16..24].try_into().unwrap()));
+            if kind == Kind::PunchAck {
+                break;
+            }
+        }
+        // The path goes, as when its puncher fails or the device closes it; the device's next
+        // punch for the same session builds it again.
+        probe
+            .send_to(&sealer.seal(Kind::Close, 0, &[]), relay_address)
+            .unwrap();
+    }
+    peer.stop();
+    let mut distinct = answers.clone();
+    distinct.sort_unstable();
+    distinct.dedup();
+    assert_eq!(distinct.len(), answers.len(), "sequence numbers {answers:?}");
+}

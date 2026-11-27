@@ -40,6 +40,10 @@ const _: () = assert!(STATUS_MAX_BYTES < REQUEST_BYTES);
 pub const CLOCK_SKEW_SECONDS: u64 = 120;
 /// The most nonces a relay remembers; when all are still fresh, it takes no new request.
 pub const REPLAY_ENTRIES: usize = 512;
+/// The most of them one device's requests take: a device that keeps asking waits on its own,
+/// and the others still get through.
+pub const REPLAY_ENTRIES_PER_DEVICE: usize = 16;
+const _: () = assert!(REPLAY_ENTRIES_PER_DEVICE < REPLAY_ENTRIES);
 /// At most one burst per device and PC this often, and per PC from any device.
 pub const BURST_GAP_SECONDS: u64 = 10;
 pub const BURST_WINDOW_SECONDS: u64 = 600;
@@ -515,9 +519,17 @@ impl Relay {
             seen.resends += 1;
             return Decision::Reply(seen.status);
         }
-        if self.seen.len() >= REPLAY_ENTRIES {
-            // Forgetting a fresh nonce would let its request through again.
-            let wait = self.seen.iter().map(|seen| seen.until).min().unwrap_or(now);
+        // Forgetting a fresh nonce would let its request through again, so a full memory refuses:
+        // the device's own share first, then the whole.
+        let own = self.seen.iter().filter(|seen| seen.device == *device);
+        let full = if own.clone().count() >= REPLAY_ENTRIES_PER_DEVICE {
+            own.map(|seen| seen.until).min()
+        } else if self.seen.len() >= REPLAY_ENTRIES {
+            self.seen.iter().map(|seen| seen.until).min()
+        } else {
+            None
+        };
+        if let Some(wait) = full {
             let mut status = reply(Status::RateLimited);
             status.retry_after = retry(wait.saturating_sub(now));
             return Decision::Reply(status);

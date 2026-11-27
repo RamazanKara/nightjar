@@ -129,10 +129,16 @@ pub struct Sealer {
 impl Sealer {
     /// `session` is the device's session nonce, which punches carry.
     pub fn new(key: &Key, tag: [u8; 8], session: [u8; SESSION_BYTES]) -> Self {
+        Self::starting_at(key, tag, session, 1)
+    }
+
+    /// [`Sealer::new`] counting from `first` (at least 1). A side that may make the sealer of
+    /// one key again gives each its own range, so no nonce repeats under that key.
+    pub fn starting_at(key: &Key, tag: [u8; 8], session: [u8; SESSION_BYTES], first: u64) -> Self {
         Self {
             key: Aead::new(key),
             tag,
-            seq: AtomicU64::new(1),
+            seq: AtomicU64::new(first.max(1)),
             session,
         }
     }

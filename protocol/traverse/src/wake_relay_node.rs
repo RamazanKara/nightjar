@@ -25,7 +25,7 @@ use std::{
     io,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream, UdpSocket},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
     thread,
@@ -52,6 +52,8 @@ const PROBE_EVERY: Duration = Duration::from_secs(2);
 #[cfg(test)]
 const PROBE_EVERY: Duration = Duration::from_millis(50);
 const PROBE_CONNECT: Duration = Duration::from_millis(800);
+/// The sequence numbers each path may send: far more than a path lives to use.
+const PATH_SEQUENCES: u64 = 1 << 32;
 /// How often, and how far apart, the final status goes.
 const FINAL_COPIES: usize = 2;
 const FINAL_GAP: Duration = Duration::from_millis(300);
@@ -207,7 +209,14 @@ struct Path {
 }
 
 impl Path {
-    fn new(state: &DeviceState, keys: PathKeys, session: [u8; 16], now: Millis) -> Self {
+    /// `first` is the first sequence number its sealer sends ([`Shared::next_seq`]).
+    fn new(
+        state: &DeviceState,
+        keys: PathKeys,
+        session: [u8; 16],
+        first: u64,
+        now: Millis,
+    ) -> Self {
         Self {
             target: state.target.clone(),
             device: state.device,
@@ -215,7 +224,7 @@ impl Path {
             heard: now,
             puncher: Puncher::new(Vec::new(), now),
             opener: Opener::new(&keys.client_to_host, keys.tag),
-            sealer: Sealer::new(&keys.host_to_client, keys.tag, session),
+            sealer: Sealer::starting_at(&keys.host_to_client, keys.tag, session, first),
             peer: None,
         }
     }
@@ -233,6 +242,11 @@ struct Shared {
     relay: Mutex<Relay>,
     status: Mutex<RelayStatus>,
     publishing: AtomicBool,
+    /// Where the next path's sequence numbers start. A path's key depends only on this relay's
+    /// session and the device's, and a path for the same device session can be built again (a
+    /// punch arriving after the last one failed or closed): each path takes its own
+    /// [`PATH_SEQUENCES`], so no nonce repeats under a key.
+    next_seq: AtomicU64,
     stop: AtomicBool,
 }
 
@@ -255,6 +269,7 @@ impl WakeRelayPeer {
             relay: Mutex::new(Relay::new()),
             status: Mutex::new(RelayStatus::default()),
             publishing: AtomicBool::new(false),
+            next_seq: AtomicU64::new(1),
             stop: AtomicBool::new(false),
         });
         let handling = Arc::downgrade(&shared);
@@ -325,6 +340,13 @@ impl WakeRelayPeer {
         self.shared.node.stop();
     }
 
+    /// The first sequence number of a new path's range.
+    fn first_seq(&self) -> u64 {
+        self.shared
+            .next_seq
+            .fetch_add(PATH_SEQUENCES, Ordering::Relaxed)
+    }
+
     fn stopped(&self) -> bool {
         self.shared.stop.load(Ordering::Acquire)
     }
@@ -373,7 +395,7 @@ impl WakeRelayPeer {
             return;
         }
         let now = self.shared.node.now();
-        let mut path = Path::new(state, keys, session, now);
+        let mut path = Path::new(state, keys, session, self.first_seq(), now);
         drop(devices);
         path.opener = opener;
         paths.insert(tag, path);

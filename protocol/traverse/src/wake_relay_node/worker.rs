@@ -173,7 +173,8 @@ impl WakeRelayPeer {
             Some(path) if path.session == record.session => path.puncher.add(&candidates),
             _ => {
                 let keys = state.keys.path(&self.shared.session, &record.session);
-                let mut path = Path::new(state, keys, record.session, now);
+                let first = self.first_seq();
+                let mut path = Path::new(state, keys, record.session, first, now);
                 path.puncher = Puncher::new(candidates, now);
                 paths.insert(tag, path);
             }

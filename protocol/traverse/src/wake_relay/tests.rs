@@ -243,21 +243,78 @@ fn two_devices_together_still_get_one_burst_per_ten_seconds() {
     assert_eq!(bursts(&decision), 0);
 }
 
+fn retry_after(decision: &Decision) -> u16 {
+    match decision {
+        Decision::Reply(reply) | Decision::Wake { reply, .. } => reply.retry_after,
+        Decision::Silent => 0,
+    }
+}
+
 #[test]
 fn a_full_replay_memory_refuses_rather_than_forgets() {
     let mut relay = Relay::new();
-    let mut bytes = request(3, NOW).1;
-    for _ in 0..REPLAY_ENTRIES {
-        bytes = request(3, NOW).1;
-        relay.handle(&enrollment(), &device(), from(), &bytes, NOW, &lan());
+    let mut listed = enrollment();
+    let devices = REPLAY_ENTRIES / REPLAY_ENTRIES_PER_DEVICE;
+    listed.devices = (0..devices)
+        .map(|n| device_id(&format!("device {n}")))
+        .collect();
+    let ask = |listed: &Enrollment, device: &DeviceId| {
+        WakeRequest::new(TARGET, *device, 3, NOW).encode(&listed.device_secret(device))
+    };
+    let mut newest = None;
+    for device in &listed.devices {
+        for _ in 0..REPLAY_ENTRIES_PER_DEVICE {
+            let bytes = ask(&listed, device);
+            relay.handle(&listed, device, from(), &bytes, NOW, &lan());
+            newest = Some((*device, bytes));
+        }
     }
-    let (_, fresh) = request(3, NOW);
-    let decision = relay.handle(&enrollment(), &device(), from(), &fresh, NOW, &lan());
+    // Every listed device has its share: one more is refused, not let through by forgetting.
+    let late = device_id("one more device");
+    listed.devices.push(late);
+    let decision = relay.handle(&listed, &late, from(), &ask(&listed, &late), NOW, &lan());
     assert_eq!(status(&decision), Some(Status::RateLimited));
+    assert_eq!(bursts(&decision), 0);
     // The newest remembered request is still a replay.
+    let (device, bytes) = newest.unwrap();
     let elsewhere: SocketAddr = "198.51.100.7:1234".parse().unwrap();
-    let replayed = relay.handle(&enrollment(), &device(), elsewhere, &bytes, NOW, &lan());
+    let replayed = relay.handle(&listed, &device, elsewhere, &bytes, NOW, &lan());
     assert_eq!(status(&replayed), Some(Status::RejectedReplay));
+}
+
+#[test]
+fn one_device_asking_without_end_locks_out_only_itself() {
+    let mut relay = Relay::new();
+    let other = device_id("another certificate");
+    let mut listed = enrollment();
+    listed.devices.push(other);
+    // More fresh requests than the whole memory holds: the first sends a burst, the rest are
+    // rate limited, and none of them is forgotten while it could pass the clock check.
+    let mut first = None;
+    for _ in 0..REPLAY_ENTRIES + 10 {
+        let (_, bytes) = request(3, NOW);
+        relay.handle(&listed, &device(), from(), &bytes, NOW, &lan());
+        first.get_or_insert(bytes);
+    }
+    let at = NOW + BURST_GAP_SECONDS + 1;
+    let (_, more) = request(3, at);
+    let refused = relay.handle(&listed, &device(), from(), &more, at, &lan());
+    assert_eq!(status(&refused), Some(Status::RateLimited));
+    assert_eq!(bursts(&refused), 0);
+    // Until its oldest remembered request could no longer pass the clock check.
+    assert_eq!(
+        u64::from(retry_after(&refused)),
+        NOW + CLOCK_SKEW_SECONDS + 1 - at
+    );
+    // Its first request is still remembered: a replay from elsewhere is one.
+    let elsewhere: SocketAddr = "198.51.100.7:1234".parse().unwrap();
+    let replayed = relay.handle(&listed, &device(), elsewhere, &first.unwrap(), at, &lan());
+    assert_eq!(status(&replayed), Some(Status::RejectedReplay));
+    // Another listed device still wakes the PC.
+    let bytes = WakeRequest::new(TARGET, other, 3, at).encode(&listed.device_secret(&other));
+    let decision = relay.handle(&listed, &other, from(), &bytes, at, &lan());
+    assert_eq!(status(&decision), Some(Status::PacketSent));
+    assert!(bursts(&decision) > 0);
 }
 
 #[test]
